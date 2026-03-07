@@ -1,0 +1,65 @@
+{
+  "name": "claude-rpg",
+  "version": "0.1.0",
+  "description": "Simulation-grounded narrative RPG where worlds are generated live, but truth remains coherent",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "claude-rpg": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "tsc --build --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run build && npm run test"
+  },
+  "dependencies": {
+    "@ai-rpg-engine/core": "^2.0.0",
+    "@ai-rpg-engine/modules": "^2.0.0",
+    "@ai-rpg-engine/content-schema": "^2.0.0",
+    "@ai-rpg-engine/terminal-ui": "^2.0.0",
+    "@ai-rpg-engine/starter-fantasy": "^2.0.0",
+    "@ai-rpg-engine/starter-cyberpunk": "^2.0.0",
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "rpg",
+    "claude",
+    "ai",
+    "narrative",
+    "simulation",
+    "worldbuilding",
+    "text-rpg",
+    "deterministic"
+  ],
+  "author": "mcp-tool-shop",
+  "license": "MIT",
+  "homepage": "https://github.com/mcp-tool-shop-org/claude-rpg",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mcp-tool-shop-org/claude-rpg.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mcp-tool-shop-org/claude-rpg/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

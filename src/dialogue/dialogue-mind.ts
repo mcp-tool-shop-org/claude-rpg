@@ -30,8 +30,9 @@ export async function generateDialogue(
   npcId: string,
   playerUtterance: string,
   tone: string,
+  playerPresence?: string,
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence);
   if (!context) return null;
 
   const prompt = buildDialoguePrompt(context);

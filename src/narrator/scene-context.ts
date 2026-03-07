@@ -20,6 +20,7 @@ export function buildSceneContext(
   tone: string,
   recentNarration: string[],
   previousLocationId?: string,
+  characterPresence?: string,
 ): SceneContext {
   const zone = world.zones[world.locationId];
   const player = world.entities[world.playerId];
@@ -91,6 +92,7 @@ export function buildSceneContext(
     tone,
     recentNarration,
     isNewZone,
+    characterPresence,
   };
 
   return { narrationInput, perceivedEvents };

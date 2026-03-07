@@ -11,7 +11,8 @@ Rules:
 - Faction loyalty affects what they reveal: loyal NPCs protect faction secrets
 - Keep dialogue to 1-3 sentences per exchange
 - Output ONLY the NPC's spoken words, no narration tags, stage directions, or quotation marks
-- Match the tone/genre of the world`;
+- Match the tone/genre of the world
+- React to the player's visible gear, injuries, titles, and reputation`;
 
 export type DialogueInput = {
   npcName: string;
@@ -37,6 +38,7 @@ export type DialogueInput = {
   playerRelationship: string;
   playerUtterance: string;
   tone: string;
+  playerPresence?: string;
 };
 
 export function buildDialoguePrompt(input: DialogueInput): string {
@@ -71,6 +73,6 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-
+${input.playerPresence ? `\n${input.playerPresence}\n` : ''}
 Player says: "${input.playerUtterance}"`;
 }

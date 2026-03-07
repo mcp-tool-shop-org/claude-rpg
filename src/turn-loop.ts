@@ -11,6 +11,13 @@ import { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 
+export type ProfileUpdateHints = {
+  xpGained: number;
+  injurySustained?: { name: string; description: string };
+  milestoneTriggered?: { label: string; description: string; tags: string[] };
+  reputationDelta?: { factionId: string; delta: number };
+};
+
 export type TurnResult = {
   playerInput: string;
   interpreted: InterpretedAction;
@@ -20,6 +27,7 @@ export type TurnResult = {
   dialogue: DialogueResult | null;
   audioCalls: McpToolCall[];
   tick: number;
+  profileHints: ProfileUpdateHints;
 };
 
 /** Execute one full turn of the game loop. */
@@ -30,6 +38,8 @@ export async function executeTurn(
   playerInput: string,
   tone: string,
   immersion?: ImmersionRuntime,
+  characterPresence?: string,
+  npcPlayerPresence?: string,
 ): Promise<TurnResult> {
   const previousLocationId = engine.world.locationId;
 
@@ -54,6 +64,7 @@ export async function executeTurn(
       dialogue: null,
       audioCalls: [],
       tick: engine.tick,
+      profileHints: { xpGained: 0 },
     };
   }
 
@@ -75,6 +86,7 @@ export async function executeTurn(
       dialogue: null,
       audioCalls: [],
       tick: engine.tick,
+      profileHints: { xpGained: 0 },
     };
   }
 
@@ -89,6 +101,7 @@ export async function executeTurn(
     recentNarration,
     previousLocationId,
     presentationState,
+    characterPresence,
   );
 
   // Step 4.5: Process through immersion runtime if available
@@ -111,6 +124,7 @@ export async function executeTurn(
       interpreted.targetIds[0],
       playerInput,
       tone,
+      npcPlayerPresence,
     );
 
     // Add voice cast to dialogue if immersion is active
@@ -123,6 +137,9 @@ export async function executeTurn(
       };
     }
   }
+
+  // Extract profile hints from events
+  const profileHints = extractProfileHints(events, interpreted.verb);
 
   // Record turn in history
   history.record({
@@ -144,5 +161,42 @@ export async function executeTurn(
     dialogue,
     audioCalls,
     tick: engine.tick,
+    profileHints,
   };
+}
+
+/** Extract profile update hints from resolved events. */
+function extractProfileHints(events: ResolvedEvent[], verb: string): ProfileUpdateHints {
+  const hints: ProfileUpdateHints = { xpGained: 0 };
+
+  for (const event of events) {
+    switch (event.type) {
+      case 'combat.entity.defeated':
+        hints.xpGained += 15;
+        break;
+      case 'world.zone.entered':
+        hints.xpGained += 5;
+        break;
+      case 'combat.damage.applied': {
+        const dmg = event.payload.damage as number | undefined;
+        if (dmg && dmg >= 10) {
+          hints.injurySustained = {
+            name: 'Battle Wound',
+            description: `Sustained ${dmg} damage in combat.`,
+          };
+        }
+        break;
+      }
+      case 'inventory.item.received':
+        hints.xpGained += 3;
+        break;
+    }
+  }
+
+  // Base XP for taking any action
+  if (verb !== 'look' && events.length > 0) {
+    hints.xpGained += 2;
+  }
+
+  return hints;
 }

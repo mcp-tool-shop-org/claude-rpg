@@ -17,6 +17,7 @@ export function buildNPCDialogueContext(
   npcId: string,
   playerUtterance: string,
   tone: string,
+  playerPresence?: string,
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -86,5 +87,6 @@ export function buildNPCDialogueContext(
     playerRelationship: relationship,
     playerUtterance,
     tone,
+    playerPresence,
   };
 }

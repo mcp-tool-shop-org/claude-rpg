@@ -1,7 +1,9 @@
 // Play mode terminal renderer
+// v0.2: enhanced status bar with profile data
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
+import type { StatusData } from '../character/presence.js';
 
 const DIVIDER = '─'.repeat(60);
 const THIN_DIVIDER = '·'.repeat(60);
@@ -12,6 +14,7 @@ export function renderPlayScreen(opts: {
   dialogue?: DialogueResult | null;
   world: WorldState;
   availableActions: string[];
+  profileStatus?: StatusData;
 }): string {
   const parts: string[] = [];
 
@@ -32,18 +35,35 @@ export function renderPlayScreen(opts: {
 
   parts.push(THIN_DIVIDER);
 
-  // Player status bar
-  const player = opts.world.entities[opts.world.playerId];
-  if (player) {
+  // Player status bar — enhanced when profile available
+  if (opts.profileStatus) {
+    const ps = opts.profileStatus;
+    const titlePart = ps.title ? ` "${ps.title}"` : '';
+    const nameLine = `${ps.name}${titlePart} (Lv${ps.level} ${ps.archetypeName})`;
+
     const statParts: string[] = [];
-    for (const [key, val] of Object.entries(player.resources)) {
-      statParts.push(`${key}: ${val}`);
+    statParts.push(`HP: ${ps.hp}`);
+    if (ps.weaponName) statParts.push(ps.weaponName);
+    if (ps.armorName) statParts.push(ps.armorName);
+    if (ps.injuryTags.length > 0) {
+      statParts.push(`[${ps.injuryTags.join(', ')}]`);
     }
-    const statuses = (player.statuses ?? []).map((s) => s.statusId);
-    if (statuses.length > 0) {
-      statParts.push(`[${statuses.join(', ')}]`);
+
+    parts.push(`  ${nameLine} | ${statParts.join(' | ')}`);
+  } else {
+    // Legacy status bar
+    const player = opts.world.entities[opts.world.playerId];
+    if (player) {
+      const statParts: string[] = [];
+      for (const [key, val] of Object.entries(player.resources)) {
+        statParts.push(`${key}: ${val}`);
+      }
+      const statuses = (player.statuses ?? []).map((s) => s.statusId);
+      if (statuses.length > 0) {
+        statParts.push(`[${statuses.join(', ')}]`);
+      }
+      parts.push(`  ${player.name} | ${statParts.join(' | ')}`);
     }
-    parts.push(`  ${player.name} | ${statParts.join(' | ')}`);
   }
 
   // Zone info
@@ -82,7 +102,7 @@ export function renderWelcome(title: string, tone?: string): string {
   parts.push(DIVIDER);
   parts.push('');
   parts.push('  Type actions in plain English. Type "quit" to exit, "save" to save.');
-  parts.push('  Type "/director" to inspect hidden truth.');
+  parts.push('  Type "/director" to inspect hidden truth, "/sheet" to view character.');
   parts.push('');
   return parts.join('\n');
 }

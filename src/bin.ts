@@ -1,22 +1,41 @@
 #!/usr/bin/env node
 
 // CLI entry point for claude-rpg
+// v0.3: character creation, profile-aware gameplay, save identity
 
 import { createInterface } from 'node:readline';
-import { createGame as createFantasyGame } from '@ai-rpg-engine/starter-fantasy';
-import { createGame as createCyberpunkGame } from '@ai-rpg-engine/starter-cyberpunk';
+import { join } from 'node:path';
 import { GameSession } from './game.js';
 import { createClaudeClient } from './claude-client.js';
 import { generateWorld } from './foundry/world-gen.js';
-import { saveSession, getSavePath } from './session/session.js';
+import {
+  saveSession,
+  loadSession,
+  loadProfileFromSession,
+  listSaves,
+  getSavePath,
+  getDefaultSaveDir,
+} from './session/session.js';
+import { TurnHistory } from './session/history.js';
+import { buildCharacter } from './character/builder.js';
+import { getPackById, resolveWorldFlag } from './character/packs.js';
+import { renderCharacterSheet } from './character/sheet.js';
+import { renderRecap } from './character/recap.js';
 
 const USAGE = `
 claude-rpg — simulation-grounded narrative RPG
 
 Usage:
   claude-rpg play [--world fantasy|cyberpunk]   Play a starter world
+  claude-rpg load                               Load a saved game
   claude-rpg new "<prompt>"                     Generate a world from a prompt
   claude-rpg --help                             Show this help
+
+Commands in-game:
+  save         Save the current game
+  /sheet       View character sheet
+  /director    Inspect hidden truth
+  quit         Exit the game
 
 Environment:
   ANTHROPIC_API_KEY   Required. Your Claude API key.
@@ -41,6 +60,8 @@ async function main(): Promise<void> {
 
   if (command === 'play') {
     await runPlay(args.slice(1));
+  } else if (command === 'load') {
+    await runLoad();
   } else if (command === 'new') {
     const prompt = args.slice(1).join(' ').replace(/^["']|["']$/g, '');
     if (!prompt) {
@@ -57,31 +78,109 @@ async function main(): Promise<void> {
 }
 
 async function runPlay(args: string[]): Promise<void> {
-  const worldFlag = args.indexOf('--world');
-  const worldName = worldFlag >= 0 ? args[worldFlag + 1] : 'fantasy';
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
 
-  let engine;
-  let title: string;
-  let tone: string;
+  // Character creation flow (includes pack selection)
+  const result = await buildCharacter(rl);
+  const engine = result.pack.createGame();
 
-  switch (worldName) {
-    case 'fantasy':
-      engine = createFantasyGame();
-      title = 'The Chapel Threshold';
-      tone = 'dark fantasy, concise, atmospheric, foreboding';
-      break;
-    case 'cyberpunk':
-      engine = createCyberpunkGame();
-      title = 'Neon Lockbox';
-      tone = 'cyberpunk noir, terse, neon-lit, paranoid';
-      break;
-    default:
-      console.error(`Unknown world: ${worldName}. Available: fantasy, cyberpunk`);
-      process.exit(1);
+  const session = new GameSession({
+    engine,
+    title: result.pack.meta.name,
+    tone: result.pack.meta.narratorTone,
+    profile: result.profile,
+    itemCatalog: result.pack.itemCatalog,
+  });
+
+  await runGameLoop(session, rl, result.pack.meta.id);
+}
+
+async function runLoad(): Promise<void> {
+  const saves = await listSaves();
+  if (saves.length === 0) {
+    console.log('\n  No saved games found.\n');
+    process.exit(0);
   }
 
-  const session = new GameSession({ engine, title, tone });
-  await runGameLoop(session);
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  console.log('\n  Saved Games:\n');
+  for (let i = 0; i < saves.length; i++) {
+    const s = saves[i];
+    const identity = s.characterName
+      ? `${s.characterName} (Lv${s.characterLevel ?? '?'}${s.characterTitle ? ` "${s.characterTitle}"` : ''})`
+      : 'Unknown character';
+    const date = new Date(s.savedAt).toLocaleDateString();
+    console.log(`    ${i + 1}. ${identity} — ${date}`);
+  }
+  console.log('');
+
+  const answer = await new Promise<string>((resolve) => {
+    rl.question('  Choose a save (or "cancel"): ', resolve);
+  });
+
+  if (answer.toLowerCase() === 'cancel') {
+    rl.close();
+    process.exit(0);
+  }
+
+  const idx = parseInt(answer, 10) - 1;
+  if (idx < 0 || idx >= saves.length) {
+    console.error('  Invalid selection.');
+    rl.close();
+    process.exit(1);
+  }
+
+  const savePath = join(getDefaultSaveDir(), saves[idx].filename);
+  const savedSession = await loadSession(savePath);
+
+  // Restore engine from pack (recreate with modules, then swap world state)
+  let engine;
+  let itemCatalog = null;
+  if (savedSession.packId) {
+    const pack = getPackById(savedSession.packId);
+    if (pack) {
+      engine = pack.createGame();
+      itemCatalog = pack.itemCatalog;
+      try {
+        const saved = JSON.parse(savedSession.engineState);
+        Object.assign(engine.store.state, saved.world.state);
+      } catch {
+        console.error('  Warning: could not restore world state.');
+      }
+    }
+  }
+  if (!engine) {
+    console.error('  Cannot restore engine — unknown pack.');
+    rl.close();
+    process.exit(1);
+  }
+
+  // Restore profile
+  const profile = loadProfileFromSession(savedSession);
+
+  // Restore history
+  const history = TurnHistory.fromJSON(savedSession.turnHistory);
+
+  const session = new GameSession({
+    engine,
+    tone: savedSession.tone,
+    title: savedSession.characterName ?? 'claude-rpg',
+    worldPrompt: savedSession.worldPrompt,
+    profile: profile ?? undefined,
+    itemCatalog: itemCatalog ?? undefined,
+  });
+
+  // Show recap
+  console.log(renderRecap(profile, history));
+
+  await runGameLoop(session, rl, savedSession.packId);
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
@@ -107,15 +206,20 @@ async function runNew(worldPrompt: string): Promise<void> {
     tone: result.tone,
     worldPrompt,
   });
-  await runGameLoop(session);
-}
 
-async function runGameLoop(session: GameSession): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
+  await runGameLoop(session, rl);
+}
+
+async function runGameLoop(
+  session: GameSession,
+  rl: ReturnType<typeof createInterface>,
+  packId?: string,
+): Promise<void> {
   // Welcome
   console.log(session.getWelcome());
 
@@ -137,20 +241,38 @@ async function runGameLoop(session: GameSession): Promise<void> {
         return;
       }
 
+      const trimmed = input.trim().toLowerCase();
+
       // Save command
-      if (input.trim().toLowerCase() === 'save') {
+      if (trimmed === 'save') {
         try {
-          const savePath = getSavePath(`save-${Date.now()}`);
+          const saveName = session.profile
+            ? `${session.profile.build.name}-${Date.now()}`
+            : `save-${Date.now()}`;
+          const savePath = getSavePath(saveName);
           await saveSession(
             session.engine,
             session.history,
             session.tone,
             savePath,
             session.worldPrompt,
+            session.profile,
+            packId,
           );
           console.log(`\n  Saved to ${savePath}\n`);
         } catch (err) {
           console.error(`  Save failed: ${err}`);
+        }
+        prompt();
+        return;
+      }
+
+      // Character sheet command
+      if (trimmed === '/sheet' || trimmed === '/character') {
+        if (session.profile && session.itemCatalog) {
+          console.log(renderCharacterSheet(session.profile, session.itemCatalog));
+        } else {
+          console.log('\n  No character profile available.\n');
         }
         prompt();
         return;

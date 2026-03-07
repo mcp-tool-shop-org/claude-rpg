@@ -13,3 +13,10 @@ export { TurnHistory } from './session/history.js';
 export { saveSession, loadSession } from './session/session.js';
 export { renderPlayScreen, renderWelcome } from './display/play-renderer.js';
 export { executeDirectorCommand } from './display/director-renderer.js';
+
+// v0.2: Immersion Runtime
+export { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
+export { PresentationStateMachine, type PresentationState, type StateTransition } from './runtime/presentation-state.js';
+export { HookManager, type HookPoint, type HookContext, type HookResult, type Hook, registerBuiltinHooks } from './runtime/hooks.js';
+export { VoiceCaster, type VoiceCast } from './runtime/voice-caster.js';
+export { VoiceSoundboardBridge, type McpToolCall } from './runtime/audio-bridge.js';

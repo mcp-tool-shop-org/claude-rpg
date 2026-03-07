@@ -1,18 +1,24 @@
-// Core turn loop: input → interpret → resolve → narrate → display
+// Core turn loop: input → interpret → resolve → narrate → present
+// v0.2: integrated with ImmersionRuntime for multi-modal output
 
 import type { Engine, ResolvedEvent } from '@ai-rpg-engine/core';
+import type { NarrationPlan } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, type NarrationResult } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
 import { TurnHistory } from './session/history.js';
+import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
+import type { McpToolCall } from './runtime/audio-bridge.js';
 
 export type TurnResult = {
   playerInput: string;
   interpreted: InterpretedAction;
   events: ResolvedEvent[];
   narration: string;
+  narrationPlan: NarrationPlan | null;
   dialogue: DialogueResult | null;
+  audioCalls: McpToolCall[];
   tick: number;
 };
 
@@ -23,6 +29,7 @@ export async function executeTurn(
   history: TurnHistory,
   playerInput: string,
   tone: string,
+  immersion?: ImmersionRuntime,
 ): Promise<TurnResult> {
   const previousLocationId = engine.world.locationId;
 
@@ -43,7 +50,9 @@ export async function executeTurn(
       interpreted,
       events: [],
       narration: `I'm not sure what you mean. Did you want to ${alts}?`,
+      narrationPlan: null,
       dialogue: null,
+      audioCalls: [],
       tick: engine.tick,
     };
   }
@@ -56,20 +65,22 @@ export async function executeTurn(
       toolId: interpreted.toolId ?? undefined,
       parameters: interpreted.parameters ?? undefined,
     });
-  } catch (err) {
-    // Action validation failed — narrate the failure
+  } catch {
     return {
       playerInput,
       interpreted,
       events: [],
       narration: `You try to ${interpreted.verb}, but nothing happens.`,
+      narrationPlan: null,
       dialogue: null,
+      audioCalls: [],
       tick: engine.tick,
     };
   }
 
   // Step 3 + 4: Build scene context with perception filtering and narrate
   const recentNarration = history.getRecentNarration(3);
+  const presentationState = immersion?.stateMachine.current;
   const narrationResult: NarrationResult = await narrateScene(
     client,
     engine.world,
@@ -77,7 +88,19 @@ export async function executeTurn(
     tone,
     recentNarration,
     previousLocationId,
+    presentationState,
   );
+
+  // Step 4.5: Process through immersion runtime if available
+  let audioCalls: McpToolCall[] = [];
+  if (immersion) {
+    audioCalls = await immersion.processPresentation(
+      engine,
+      events,
+      interpreted.verb,
+      narrationResult.plan ?? undefined,
+    );
+  }
 
   // Step 5: Generate NPC dialogue if speaking
   let dialogue: DialogueResult | null = null;
@@ -89,6 +112,16 @@ export async function executeTurn(
       playerInput,
       tone,
     );
+
+    // Add voice cast to dialogue if immersion is active
+    if (dialogue && immersion) {
+      const cast = immersion.getVoiceCast(interpreted.targetIds[0]);
+      dialogue.voiceCast = {
+        voiceId: cast.voiceId,
+        emotion: cast.defaultEmotion,
+        speed: cast.defaultSpeed,
+      };
+    }
   }
 
   // Record turn in history
@@ -107,7 +140,9 @@ export async function executeTurn(
     interpreted,
     events,
     narration: narrationResult.narration,
+    narrationPlan: narrationResult.plan,
     dialogue,
+    audioCalls,
     tick: engine.tick,
   };
 }

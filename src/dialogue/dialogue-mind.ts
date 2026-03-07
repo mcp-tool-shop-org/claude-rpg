@@ -16,6 +16,11 @@ export type DialogueResult = {
     morale: number;
     suspicion: number;
   };
+  voiceCast?: {
+    voiceId: string;
+    emotion: string;
+    speed: number;
+  };
 };
 
 /** Generate grounded NPC dialogue. */

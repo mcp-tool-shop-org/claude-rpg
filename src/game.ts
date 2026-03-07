@@ -1,4 +1,5 @@
-// GameSession: master orchestrator wiring Engine + Claude + UI
+// GameSession: master orchestrator wiring Engine + Claude + UI + Immersion
+// v0.2: integrated with ImmersionRuntime
 
 import type { Engine } from '@ai-rpg-engine/core';
 import { createClaudeClient, type ClaudeClient, type ClaudeClientConfig } from './claude-client.js';
@@ -7,6 +8,7 @@ import { executeTurn, type TurnResult } from './turn-loop.js';
 import { renderPlayScreen, renderWelcome, renderThinking } from './display/play-renderer.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { narrateScene } from './narrator/narrator.js';
+import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 
 export type GameMode = 'play' | 'director';
 
@@ -16,6 +18,7 @@ export type GameConfig = {
   tone?: string;
   title?: string;
   worldPrompt?: string;
+  immersion?: ImmersionConfig;
 };
 
 export class GameSession {
@@ -25,6 +28,7 @@ export class GameSession {
   readonly tone: string;
   readonly title: string;
   readonly worldPrompt?: string;
+  readonly immersion: ImmersionRuntime;
   mode: GameMode = 'play';
 
   constructor(config: GameConfig) {
@@ -34,6 +38,8 @@ export class GameSession {
     this.tone = config.tone ?? 'dark fantasy, concise, atmospheric';
     this.title = config.title ?? 'claude-rpg';
     this.worldPrompt = config.worldPrompt;
+    this.immersion = new ImmersionRuntime(config.immersion);
+    this.immersion.initialize(this.engine);
   }
 
   /** Get the welcome screen text. */
@@ -50,6 +56,7 @@ export class GameSession {
       this.tone,
       [],
       undefined,
+      this.immersion.stateMachine.current,
     );
     this.history.record({
       tick: this.engine.tick,
@@ -76,11 +83,13 @@ export class GameSession {
     // Director mode toggle
     if (trimmed === '/director' || trimmed === '/d') {
       this.mode = 'director';
+      this.immersion.stateMachine.transition('director', '/director');
       return renderDirectorHelp();
     }
 
     if (trimmed === '/back' || trimmed === '/b') {
       this.mode = 'play';
+      this.immersion.stateMachine.transition('exploration', '/back');
       return await this.getOpeningNarration();
     }
 
@@ -89,13 +98,14 @@ export class GameSession {
       return executeDirectorCommand(trimmed, this.engine.world);
     }
 
-    // Play mode: execute a turn
+    // Play mode: execute a turn with immersion
     const turnResult = await executeTurn(
       this.engine,
       this.client,
       this.history,
       trimmed,
       this.tone,
+      this.immersion,
     );
 
     return renderPlayScreen({

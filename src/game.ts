@@ -185,9 +185,12 @@ import {
   formatPartyStatusLine,
   formatPartyPresence,
 } from '@ai-rpg-engine/modules';
-import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart } from './display/help-system.js';
+import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp, renderConcludeHelp, getOnboardingByGenre, renderFirstTurnOrientation } from './display/help-system.js';
 import { renderCompactStatus } from './display/status-compact.js';
 import { generateSuggestions } from './display/contextual-suggestions.js';
+import { renderArchiveBrowser } from './display/archive-browser.js';
+import { listArchivedCampaigns } from './session/session.js';
+import { exportChronicleMarkdown, exportChronicleJSON, exportFinaleMarkdown, writeExport } from './session/chronicle-export.js';
 
 export type GameMode = 'play' | 'director';
 
@@ -202,6 +205,7 @@ export type GameConfig = {
   itemCatalog?: ItemCatalog;
   genre?: string;
   journal?: CampaignJournal;
+  fastMode?: boolean;
 };
 
 export class GameSession {
@@ -237,6 +241,7 @@ export class GameSession {
   endgameTriggers: EndgameTrigger[] = [];
   finaleOutline: FinaleOutline | null = null;
   campaignStatus: 'active' | 'completed' = 'active';
+  readonly fastMode: boolean;
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -251,6 +256,7 @@ export class GameSession {
     this.itemCatalog = config.itemCatalog ?? null;
     this.journal = config.journal ?? new CampaignJournal();
     this.genre = config.genre ?? 'fantasy';
+    this.fastMode = config.fastMode ?? false;
 
     // Initialize district economies from genre + district tags
     this.initializeDistrictEconomies();
@@ -428,12 +434,20 @@ export class GameSession {
       verb: 'look',
       narration: result.narration,
     });
-    return renderPlayScreen({
+    let output = renderPlayScreen({
       narration: result.narration,
       world: this.engine.world,
       availableActions: this.engine.getAvailableActions(),
       profileStatus: this.getStatusData() ?? undefined,
     });
+
+    // D3: First-turn onboarding — show pack-specific orientation on new games
+    const onboarding = getOnboardingByGenre(this.genre);
+    if (onboarding) {
+      output += renderFirstTurnOrientation(onboarding);
+    }
+
+    return output;
   }
 
   /** Process one player input and return the rendered output. */
@@ -502,6 +516,8 @@ export class GameSession {
         const sub = cmdParts[1];
         if (!sub) return renderPlayHelp();
         if (sub === 'leverage') return renderLeverageHelp();
+        if (sub === 'arcs') return renderArcHelp();
+        if (sub === 'conclude' || sub === 'conclusion' || sub === 'finale') return renderConcludeHelp();
         return renderPackQuickstart(sub);
       }
       if (playCmd === '/status') {
@@ -515,6 +531,10 @@ export class GameSession {
         const arcInd = this.arcSnapshot?.dominantArc
           ? `${this.arcSnapshot.dominantArc} (${this.arcSnapshot.signals.find((s) => s.kind === this.arcSnapshot!.dominantArc)?.momentum ?? 'steady'})`
           : undefined;
+        const unacknowledged = this.endgameTriggers.filter((t) => !t.acknowledged);
+        const endgameInd = unacknowledged.length > 0
+          ? unacknowledged.map((t) => `${t.resolutionClass} (turn ${t.detectedAtTick})`).join(', ')
+          : undefined;
         return renderCompactStatus({
           statusData: this.getStatusData()!,
           leverageState,
@@ -523,6 +543,8 @@ export class GameSession {
           situationTag: recommendation.situationTag,
           materialsSummary: matSummary !== 'No materials' ? matSummary : undefined,
           arcIndicator: arcInd,
+          endgameIndicator: endgameInd,
+          fastMode: this.fastMode,
         });
       }
       if (playCmd === '/map') {
@@ -548,6 +570,12 @@ export class GameSession {
       }
       if (playCmd === '/dismiss') {
         return this.handleDismiss(cmdParts[1]);
+      }
+      if (playCmd === '/archive') {
+        return await this.handleArchive();
+      }
+      if (playCmd === '/export') {
+        return await this.handleExport(cmdParts.slice(1));
       }
     }
 
@@ -695,6 +723,7 @@ export class GameSession {
         hasExpiringOpportunity: this.activeOpportunities.some((o) => o.status === 'available' && o.turnsRemaining != null && o.turnsRemaining <= 3),
         hasStaleAcceptedOpportunity: this.activeOpportunities.some((o) => o.status === 'accepted' && o.acceptedAtTick != null && this.engine.tick - o.acceptedAtTick >= 4),
         hasEndgameDetected: this.endgameTriggers.some((t) => !t.acknowledged),
+        endgameTriggerCount: this.endgameTriggers.filter((t) => !t.acknowledged).length,
       });
     }
 
@@ -717,6 +746,7 @@ export class GameSession {
       leverageStatus,
       partyStatusLine,
       suggestions,
+      hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
     });
   }
 
@@ -1389,10 +1419,29 @@ export class GameSession {
       value: this.profile ? getReputation(this.profile, fid) : 0,
     }));
     const player = this.engine.world.entities[this.engine.world.playerId];
+    const leverage = this.profile ? getLeverageState(this.profile.custom) : { favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0 };
+    const totalTurns = this.profile?.totalTurns ?? 0;
+    const currentTick = this.engine.tick;
+
+    // Fast mode: inflate turn counts and leverage values to accelerate arc/endgame detection
+    const turnScale = this.fastMode ? 2 : 1;
+    const leverageScale = this.fastMode ? 1.5 : 1;
+
     return {
       factionStates,
-      playerReputations,
-      playerLeverage: this.profile ? getLeverageState(this.profile.custom) : { favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0 },
+      playerReputations: this.fastMode
+        ? playerReputations.map((r) => ({ ...r, value: Math.round(r.value * leverageScale) }))
+        : playerReputations,
+      playerLeverage: this.fastMode
+        ? {
+            favor: Math.round(leverage.favor * leverageScale),
+            debt: Math.round(leverage.debt * leverageScale),
+            blackmail: Math.round(leverage.blackmail * leverageScale),
+            influence: Math.round(leverage.influence * leverageScale),
+            heat: leverage.heat, // don't scale heat — it's a penalty
+            legitimacy: Math.round(leverage.legitimacy * leverageScale),
+          }
+        : leverage,
       activePressures: this.activePressures,
       npcProfiles: this.lastNpcProfiles,
       npcObligations: this.npcObligations,
@@ -1404,8 +1453,8 @@ export class GameSession {
       playerHp: player?.resources?.hp,
       playerMaxHp: player?.resources?.maxHp,
       playerLevel: this.profile?.progression.level ?? 1,
-      totalTurns: this.profile?.totalTurns ?? 0,
-      currentTick: this.engine.tick,
+      totalTurns: totalTurns * turnScale,
+      currentTick: currentTick * turnScale,
     };
   }
 
@@ -1542,17 +1591,98 @@ export class GameSession {
     );
 
     const lines: string[] = [];
+    lines.push('');
+    lines.push('  ═'.repeat(30));
+    lines.push('  CAMPAIGN CONCLUSION');
+    lines.push('  ═'.repeat(30));
+    lines.push('');
     lines.push(result.deterministicSummary);
     if (result.epilogue) {
       lines.push('');
       lines.push('  ─'.repeat(30));
       lines.push('');
       lines.push(`  ${result.epilogue.split('\n').join('\n  ')}`);
-      lines.push('');
     }
-    lines.push('  Continue playing  |  Type "save" to archive  |  Type "quit" to exit');
+    lines.push('');
+    lines.push(result.worldAfter);
+    lines.push('');
+    lines.push('  ─'.repeat(30));
+    lines.push('  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit');
 
     return lines.join('\n');
+  }
+
+  /** Browse completed campaign archive. */
+  async handleArchive(): Promise<string> {
+    const campaigns = await listArchivedCampaigns();
+    return renderArchiveBrowser(campaigns);
+  }
+
+  /** Export campaign chronicle or finale as markdown/JSON. */
+  async handleExport(args: string[]): Promise<string> {
+    const format = args[0]?.toLowerCase();
+
+    if (format === 'finale') {
+      if (this.campaignStatus !== 'completed' || !this.finaleOutline) {
+        return '  No finale available — use /conclude to complete your campaign first.';
+      }
+      const md = exportFinaleMarkdown(
+        this.finaleOutline,
+        undefined,
+        this.genre,
+        this.title,
+      );
+      const filename = `${sanitizeFilename(this.title)}-finale-${Date.now()}.md`;
+      const filepath = await writeExport(filename, md);
+      return `  Finale exported to ${filepath}`;
+    }
+
+    if (format === 'json') {
+      const sessionData = this.buildSavedSessionSnapshot();
+      const data = exportChronicleJSON(sessionData);
+      const filename = `${sanitizeFilename(this.title)}-${Date.now()}.json`;
+      const filepath = await writeExport(filename, JSON.stringify(data, null, 2));
+      return `  Chronicle exported to ${filepath}`;
+    }
+
+    if (format === 'md' || !format) {
+      const sessionData = this.buildSavedSessionSnapshot();
+      const md = exportChronicleMarkdown(sessionData);
+      const filename = `${sanitizeFilename(this.title)}-${Date.now()}.md`;
+      const filepath = await writeExport(filename, md);
+      return `  Chronicle exported to ${filepath}`;
+    }
+
+    return '  Usage: /export md | /export json | /export finale';
+  }
+
+  /** Build a lightweight SavedSession snapshot for export (no engine serialization needed). */
+  private buildSavedSessionSnapshot(): import('./session/session.js').SavedSession {
+    return {
+      version: '1.4.0',
+      engineState: '',
+      turnHistory: this.history.toJSON(),
+      tone: this.tone,
+      savedAt: new Date().toISOString(),
+      packId: undefined,
+      characterName: this.profile?.build.name,
+      characterLevel: this.profile?.progression.level,
+      characterTitle: this.profile?.custom.title as string | undefined,
+      genre: this.genre,
+      chronicleRecords: this.journal.size() > 0
+        ? JSON.stringify(this.journal.serialize())
+        : undefined,
+      arcSnapshot: this.arcSnapshot
+        ? JSON.stringify(this.arcSnapshot)
+        : undefined,
+      finaleOutline: this.finaleOutline
+        ? JSON.stringify(this.finaleOutline)
+        : undefined,
+      campaignStatus: this.campaignStatus,
+      partyState: this.partyState.companions.length > 0
+        ? JSON.stringify(this.partyState)
+        : undefined,
+    };
   }
 
   /** Get the "thinking" indicator. */
@@ -3085,6 +3215,11 @@ export class GameSession {
       }
     }
   }
+}
+
+/** Sanitize a string for use in filenames. */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, '') || 'campaign';
 }
 
 /** Deterministic hash for side-effect rolls. */

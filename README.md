@@ -16,7 +16,7 @@
 
 # Claude RPG
 
-A simulation-grounded terminal RPG where Claude narrates, the engine preserves truth, and the immersion runtime stages voice, sound, and presentation.
+A simulation-grounded campaign RPG where Claude stages the story, the engine preserves truth, and worlds evolve through rumor, pressure, faction, relationship, economy, and arc systems toward meaningful conclusions.
 
 ## What Is Claude RPG?
 

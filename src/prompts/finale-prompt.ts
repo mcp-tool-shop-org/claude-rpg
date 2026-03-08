@@ -27,6 +27,17 @@ Resolution tone guide:
 
 Respond with narration text only, no JSON or formatting.`;
 
+/** Pack-specific narrative voices for the epilogue. */
+const PACK_VOICES: Record<string, string> = {
+  fantasy: 'Write in an epic chronicle voice with archaic turns of phrase — the tone of a saga told beside a dying fire.',
+  cyberpunk: 'Write in a noir data-log voice with clipped corporate language — the tone of a classified debrief.',
+  detective: 'Write in a case-file summary voice with methodical deduction — the tone of a detective closing the final folder.',
+  pirate: "Write in a ship's log voice with maritime metaphor — the tone of a captain's final entry before port.",
+  zombie: "Write in a survivor's journal voice, terse and haunted — the tone of someone writing by candlelight.",
+  'weird-west': 'Write in a frontier tall-tale voice with dust and superstition — the tone of a story told on a saloon porch.',
+  colony: 'Write in a mission report voice with bureaucratic dread — the tone of a log transmitted to no one.',
+};
+
 export function buildFinalePrompt(outline: FinaleOutline, genre: string, playerName?: string): string {
   const npcFates = outline.npcFates
     .map((f) => `  - ${f.name}: ${f.outcome}${f.lastSignificantEvent ? ` (${f.lastSignificantEvent})` : ''}`)
@@ -84,5 +95,5 @@ ${legacy || '  (none)'}
 Epilogue seeds (themes to weave in):
 ${seeds || '  (none)'}
 
-Write the epilogue.`;
+${PACK_VOICES[genre] ?? ''}Write the epilogue.`;
 }

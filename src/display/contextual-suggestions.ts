@@ -26,9 +26,10 @@ export function generateSuggestions(opts: {
   hasExpiringOpportunity?: boolean;
   hasStaleAcceptedOpportunity?: boolean;
   hasEndgameDetected?: boolean;
+  endgameTriggerCount?: number;
 }): ContextualSuggestion[] {
   const suggestions: ContextualSuggestion[] = [];
-  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket, hasCraftingShortage, hasCraftableMaterials, hasNewOpportunity, hasExpiringOpportunity, hasStaleAcceptedOpportunity, hasEndgameDetected } = opts;
+  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket, hasCraftingShortage, hasCraftableMaterials, hasNewOpportunity, hasExpiringOpportunity, hasStaleAcceptedOpportunity, hasEndgameDetected, endgameTriggerCount } = opts;
 
   // 1. Crisis pressure → suggest top advisor move
   if (recommendation.situationTag === 'crisis' && recommendation.top3.length > 0) {
@@ -138,12 +139,13 @@ export function generateSuggestions(opts: {
     });
   }
 
-  // 14. Endgame detected → suggest /conclude (v2.0)
+  // 14. Endgame detected → escalating urgency by trigger count (v2.0, v2.1)
   if (suggestions.length < 2 && hasEndgameDetected) {
-    suggestions.push({
-      text: 'A turning point approaches — type /conclude to see your legacy',
-      trigger: 'endgame-detected',
-    });
+    const count = endgameTriggerCount ?? 1;
+    const text = count >= 2
+      ? 'Multiple endgame conditions detected — type /conclude to see your legacy'
+      : 'A turning point approaches — type /conclude to see your legacy';
+    suggestions.push({ text, trigger: 'endgame-detected' });
   }
 
   // After turn 10, only show on notable events (already handled by crisis/milestone/failed checks)

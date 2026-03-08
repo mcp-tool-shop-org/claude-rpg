@@ -17,13 +17,16 @@ export function renderCompactStatus(opts: {
   materialsSummary?: string;
   opportunitySummary?: string;
   arcIndicator?: string;
+  endgameIndicator?: string;
+  fastMode?: boolean;
 }): string {
   const { statusData: s, leverageState, topThreat, suggestedMove, situationTag, economySummary, materialsSummary } = opts;
   const lines: string[] = [];
 
   lines.push('');
   lines.push(DIVIDER);
-  lines.push(`  STATUS \u2014 ${situationTag}`);
+  const fastLabel = opts.fastMode ? ' (Fast Campaign)' : '';
+  lines.push(`  STATUS \u2014 ${situationTag}${fastLabel}`);
   lines.push(DIVIDER);
 
   // Character line
@@ -64,6 +67,11 @@ export function renderCompactStatus(opts: {
   // Arc line (v2.0)
   if (opts.arcIndicator) {
     lines.push(`  Arc: ${opts.arcIndicator}`);
+  }
+
+  // Endgame line (v2.1)
+  if (opts.endgameIndicator) {
+    lines.push(`  Endgame: ${opts.endgameIndicator}`);
   }
 
   // Threat line

@@ -133,6 +133,42 @@ export function getPackOnboarding(packId: string): PackOnboarding | undefined {
   return PACK_ONBOARDING[packId];
 }
 
+/** Map genre to starter pack ID for first-turn onboarding. */
+const GENRE_TO_PACK: Record<string, string> = {
+  fantasy: 'chapel-threshold',
+  cyberpunk: 'neon-lockbox',
+  detective: 'gaslight-detective',
+  pirate: 'black-flag-requiem',
+  'weird-west': 'dust-devils-bargain',
+  zombie: 'ashfall-dead',
+  colony: 'signal-loss',
+};
+
+/** Get onboarding data by genre (for first-turn guidance). */
+export function getOnboardingByGenre(genre: string): PackOnboarding | undefined {
+  const packId = GENRE_TO_PACK[genre];
+  return packId ? PACK_ONBOARDING[packId] : undefined;
+}
+
+/** Render compact first-turn orientation from pack onboarding data. */
+export function renderFirstTurnOrientation(data: PackOnboarding): string {
+  const lines: string[] = [];
+  lines.push('');
+  lines.push(THIN);
+  lines.push(`  ${data.flavorIntro}`);
+  lines.push('');
+  lines.push('  TRY:');
+  for (const move of data.suggestedFirstMoves) {
+    lines.push(`    > ${move}`);
+  }
+  if (data.dangerWarning) {
+    lines.push(`  WARNING: ${data.dangerWarning}`);
+  }
+  lines.push(`  Type /help for commands, /help leverage for social verbs.`);
+  lines.push('');
+  return lines.join('\n');
+}
+
 // --- Play Mode Help ---
 
 export function renderPlayHelp(): string {
@@ -161,8 +197,12 @@ ${DIVIDER}
   COMMANDS
     /help                         This reference
     /help leverage                Full leverage verb reference
+    /help arcs                    Campaign arc kinds and momentum
+    /help conclude                Endgame triggers and epilogue
     /help <pack-id>               Pack-specific quickstart guide
     /status                       Strategic snapshot
+    /arcs                         View arc trajectory
+    /conclude                     Render campaign epilogue
     /sheet                        Character sheet
     /director                     Enter director mode
 
@@ -264,17 +304,91 @@ export function renderPackQuickstart(packId: string): string {
   return lines.join('\n');
 }
 
+// --- Arc Help ---
+
+export function renderArcHelp(): string {
+  return `
+${DIVIDER}
+  CAMPAIGN ARCS
+${DIVIDER}
+
+  The engine tracks 10 narrative arc kinds based on your actions:
+
+    rising-power       Growing faction influence, territory, political capital
+    hunted             Multiple factions hostile, bounties, allies turning
+    kingmaker          Holding balance of power between competing factions
+    resistance         Fighting dominant faction from a weaker position
+    merchant-prince    Economic dominance through trade and resources
+    shadow-broker      Intel accumulation, hidden influence, rumor networks
+    peacemaker         Resolving conflicts, building alliances
+    outcast            Rejected by all factions, operating independently
+    revelation         Uncovering hidden truths, following belief chains
+    betrayer           Breaking alliances, abandoning obligations
+
+  Each arc signal has momentum: rising, steady, or fading.
+  Your dominant arc shapes endgame triggers and the campaign epilogue.
+
+  COMMANDS
+    /arcs              View your current arc trajectory
+    /status            See arc indicator in strategic snapshot
+
+${DIVIDER}
+`;
+}
+
+// --- Conclude Help ---
+
+export function renderConcludeHelp(): string {
+  return `
+${DIVIDER}
+  CAMPAIGN CONCLUSIONS
+${DIVIDER}
+
+  When your story reaches critical mass, endgame triggers fire.
+  These are one-shot pivotal moments based on 8 resolution classes:
+
+    victory            Dominant faction control with high stability
+    exile              Expelled from all territories, no allies
+    overthrow          Faction leadership change driven by you
+    martyrdom          Sacrifice for a cause (high influence spent)
+    corruption         Power gained through betrayal and manipulation
+    revelation         Major hidden truth exposed to all factions
+    stalemate          All factions locked in unresolvable tension
+    exodus             Abandoning the setting entirely
+
+  When triggers appear, you'll see contextual hints.
+  Type /conclude to render your campaign epilogue.
+
+  The epilogue is grounded in simulation truth — faction fates,
+  NPC outcomes, district conditions, and your legacy are computed
+  deterministically, then narrated by Claude.
+
+  COMMANDS
+    /conclude          Render campaign epilogue (when triggers present)
+    /arcs              View arc trajectory leading to conclusion
+
+${DIVIDER}
+`;
+}
+
 // --- Director Help Extended ---
 
 export function renderDirectorHelpExtended(subcommand: string): string {
   switch (subcommand.toLowerCase()) {
     case 'leverage':
       return renderLeverageHelp();
+    case 'arcs':
+      return renderArcHelp();
+    case 'conclude':
+    case 'conclusion':
+    case 'conclusions':
+    case 'finale':
+      return renderConcludeHelp();
     default: {
       // Check if it's a pack ID
       const pack = PACK_ONBOARDING[subcommand.toLowerCase()];
       if (pack) return renderPackQuickstart(subcommand.toLowerCase());
-      return `  Unknown help topic: "${subcommand}". Try: leverage, or a pack id.`;
+      return `  Unknown help topic: "${subcommand}". Try: leverage, arcs, conclude, or a pack id.`;
     }
   }
 }

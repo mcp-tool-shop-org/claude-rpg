@@ -2,7 +2,7 @@ import type { SiteConfig } from '@mcptoolshop/site-theme';
 
 export const config: SiteConfig = {
   title: 'Claude RPG',
-  description: 'Simulation-grounded narrative RPG where worlds are generated live, but truth remains coherent',
+  description: 'Simulation-grounded campaign RPG where Claude stages the story, the engine preserves truth, and worlds evolve toward meaningful conclusions',
   logoBadge: 'CR',
   brandName: 'Claude RPG',
   repoUrl: 'https://github.com/mcp-tool-shop-org/claude-rpg',
@@ -13,13 +13,13 @@ export const config: SiteConfig = {
     badge: 'Terminal RPG',
     headline: 'Claude narrates.',
     headlineAccent: 'The engine owns truth.',
-    description: 'A simulation-grounded narrative RPG where Claude interprets and narrates, the AI RPG Engine resolves actions deterministically, and the immersion runtime stages voice, sound, and presentation.',
+    description: 'A simulation-grounded campaign RPG where Claude stages the story, the engine preserves truth, and worlds evolve through rumor, pressure, faction, relationship, economy, and arc systems toward meaningful conclusions.',
     primaryCta: { href: '#usage', label: 'Get started' },
     secondaryCta: { href: 'handbook/', label: 'Read the Handbook' },
     previews: [
       { label: 'Play', code: 'npx claude-rpg play --world fantasy' },
       { label: 'Generate', code: 'npx claude-rpg new "A flooded gothic trade city"' },
-      { label: 'Load', code: 'npx claude-rpg load' },
+      { label: 'Archive', code: 'npx claude-rpg archive' },
     ],
   },
 
@@ -53,6 +53,10 @@ export const config: SiteConfig = {
         {
           title: 'Equipment provenance',
           desc: 'Items carry history. A sword that kills enough becomes a relic with an epithet. NPCs recognize equipped items and react to their reputation.',
+        },
+        {
+          title: 'Campaign archives',
+          desc: 'Browse completed campaigns, export chronicles as markdown or JSON, and share standalone finale documents. Every campaign leaves a record.',
         },
       ],
     },

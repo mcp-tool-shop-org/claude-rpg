@@ -20,11 +20,17 @@ export function renderPlayScreen(opts: {
   leverageStatus?: string;
   partyStatusLine?: string;
   suggestions?: ContextualSuggestion[];
+  hasEndgameTriggers?: boolean;
 }): string {
   const parts: string[] = [];
 
   parts.push('');
   parts.push(DIVIDER);
+
+  // Endgame approach banner (v2.1)
+  if (opts.hasEndgameTriggers) {
+    parts.push('  ── approaching conclusion ──');
+  }
 
   // Narration
   parts.push('');

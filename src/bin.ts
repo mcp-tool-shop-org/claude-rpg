@@ -30,9 +30,11 @@ import {
   loadEndgameTriggersFromSession,
   loadFinaleFromSession,
   listSaves,
+  listArchivedCampaigns,
   getSavePath,
   getDefaultSaveDir,
 } from './session/session.js';
+import { renderArchiveBrowser } from './display/archive-browser.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
@@ -78,8 +80,10 @@ claude-rpg — simulation-grounded narrative RPG
 
 Usage:
   claude-rpg play [--world fantasy|cyberpunk]   Play a starter world
+                  [--fast]                      Accelerated campaign pacing
   claude-rpg load                               Load a saved game
   claude-rpg new "<prompt>"                     Generate a world from a prompt
+  claude-rpg archive                            Browse completed campaigns
   claude-rpg --help                             Show this help
 
 Commands in-game:
@@ -91,6 +95,8 @@ Commands in-game:
   /jobs          View available opportunities
   /arcs          View campaign arc trajectory
   /conclude      Trigger campaign finale
+  /archive       Browse completed campaigns
+  /export        Export chronicle (md/json/finale)
   /director      Inspect hidden truth
   /help          In-game help system
   quit           Exit the game
@@ -120,6 +126,8 @@ async function main(): Promise<void> {
     await runPlay(args.slice(1));
   } else if (command === 'load') {
     await runLoad();
+  } else if (command === 'archive') {
+    await runArchive();
   } else if (command === 'new') {
     const prompt = args.slice(1).join(' ').replace(/^["']|["']$/g, '');
     if (!prompt) {
@@ -145,6 +153,7 @@ async function runPlay(args: string[]): Promise<void> {
   const result = await buildCharacter(rl);
   const engine = result.pack.createGame();
 
+  const fastMode = args.includes('--fast');
   const session = new GameSession({
     engine,
     title: result.pack.meta.name,
@@ -152,6 +161,7 @@ async function runPlay(args: string[]): Promise<void> {
     profile: result.profile,
     itemCatalog: result.pack.itemCatalog,
     genre: result.pack.meta.genres[0] ?? 'fantasy',
+    fastMode,
   });
 
   const snapshot = captureSnapshot(result.profile);
@@ -305,6 +315,11 @@ async function runLoad(): Promise<void> {
   const initialCustom = profile ? structuredClone(profile.custom) : {};
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities);
+}
+
+async function runArchive(): Promise<void> {
+  const campaigns = await listArchivedCampaigns();
+  console.log(renderArchiveBrowser(campaigns));
 }
 
 async function runNew(worldPrompt: string): Promise<void> {

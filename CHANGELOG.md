@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-03-08
+
+### Added
+- Campaign archive browser: `/archive` command and `claude-rpg archive` CLI to browse completed campaigns
+- Chronicle export: `/export md`, `/export json`, `/export finale` for campaign data export
+- Pack-aware finale voices: genre-specific narration styles for epilogues (chronicle, noir, case-file, ship's log, journal, tall-tale, mission report)
+- Compact "world after" summary block in campaign conclusions
+- Fast campaign mode: `--fast` flag accelerates arc/endgame detection for shorter sessions
+- First-turn onboarding: pack-specific orientation with suggested actions on new games
+- `/help arcs` and `/help conclude` help topics
+- Escalating endgame approach signals with trigger count
+- "Approaching conclusion" banner in play mode when endgame triggers are active
+- Endgame indicator in `/status` output
+- Handbook pages: Full Campaign Loop, Archive & Export
+- Campaign archives feature card on landing page
+
+### Changed
+- Finale conclusion screen now shows CAMPAIGN CONCLUSION header, world-after block, and `/export` hint
+- Updated product sentence across README and landing page
+- Landing page previews updated (Archive replaces Load)
+
 ## [1.2.0] - 2026-03-08
 
 ### Added

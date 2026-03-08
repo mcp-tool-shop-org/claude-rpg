@@ -329,6 +329,87 @@ export function loadFinaleFromSession(session: SavedSession): FinaleOutline | nu
   }
 }
 
+/** List completed (archived) campaigns from save files. */
+export async function listArchivedCampaigns(): Promise<ArchivedCampaignSummary[]> {
+  const dir = getDefaultSaveDir();
+  let files: string[];
+  try {
+    files = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const results: ArchivedCampaignSummary[] = [];
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    try {
+      const raw = await readFile(join(dir, file), 'utf-8');
+      const session = JSON.parse(raw) as SavedSession;
+      if (session.campaignStatus !== 'completed') continue;
+
+      const outline = session.finaleOutline ? JSON.parse(session.finaleOutline) as FinaleOutline : null;
+      const arcSnap = session.arcSnapshot ? JSON.parse(session.arcSnapshot) as ArcSnapshot : null;
+      const chronicle = session.chronicleRecords ? JSON.parse(session.chronicleRecords) as CampaignRecord[] : [];
+      const party = session.partyState ? JSON.parse(session.partyState) as PartyState : null;
+
+      // Top 3 most significant chronicle events as highlights
+      const highlights = [...chronicle]
+        .sort((a, b) => b.significance - a.significance)
+        .slice(0, 3)
+        .map((r) => r.description);
+
+      // Companion fates
+      const companionFates = outline?.companionFates?.map(
+        (c: { name: string; outcome: string }) => `${c.name} (${c.outcome})`,
+      ) ?? [];
+
+      // Relic names from item chronicle if profile exists
+      const relicNames: string[] = [];
+      if (session.profile) {
+        try {
+          const profile = JSON.parse(session.profile);
+          const itemChronicle = profile?.itemChronicle ?? {};
+          for (const [itemId, entries] of Object.entries(itemChronicle)) {
+            if (Array.isArray(entries) && entries.length >= 3) {
+              relicNames.push(itemId);
+            }
+          }
+        } catch {
+          // Skip if profile can't be parsed
+        }
+      }
+
+      results.push({
+        filename: file,
+        packId: session.packId,
+        title: session.characterName ?? session.packId ?? 'Unknown',
+        dominantArc: outline?.dominantArc ?? arcSnap?.dominantArc ?? null,
+        resolutionClass: outline?.resolutionClass ?? null,
+        turnCount: outline?.campaignDuration ?? chronicle.length,
+        chronicleHighlights: highlights,
+        companionFates,
+        relicNames,
+      });
+    } catch {
+      // Skip corrupted saves
+    }
+  }
+
+  return results;
+}
+
+export type ArchivedCampaignSummary = {
+  filename: string;
+  packId?: string;
+  title: string;
+  dominantArc: string | null;
+  resolutionClass: string | null;
+  turnCount: number;
+  chronicleHighlights: string[];
+  companionFates: string[];
+  relicNames: string[];
+};
+
 /** List all saves with summary info for display. */
 export async function listSaves(): Promise<SaveSlotSummary[]> {
   const dir = getDefaultSaveDir();

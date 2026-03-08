@@ -1,9 +1,11 @@
 // Play mode terminal renderer
 // v0.2: enhanced status bar with profile data
+// v1.1: leverage status line + contextual suggestions
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
 import type { StatusData } from '../character/presence.js';
+import type { ContextualSuggestion } from './contextual-suggestions.js';
 
 const DIVIDER = '─'.repeat(60);
 const THIN_DIVIDER = '·'.repeat(60);
@@ -15,6 +17,8 @@ export function renderPlayScreen(opts: {
   world: WorldState;
   availableActions: string[];
   profileStatus?: StatusData;
+  leverageStatus?: string;
+  suggestions?: ContextualSuggestion[];
 }): string {
   const parts: string[] = [];
 
@@ -66,6 +70,11 @@ export function renderPlayScreen(opts: {
     }
   }
 
+  // Leverage status line
+  if (opts.leverageStatus && opts.leverageStatus !== 'No leverage') {
+    parts.push(`  ${opts.leverageStatus}`);
+  }
+
   // Zone info
   const zone = opts.world.zones[opts.world.locationId];
   if (zone) {
@@ -76,6 +85,13 @@ export function renderPlayScreen(opts: {
   }
 
   parts.push(DIVIDER);
+
+  // Contextual suggestions
+  if (opts.suggestions && opts.suggestions.length > 0) {
+    for (const s of opts.suggestions) {
+      parts.push(`  hint: ${s.text}`);
+    }
+  }
 
   // Prompt
   parts.push('');

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 // CLI entry point for claude-rpg
-// v0.3: character creation, profile-aware gameplay, save identity
+// v0.4: social consequence — reputation, stance, title evolution, session deltas
+// v0.5: rumor ecology — player legend propagation + persistence
+// v0.6: emergent pressure — world-generated threats + persistence
+// v0.7: resolution & fallout — pressures resolve with structured consequences
 
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
@@ -12,6 +15,10 @@ import {
   saveSession,
   loadSession,
   loadProfileFromSession,
+  loadRumorsFromSession,
+  loadPressuresFromSession,
+  loadResolvedPressuresFromSession,
+  loadChronicleFromSession,
   listSaves,
   getSavePath,
   getDefaultSaveDir,
@@ -21,6 +28,22 @@ import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
 import { renderCharacterSheet } from './character/sheet.js';
 import { renderRecap } from './character/recap.js';
+import {
+  captureSnapshot,
+  computeSessionDelta,
+  type SessionSnapshot,
+} from './character/recap-delta.js';
+import {
+  captureWorldSnapshot,
+  computeWorldDelta,
+  type WorldSnapshot,
+} from './character/world-delta.js';
+import {
+  computeFactionDeltas,
+  computeRumorDelta,
+  deriveWhatPeopleAreSaying,
+  renderFullRecap,
+} from './character/session-recap.js';
 
 const USAGE = `
 claude-rpg — simulation-grounded narrative RPG
@@ -93,9 +116,14 @@ async function runPlay(args: string[]): Promise<void> {
     tone: result.pack.meta.narratorTone,
     profile: result.profile,
     itemCatalog: result.pack.itemCatalog,
+    genre: result.pack.meta.genres[0] ?? 'fantasy',
   });
 
-  await runGameLoop(session, rl, result.pack.meta.id);
+  const snapshot = captureSnapshot(result.profile);
+  const worldSnap = captureWorldSnapshot(
+    session.activePressures, session.playerRumors, session.resolvedPressures,
+  );
+  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap);
 }
 
 async function runLoad(): Promise<void> {
@@ -114,10 +142,21 @@ async function runLoad(): Promise<void> {
   for (let i = 0; i < saves.length; i++) {
     const s = saves[i];
     const identity = s.characterName
-      ? `${s.characterName} (Lv${s.characterLevel ?? '?'}${s.characterTitle ? ` "${s.characterTitle}"` : ''})`
+      ? `${s.characterName}${s.characterTitle ? `, "${s.characterTitle}"` : ''} (Lv${s.characterLevel ?? '?'})`
       : 'Unknown character';
     const date = new Date(s.savedAt).toLocaleDateString();
     console.log(`    ${i + 1}. ${identity} — ${date}`);
+    // Enhanced details
+    const details: string[] = [];
+    if (s.chronicleEvents != null && s.chronicleEvents > 0) {
+      details.push(`${s.chronicleEvents} chronicle events`);
+    }
+    if (s.campaignAge != null && s.campaignAge > 0) {
+      details.push(`${s.campaignAge} ticks`);
+    }
+    if (details.length > 0) {
+      console.log(`       ${details.join(' | ')}`);
+    }
   }
   console.log('');
 
@@ -168,6 +207,12 @@ async function runLoad(): Promise<void> {
   // Restore history
   const history = TurnHistory.fromJSON(savedSession.turnHistory);
 
+  // Restore player rumors, pressures, fallout history, and chronicle
+  const restoredRumors = loadRumorsFromSession(savedSession);
+  const restoredPressures = loadPressuresFromSession(savedSession);
+  const restoredResolved = loadResolvedPressuresFromSession(savedSession);
+  const restoredJournal = loadChronicleFromSession(savedSession);
+
   const session = new GameSession({
     engine,
     tone: savedSession.tone,
@@ -175,12 +220,23 @@ async function runLoad(): Promise<void> {
     worldPrompt: savedSession.worldPrompt,
     profile: profile ?? undefined,
     itemCatalog: itemCatalog ?? undefined,
+    genre: savedSession.genre ?? 'fantasy',
+    journal: restoredJournal,
   });
+
+  // Restore rumors, pressures, and fallout history into session
+  session.playerRumors = restoredRumors;
+  session.activePressures = restoredPressures;
+  session.resolvedPressures = restoredResolved;
 
   // Show recap
   console.log(renderRecap(profile, history));
 
-  await runGameLoop(session, rl, savedSession.packId);
+  const snapshot = profile ? captureSnapshot(profile) : undefined;
+  const worldSnap = captureWorldSnapshot(
+    session.activePressures, session.playerRumors, session.resolvedPressures,
+  );
+  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap);
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
@@ -219,6 +275,8 @@ async function runGameLoop(
   session: GameSession,
   rl: ReturnType<typeof createInterface>,
   packId?: string,
+  initialSnapshot?: SessionSnapshot,
+  initialWorldSnapshot?: WorldSnapshot,
 ): Promise<void> {
   // Welcome
   console.log(session.getWelcome());
@@ -258,8 +316,20 @@ async function runGameLoop(
             session.worldPrompt,
             session.profile,
             packId,
+            session.playerRumors,
+            session.activePressures,
+            session.genre,
+            session.resolvedPressures,
+            session.journal,
           );
-          console.log(`\n  Saved to ${savePath}\n`);
+          console.log(`\n  Saved to ${savePath}`);
+
+          // Show unified session recap
+          const recapText = buildUnifiedRecap(
+            session, initialSnapshot, initialWorldSnapshot,
+          );
+          if (recapText) console.log(recapText);
+          else console.log('');
         } catch (err) {
           console.error(`  Save failed: ${err}`);
         }
@@ -283,6 +353,11 @@ async function runGameLoop(
         const output = await session.processInput(input);
 
         if (output === '__QUIT__') {
+          // Show unified session recap
+          const recapText = buildUnifiedRecap(
+            session, initialSnapshot, initialWorldSnapshot,
+          );
+          if (recapText) console.log(recapText);
           console.log('\n  Farewell.\n');
           rl.close();
           process.exit(0);
@@ -298,6 +373,58 @@ async function runGameLoop(
   };
 
   prompt();
+}
+
+/** Build unified 5-section recap from session state. */
+function buildUnifiedRecap(
+  session: GameSession,
+  initialSnapshot?: SessionSnapshot,
+  initialWorldSnapshot?: WorldSnapshot,
+): string {
+  if (!initialSnapshot || !session.profile) return '';
+
+  const currentSnapshot = captureSnapshot(session.profile);
+  const characterDelta = computeSessionDelta(initialSnapshot, currentSnapshot);
+
+  const currentWorldSnap = captureWorldSnapshot(
+    session.activePressures, session.playerRumors, session.resolvedPressures,
+  );
+  const worldDelta = initialWorldSnapshot
+    ? computeWorldDelta(initialWorldSnapshot, currentWorldSnap, session.resolvedPressures)
+    : { pressuresSpawned: 0, pressuresResolved: 0, resolutionSummaries: [], chainReactions: 0, rumorsDelta: 0 };
+
+  const factionDeltas = computeFactionDeltas(
+    initialSnapshot.reputation,
+    currentSnapshot.reputation,
+    session.playerRumors,
+    session.resolvedPressures,
+    initialWorldSnapshot?.resolvedCount ?? 0,
+  );
+
+  const rumorDelta = computeRumorDelta(
+    initialWorldSnapshot?.rumorCount ?? 0,
+    session.playerRumors,
+  );
+
+  // Build faction names from engine world state
+  const factionNames: Record<string, string> = {};
+  for (const [id, faction] of Object.entries(session.engine.world.factions)) {
+    factionNames[id] = (faction as Record<string, unknown>).name as string ?? id;
+  }
+
+  const whatPeopleAreSaying = deriveWhatPeopleAreSaying(
+    session.playerRumors,
+    session.profile.reputation,
+    factionNames,
+  );
+
+  return renderFullRecap(
+    characterDelta,
+    worldDelta,
+    factionDeltas,
+    rumorDelta,
+    whatPeopleAreSaying,
+  );
 }
 
 main().catch((err) => {

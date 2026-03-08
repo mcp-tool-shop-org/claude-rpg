@@ -15,6 +15,7 @@ Rules:
 - Environmental instability should affect prose tone
 - Do not list game mechanics or stats — describe experiences
 - Reference the player's gear, injuries, and title naturally — weave them into the scene
+- NPCs in the scene react to the player's reputation and presence — guards stiffen, merchants beckon, enemies recoil
 
 Respond with a JSON object (NarrationPlan) with this shape:
 {
@@ -75,6 +76,7 @@ export type SceneNarrationInput = {
   isNewZone: boolean;
   presentationState?: string;
   characterPresence?: string;
+  activePressures?: string[];
 };
 
 export function buildNarratePrompt(input: SceneNarrationInput): string {
@@ -109,5 +111,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}
 
-Tone: ${input.tone}${stateHint}${recent}`;
+Tone: ${input.tone}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${recent}`;
 }

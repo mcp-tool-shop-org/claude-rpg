@@ -141,6 +141,30 @@ function tryFastInterpret(
     }
   }
 
+  // Social verbs (bribe, intimidate, recruit, petition, disguise, stake claim)
+  if (verbs.includes('social')) {
+    const socialMatch = tryLeverageVerb(lower, 'social', entities);
+    if (socialMatch) return socialMatch;
+  }
+
+  // Rumor verbs (spread rumor, deny rumor, frame, bury, leak)
+  if (verbs.includes('rumor')) {
+    const rumorMatch = tryLeverageVerb(lower, 'rumor', entities);
+    if (rumorMatch) return rumorMatch;
+  }
+
+  // Diplomacy verbs (negotiate, broker, request meeting, improve standing)
+  if (verbs.includes('diplomacy')) {
+    const diploMatch = tryLeverageVerb(lower, 'diplomacy', entities);
+    if (diploMatch) return diploMatch;
+  }
+
+  // Sabotage verbs (sabotage, plant evidence, blackmail)
+  if (verbs.includes('sabotage')) {
+    const saboMatch = tryLeverageVerb(lower, 'sabotage', entities);
+    if (saboMatch) return saboMatch;
+  }
+
   // Use item
   if (/^use\s+/.test(lower) && verbs.includes('use')) {
     const itemName = lower.replace(/^use\s+/i, '');
@@ -161,6 +185,88 @@ function tryFastInterpret(
     }
   }
 
+  return null;
+}
+
+// --- Leverage verb fast path patterns ---
+
+type LeverageVerbMap = { pattern: RegExp; subAction: string; extractTarget: boolean };
+
+const SOCIAL_PATTERNS: LeverageVerbMap[] = [
+  { pattern: /^bribe\s+(.+)/i, subAction: 'bribe', extractTarget: true },
+  { pattern: /^intimidate\s+(.+)/i, subAction: 'intimidate', extractTarget: true },
+  { pattern: /^recruit\s+(.+)/i, subAction: 'recruit-ally', extractTarget: true },
+  { pattern: /^petition\s+(.+)/i, subAction: 'petition-authority', extractTarget: true },
+  { pattern: /^(disguise|hide identity|conceal)/i, subAction: 'disguise', extractTarget: false },
+  { pattern: /^stake\s+claim/i, subAction: 'stake-claim', extractTarget: false },
+  { pattern: /^call\s+in\s+(a\s+)?favor/i, subAction: 'call-in-favor', extractTarget: false },
+];
+
+const RUMOR_PATTERNS: LeverageVerbMap[] = [
+  { pattern: /^spread\s+(a\s+)?(rumor|rumour)\s+(about\s+|that\s+)?(.+)/i, subAction: 'seed', extractTarget: true },
+  { pattern: /^(seed|plant)\s+(a\s+)?(rumor|rumour)/i, subAction: 'seed', extractTarget: false },
+  { pattern: /^deny\s+(the\s+)?(rumor|rumour|accusation)/i, subAction: 'deny', extractTarget: false },
+  { pattern: /^frame\s+(.+)/i, subAction: 'frame', extractTarget: true },
+  { pattern: /^(bury|suppress)\s+(the\s+)?(scandal|rumor|rumour)/i, subAction: 'bury-scandal', extractTarget: false },
+  { pattern: /^leak\s+(the\s+)?truth/i, subAction: 'leak-truth', extractTarget: false },
+  { pattern: /^(spread\s+)?counter[\s-]?rumor/i, subAction: 'spread-counter-rumor', extractTarget: false },
+  { pattern: /^claim\s+(false\s+)?credit/i, subAction: 'claim-false-credit', extractTarget: false },
+];
+
+const DIPLOMACY_PATTERNS: LeverageVerbMap[] = [
+  { pattern: /^request\s+(a\s+)?meeting\s+(with\s+)?(.+)/i, subAction: 'request-meeting', extractTarget: true },
+  { pattern: /^improve\s+standing\s+(with\s+)?(.+)/i, subAction: 'improve-standing', extractTarget: true },
+  { pattern: /^negotiate\s+access\s+(with\s+|to\s+)?(.+)/i, subAction: 'negotiate-access', extractTarget: true },
+  { pattern: /^broker\s+(a\s+)?truce/i, subAction: 'broker-truce', extractTarget: false },
+  { pattern: /^trade\s+(a\s+)?secret/i, subAction: 'trade-secret', extractTarget: false },
+  { pattern: /^(form|propose)\s+(a\s+)?(temporary\s+)?alliance/i, subAction: 'temporary-alliance', extractTarget: false },
+  { pattern: /^cash\s+(in\s+)?(a\s+)?milestone/i, subAction: 'cash-milestone', extractTarget: false },
+];
+
+const SABOTAGE_PATTERNS: LeverageVerbMap[] = [
+  { pattern: /^sabotage\s+(.+)/i, subAction: 'sabotage', extractTarget: true },
+  { pattern: /^plant\s+evidence\s+(against\s+)?(.+)/i, subAction: 'plant-evidence', extractTarget: true },
+  { pattern: /^blackmail\s+(.+)/i, subAction: 'blackmail-target', extractTarget: true },
+];
+
+const VERB_PATTERN_MAP: Record<string, LeverageVerbMap[]> = {
+  social: SOCIAL_PATTERNS,
+  rumor: RUMOR_PATTERNS,
+  diplomacy: DIPLOMACY_PATTERNS,
+  sabotage: SABOTAGE_PATTERNS,
+};
+
+function tryLeverageVerb(
+  lower: string,
+  verb: string,
+  entities: EntityState[],
+): InterpretedAction | null {
+  const patterns = VERB_PATTERN_MAP[verb];
+  if (!patterns) return null;
+
+  for (const { pattern, subAction, extractTarget } of patterns) {
+    const match = lower.match(pattern);
+    if (match) {
+      let targetId: string | null = null;
+      if (extractTarget) {
+        // Get the last capture group as the potential target name
+        const targetText = match[match.length - 1];
+        if (targetText) {
+          const entity = findEntityByName(targetText.trim(), entities);
+          if (entity) targetId = entity.id;
+        }
+      }
+      return {
+        verb,
+        targetIds: targetId ? [targetId] : null,
+        toolId: null,
+        parameters: { subAction },
+        confidence: 'high',
+        reasoning: `${verb}: ${subAction}`,
+        alternatives: null,
+      };
+    }
+  }
   return null;
 }
 

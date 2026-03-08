@@ -2,6 +2,7 @@
 
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
+import type { WorldState } from '@ai-rpg-engine/core';
 import {
   computeLoadoutEffects,
   type LoadoutEffect,
@@ -11,6 +12,12 @@ import {
   getActiveInjuries,
   getReputation,
 } from '@ai-rpg-engine/character-profile';
+import {
+  deriveStance,
+  getCognition,
+  getEntityFaction,
+  getFactionCognition,
+} from '@ai-rpg-engine/modules';
 
 export type PresenceStrings = {
   /** For the narrator: gear, injuries, title woven into descriptive context. */
@@ -37,6 +44,7 @@ export type StatusData = {
 export function buildPresence(
   profile: CharacterProfile,
   itemCatalog: ItemCatalog,
+  npcStance?: string,
 ): PresenceStrings {
   const level = computeLevel(profile.progression.xp);
   const archName = profile.build.archetypeId;
@@ -99,10 +107,31 @@ export function buildPresence(
     npcParts.push(`Rep: ${repStr}.`);
   }
 
+  // Stance indicator for NPC perception
+  if (npcStance && npcStance !== 'neutral') {
+    npcParts.push(`Stance toward player: ${npcStance}.`);
+  }
+
   return {
     narratorSummary: narratorParts.join(' '),
     npcPerception: npcParts.join(' '),
   };
+}
+
+/** Build stance-aware NPC presence for a specific NPC. */
+export function buildNPCStancePresence(
+  profile: CharacterProfile,
+  itemCatalog: ItemCatalog,
+  world: WorldState,
+  npcId: string,
+): PresenceStrings {
+  const factionId = getEntityFaction(world, npcId);
+  const repValue = factionId ? getReputation(profile, factionId) : 0;
+  const cognition = getCognition(world, npcId);
+  const factionCog = factionId ? getFactionCognition(world, factionId) : null;
+  const stance = deriveStance(repValue, cognition, factionCog?.alertLevel ?? 0);
+
+  return buildPresence(profile, itemCatalog, stance);
 }
 
 /** Build structured status data for terminal display. */

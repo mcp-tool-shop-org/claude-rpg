@@ -1,8 +1,11 @@
 // Core turn loop: input → interpret → resolve → narrate → present
 // v0.2: integrated with ImmersionRuntime for multi-modal output
+// v0.7: pressure resolution detection heuristic
 
-import type { Engine, ResolvedEvent } from '@ai-rpg-engine/core';
+import type { Engine, ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
+import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { NarrationPlan } from '@ai-rpg-engine/presentation';
+import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, type NarrationResult } from './narrator/narrator.js';
@@ -16,6 +19,7 @@ export type ProfileUpdateHints = {
   injurySustained?: { name: string; description: string };
   milestoneTriggered?: { label: string; description: string; tags: string[] };
   reputationDelta?: { factionId: string; delta: number };
+  pressureResolution?: { pressureId: string; resolutionType: ResolutionType };
 };
 
 export type TurnResult = {
@@ -40,6 +44,10 @@ export async function executeTurn(
   immersion?: ImmersionRuntime,
   characterPresence?: string,
   npcPlayerPresence?: string,
+  playerProfile?: CharacterProfile | null,
+  playerRumors?: PlayerRumor[],
+  pressureContext?: string[],
+  worldPressures?: WorldPressure[],
 ): Promise<TurnResult> {
   const previousLocationId = engine.world.locationId;
 
@@ -102,6 +110,7 @@ export async function executeTurn(
     previousLocationId,
     presentationState,
     characterPresence,
+    pressureContext,
   );
 
   // Step 4.5: Process through immersion runtime if available
@@ -125,6 +134,9 @@ export async function executeTurn(
       playerInput,
       tone,
       npcPlayerPresence,
+      playerProfile,
+      playerRumors,
+      worldPressures,
     );
 
     // Add voice cast to dialogue if immersion is active
@@ -138,8 +150,8 @@ export async function executeTurn(
     }
   }
 
-  // Extract profile hints from events
-  const profileHints = extractProfileHints(events, interpreted.verb);
+  // Extract profile hints from events (includes pressure resolution detection)
+  const profileHints = extractProfileHints(events, interpreted.verb, engine.world, worldPressures);
 
   // Record turn in history
   history.record({
@@ -166,17 +178,60 @@ export async function executeTurn(
 }
 
 /** Extract profile update hints from resolved events. */
-function extractProfileHints(events: ResolvedEvent[], verb: string): ProfileUpdateHints {
+function extractProfileHints(
+  events: ResolvedEvent[],
+  verb: string,
+  world: WorldState,
+  activePressures?: WorldPressure[],
+): ProfileUpdateHints {
   const hints: ProfileUpdateHints = { xpGained: 0 };
 
   for (const event of events) {
     switch (event.type) {
-      case 'combat.entity.defeated':
+      case 'combat.entity.defeated': {
         hints.xpGained += 15;
+
+        // Reputation: killing a faction member angers their faction
+        const defeatedId = event.payload.entityId as string | undefined;
+        if (defeatedId) {
+          const factionId = getEntityFaction(world, defeatedId);
+          if (factionId && !hints.reputationDelta) {
+            hints.reputationDelta = { factionId, delta: -15 };
+          }
+
+          // Milestone: defeating a boss
+          const entity = world.entities[defeatedId];
+          if (entity?.tags.includes('boss') && !hints.milestoneTriggered) {
+            hints.milestoneTriggered = {
+              label: `Defeated ${entity.name}`,
+              description: `Slew ${entity.name} in combat.`,
+              tags: ['combat', 'boss-kill'],
+            };
+          }
+        }
         break;
-      case 'world.zone.entered':
+      }
+      case 'world.zone.entered': {
         hints.xpGained += 5;
+
+        // Milestone: entering a landmark or boss lair
+        const zoneId = event.payload.zoneId as string | undefined;
+        if (zoneId && !hints.milestoneTriggered) {
+          const zone = world.zones[zoneId];
+          if (zone) {
+            const tags = zone.tags ?? [];
+            if (tags.includes('boss-lair') || tags.includes('landmark')) {
+              const tag = tags.includes('boss-lair') ? 'boss-lair' : 'landmark';
+              hints.milestoneTriggered = {
+                label: `Entered ${zone.name}`,
+                description: `Discovered ${zone.name}.`,
+                tags: ['exploration', tag],
+              };
+            }
+          }
+        }
         break;
+      }
       case 'combat.damage.applied': {
         const dmg = event.payload.damage as number | undefined;
         if (dmg && dmg >= 10) {
@@ -198,5 +253,63 @@ function extractProfileHints(events: ResolvedEvent[], verb: string): ProfileUpda
     hints.xpGained += 2;
   }
 
+  // Pressure resolution detection (heuristic, no LLM call)
+  if (activePressures && activePressures.length > 0) {
+    hints.pressureResolution = detectPressureResolution(events, verb, world, activePressures);
+  }
+
   return hints;
+}
+
+/**
+ * Heuristic: match player actions against active pressures.
+ * False negatives are fine — undetected resolutions just expire normally.
+ */
+function detectPressureResolution(
+  events: ResolvedEvent[],
+  verb: string,
+  world: WorldState,
+  pressures: WorldPressure[],
+): ProfileUpdateHints['pressureResolution'] {
+  // Combat victory → resolves bounty or revenge attempt
+  const defeatedFactions = new Set<string>();
+  for (const event of events) {
+    if (event.type === 'combat.entity.defeated') {
+      const defeatedId = event.payload.entityId as string | undefined;
+      if (defeatedId) {
+        const factionId = getEntityFaction(world, defeatedId);
+        if (factionId) defeatedFactions.add(factionId);
+      }
+    }
+  }
+
+  if (defeatedFactions.size > 0) {
+    for (const p of pressures) {
+      if (
+        (p.kind === 'bounty-issued' || p.kind === 'revenge-attempt') &&
+        defeatedFactions.has(p.sourceFactionId)
+      ) {
+        return { pressureId: p.id, resolutionType: 'resolved-by-player' };
+      }
+    }
+  }
+
+  // Speaking to a faction with a summons → resolves it
+  if (verb === 'speak') {
+    for (const p of pressures) {
+      if (p.kind === 'faction-summons') {
+        // Check if we spoke to someone from that faction
+        for (const entity of Object.values(world.entities)) {
+          if (entity.zoneId === world.locationId && entity.id !== world.playerId) {
+            const factionId = getEntityFaction(world, entity.id);
+            if (factionId === p.sourceFactionId) {
+              return { pressureId: p.id, resolutionType: 'resolved-by-player' };
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return undefined;
 }

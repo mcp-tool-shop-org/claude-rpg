@@ -1,13 +1,21 @@
 // Serialize NPC cognitive state into dialogue prompt context
 
 import type { WorldState } from '@ai-rpg-engine/core';
+import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
+import { getReputation } from '@ai-rpg-engine/character-profile';
 import {
   getCognition,
   getEntityFaction,
   getFactionCognition,
   getRumorsFrom,
+  deriveStance,
+  getReputationConsequence,
+  getRumorsKnownToFaction,
+  getPressuresForFaction,
   type Belief,
   type Memory,
+  type PlayerRumor,
+  type WorldPressure,
 } from '@ai-rpg-engine/modules';
 import type { DialogueInput } from '../prompts/dialogue-npc.js';
 
@@ -18,6 +26,9 @@ export function buildNPCDialogueContext(
   playerUtterance: string,
   tone: string,
   playerPresence?: string,
+  playerProfile?: CharacterProfile,
+  playerRumors?: PlayerRumor[],
+  activePressures?: WorldPressure[],
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -57,13 +68,15 @@ export function buildNPCDialogueContext(
     (r) => `${r.subject ?? 'unknown'}: ${r.key ?? ''} = ${r.value ?? '?'}`,
   );
 
-  // Determine player relationship from NPC beliefs
-  const hostileBelief = beliefs.find(
-    (b) => b.subject === world.playerId && b.key === 'hostile',
-  );
-  let relationship = 'neutral';
-  if (hostileBelief) {
-    relationship = hostileBelief.value ? 'hostile' : 'friendly';
+  // Derive social stance from reputation + cognition
+  const repValue = factionId && playerProfile ? getReputation(playerProfile, factionId) : 0;
+  const alertLevel = faction?.alertLevel ?? 0;
+  const stance = deriveStance(repValue, cognition, alertLevel);
+  const consequence = getReputationConsequence(repValue);
+
+  let relationship = stance as string;
+  if (consequence.dialogueBias) {
+    relationship += ` — ${consequence.dialogueBias}`;
   }
 
   // Determine personality from AI profile or tags
@@ -73,6 +86,32 @@ export function buildNPCDialogueContext(
     npc.tags.includes('hostile') ? 'aggressive' :
     'cautious'
   );
+
+  // Get player rumors known to this NPC's faction
+  const knownPlayerRumors = playerRumors && factionId
+    ? getRumorsKnownToFaction(playerRumors, factionId)
+        .filter((r) => r.confidence > 0.3)
+        .slice(0, 3)
+        .map((r) => ({
+          claim: r.claim,
+          confidence: r.confidence,
+          distortion: r.distortion,
+          valence: r.valence,
+        }))
+    : undefined;
+
+  // Get pressures from this NPC's faction (exclude hidden)
+  const factionPressures = activePressures && factionId
+    ? getPressuresForFaction(activePressures, factionId)
+        .filter((p) => p.visibility !== 'hidden')
+        .slice(0, 2)
+        .map((p) => ({
+          kind: p.kind,
+          description: p.description,
+          urgency: p.urgency,
+          visibility: p.visibility,
+        }))
+    : undefined;
 
   return {
     npcName: npc.name,
@@ -88,5 +127,7 @@ export function buildNPCDialogueContext(
     playerUtterance,
     tone,
     playerPresence,
+    playerRumors: knownPlayerRumors,
+    activePressures: factionPressures,
   };
 }

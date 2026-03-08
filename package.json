@@ -1,6 +1,6 @@
 {
   "name": "claude-rpg",
-  "version": "0.3.0",
+  "version": "1.1.0",
   "description": "Simulation-grounded narrative RPG where worlds are generated live, but truth remains coherent",
   "type": "module",
   "main": "./dist/index.js",
@@ -26,14 +26,17 @@
     "verify": "npm run build && npm run test"
   },
   "dependencies": {
-    "@ai-rpg-engine/core": "^2.0.0",
-    "@ai-rpg-engine/modules": "^2.0.0",
-    "@ai-rpg-engine/content-schema": "^2.0.0",
-    "@ai-rpg-engine/terminal-ui": "^2.0.0",
+    "@ai-rpg-engine/audio-director": "^2.0.0",
     "@ai-rpg-engine/character-creation": "^2.0.0",
     "@ai-rpg-engine/character-profile": "^2.0.0",
+    "@ai-rpg-engine/content-schema": "^2.0.0",
+    "@ai-rpg-engine/campaign-memory": "^2.0.0",
+    "@ai-rpg-engine/core": "^2.0.0",
     "@ai-rpg-engine/equipment": "^2.0.0",
+    "@ai-rpg-engine/modules": "^2.0.4",
     "@ai-rpg-engine/pack-registry": "^2.0.0",
+    "@ai-rpg-engine/presentation": "^2.0.0",
+    "@ai-rpg-engine/soundpack-core": "^2.0.0",
     "@ai-rpg-engine/starter-colony": "^2.0.0",
     "@ai-rpg-engine/starter-cyberpunk": "^2.0.0",
     "@ai-rpg-engine/starter-detective": "^2.0.0",
@@ -41,9 +44,7 @@
     "@ai-rpg-engine/starter-pirate": "^2.0.0",
     "@ai-rpg-engine/starter-weird-west": "^2.0.0",
     "@ai-rpg-engine/starter-zombie": "^2.0.0",
-    "@ai-rpg-engine/presentation": "^2.0.0",
-    "@ai-rpg-engine/audio-director": "^2.0.0",
-    "@ai-rpg-engine/soundpack-core": "^2.0.0",
+    "@ai-rpg-engine/terminal-ui": "^2.0.0",
     "@anthropic-ai/sdk": "^0.39.0"
   },
   "devDependencies": {

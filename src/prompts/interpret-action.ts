@@ -17,6 +17,13 @@ Rules:
 - If the input doesn't map to any available verb, use the "look" verb as fallback
 - Never invent verbs that aren't in the available list
 
+Compound verbs: For "social", "rumor", "diplomacy", and "sabotage" verbs, include a "subAction" key in the parameters object:
+- social: bribe, intimidate, call-in-favor, recruit-ally, petition-authority, disguise, stake-claim
+- rumor: seed, deny, frame, claim-false-credit, bury-scandal, leak-truth, spread-counter-rumor
+- diplomacy: request-meeting, improve-standing, cash-milestone, negotiate-access, trade-secret, temporary-alliance, broker-truce
+- sabotage: sabotage, plant-evidence, blackmail-target
+Example: "bribe the guard" → { "verb": "social", "targetIds": ["guard-1"], "parameters": { "subAction": "bribe" } }
+
 Respond with JSON only, no other text:
 {
   "verb": "string",

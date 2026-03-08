@@ -12,7 +12,23 @@ Rules:
 - Keep dialogue to 1-3 sentences per exchange
 - Output ONLY the NPC's spoken words, no narration tags, stage directions, or quotation marks
 - Match the tone/genre of the world
-- React to the player's visible gear, injuries, titles, and reputation`;
+- React to the player's visible gear, injuries, titles, and reputation
+- If the player's stance is hostile or fearful, reflect that in dialogue tone and willingness to help
+- If the player is awed or has kinship, be more forthcoming with information and aid
+- Merchants adjust pricing language based on stance (hostile = inflated, awed = discounts)
+- If the NPC's faction has high alert, be evasive or defensive regardless of personal feelings
+- If the NPC has heard rumors about the player, weave them into dialogue naturally
+- High-confidence rumors are stated as fact; low-confidence rumors are hedged ("I heard...", "They say...")
+- High-distortion rumors may be inaccurate — the NPC believes the distorted version
+- Heroic rumors make the NPC more respectful or cautious; fearsome rumors make them wary or hostile
+- NPCs may ask the player about rumors they've heard, seeking confirmation or denial
+- If there is an active pressure from the NPC's faction, it affects their behavior:
+  - bounty-issued: the NPC may threaten, demand surrender, or offer to look the other way
+  - investigation-opened: the NPC asks probing questions, withholds information
+  - merchant-blacklist: the NPC refuses trade or demands premium prices
+  - faction-summons: the NPC insists the player comply, warns of consequences
+  - revenge-attempt: the NPC is hostile, may ambush or betray
+- Pressures the NPC doesn't know about (hidden visibility) have no effect on dialogue`;
 
 export type DialogueInput = {
   npcName: string;
@@ -39,7 +55,41 @@ export type DialogueInput = {
   playerUtterance: string;
   tone: string;
   playerPresence?: string;
+  playerRumors?: Array<{
+    claim: string;
+    confidence: number;
+    distortion: number;
+    valence: string;
+  }>;
+  activePressures?: Array<{
+    kind: string;
+    description: string;
+    urgency: number;
+    visibility: string;
+  }>;
 };
+
+function formatActivePressures(
+  pressures?: DialogueInput['activePressures'],
+): string {
+  if (!pressures || pressures.length === 0) return '';
+  const lines = pressures.map((p) => {
+    const urgency = p.urgency >= 0.7 ? 'imminent' : p.urgency >= 0.4 ? 'developing' : 'emerging';
+    return `  - ${p.kind} (${urgency}): ${p.description}`;
+  });
+  return `\nFaction pressures involving the player:\n${lines.join('\n')}\n`;
+}
+
+function formatPlayerRumors(
+  rumors?: DialogueInput['playerRumors'],
+): string {
+  if (!rumors || rumors.length === 0) return '';
+  const lines = rumors.map((r) => {
+    const conf = r.confidence >= 0.8 ? 'certain' : r.confidence >= 0.5 ? 'heard' : 'vague whisper';
+    return `  - "${r.claim}" (${conf}, ${r.valence})`;
+  });
+  return `\nRumors about the player:\n${lines.join('\n')}\n`;
+}
 
 export function buildDialoguePrompt(input: DialogueInput): string {
   const beliefs = input.beliefs
@@ -73,6 +123,6 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${input.playerPresence ? `\n${input.playerPresence}\n` : ''}
+${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}
 Player says: "${input.playerUtterance}"`;
 }

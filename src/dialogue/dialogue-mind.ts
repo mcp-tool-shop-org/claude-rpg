@@ -1,6 +1,8 @@
 // Dialogue Mind: generate NPC dialogue grounded in simulation state
 
 import type { WorldState } from '@ai-rpg-engine/core';
+import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
+import type { PlayerRumor, WorldPressure } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
@@ -31,8 +33,11 @@ export async function generateDialogue(
   playerUtterance: string,
   tone: string,
   playerPresence?: string,
+  playerProfile?: CharacterProfile | null,
+  playerRumors?: PlayerRumor[],
+  activePressures?: WorldPressure[],
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures);
   if (!context) return null;
 
   const prompt = buildDialoguePrompt(context);

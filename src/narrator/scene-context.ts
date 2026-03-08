@@ -24,6 +24,7 @@ export function buildSceneContext(
   activePressures?: string[],
   districtDescriptor?: string,
   partyPresence?: string,
+  economyContext?: string,
 ): SceneContext {
   const zone = world.zones[world.locationId];
   const player = world.entities[world.playerId];
@@ -99,6 +100,7 @@ export function buildSceneContext(
     activePressures,
     districtDescriptor,
     partyPresence,
+    economyContext,
   };
 
   return { narrationInput, perceivedEvents };

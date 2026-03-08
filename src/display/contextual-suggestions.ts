@@ -18,9 +18,11 @@ export function generateSuggestions(opts: {
   recommendation: MoveRecommendation;
   hasUsedLeverage: boolean;
   recentMilestone: boolean;
+  hasSupplyCrisis?: boolean;
+  hasBlackMarket?: boolean;
 }): ContextualSuggestion[] {
   const suggestions: ContextualSuggestion[] = [];
-  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures } = opts;
+  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket } = opts;
 
   // 1. Crisis pressure → suggest top advisor move
   if (recommendation.situationTag === 'crisis' && recommendation.top3.length > 0) {
@@ -74,11 +76,28 @@ export function generateSuggestions(opts: {
     });
   }
 
+  // 7. Supply crisis → suggest trade/negotiation
+  if (suggestions.length < 2 && hasSupplyCrisis) {
+    suggestions.push({
+      text: 'Supplies are critically low — negotiate trade or find alternative sources',
+      trigger: 'supply-crisis',
+    });
+  }
+
+  // 8. Black market active → suggest contraband opportunities
+  if (suggestions.length < 2 && hasBlackMarket && !hasSupplyCrisis) {
+    suggestions.push({
+      text: 'Black market activity detected — contraband may be available',
+      trigger: 'black-market',
+    });
+  }
+
   // After turn 10, only show on notable events (already handled by crisis/milestone/failed checks)
   if (turnCount > 10) {
     return suggestions.filter((s) =>
       s.trigger === 'crisis-pressure' || s.trigger === 'action-failed' ||
-      s.trigger === 'milestone-cash' || s.trigger === 'pressure-hint');
+      s.trigger === 'milestone-cash' || s.trigger === 'pressure-hint' ||
+      s.trigger === 'supply-crisis' || s.trigger === 'black-market');
   }
 
   return suggestions.slice(0, 2);

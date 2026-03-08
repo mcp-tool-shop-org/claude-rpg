@@ -25,7 +25,10 @@ export type ChronicleEventSource =
   | { kind: 'item-acquired'; itemId: string; itemName: string; source: string; tick: number }
   | { kind: 'item-lost'; itemId: string; itemName: string; reason: string; tick: number }
   | { kind: 'item-recognized'; itemId: string; itemName: string; recognizedBy: string; tick: number }
-  | { kind: 'item-transformed'; itemId: string; itemName: string; transformation: string; tick: number };
+  | { kind: 'item-transformed'; itemId: string; itemName: string; transformation: string; tick: number }
+  | { kind: 'supply-crisis'; districtId: string; category: string; level: number; tick: number }
+  | { kind: 'trade-completed'; districtId: string; category: string; delta: number; cause: string; tick: number }
+  | { kind: 'black-market-opened'; districtId: string; tick: number };
 
 // --- Compaction Types ---
 
@@ -125,6 +128,12 @@ export function deriveChronicleEvents(
       return deriveItemRecognized(source, playerId);
     case 'item-transformed':
       return deriveItemTransformed(source, playerId);
+    case 'supply-crisis':
+      return deriveSupplyCrisis(source);
+    case 'trade-completed':
+      return deriveTradeCompleted(source);
+    case 'black-market-opened':
+      return deriveBlackMarketOpened(source);
   }
 }
 
@@ -624,4 +633,52 @@ export function buildChronicleContext(
   const events = top.map((r) => r.description).join('. ');
 
   return `${header} ${events}.`;
+}
+
+// --- Economy Chronicle Events (v1.7) ---
+
+function deriveSupplyCrisis(
+  source: Extract<ChronicleEventSource, { kind: 'supply-crisis' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'discovery' as RecordCategory,
+    actorId: 'world',
+    zoneId: source.districtId,
+    description: `${source.category} supply crisis in ${source.districtId} (level ${source.level})`,
+    significance: 0.6,
+    witnesses: [],
+    data: { category: source.category, level: source.level },
+  }];
+}
+
+function deriveTradeCompleted(
+  source: Extract<ChronicleEventSource, { kind: 'trade-completed' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  const verb = source.delta > 0 ? 'supplied' : 'drained';
+  return [{
+    tick: source.tick,
+    category: 'action' as RecordCategory,
+    actorId: 'player',
+    zoneId: source.districtId,
+    description: `${source.cause} ${verb} ${source.category} in ${source.districtId}`,
+    significance: 0.3,
+    witnesses: [],
+    data: { category: source.category, delta: source.delta },
+  }];
+}
+
+function deriveBlackMarketOpened(
+  source: Extract<ChronicleEventSource, { kind: 'black-market-opened' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'discovery' as RecordCategory,
+    actorId: 'world',
+    zoneId: source.districtId,
+    description: `Black market opened in ${source.districtId}`,
+    significance: 0.5,
+    witnesses: [],
+    data: {},
+  }];
 }

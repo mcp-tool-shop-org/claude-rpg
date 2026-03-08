@@ -23,6 +23,7 @@ import {
   loadObligationsFromSession,
   loadConsequenceChainsFromSession,
   loadPartyFromSession,
+  loadEconomiesFromSession,
   listSaves,
   getSavePath,
   getDefaultSaveDir,
@@ -49,10 +50,11 @@ import {
   computeDistrictDeltas,
   computeCompanionRecapEntries,
   computeItemRecapEntries,
+  computeEconomyRecapEntries,
   renderFullRecap,
 } from './character/session-recap.js';
 import type { ItemChronicleEntry } from '@ai-rpg-engine/equipment';
-import type { PartyState } from '@ai-rpg-engine/modules';
+import type { PartyState, DistrictEconomy } from '@ai-rpg-engine/modules';
 import {
   computeNpcRecapEntries,
   getAllDistrictIds,
@@ -142,7 +144,8 @@ async function runPlay(args: string[]): Promise<void> {
   const districtMoods = captureDistrictMoods(session);
   const initialParty = structuredClone(session.partyState);
   const initialItemChronicle = structuredClone(result.profile.itemChronicle);
-  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle);
+  const initialEconomies = cloneEconomies(session.districtEconomies);
+  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies);
 }
 
 async function runLoad(): Promise<void> {
@@ -235,6 +238,7 @@ async function runLoad(): Promise<void> {
   const restoredObligations = loadObligationsFromSession(savedSession);
   const restoredChains = loadConsequenceChainsFromSession(savedSession);
   const restoredParty = loadPartyFromSession(savedSession);
+  const restoredEconomies = loadEconomiesFromSession(savedSession);
 
   const session = new GameSession({
     engine,
@@ -256,6 +260,7 @@ async function runLoad(): Promise<void> {
   session.npcObligations = restoredObligations;
   session.activeConsequenceChains = restoredChains;
   session.partyState = restoredParty;
+  if (restoredEconomies.size > 0) session.districtEconomies = restoredEconomies;
 
   // Show recap
   console.log(renderRecap(profile, history));
@@ -267,7 +272,8 @@ async function runLoad(): Promise<void> {
   const districtMoods = captureDistrictMoods(session);
   const initialParty = structuredClone(session.partyState);
   const initialItemChronicle = profile ? structuredClone(profile.itemChronicle) : {};
-  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle);
+  const initialEconomies = cloneEconomies(session.districtEconomies);
+  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies);
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
@@ -309,6 +315,14 @@ type DistrictMoodSnapshot = {
   metrics: { commerce: number; morale: number; alertPressure: number; stability: number };
 }[];
 
+function cloneEconomies(economies: Map<string, DistrictEconomy>): Map<string, DistrictEconomy> {
+  const clone = new Map<string, DistrictEconomy>();
+  for (const [id, econ] of economies) {
+    clone.set(id, structuredClone(econ));
+  }
+  return clone;
+}
+
 function captureDistrictMoods(session: GameSession): DistrictMoodSnapshot {
   const moods: DistrictMoodSnapshot = [];
   for (const districtId of getAllDistrictIds(session.engine.world)) {
@@ -340,6 +354,7 @@ async function runGameLoop(
   initialDistrictMoods?: DistrictMoodSnapshot,
   initialPartyState?: PartyState,
   initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
+  initialEconomies?: Map<string, DistrictEconomy>,
 ): Promise<void> {
   // Welcome
   console.log(session.getWelcome());
@@ -389,12 +404,13 @@ async function runGameLoop(
             session.npcObligations,
             session.activeConsequenceChains,
             session.partyState,
+            session.districtEconomies,
           );
           console.log(`\n  Saved to ${savePath}`);
 
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies,
           );
           if (recapText) console.log(recapText);
           else console.log('');
@@ -423,7 +439,7 @@ async function runGameLoop(
         if (output === '__QUIT__') {
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies,
           );
           if (recapText) console.log(recapText);
           console.log('\n  Farewell.\n');
@@ -443,7 +459,7 @@ async function runGameLoop(
   prompt();
 }
 
-/** Build unified 5-section recap from session state. */
+/** Build unified session recap from session state. */
 function buildUnifiedRecap(
   session: GameSession,
   initialSnapshot?: SessionSnapshot,
@@ -451,6 +467,7 @@ function buildUnifiedRecap(
   initialDistrictMoods?: DistrictMoodSnapshot,
   initialPartyState?: PartyState,
   initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
+  initialEconomies?: Map<string, DistrictEconomy>,
 ): string {
   if (!initialSnapshot || !session.profile) return '';
 
@@ -528,6 +545,18 @@ function buildUnifiedRecap(
     ? computeItemRecapEntries(initialItemChronicle, session.profile.itemChronicle, itemNames)
     : [];
 
+  // Compute economy recap entries
+  const districtNameMap: Record<string, string> = {};
+  for (const districtId of getAllDistrictIds(session.engine.world)) {
+    const dDef = getDistrictDefinition(session.engine.world, districtId);
+    if (dDef) districtNameMap[districtId] = dDef.name;
+  }
+  const economyRecapEntries = computeEconomyRecapEntries(
+    initialEconomies,
+    session.districtEconomies,
+    districtNameMap,
+  );
+
   return renderFullRecap(
     characterDelta,
     worldDelta,
@@ -538,6 +567,7 @@ function buildUnifiedRecap(
     districtDeltas,
     companionRecapEntries.length > 0 ? companionRecapEntries : undefined,
     itemRecapEntries.length > 0 ? itemRecapEntries : undefined,
+    economyRecapEntries.length > 0 ? economyRecapEntries : undefined,
   );
 }
 

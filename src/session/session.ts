@@ -10,12 +10,12 @@ import { join, dirname } from 'node:path';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
-import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState } from '@ai-rpg-engine/modules';
+import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState, type DistrictEconomy } from '@ai-rpg-engine/modules';
 import { CampaignJournal, type CampaignRecord } from '@ai-rpg-engine/campaign-memory';
 import { TurnHistory } from './history.js';
 
 export type SavedSession = {
-  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0' | '0.8.0' | '0.9.0' | '1.0.0' | '1.1.0';
+  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0' | '0.8.0' | '0.9.0' | '1.0.0' | '1.1.0' | '1.2.0';
   engineState: string;
   turnHistory: ReturnType<TurnHistory['toJSON']>;
   worldPrompt?: string;
@@ -46,6 +46,8 @@ export type SavedSession = {
   consequenceChains?: string;
   // v1.1.0 fields
   partyState?: string;
+  // v1.2.0 fields
+  districtEconomies?: string;
 };
 
 export type SaveSlotSummary = {
@@ -80,6 +82,7 @@ export async function saveSession(
   npcObligations?: Map<string, NpcObligationLedger>,
   consequenceChains?: Map<string, ConsequenceChain>,
   partyState?: PartyState,
+  districtEconomies?: Map<string, DistrictEconomy>,
 ): Promise<void> {
   // Compute leverage snapshot for save summary
   const leverageSnap = profile
@@ -87,7 +90,7 @@ export async function saveSession(
     : undefined;
 
   const session: SavedSession = {
-    version: '1.1.0',
+    version: '1.2.0',
     engineState: engine.serialize(),
     turnHistory: history.toJSON(),
     worldPrompt,
@@ -123,6 +126,9 @@ export async function saveSession(
       : undefined,
     partyState: partyState && partyState.companions.length > 0
       ? JSON.stringify(partyState)
+      : undefined,
+    districtEconomies: districtEconomies && districtEconomies.size > 0
+      ? JSON.stringify(Object.fromEntries(districtEconomies))
       : undefined,
   };
 
@@ -227,6 +233,19 @@ export function loadPartyFromSession(session: SavedSession): PartyState {
     return JSON.parse(session.partyState) as PartyState;
   } catch {
     return createPartyState();
+  }
+}
+
+/** Load district economies from a saved session. */
+export function loadEconomiesFromSession(
+  session: SavedSession,
+): Map<string, DistrictEconomy> {
+  if (!session.districtEconomies) return new Map();
+  try {
+    const obj = JSON.parse(session.districtEconomies) as Record<string, DistrictEconomy>;
+    return new Map(Object.entries(obj));
+  } catch {
+    return new Map();
   }
 }
 

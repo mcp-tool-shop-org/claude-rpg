@@ -29,6 +29,9 @@ import {
   computeDistrictModifiers,
   formatPartyForDirector,
   evaluateDepartureRisk,
+  formatAllDistrictEconomiesForDirector,
+  formatEconomyForDirector,
+  deriveEconomyDescriptor,
   type PlayerRumor,
   type WorldPressure,
   type PressureFallout,
@@ -40,6 +43,7 @@ import {
   type LeverageState,
   type StrategicMap,
   type PartyState,
+  type DistrictEconomy,
 } from '@ai-rpg-engine/modules';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
@@ -86,6 +90,8 @@ ${DIVIDER}
   /item <item-id>               Inspect item provenance, chronicle, relic state
   /districts                    Show all districts with mood + metrics
   /district <id>                Deep inspect a specific district
+  /market                       Show all district economies at a glance
+  /trade <district-id>          Detailed district economy + value modifiers
   /status                       Compact strategic snapshot
   /stats                        Session balance metrics
   /help leverage                Full leverage verb reference
@@ -125,6 +131,7 @@ export function executeDirectorCommand(
   partyState?: PartyState,
   profile?: CharacterProfile | null,
   itemCatalog?: ItemCatalog | null,
+  districtEconomies?: Map<string, DistrictEconomy>,
 ): string {
   const parts = command.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
@@ -257,6 +264,27 @@ export function executeDirectorCommand(
       return formatDistrictForDirector(districtId, dDef, dState, mood, mods);
     }
 
+    case '/market': {
+      if (!districtEconomies || districtEconomies.size === 0) return '  No economy data available.';
+      const entries: { districtId: string; districtName: string; economy: DistrictEconomy }[] = [];
+      for (const [districtId, economy] of districtEconomies) {
+        const dDef = getDistrictDefinition(world, districtId);
+        entries.push({ districtId, districtName: dDef?.name ?? districtId, economy });
+      }
+      return formatAllDistrictEconomiesForDirector(entries);
+    }
+
+    case '/trade': {
+      const districtId = parts[1];
+      if (!districtId) return '  Usage: /trade <district-id>';
+      if (!districtEconomies) return '  No economy data available.';
+      const economy = districtEconomies.get(districtId);
+      if (!economy) return `  No economy data for district "${districtId}".`;
+      const dDef = getDistrictDefinition(world, districtId);
+      const descriptor = deriveEconomyDescriptor(economy);
+      return formatEconomyForDirector(districtId, dDef?.name ?? districtId, economy, descriptor);
+    }
+
     case '/chronicle': {
       if (!journal || journal.size() === 0) return '  No chronicle events recorded yet.';
       const mode = (parts[1] ?? 'timeline') as ChronicleRenderMode;
@@ -300,12 +328,32 @@ export function executeDirectorCommand(
       const topThreat = (activePressures ?? []).length > 0
         ? { description: activePressures![0].description, urgency: activePressures![0].urgency }
         : null;
+      // Build economy summary for status line
+      let economySummary: string | undefined;
+      if (districtEconomies && districtEconomies.size > 0) {
+        const scarceParts: string[] = [];
+        const surplusParts: string[] = [];
+        for (const [, econ] of districtEconomies) {
+          const desc = deriveEconomyDescriptor(econ);
+          for (const s of desc.scarcities) {
+            if (!scarceParts.includes(s.category)) scarceParts.push(s.category);
+          }
+          for (const s of desc.surpluses) {
+            if (!surplusParts.includes(s.category)) surplusParts.push(s.category);
+          }
+        }
+        const parts: string[] = [];
+        if (scarceParts.length > 0) parts.push(`${scarceParts.join(', ')} scarce`);
+        if (surplusParts.length > 0) parts.push(`${surplusParts.join(', ')} plentiful`);
+        if (parts.length > 0) economySummary = parts.join(', ');
+      }
       return renderCompactStatus({
         statusData,
         leverageState,
         topThreat,
         suggestedMove: suggestedMove ?? null,
         situationTag: situationTag ?? 'safe',
+        economySummary,
       });
     }
 

@@ -18,6 +18,14 @@ import { EQUIPMENT_SLOTS, recordItemEvent } from '@ai-rpg-engine/equipment';
 import {
   evaluateItemRecognition,
   shouldRecognize,
+  createDistrictEconomy,
+  tickDistrictEconomy,
+  applyEconomyShift,
+  deriveEconomyDescriptor,
+  formatEconomyForNarrator,
+  formatAllDistrictEconomiesForDirector,
+  type DistrictEconomy,
+  type SupplyCategory,
 } from '@ai-rpg-engine/modules';
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 import {
@@ -184,6 +192,7 @@ export class GameSession {
   lastLeverageResolution: LeverageResolution | null = null;
   lastCompanionReactions: CompanionReaction[] = [];
   partyState: PartyState = createPartyState();
+  districtEconomies: Map<string, DistrictEconomy> = new Map();
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -198,6 +207,9 @@ export class GameSession {
     this.itemCatalog = config.itemCatalog ?? null;
     this.journal = config.journal ?? new CampaignJournal();
     this.genre = config.genre ?? 'fantasy';
+
+    // Initialize district economies from genre + district tags
+    this.initializeDistrictEconomies();
 
     // Register leverage verb handlers (thin stubs — resolution happens in processInput)
     this.registerLeverageVerbs();
@@ -347,6 +359,7 @@ export class GameSession {
     const pressureContext = this.getVisiblePressureContext();
     const districtDescriptor = this.getDistrictDescriptor();
     const partyPresenceStr = this.getPartyPresence();
+    const economyCtx = this.getEconomyContext();
     const result = await narrateScene(
       this.client,
       this.engine.world,
@@ -359,6 +372,7 @@ export class GameSession {
       pressureContext,
       districtDescriptor,
       partyPresenceStr,
+      economyCtx,
     );
     this.history.record({
       tick: this.engine.tick,
@@ -423,6 +437,7 @@ export class GameSession {
         this.partyState,
         this.profile,
         this.itemCatalog,
+        this.districtEconomies,
       );
     }
 
@@ -478,6 +493,7 @@ export class GameSession {
     const zoneBefore = this.engine.world.locationId;
 
     const partyPresenceStr = this.getPartyPresence();
+    const turnEconomyCtx = this.getEconomyContext();
     const turnResult = await executeTurn(
       this.engine,
       this.client,
@@ -494,6 +510,7 @@ export class GameSession {
       this.lastNpcActions,
       districtDescriptor,
       partyPresenceStr,
+      turnEconomyCtx,
     );
 
     // Process leverage actions (social/rumor/diplomacy/sabotage)
@@ -510,6 +527,9 @@ export class GameSession {
 
     // Faction agency: factions evaluate state and take actions
     this.tickFactionAgency();
+
+    // Economy tick: baseline-seeking decay per district (v1.7)
+    this.tickDistrictEconomies();
 
     // NPC agency: named NPCs evaluate state and take individual actions
     this.tickNpcAgencyTurn();
@@ -565,6 +585,9 @@ export class GameSession {
     let suggestions: ReturnType<typeof generateSuggestions> | undefined;
     if (this.profile) {
       const recommendation = this.buildMoveRecommendation();
+      // Economy flags for contextual suggestions
+      const hasSupplyCrisis = this.activePressures.some((p) => p.kind === 'supply-crisis');
+      const hasBlackMarket = [...this.districtEconomies.values()].some((e) => e.blackMarketActive);
       suggestions = generateSuggestions({
         turnCount: this.profile.totalTurns,
         leverageState: getLeverageState(this.profile.custom),
@@ -574,6 +597,8 @@ export class GameSession {
         recommendation,
         hasUsedLeverage: this.hasEverUsedLeverage(),
         recentMilestone: !!turnResult.profileHints.milestoneTriggered,
+        hasSupplyCrisis,
+        hasBlackMarket,
       });
     }
 
@@ -678,6 +703,16 @@ export class GameSession {
       companionNames[comp.npcId] = this.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
     }
     return formatPartyPresence(this.partyState, companionNames) ?? undefined;
+  }
+
+  /** Get economy context for narrator (~10-15 tokens). */
+  private getEconomyContext(): string | undefined {
+    const districtId = this.getPlayerDistrictId();
+    if (!districtId) return undefined;
+    const economy = this.districtEconomies.get(districtId);
+    if (!economy) return undefined;
+    const descriptor = deriveEconomyDescriptor(economy);
+    return formatEconomyForNarrator(descriptor);
   }
 
   /** Get the faction that controls the player's current zone (for witnessing). */
@@ -861,6 +896,10 @@ export class GameSession {
             }
           }
           break;
+
+        case 'economy-shift':
+          this.applyEconomyShiftEffect(effect.districtId, effect.category, effect.delta, effect.cause);
+          break;
       }
     }
   }
@@ -921,6 +960,7 @@ export class GameSession {
       activePressures: this.activePressures,
       genre: this.genre,
       currentTick: this.engine.tick,
+      districtEconomies: this.districtEconomies.size > 0 ? this.districtEconomies : undefined,
     };
   }
 
@@ -1023,6 +1063,54 @@ export class GameSession {
     }
   }
 
+  // --- v1.7: Economy ---
+
+  /** Initialize district economies from genre + district tags. */
+  private initializeDistrictEconomies(): void {
+    const districtIds = getAllDistrictIds(this.engine.world);
+    for (const districtId of districtIds) {
+      const def = getDistrictDefinition(this.engine.world, districtId);
+      const tags = def?.tags ?? [];
+      this.districtEconomies.set(
+        districtId,
+        createDistrictEconomy(this.genre, tags),
+      );
+    }
+  }
+
+  /** Tick all district economies — baseline-seeking decay, stability modulation. */
+  private tickDistrictEconomies(): void {
+    for (const [districtId, economy] of this.districtEconomies) {
+      const dState = getDistrictState(this.engine.world, districtId);
+      if (!dState) continue;
+      const updated = tickDistrictEconomy(
+        economy,
+        dState.commerce,
+        dState.stability,
+        this.engine.tick,
+      );
+      this.districtEconomies.set(districtId, updated);
+    }
+  }
+
+  /** Apply an economy-shift effect to a district's economy. */
+  private applyEconomyShiftEffect(
+    districtId: string,
+    category: string,
+    delta: number,
+    cause: string,
+  ): void {
+    const economy = this.districtEconomies.get(districtId);
+    if (!economy) return;
+    const updated = applyEconomyShift(economy, {
+      districtId,
+      category: category as SupplyCategory,
+      delta,
+      cause,
+    });
+    this.districtEconomies.set(districtId, updated);
+  }
+
   /** Faction agency: factions evaluate state and take strategic actions. */
   private tickFactionAgency(): void {
     if (!this.profile) return;
@@ -1046,12 +1134,13 @@ export class GameSession {
       playerReputations,
       this.activePressures,
       this.engine.tick,
+      this.districtEconomies,
     );
 
     // Build profiles for director view (even if no actions were taken)
     this.lastFactionProfiles = factionIds.map((factionId) => {
       const rep = playerReputations.find((r) => r.factionId === factionId)?.value ?? 0;
-      return buildFactionProfile(factionId, this.engine.world, rep, this.activePressures);
+      return buildFactionProfile(factionId, this.engine.world, rep, this.activePressures, this.districtEconomies);
     });
 
     // Apply effects from each faction action
@@ -1138,6 +1227,10 @@ export class GameSession {
 
         case 'member-count':
           // Member count changes are tracked conceptually — no entity spawning in v0.9
+          break;
+
+        case 'economy-shift':
+          this.applyEconomyShiftEffect(effect.districtId, effect.category, effect.delta, effect.cause);
           break;
       }
     }
@@ -1838,6 +1931,7 @@ export class GameSession {
       this.activePressures,
       playerReputations,
       this.lastFactionActions,
+      this.districtEconomies,
     );
   }
 

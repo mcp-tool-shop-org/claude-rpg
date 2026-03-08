@@ -36,7 +36,11 @@ Rules:
 - If the NPC is bargaining, be transactional: name what they want, what they offer, and the cost
 - If the NPC is warning the player, speak urgently, check if overheard, be direct about the danger
 - If the NPC is attempting to recruit or defect, speak in hushed tones, test the player's reaction before committing
-- If the NPC is betraying their faction, use euphemisms and conflicted tone — they know the weight of what they're doing`;
+- If the NPC is betraying their faction, use euphemisms and conflicted tone — they know the weight of what they're doing
+- When economy context is provided, it affects NPC behavior:
+  - In scarce districts: NPCs are desperate — merchants demand supplies as payment, guards demand bribes for access, civilians hoard and share reluctantly
+  - In surplus districts: NPCs are generous — merchants offer deals freely, goods are abundant, conversation turns to plenty and waste
+  - When black market is active: NPCs speak in coded language about "special goods," offer contraband in whispers, watch for authorities`;
 
 export type DialogueInput = {
   npcName: string;
@@ -83,6 +87,8 @@ export type DialogueInput = {
   isBargaining?: boolean;
   isWarning?: boolean;
   npcAgencyPresence?: string;
+  // v1.7: Economy context
+  economyContext?: string;
 };
 
 function formatActivePressures(
@@ -152,6 +158,6 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
+${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
 Player says: "${input.playerUtterance}"`;
 }

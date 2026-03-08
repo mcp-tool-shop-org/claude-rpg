@@ -13,8 +13,9 @@ export function renderCompactStatus(opts: {
   topThreat: { description: string; urgency: number } | null;
   suggestedMove: ScoredMove | null;
   situationTag: string;
+  economySummary?: string;
 }): string {
-  const { statusData: s, leverageState, topThreat, suggestedMove, situationTag } = opts;
+  const { statusData: s, leverageState, topThreat, suggestedMove, situationTag, economySummary } = opts;
   const lines: string[] = [];
 
   lines.push('');
@@ -40,6 +41,11 @@ export function renderCompactStatus(opts: {
   const leverageLine = formatLeverageStatus(leverageState);
   if (leverageLine !== 'No leverage') {
     lines.push(`  ${leverageLine}`);
+  }
+
+  // Economy line
+  if (economySummary) {
+    lines.push(`  Market: ${economySummary}`);
   }
 
   // Threat line

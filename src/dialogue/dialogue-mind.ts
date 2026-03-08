@@ -37,8 +37,10 @@ export async function generateDialogue(
   playerRumors?: PlayerRumor[],
   activePressures?: WorldPressure[],
   lastNpcActions?: NpcActionResult[],
+  economyContext?: string,
 ): Promise<DialogueResult | null> {
   const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
+  if (context && economyContext) context.economyContext = economyContext;
   if (!context) return null;
 
   const prompt = buildDialoguePrompt(context);

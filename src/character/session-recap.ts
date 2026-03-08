@@ -3,7 +3,8 @@
 
 import type { SessionDelta } from './recap-delta.js';
 import type { WorldDelta } from './world-delta.js';
-import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState } from '@ai-rpg-engine/modules';
+import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState, DistrictEconomy } from '@ai-rpg-engine/modules';
+import { deriveEconomyDescriptor, type SupplyCategory } from '@ai-rpg-engine/modules';
 
 const DIVIDER = '─'.repeat(60);
 const HEAVY_DIVIDER = '═'.repeat(60);
@@ -55,6 +56,12 @@ export type ItemRecapEntry = {
   name: string;
   event: 'acquired' | 'lost' | 'milestone-reached' | 'recognized';
   detail?: string;
+};
+
+export type EconomyRecapEntry = {
+  districtId: string;
+  districtName: string;
+  changes: string[];
 };
 
 // --- Computation ---
@@ -306,6 +313,63 @@ export function computeItemRecapEntries(
   return entries;
 }
 
+export function computeEconomyRecapEntries(
+  beforeEconomies: Map<string, DistrictEconomy> | undefined,
+  afterEconomies: Map<string, DistrictEconomy>,
+  districtNames: Record<string, string>,
+): EconomyRecapEntry[] {
+  const entries: EconomyRecapEntry[] = [];
+  const THRESHOLD = 15;
+
+  for (const [districtId, afterEcon] of afterEconomies) {
+    const beforeEcon = beforeEconomies?.get(districtId);
+    if (!beforeEcon) continue;
+
+    const changes: string[] = [];
+    const afterDesc = deriveEconomyDescriptor(afterEcon);
+    const beforeDesc = deriveEconomyDescriptor(beforeEcon);
+
+    // Check for new scarcities
+    for (const s of afterDesc.scarcities) {
+      if (!beforeDesc.scarcities.some((bs) => bs.category === s.category)) {
+        changes.push(`${s.category} became scarce`);
+      }
+    }
+
+    // Check for resolved scarcities
+    for (const s of beforeDesc.scarcities) {
+      if (!afterDesc.scarcities.some((as) => as.category === s.category)) {
+        changes.push(`${s.category} scarcity resolved`);
+      }
+    }
+
+    // Check significant supply shifts
+    for (const cat of Object.keys(afterEcon.supplies) as SupplyCategory[]) {
+      const diff = afterEcon.supplies[cat].level - beforeEcon.supplies[cat].level;
+      if (Math.abs(diff) >= THRESHOLD) {
+        changes.push(`${cat} ${diff > 0 ? 'recovered' : 'declined'} (${diff > 0 ? '+' : ''}${Math.round(diff)})`);
+      }
+    }
+
+    // Black market state change
+    if (!beforeEcon.blackMarketActive && afterEcon.blackMarketActive) {
+      changes.push('black market opened');
+    } else if (beforeEcon.blackMarketActive && !afterEcon.blackMarketActive) {
+      changes.push('black market shut down');
+    }
+
+    if (changes.length > 0) {
+      entries.push({
+        districtId,
+        districtName: districtNames[districtId] ?? districtId,
+        changes,
+      });
+    }
+  }
+
+  return entries;
+}
+
 // --- Rendering ---
 
 export function renderFullRecap(
@@ -318,6 +382,7 @@ export function renderFullRecap(
   districtDeltas?: DistrictDelta[],
   companionRecapEntries?: CompanionRecapEntry[],
   itemRecapEntries?: ItemRecapEntry[],
+  economyRecapEntries?: EconomyRecapEntry[],
 ): string {
   // Nothing to show if nothing happened
   if (
@@ -401,6 +466,22 @@ export function renderFullRecap(
       }
       if (dd.keyShifts.length > 0) {
         lines.push(`    ${dd.keyShifts.join(', ')}`);
+      }
+    }
+  }
+
+  // Section: Economy Changes
+  if (economyRecapEntries && economyRecapEntries.length > 0) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  ECONOMY CHANGES');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    for (const entry of economyRecapEntries) {
+      lines.push(`  ${entry.districtName}:`);
+      for (const change of entry.changes) {
+        lines.push(`    - ${change}`);
       }
     }
   }

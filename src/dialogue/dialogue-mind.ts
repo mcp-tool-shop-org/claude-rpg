@@ -2,7 +2,7 @@
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { PlayerRumor, WorldPressure } from '@ai-rpg-engine/modules';
+import type { PlayerRumor, WorldPressure, NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
@@ -36,8 +36,9 @@ export async function generateDialogue(
   playerProfile?: CharacterProfile | null,
   playerRumors?: PlayerRumor[],
   activePressures?: WorldPressure[],
+  lastNpcActions?: NpcActionResult[],
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
   if (!context) return null;
 
   const prompt = buildDialoguePrompt(context);

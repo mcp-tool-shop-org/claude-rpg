@@ -25,6 +25,8 @@ export async function narrateScene(
   presentationState?: PresentationState,
   characterPresence?: string,
   activePressures?: string[],
+  districtDescriptor?: string,
+  partyPresence?: string,
 ): Promise<NarrationResult> {
   const sceneContext = buildSceneContext(
     world,
@@ -34,6 +36,8 @@ export async function narrateScene(
     previousLocationId,
     characterPresence,
     activePressures,
+    districtDescriptor,
+    partyPresence,
   );
 
   // Add presentation state to the narration input

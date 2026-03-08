@@ -16,6 +16,10 @@ Rules:
 - Do not list game mechanics or stats — describe experiences
 - Reference the player's gear, injuries, and title naturally — weave them into the scene
 - NPCs in the scene react to the player's reputation and presence — guards stiffen, merchants beckon, enemies recoil
+- When world pressure hints describe NPC body language or demeanor, weave them naturally into the scene as environmental observations — show the behavior, never explain the motivation
+- The district feel describes the neighborhood mood — weave it naturally into environmental descriptions. Show crowds, emptiness, tension, commerce, morale through sensory detail
+- Companions travel with the player. Reference their presence, reactions, and body language naturally. A fighter companion scans for threats. A diplomat companion reads the room. Show their personality through small details
+- When the player carries items with notable history (relics, trophies, stolen goods, cursed items), reference their presence through environmental reactions — NPCs glancing at a weapon, the weight of a cursed trinket, the gleam of a legendary blade. Show provenance through the world's reaction, not exposition
 
 Respond with a JSON object (NarrationPlan) with this shape:
 {
@@ -77,6 +81,8 @@ export type SceneNarrationInput = {
   presentationState?: string;
   characterPresence?: string;
   activePressures?: string[];
+  districtDescriptor?: string;
+  partyPresence?: string;
 };
 
 export function buildNarratePrompt(input: SceneNarrationInput): string {
@@ -99,7 +105,7 @@ export function buildNarratePrompt(input: SceneNarrationInput): string {
 
   return `${input.isNewZone ? 'The player just entered a new area.' : 'The player is still in the same area.'}
 
-Zone: ${input.zoneName} [${input.zoneTags.join(', ')}]
+Zone: ${input.zoneName} [${input.zoneTags.join(', ')}]${input.districtDescriptor ? `\nDistrict: ${input.districtDescriptor}` : ''}
 Atmosphere: ${input.atmosphere.light} light, ${input.atmosphere.noise}, ${input.atmosphere.stability}
 Exits: ${input.exits.join(', ') || 'none visible'}
 
@@ -109,7 +115,7 @@ ${entities || '  (none)'}
 Recent events:
 ${events || '  (none)'}
 
-Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}
+Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
 Tone: ${input.tone}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${recent}`;
 }

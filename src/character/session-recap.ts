@@ -3,7 +3,7 @@
 
 import type { SessionDelta } from './recap-delta.js';
 import type { WorldDelta } from './world-delta.js';
-import type { PlayerRumor, PressureFallout } from '@ai-rpg-engine/modules';
+import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState } from '@ai-rpg-engine/modules';
 
 const DIVIDER = '─'.repeat(60);
 const HEAVY_DIVIDER = '═'.repeat(60);
@@ -31,6 +31,30 @@ export type WhatPeopleAreSaying = {
   factionName: string;
   sentiment: 'hostile' | 'wary' | 'neutral' | 'friendly' | 'admiring';
   latestRumor?: string;
+};
+
+export type DistrictDelta = {
+  districtId: string;
+  districtName: string;
+  moodBefore: string;
+  moodAfter: string;
+  changed: boolean;
+  keyShifts: string[];
+};
+
+export type CompanionRecapEntry = {
+  npcId: string;
+  name: string;
+  role: CompanionRole;
+  event: 'joined' | 'departed' | 'betrayed' | 'died' | 'shifted-breakpoint' | 'saved-player';
+  detail?: string;
+};
+
+export type ItemRecapEntry = {
+  itemId: string;
+  name: string;
+  event: 'acquired' | 'lost' | 'milestone-reached' | 'recognized';
+  detail?: string;
 };
 
 // --- Computation ---
@@ -153,6 +177,135 @@ export function deriveWhatPeopleAreSaying(
   return results;
 }
 
+export function computeDistrictDeltas(
+  beforeMoods: { districtId: string; districtName: string; descriptor: string; metrics: { commerce: number; morale: number; alertPressure: number; stability: number } }[],
+  afterMoods: { districtId: string; districtName: string; descriptor: string; metrics: { commerce: number; morale: number; alertPressure: number; stability: number } }[],
+): DistrictDelta[] {
+  const deltas: DistrictDelta[] = [];
+
+  for (const after of afterMoods) {
+    const before = beforeMoods.find((b) => b.districtId === after.districtId);
+    if (!before) continue;
+
+    const keyShifts: string[] = [];
+    const THRESHOLD = 15;
+
+    const commerceDiff = after.metrics.commerce - before.metrics.commerce;
+    if (Math.abs(commerceDiff) >= THRESHOLD) {
+      keyShifts.push(commerceDiff > 0 ? 'commerce recovered' : 'commerce declined');
+    }
+    const moraleDiff = after.metrics.morale - before.metrics.morale;
+    if (Math.abs(moraleDiff) >= THRESHOLD) {
+      keyShifts.push(moraleDiff > 0 ? 'morale lifted' : 'morale fell sharply');
+    }
+    const alertDiff = after.metrics.alertPressure - before.metrics.alertPressure;
+    if (Math.abs(alertDiff) >= THRESHOLD) {
+      keyShifts.push(alertDiff > 0 ? 'alertPressure rose sharply' : 'alertPressure eased');
+    }
+    const stabDiff = after.metrics.stability - before.metrics.stability;
+    if (Math.abs(stabDiff) >= 2) {
+      keyShifts.push(stabDiff > 0 ? 'stability improved' : 'stability deteriorated');
+    }
+
+    const changed = before.descriptor !== after.descriptor || keyShifts.length > 0;
+    deltas.push({
+      districtId: after.districtId,
+      districtName: after.districtName,
+      moodBefore: before.descriptor,
+      moodAfter: after.descriptor,
+      changed,
+      keyShifts,
+    });
+  }
+
+  return deltas;
+}
+
+export function computeCompanionRecapEntries(
+  beforeParty: PartyState | undefined,
+  afterParty: PartyState | undefined,
+  companionNames: Record<string, string>,
+): CompanionRecapEntry[] {
+  const entries: CompanionRecapEntry[] = [];
+  const beforeIds = new Set((beforeParty?.companions ?? []).map((c) => c.npcId));
+  const afterIds = new Set((afterParty?.companions ?? []).map((c) => c.npcId));
+
+  // Joined: in after but not before
+  for (const comp of afterParty?.companions ?? []) {
+    if (!beforeIds.has(comp.npcId)) {
+      entries.push({
+        npcId: comp.npcId,
+        name: companionNames[comp.npcId] ?? comp.npcId,
+        role: comp.role,
+        event: 'joined',
+      });
+    }
+  }
+
+  // Departed: in before but not after
+  for (const comp of beforeParty?.companions ?? []) {
+    if (!afterIds.has(comp.npcId)) {
+      entries.push({
+        npcId: comp.npcId,
+        name: companionNames[comp.npcId] ?? comp.npcId,
+        role: comp.role,
+        event: 'departed',
+      });
+    }
+  }
+
+  return entries;
+}
+
+export function computeItemRecapEntries(
+  beforeChronicle: Record<string, import('@ai-rpg-engine/equipment').ItemChronicleEntry[]>,
+  afterChronicle: Record<string, import('@ai-rpg-engine/equipment').ItemChronicleEntry[]>,
+  itemNames: Record<string, string>,
+): ItemRecapEntry[] {
+  const entries: ItemRecapEntry[] = [];
+  const allItemIds = new Set([...Object.keys(beforeChronicle), ...Object.keys(afterChronicle)]);
+
+  for (const itemId of allItemIds) {
+    const before = beforeChronicle[itemId] ?? [];
+    const after = afterChronicle[itemId] ?? [];
+
+    // New item acquired this session
+    if (before.length === 0 && after.length > 0) {
+      const acqEvent = after.find((e) => e.event === 'acquired');
+      entries.push({
+        itemId,
+        name: itemNames[itemId] ?? itemId,
+        event: 'acquired',
+        detail: acqEvent?.detail,
+      });
+    }
+
+    // Item lost (had entries before, now has a 'lost' event)
+    const newLost = after.filter((e) => e.event === 'lost' && !before.some((b) => b.tick === e.tick));
+    if (newLost.length > 0) {
+      entries.push({
+        itemId,
+        name: itemNames[itemId] ?? itemId,
+        event: 'lost',
+        detail: newLost[0].detail,
+      });
+    }
+
+    // Recognized this session
+    const newRecognitions = after.filter((e) => e.event === 'recognized' && !before.some((b) => b.tick === e.tick));
+    if (newRecognitions.length > 0) {
+      entries.push({
+        itemId,
+        name: itemNames[itemId] ?? itemId,
+        event: 'recognized',
+        detail: `${newRecognitions.length} time${newRecognitions.length > 1 ? 's' : ''}`,
+      });
+    }
+  }
+
+  return entries;
+}
+
 // --- Rendering ---
 
 export function renderFullRecap(
@@ -161,6 +314,10 @@ export function renderFullRecap(
   factionDeltas: FactionDelta[],
   rumorDelta: RumorDelta,
   whatPeopleAreSaying: WhatPeopleAreSaying[],
+  npcRecapEntries?: NpcRecapEntry[],
+  districtDeltas?: DistrictDelta[],
+  companionRecapEntries?: CompanionRecapEntry[],
+  itemRecapEntries?: ItemRecapEntry[],
 ): string {
   // Nothing to show if nothing happened
   if (
@@ -227,7 +384,28 @@ export function renderFullRecap(
     }
   }
 
-  // Section 3: Faction Shifts
+  // Section 3: District Changes
+  const changedDistricts = districtDeltas?.filter((d) => d.changed) ?? [];
+  if (changedDistricts.length > 0) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  DISTRICT CHANGES');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    for (const dd of changedDistricts) {
+      if (dd.moodBefore !== dd.moodAfter) {
+        lines.push(`  ${dd.districtName}: "${dd.moodBefore}" → "${dd.moodAfter}"`);
+      } else {
+        lines.push(`  ${dd.districtName}: "${dd.moodAfter}"`);
+      }
+      if (dd.keyShifts.length > 0) {
+        lines.push(`    ${dd.keyShifts.join(', ')}`);
+      }
+    }
+  }
+
+  // Section 4: Faction Shifts
   if (factionDeltas.length > 0) {
     lines.push('');
     lines.push(`  ${DIVIDER}`);
@@ -287,6 +465,57 @@ export function renderFullRecap(
       } else {
         lines.push(`  ${wps.factionName} (${wps.sentiment})`);
       }
+    }
+  }
+
+  // Section 6: Notable Characters
+  if (npcRecapEntries && npcRecapEntries.length > 0) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  NOTABLE CHARACTERS');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    for (const entry of npcRecapEntries) {
+      const shiftStr = entry.shifted && entry.previousBreakpoint
+        ? ` [was: ${entry.previousBreakpoint}]`
+        : '';
+      const shiftMark = entry.shifted ? ' [shifted!]' : '';
+      lines.push(`  ${entry.name} (${entry.factionId}) — ${entry.breakpoint}${shiftStr}${shiftMark} | ${entry.dominantAxis}-driven`);
+
+      const parts: string[] = [];
+      if (entry.obligationSummary !== 'none') parts.push(entry.obligationSummary);
+      if (entry.activeChainKind) parts.push(`Active: ${entry.activeChainKind} chain`);
+      const detailStr = parts.length > 0 ? parts.join(' | ') + ' | ' : '';
+      lines.push(`    ${detailStr}"${entry.leverageAngle}"`);
+    }
+  }
+
+  // Section: Companion Changes
+  if (companionRecapEntries && companionRecapEntries.length > 0) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  COMPANION CHANGES');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    for (const entry of companionRecapEntries) {
+      const detail = entry.detail ? `: ${entry.detail}` : '';
+      lines.push(`  ${entry.name} (${entry.role}): ${entry.event}${detail}`);
+    }
+  }
+
+  // Section: Equipment Changes
+  if (itemRecapEntries && itemRecapEntries.length > 0) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  EQUIPMENT CHANGES');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    for (const entry of itemRecapEntries) {
+      const detail = entry.detail ? ` — ${entry.detail}` : '';
+      lines.push(`  ${entry.name}: ${entry.event}${detail}`);
     }
   }
 

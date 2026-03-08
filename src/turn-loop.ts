@@ -5,7 +5,7 @@
 import type { Engine, ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { NarrationPlan } from '@ai-rpg-engine/presentation';
-import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType } from '@ai-rpg-engine/modules';
+import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, type NarrationResult } from './narrator/narrator.js';
@@ -48,6 +48,9 @@ export async function executeTurn(
   playerRumors?: PlayerRumor[],
   pressureContext?: string[],
   worldPressures?: WorldPressure[],
+  lastNpcActions?: NpcActionResult[],
+  districtDescriptor?: string,
+  partyPresence?: string,
 ): Promise<TurnResult> {
   const previousLocationId = engine.world.locationId;
 
@@ -111,6 +114,8 @@ export async function executeTurn(
     presentationState,
     characterPresence,
     pressureContext,
+    districtDescriptor,
+    partyPresence,
   );
 
   // Step 4.5: Process through immersion runtime if available
@@ -137,6 +142,7 @@ export async function executeTurn(
       playerProfile,
       playerRumors,
       worldPressures,
+      lastNpcActions,
     );
 
     // Add voice cast to dialogue if immersion is active

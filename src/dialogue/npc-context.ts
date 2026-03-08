@@ -12,12 +12,15 @@ import {
   getReputationConsequence,
   getRumorsKnownToFaction,
   getPressuresForFaction,
+  buildNpcProfile,
   type Belief,
   type Memory,
   type PlayerRumor,
   type WorldPressure,
+  type NpcActionResult,
 } from '@ai-rpg-engine/modules';
 import type { DialogueInput } from '../prompts/dialogue-npc.js';
+import { buildNpcPresenceForDialogue, getNpcDialogueHint } from '../npc/presence.js';
 
 /** Build the dialogue context for an NPC from their simulation state. */
 export function buildNPCDialogueContext(
@@ -29,6 +32,7 @@ export function buildNPCDialogueContext(
   playerProfile?: CharacterProfile,
   playerRumors?: PlayerRumor[],
   activePressures?: WorldPressure[],
+  lastNpcActions?: NpcActionResult[],
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -113,6 +117,42 @@ export function buildNPCDialogueContext(
         }))
     : undefined;
 
+  // v1.2: NPC agency context
+  let npcGoal: string | undefined;
+  let npcStance: string | undefined;
+  let npcRecentAction: string | undefined;
+  let isLying = false;
+  let isBargaining = false;
+  let isWarning = false;
+  let npcAgencyPresence: string | undefined;
+
+  if (npc.ai) {
+    const profile = buildNpcProfile(world, npcId, world.playerId, activePressures ?? [], playerRumors);
+    const topGoal = profile.goals[0];
+    if (topGoal) {
+      npcGoal = topGoal.label;
+      isLying = topGoal.verb === 'lie' || topGoal.verb === 'conceal';
+      isBargaining = topGoal.verb === 'bargain';
+      isWarning = topGoal.verb === 'warn';
+    }
+    npcAgencyPresence = buildNpcPresenceForDialogue(profile);
+
+    // Derive stance label from relationship
+    const rel = profile.relationship;
+    const stanceParts: string[] = [];
+    if (rel.fear > 60) stanceParts.push('frightened');
+    if (rel.trust < -30) stanceParts.push('hostile');
+    else if (rel.trust > 30) stanceParts.push('friendly');
+    if (rel.greed > 60) stanceParts.push('mercenary');
+    if (stanceParts.length > 0) npcStance = stanceParts.join(', ');
+  }
+
+  // Check for recent NPC action
+  if (lastNpcActions) {
+    const hint = getNpcDialogueHint(npcId, lastNpcActions);
+    if (hint) npcRecentAction = hint;
+  }
+
   return {
     npcName: npc.name,
     npcType: npc.type,
@@ -129,5 +169,12 @@ export function buildNPCDialogueContext(
     playerPresence,
     playerRumors: knownPlayerRumors,
     activePressures: factionPressures,
+    npcGoal,
+    npcStance,
+    npcRecentAction,
+    isLying,
+    isBargaining,
+    isWarning,
+    npcAgencyPresence,
   };
 }

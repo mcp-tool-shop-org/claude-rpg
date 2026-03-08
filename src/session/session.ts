@@ -10,12 +10,12 @@ import { join, dirname } from 'node:path';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
-import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout } from '@ai-rpg-engine/modules';
+import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState } from '@ai-rpg-engine/modules';
 import { CampaignJournal, type CampaignRecord } from '@ai-rpg-engine/campaign-memory';
 import { TurnHistory } from './history.js';
 
 export type SavedSession = {
-  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0';
+  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0' | '0.8.0' | '0.9.0' | '1.0.0' | '1.1.0';
   engineState: string;
   turnHistory: ReturnType<TurnHistory['toJSON']>;
   worldPrompt?: string;
@@ -38,6 +38,14 @@ export type SavedSession = {
   chronicleRecords?: string;
   // v0.7.0 fields
   leverageSnapshot?: string;
+  // v0.8.0 fields
+  npcAgencySnapshot?: string;
+  // v0.9.0 fields
+  npcObligations?: string;
+  // v1.0.0 fields
+  consequenceChains?: string;
+  // v1.1.0 fields
+  partyState?: string;
 };
 
 export type SaveSlotSummary = {
@@ -67,6 +75,11 @@ export async function saveSession(
   genre?: string,
   resolvedPressures?: PressureFallout[],
   journal?: CampaignJournal,
+  npcProfiles?: NpcProfile[],
+  npcActions?: NpcActionResult[],
+  npcObligations?: Map<string, NpcObligationLedger>,
+  consequenceChains?: Map<string, ConsequenceChain>,
+  partyState?: PartyState,
 ): Promise<void> {
   // Compute leverage snapshot for save summary
   const leverageSnap = profile
@@ -74,7 +87,7 @@ export async function saveSession(
     : undefined;
 
   const session: SavedSession = {
-    version: '0.7.0',
+    version: '1.1.0',
     engineState: engine.serialize(),
     turnHistory: history.toJSON(),
     worldPrompt,
@@ -99,6 +112,18 @@ export async function saveSession(
       ? JSON.stringify(journal.serialize())
       : undefined,
     leverageSnapshot: leverageSnap || undefined,
+    npcAgencySnapshot: (npcProfiles && npcProfiles.length > 0) || (npcActions && npcActions.length > 0)
+      ? JSON.stringify({ profiles: npcProfiles ?? [], actions: npcActions ?? [] })
+      : undefined,
+    npcObligations: npcObligations && npcObligations.size > 0
+      ? JSON.stringify(Object.fromEntries(npcObligations))
+      : undefined,
+    consequenceChains: consequenceChains && consequenceChains.size > 0
+      ? JSON.stringify(Object.fromEntries(consequenceChains))
+      : undefined,
+    partyState: partyState && partyState.companions.length > 0
+      ? JSON.stringify(partyState)
+      : undefined,
   };
 
   await mkdir(dirname(savePath), { recursive: true });
@@ -155,6 +180,53 @@ export function loadChronicleFromSession(session: SavedSession): CampaignJournal
     return CampaignJournal.deserialize(records);
   } catch {
     return new CampaignJournal();
+  }
+}
+
+/** Load NPC agency state from a saved session. */
+export function loadNpcAgencyFromSession(session: SavedSession): { profiles: NpcProfile[]; actions: NpcActionResult[] } {
+  if (!session.npcAgencySnapshot) return { profiles: [], actions: [] };
+  try {
+    const data = JSON.parse(session.npcAgencySnapshot) as { profiles: NpcProfile[]; actions: NpcActionResult[] };
+    return { profiles: data.profiles ?? [], actions: data.actions ?? [] };
+  } catch {
+    return { profiles: [], actions: [] };
+  }
+}
+
+/** Load NPC obligations from a saved session. */
+export function loadObligationsFromSession(
+  session: SavedSession,
+): Map<string, NpcObligationLedger> {
+  if (!session.npcObligations) return new Map();
+  try {
+    const obj = JSON.parse(session.npcObligations) as Record<string, NpcObligationLedger>;
+    return new Map(Object.entries(obj));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Load consequence chains from a saved session. */
+export function loadConsequenceChainsFromSession(
+  session: SavedSession,
+): Map<string, ConsequenceChain> {
+  if (!session.consequenceChains) return new Map();
+  try {
+    const obj = JSON.parse(session.consequenceChains) as Record<string, ConsequenceChain>;
+    return new Map(Object.entries(obj));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Load party state from a saved session. */
+export function loadPartyFromSession(session: SavedSession): PartyState {
+  if (!session.partyState) return createPartyState();
+  try {
+    return JSON.parse(session.partyState) as PartyState;
+  } catch {
+    return createPartyState();
   }
 }
 

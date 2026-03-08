@@ -28,7 +28,15 @@ Rules:
   - merchant-blacklist: the NPC refuses trade or demands premium prices
   - faction-summons: the NPC insists the player comply, warns of consequences
   - revenge-attempt: the NPC is hostile, may ambush or betray
-- Pressures the NPC doesn't know about (hidden visibility) have no effect on dialogue`;
+- Pressures the NPC doesn't know about (hidden visibility) have no effect on dialogue
+- If the NPC has a current goal, steer conversation toward it subtly
+- Goal-aware speech: NPCs with a goal will try to advance it through dialogue (warn, bargain, accuse, recruit)
+- Fear-aware tone: frightened NPCs speak shorter, more nervously, may contradict themselves under pressure
+- If the NPC is lying or concealing, give wrong info confidently but show micro-tells (over-explaining, breaking eye contact, deflection)
+- If the NPC is bargaining, be transactional: name what they want, what they offer, and the cost
+- If the NPC is warning the player, speak urgently, check if overheard, be direct about the danger
+- If the NPC is attempting to recruit or defect, speak in hushed tones, test the player's reaction before committing
+- If the NPC is betraying their faction, use euphemisms and conflicted tone — they know the weight of what they're doing`;
 
 export type DialogueInput = {
   npcName: string;
@@ -67,6 +75,14 @@ export type DialogueInput = {
     urgency: number;
     visibility: string;
   }>;
+  // v1.2: NPC agency fields
+  npcGoal?: string;
+  npcStance?: string;
+  npcRecentAction?: string;
+  isLying?: boolean;
+  isBargaining?: boolean;
+  isWarning?: boolean;
+  npcAgencyPresence?: string;
 };
 
 function formatActivePressures(
@@ -89,6 +105,19 @@ function formatPlayerRumors(
     return `  - "${r.claim}" (${conf}, ${r.valence})`;
   });
   return `\nRumors about the player:\n${lines.join('\n')}\n`;
+}
+
+function formatNpcAgencyContext(input: DialogueInput): string {
+  const parts: string[] = [];
+  if (input.npcGoal) parts.push(`Current goal: ${input.npcGoal}`);
+  if (input.npcStance) parts.push(`Stance toward player: ${input.npcStance}`);
+  if (input.npcRecentAction) parts.push(`Recent action: ${input.npcRecentAction}`);
+  if (input.isLying) parts.push('BEHAVIOR: NPC is actively lying or concealing — give wrong info confidently but with subtle tells');
+  if (input.isBargaining) parts.push('BEHAVIOR: NPC wants to make a deal — be transactional');
+  if (input.isWarning) parts.push('BEHAVIOR: NPC is warning the player — speak urgently, be direct about danger');
+  if (input.npcAgencyPresence) parts.push(input.npcAgencyPresence);
+  if (parts.length === 0) return '';
+  return `\nNPC agency state:\n${parts.map((p) => `  ${p}`).join('\n')}\n`;
 }
 
 export function buildDialoguePrompt(input: DialogueInput): string {
@@ -123,6 +152,6 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}
+${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
 Player says: "${input.playerUtterance}"`;
 }

@@ -18,6 +18,7 @@ export function renderPlayScreen(opts: {
   availableActions: string[];
   profileStatus?: StatusData;
   leverageStatus?: string;
+  partyStatusLine?: string;
   suggestions?: ContextualSuggestion[];
 }): string {
   const parts: string[] = [];
@@ -73,6 +74,11 @@ export function renderPlayScreen(opts: {
   // Leverage status line
   if (opts.leverageStatus && opts.leverageStatus !== 'No leverage') {
     parts.push(`  ${opts.leverageStatus}`);
+  }
+
+  // Party status line
+  if (opts.partyStatusLine) {
+    parts.push(opts.partyStatusLine);
   }
 
   // Zone info

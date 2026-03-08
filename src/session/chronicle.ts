@@ -4,7 +4,7 @@
 
 import type { CampaignJournal, CampaignRecord, RecordCategory } from '@ai-rpg-engine/campaign-memory';
 import type { ResolvedEvent } from '@ai-rpg-engine/core';
-import type { PressureFallout, PlayerRumor, FactionAction } from '@ai-rpg-engine/modules';
+import type { PressureFallout, PlayerRumor, FactionAction, NpcAction, NpcObligation } from '@ai-rpg-engine/modules';
 import type { ProfileUpdateHints } from '../turn-loop.js';
 
 // --- Event Source Types ---
@@ -14,7 +14,18 @@ export type ChronicleEventSource =
   | { kind: 'pressure-resolved'; fallout: PressureFallout; tick: number }
   | { kind: 'title-change'; oldTitle: string | undefined; newTitle: string; tick: number }
   | { kind: 'rumor-spawned'; rumor: PlayerRumor; tick: number }
-  | { kind: 'faction-action'; action: FactionAction; tick: number };
+  | { kind: 'faction-action'; action: FactionAction; tick: number }
+  | { kind: 'npc-action'; action: NpcAction; npcName: string; tick: number }
+  | { kind: 'obligation-created'; obligation: NpcObligation; npcName: string; tick: number }
+  | { kind: 'companion-joined'; npcId: string; npcName: string; role: string; tick: number }
+  | { kind: 'companion-departed'; npcId: string; npcName: string; reason: string; tick: number }
+  | { kind: 'companion-betrayed'; npcId: string; npcName: string; tick: number }
+  | { kind: 'companion-saved-player'; npcId: string; npcName: string; tick: number }
+  | { kind: 'companion-died'; npcId: string; npcName: string; tick: number }
+  | { kind: 'item-acquired'; itemId: string; itemName: string; source: string; tick: number }
+  | { kind: 'item-lost'; itemId: string; itemName: string; reason: string; tick: number }
+  | { kind: 'item-recognized'; itemId: string; itemName: string; recognizedBy: string; tick: number }
+  | { kind: 'item-transformed'; itemId: string; itemName: string; transformation: string; tick: number };
 
 // --- Compaction Types ---
 
@@ -47,6 +58,15 @@ const BASE_SIGNIFICANCE: Record<RecordCategory, number> = {
   gift: 0.3,
   insult: 0.3,
   action: 0.2,
+  'companion-joined': 0.6,
+  'companion-departed': 0.7,
+  'companion-betrayed': 0.9,
+  'companion-saved-player': 0.8,
+  'companion-died': 1.0,
+  'item-acquired': 0.4,
+  'item-lost': 0.5,
+  'item-recognized': 0.3,
+  'item-transformed': 0.7,
 };
 
 export function computeSignificance(
@@ -83,6 +103,28 @@ export function deriveChronicleEvents(
       return deriveRumorSpawned(source, playerId);
     case 'faction-action':
       return deriveFactionActionEvent(source);
+    case 'npc-action':
+      return deriveNpcActionEvent(source);
+    case 'obligation-created':
+      return deriveObligationEvent(source);
+    case 'companion-joined':
+      return deriveCompanionJoined(source);
+    case 'companion-departed':
+      return deriveCompanionDeparted(source);
+    case 'companion-betrayed':
+      return deriveCompanionBetrayed(source);
+    case 'companion-saved-player':
+      return deriveCompanionSavedPlayer(source);
+    case 'companion-died':
+      return deriveCompanionDied(source);
+    case 'item-acquired':
+      return deriveItemAcquired(source, playerId);
+    case 'item-lost':
+      return deriveItemLost(source, playerId);
+    case 'item-recognized':
+      return deriveItemRecognized(source, playerId);
+    case 'item-transformed':
+      return deriveItemTransformed(source, playerId);
   }
 }
 
@@ -270,6 +312,195 @@ function deriveFactionActionEvent(
     significance,
     witnesses: [],
     data: { verb: action.verb, factionAction: true },
+  }];
+}
+
+function deriveNpcActionEvent(
+  source: Extract<ChronicleEventSource, { kind: 'npc-action' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  const { action, npcName, tick } = source;
+
+  const category: RecordCategory =
+    action.verb === 'accuse' ? 'betrayal'
+    : action.verb === 'betray' ? 'betrayal'
+    : action.verb === 'recruit' ? 'alliance'
+    : action.verb === 'bargain' ? 'alliance'
+    : action.verb === 'flee' ? 'action'
+    : 'action';
+
+  const significance =
+    action.verb === 'betray' ? 0.8
+    : action.verb === 'accuse' ? 0.6
+    : action.verb === 'recruit' ? 0.5
+    : action.verb === 'warn' ? 0.4
+    : action.verb === 'flee' ? 0.4
+    : 0.3;
+
+  return [{
+    tick,
+    category,
+    actorId: action.npcId,
+    description: `${npcName}: ${action.description}`,
+    significance,
+    witnesses: [],
+    data: { verb: action.verb, npcAction: true },
+  }];
+}
+
+function deriveObligationEvent(
+  source: Extract<ChronicleEventSource, { kind: 'obligation-created' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  const { obligation, npcName, tick } = source;
+
+  const category: RecordCategory =
+    obligation.kind === 'betrayed' ? 'betrayal'
+    : obligation.kind === 'saved' ? 'rescue'
+    : obligation.kind === 'bribed' ? 'alliance'
+    : 'debt';
+
+  const dirLabel =
+    obligation.direction === 'npc-owes-player' ? 'owes you'
+    : obligation.direction === 'player-owes-npc' ? 'you owe'
+    : 'between NPCs';
+
+  return [{
+    tick,
+    category,
+    actorId: obligation.npcId,
+    description: `${npcName}: ${obligation.kind} (${dirLabel}, mag ${obligation.magnitude})`,
+    significance: obligation.magnitude >= 5 ? 0.6 : 0.3,
+    witnesses: [],
+    data: { kind: obligation.kind, direction: obligation.direction, magnitude: obligation.magnitude },
+  }];
+}
+
+function deriveCompanionJoined(
+  source: Extract<ChronicleEventSource, { kind: 'companion-joined' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'companion-joined',
+    actorId: source.npcId,
+    description: `${source.npcName} joined the party as ${source.role}`,
+    significance: 0.6,
+    witnesses: [],
+    data: { role: source.role },
+  }];
+}
+
+function deriveCompanionDeparted(
+  source: Extract<ChronicleEventSource, { kind: 'companion-departed' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'companion-departed',
+    actorId: source.npcId,
+    description: `${source.npcName} left the party: ${source.reason}`,
+    significance: 0.7,
+    witnesses: [],
+    data: { reason: source.reason },
+  }];
+}
+
+function deriveCompanionBetrayed(
+  source: Extract<ChronicleEventSource, { kind: 'companion-betrayed' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'companion-betrayed',
+    actorId: source.npcId,
+    description: `${source.npcName} turned against the party`,
+    significance: 0.9,
+    witnesses: [],
+    data: {},
+  }];
+}
+
+function deriveCompanionSavedPlayer(
+  source: Extract<ChronicleEventSource, { kind: 'companion-saved-player' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'companion-saved-player',
+    actorId: source.npcId,
+    description: `${source.npcName} intercepted a blow meant for you`,
+    significance: 0.8,
+    witnesses: [],
+    data: {},
+  }];
+}
+
+function deriveCompanionDied(
+  source: Extract<ChronicleEventSource, { kind: 'companion-died' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'companion-died',
+    actorId: source.npcId,
+    description: `${source.npcName} fell in battle`,
+    significance: 1.0,
+    witnesses: [],
+    data: {},
+  }];
+}
+
+function deriveItemAcquired(
+  source: Extract<ChronicleEventSource, { kind: 'item-acquired' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'item-acquired',
+    actorId: playerId,
+    description: `Acquired ${source.itemName}: ${source.source}`,
+    significance: 0.4,
+    witnesses: [],
+    data: { itemId: source.itemId },
+  }];
+}
+
+function deriveItemLost(
+  source: Extract<ChronicleEventSource, { kind: 'item-lost' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'item-lost',
+    actorId: playerId,
+    description: `Lost ${source.itemName}: ${source.reason}`,
+    significance: 0.5,
+    witnesses: [],
+    data: { itemId: source.itemId },
+  }];
+}
+
+function deriveItemRecognized(
+  source: Extract<ChronicleEventSource, { kind: 'item-recognized' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'item-recognized',
+    actorId: playerId,
+    description: `${source.itemName} recognized by ${source.recognizedBy}`,
+    significance: 0.3,
+    witnesses: [],
+    data: { itemId: source.itemId, recognizedBy: source.recognizedBy },
+  }];
+}
+
+function deriveItemTransformed(
+  source: Extract<ChronicleEventSource, { kind: 'item-transformed' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'item-transformed',
+    actorId: playerId,
+    description: `${source.itemName}: ${source.transformation}`,
+    significance: 0.7,
+    witnesses: [],
+    data: { itemId: source.itemId },
   }];
 }
 

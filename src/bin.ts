@@ -19,6 +19,10 @@ import {
   loadPressuresFromSession,
   loadResolvedPressuresFromSession,
   loadChronicleFromSession,
+  loadNpcAgencyFromSession,
+  loadObligationsFromSession,
+  loadConsequenceChainsFromSession,
+  loadPartyFromSession,
   listSaves,
   getSavePath,
   getDefaultSaveDir,
@@ -42,8 +46,20 @@ import {
   computeFactionDeltas,
   computeRumorDelta,
   deriveWhatPeopleAreSaying,
+  computeDistrictDeltas,
+  computeCompanionRecapEntries,
+  computeItemRecapEntries,
   renderFullRecap,
 } from './character/session-recap.js';
+import type { ItemChronicleEntry } from '@ai-rpg-engine/equipment';
+import type { PartyState } from '@ai-rpg-engine/modules';
+import {
+  computeNpcRecapEntries,
+  getAllDistrictIds,
+  getDistrictState,
+  getDistrictDefinition,
+  computeDistrictMood,
+} from '@ai-rpg-engine/modules';
 
 const USAGE = `
 claude-rpg — simulation-grounded narrative RPG
@@ -123,7 +139,10 @@ async function runPlay(args: string[]): Promise<void> {
   const worldSnap = captureWorldSnapshot(
     session.activePressures, session.playerRumors, session.resolvedPressures,
   );
-  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap);
+  const districtMoods = captureDistrictMoods(session);
+  const initialParty = structuredClone(session.partyState);
+  const initialItemChronicle = structuredClone(result.profile.itemChronicle);
+  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle);
 }
 
 async function runLoad(): Promise<void> {
@@ -212,6 +231,10 @@ async function runLoad(): Promise<void> {
   const restoredPressures = loadPressuresFromSession(savedSession);
   const restoredResolved = loadResolvedPressuresFromSession(savedSession);
   const restoredJournal = loadChronicleFromSession(savedSession);
+  const restoredNpcAgency = loadNpcAgencyFromSession(savedSession);
+  const restoredObligations = loadObligationsFromSession(savedSession);
+  const restoredChains = loadConsequenceChainsFromSession(savedSession);
+  const restoredParty = loadPartyFromSession(savedSession);
 
   const session = new GameSession({
     engine,
@@ -228,6 +251,11 @@ async function runLoad(): Promise<void> {
   session.playerRumors = restoredRumors;
   session.activePressures = restoredPressures;
   session.resolvedPressures = restoredResolved;
+  session.lastNpcProfiles = restoredNpcAgency.profiles;
+  session.lastNpcActions = restoredNpcAgency.actions;
+  session.npcObligations = restoredObligations;
+  session.activeConsequenceChains = restoredChains;
+  session.partyState = restoredParty;
 
   // Show recap
   console.log(renderRecap(profile, history));
@@ -236,7 +264,10 @@ async function runLoad(): Promise<void> {
   const worldSnap = captureWorldSnapshot(
     session.activePressures, session.playerRumors, session.resolvedPressures,
   );
-  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap);
+  const districtMoods = captureDistrictMoods(session);
+  const initialParty = structuredClone(session.partyState);
+  const initialItemChronicle = profile ? structuredClone(profile.itemChronicle) : {};
+  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle);
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
@@ -271,12 +302,44 @@ async function runNew(worldPrompt: string): Promise<void> {
   await runGameLoop(session, rl);
 }
 
+type DistrictMoodSnapshot = {
+  districtId: string;
+  districtName: string;
+  descriptor: string;
+  metrics: { commerce: number; morale: number; alertPressure: number; stability: number };
+}[];
+
+function captureDistrictMoods(session: GameSession): DistrictMoodSnapshot {
+  const moods: DistrictMoodSnapshot = [];
+  for (const districtId of getAllDistrictIds(session.engine.world)) {
+    const dState = getDistrictState(session.engine.world, districtId);
+    const dDef = getDistrictDefinition(session.engine.world, districtId);
+    if (!dState || !dDef) continue;
+    const mood = computeDistrictMood(dState, dDef.tags);
+    moods.push({
+      districtId,
+      districtName: dDef.name,
+      descriptor: mood.descriptor,
+      metrics: {
+        commerce: dState.commerce,
+        morale: dState.morale,
+        alertPressure: dState.alertPressure,
+        stability: dState.stability,
+      },
+    });
+  }
+  return moods;
+}
+
 async function runGameLoop(
   session: GameSession,
   rl: ReturnType<typeof createInterface>,
   packId?: string,
   initialSnapshot?: SessionSnapshot,
   initialWorldSnapshot?: WorldSnapshot,
+  initialDistrictMoods?: DistrictMoodSnapshot,
+  initialPartyState?: PartyState,
+  initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
 ): Promise<void> {
   // Welcome
   console.log(session.getWelcome());
@@ -321,12 +384,17 @@ async function runGameLoop(
             session.genre,
             session.resolvedPressures,
             session.journal,
+            session.lastNpcProfiles,
+            session.lastNpcActions,
+            session.npcObligations,
+            session.activeConsequenceChains,
+            session.partyState,
           );
           console.log(`\n  Saved to ${savePath}`);
 
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle,
           );
           if (recapText) console.log(recapText);
           else console.log('');
@@ -355,7 +423,7 @@ async function runGameLoop(
         if (output === '__QUIT__') {
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle,
           );
           if (recapText) console.log(recapText);
           console.log('\n  Farewell.\n');
@@ -380,6 +448,9 @@ function buildUnifiedRecap(
   session: GameSession,
   initialSnapshot?: SessionSnapshot,
   initialWorldSnapshot?: WorldSnapshot,
+  initialDistrictMoods?: DistrictMoodSnapshot,
+  initialPartyState?: PartyState,
+  initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
 ): string {
   if (!initialSnapshot || !session.profile) return '';
 
@@ -418,12 +489,55 @@ function buildUnifiedRecap(
     factionNames,
   );
 
+  // Compute NPC recap entries
+  const npcRecapEntries = computeNpcRecapEntries(
+    session.lastNpcProfiles,
+    session.previousBreakpoints,
+    session.npcObligations,
+    session.activeConsequenceChains,
+  );
+
+  // Compute district deltas
+  const currentDistrictMoods = captureDistrictMoods(session);
+  const districtDeltas = initialDistrictMoods
+    ? computeDistrictDeltas(initialDistrictMoods, currentDistrictMoods)
+    : undefined;
+
+  // Compute companion recap entries
+  const companionNames: Record<string, string> = {};
+  for (const comp of session.partyState?.companions ?? []) {
+    companionNames[comp.npcId] = session.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
+  }
+  for (const comp of initialPartyState?.companions ?? []) {
+    if (!companionNames[comp.npcId]) {
+      companionNames[comp.npcId] = session.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
+    }
+  }
+  const companionRecapEntries = computeCompanionRecapEntries(
+    initialPartyState, session.partyState, companionNames,
+  );
+
+  // Compute item recap entries
+  const itemNames: Record<string, string> = {};
+  if (session.itemCatalog) {
+    for (const item of session.itemCatalog.items) {
+      itemNames[item.id] = item.name;
+    }
+  }
+  const itemRecapEntries = initialItemChronicle
+    ? computeItemRecapEntries(initialItemChronicle, session.profile.itemChronicle, itemNames)
+    : [];
+
   return renderFullRecap(
     characterDelta,
     worldDelta,
     factionDeltas,
     rumorDelta,
     whatPeopleAreSaying,
+    npcRecapEntries.length > 0 ? npcRecapEntries : undefined,
+    districtDeltas,
+    companionRecapEntries.length > 0 ? companionRecapEntries : undefined,
+    itemRecapEntries.length > 0 ? itemRecapEntries : undefined,
   );
 }
 

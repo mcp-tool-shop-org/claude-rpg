@@ -10,7 +10,7 @@ export { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.
 export { buildNPCDialogueContext } from './dialogue/npc-context.js';
 export { generateWorld, type WorldGenResult, type WorldGenProposal } from './foundry/world-gen.js';
 export { TurnHistory } from './session/history.js';
-export { saveSession, loadSession, loadProfileFromSession, loadRumorsFromSession, loadPressuresFromSession, loadResolvedPressuresFromSession, listSaves, type SaveSlotSummary } from './session/session.js';
+export { saveSession, loadSession, loadProfileFromSession, loadRumorsFromSession, loadPressuresFromSession, loadResolvedPressuresFromSession, loadNpcAgencyFromSession, listSaves, type SaveSlotSummary } from './session/session.js';
 export { renderPlayScreen, renderWelcome } from './display/play-renderer.js';
 export { executeDirectorCommand } from './display/director-renderer.js';
 
@@ -61,7 +61,7 @@ export {
   type RumorDelta,
   type WhatPeopleAreSaying,
 } from './character/session-recap.js';
-export { loadChronicleFromSession } from './session/session.js';
+export { loadChronicleFromSession, loadObligationsFromSession, loadConsequenceChainsFromSession } from './session/session.js';
 
 // v0.9: Faction Agency
 // FactionProfile, FactionAction, FactionActionResult, FactionGoal, FactionEffect available via @ai-rpg-engine/modules
@@ -78,3 +78,8 @@ export { loadChronicleFromSession } from './session/session.js';
 // Director commands: /stats, /status
 // Contextual suggestions injected after turns
 // Pack-aware onboarding via help-system
+
+// v1.2: NPC Agency
+export { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
+export { buildNpcPresenceForDialogue, buildNpcPresenceForNarrator, getNpcDialogueHint } from './npc/presence.js';
+// NpcProfile, NpcAction, NpcActionResult, NpcGoal, NpcRelationship, NpcActionVerb, NpcEffect available via @ai-rpg-engine/modules

@@ -18,14 +18,41 @@ import {
   formatFactionProfilesForDirector,
   formatLeverageForDirector,
   formatStrategicMapForDirector,
+  formatNpcProfileForDirector,
+  formatNpcPeopleForDirector,
+  formatAllDistrictsForDirector,
+  formatDistrictForDirector,
+  getAllDistrictIds,
+  getDistrictState,
+  getDistrictDefinition,
+  computeDistrictMood,
+  computeDistrictModifiers,
+  formatPartyForDirector,
+  evaluateDepartureRisk,
   type PlayerRumor,
   type WorldPressure,
   type PressureFallout,
   type FactionProfile,
   type FactionActionResult,
+  type NpcProfile,
+  type NpcActionResult,
+  type NpcObligationLedger,
   type LeverageState,
   type StrategicMap,
+  type PartyState,
 } from '@ai-rpg-engine/modules';
+import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
+import type { ItemCatalog } from '@ai-rpg-engine/equipment';
+import {
+  formatProvenanceForDirector,
+  getItemHistory,
+  getItemKillCount,
+  getItemAge,
+  evaluateRelicGrowth,
+  getRelicEpithet,
+  TIER_LABELS,
+  EQUIPMENT_SLOTS,
+} from '@ai-rpg-engine/equipment';
 import type { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 import { compactChronicle } from '../session/chronicle.js';
 import { renderChronicle, type ChronicleRenderMode } from '../character/chronicle-renderer.js';
@@ -51,8 +78,14 @@ ${DIVIDER}
   /pressures                    Show active world pressures
   /world                        Show resolved pressures and fallout
   /factions                     Show faction agency (goals, actions, profiles)
+  /people [zone]                Show named NPCs (goals, stance, last action)
+  /npc <npc-id>                 Inspect individual NPC agency state
   /leverage                     Show player leverage currencies
   /map                          Show strategic map (districts + factions)
+  /party                        Show companion party state
+  /item <item-id>               Inspect item provenance, chronicle, relic state
+  /districts                    Show all districts with mood + metrics
+  /district <id>                Deep inspect a specific district
   /status                       Compact strategic snapshot
   /stats                        Session balance metrics
   /help leverage                Full leverage verb reference
@@ -86,6 +119,12 @@ export function executeDirectorCommand(
   suggestedMove?: ScoredMove | null,
   situationTag?: string,
   profileCustom?: Record<string, string | number | boolean>,
+  npcProfiles?: NpcProfile[],
+  lastNpcActions?: NpcActionResult[],
+  npcObligations?: Map<string, NpcObligationLedger>,
+  partyState?: PartyState,
+  profile?: CharacterProfile | null,
+  itemCatalog?: ItemCatalog | null,
 ): string {
   const parts = command.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
@@ -165,6 +204,34 @@ export function executeDirectorCommand(
       return formatFactionProfilesForDirector(profiles, actions);
     }
 
+    case '/people': {
+      const profiles = npcProfiles ?? [];
+      const actions = lastNpcActions ?? [];
+      if (profiles.length === 0) return '  No named NPCs found.';
+      // Optional zone filter
+      const zoneFilter = parts[1];
+      const filtered = zoneFilter
+        ? profiles.filter((p) => {
+            const entity = world.entities[p.npcId];
+            return entity?.zoneId === zoneFilter;
+          })
+        : profiles;
+      if (filtered.length === 0) return `  No named NPCs in zone "${zoneFilter}".`;
+      return formatNpcPeopleForDirector(filtered, actions, npcObligations);
+    }
+
+    case '/npc': {
+      const npcId = parts[1];
+      if (!npcId) return '  Usage: /npc <npc-id>';
+      const profiles = npcProfiles ?? [];
+      const actions = lastNpcActions ?? [];
+      const profile = profiles.find((p) => p.npcId === npcId);
+      if (!profile) return `  NPC "${npcId}" not found (or not a named NPC).`;
+      const lastAction = actions.find((a) => a.action.npcId === npcId);
+      const obligations = npcObligations?.get(npcId);
+      return formatNpcProfileForDirector(profile, lastAction, obligations);
+    }
+
     case '/leverage': {
       if (!leverageState) return '  No leverage data available.';
       return formatLeverageForDirector(leverageState);
@@ -173,6 +240,21 @@ export function executeDirectorCommand(
     case '/map': {
       if (!strategicMap) return '  No strategic map data available.';
       return formatStrategicMapForDirector(strategicMap);
+    }
+
+    case '/districts': {
+      return formatAllDistrictsForDirector(world);
+    }
+
+    case '/district': {
+      const districtId = parts[1];
+      if (!districtId) return '  Usage: /district <district-id>';
+      const dState = getDistrictState(world, districtId);
+      const dDef = getDistrictDefinition(world, districtId);
+      if (!dState || !dDef) return `  District "${districtId}" not found.`;
+      const mood = computeDistrictMood(dState, dDef.tags);
+      const mods = computeDistrictModifiers(mood);
+      return formatDistrictForDirector(districtId, dDef, dState, mood, mods);
     }
 
     case '/chronicle': {
@@ -238,6 +320,40 @@ export function executeDirectorCommand(
       return renderDirectorHelp();
     }
 
+    case '/party': {
+      if (!partyState || partyState.companions.length === 0) {
+        return '  No companions recruited. Use /recruit <npc-id> in play mode.';
+      }
+      // Build companion profiles for display
+      const companionProfiles = (npcProfiles ?? [])
+        .filter((p) => partyState.companions.some((c) => c.npcId === p.npcId))
+        .map((p) => ({
+          npcId: p.npcId,
+          name: world.entities[p.npcId]?.name ?? p.npcId,
+          breakpoint: p.breakpoint,
+          goals: p.goals.map((g) => ({ label: g.verb, priority: g.priority })),
+        }));
+      // Build departure risks
+      const departureRisks: Record<string, { risk: string; reason?: string }> = {};
+      for (const comp of partyState.companions) {
+        const profile = (npcProfiles ?? []).find((p) => p.npcId === comp.npcId);
+        const assessment = evaluateDepartureRisk(comp, profile?.breakpoint);
+        departureRisks[comp.npcId] = assessment;
+      }
+      return formatPartyForDirector(partyState, companionProfiles, departureRisks);
+    }
+
+    case '/item': {
+      const itemId = parts[1];
+      if (!itemId) {
+        // List all equipped/inventory items
+        if (!profile || !itemCatalog) return '  No profile or item catalog loaded.';
+        return renderItemList(profile, itemCatalog, currentTick ?? 0);
+      }
+      if (!profile || !itemCatalog) return '  No profile or item catalog loaded.';
+      return renderItemInspection(itemId, profile, itemCatalog, currentTick ?? 0);
+    }
+
     default:
       return `  Unknown command: ${cmd}. Type /help for available commands.`;
   }
@@ -292,6 +408,90 @@ function renderStats(custom: Record<string, string | number | boolean>): string 
   lines.push('');
   lines.push(DIVIDER);
   lines.push('');
+  return lines.join('\n');
+}
+
+function renderItemList(profile: CharacterProfile, catalog: ItemCatalog, tick: number): string {
+  const lines: string[] = ['', DIVIDER, '  EQUIPMENT', DIVIDER, ''];
+  for (const slot of EQUIPMENT_SLOTS) {
+    const itemId = profile.loadout.equipped[slot];
+    if (!itemId) {
+      lines.push(`  ${slot}: (empty)`);
+      continue;
+    }
+    const item = catalog.items.find((i) => i.id === itemId);
+    if (!item) {
+      lines.push(`  ${slot}: ${itemId} (unknown)`);
+      continue;
+    }
+    const chronicle = getItemHistory(profile.itemChronicle, itemId);
+    const relic = evaluateRelicGrowth(item, chronicle, tick);
+    const name = relic.currentEpithet ?? item.name;
+    const tierLabel = relic.tier > 0 ? ` [${TIER_LABELS[relic.tier]}]` : '';
+    lines.push(`  ${slot}: ${name} (${item.rarity})${tierLabel}`);
+  }
+  if (profile.loadout.inventory.length > 0) {
+    lines.push('');
+    lines.push('  INVENTORY');
+    for (const itemId of profile.loadout.inventory) {
+      const item = catalog.items.find((i) => i.id === itemId);
+      lines.push(`    ${item?.name ?? itemId}`);
+    }
+  }
+  lines.push('', `  Use /item <item-id> to inspect a specific item.`, '');
+  return lines.join('\n');
+}
+
+function renderItemInspection(itemId: string, profile: CharacterProfile, catalog: ItemCatalog, tick: number): string {
+  const item = catalog.items.find((i) => i.id === itemId);
+  if (!item) return `  Item "${itemId}" not found in catalog.`;
+
+  const chronicle = getItemHistory(profile.itemChronicle, itemId);
+  const relic = evaluateRelicGrowth(item, chronicle, tick);
+  const isEquipped = Object.values(profile.loadout.equipped).includes(itemId);
+
+  const lines: string[] = ['', DIVIDER];
+  lines.push(`  ITEM: ${getRelicEpithet(item, relic)}`);
+  lines.push(DIVIDER);
+  lines.push('');
+  lines.push(`  Slot: ${item.slot} | Rarity: ${item.rarity} | Equipped: ${isEquipped ? 'yes' : 'no'}`);
+
+  // Provenance
+  lines.push(`  ${formatProvenanceForDirector(item, chronicle)}`);
+
+  // Relic state
+  if (relic.tier > 0) {
+    lines.push(`  Relic tier: ${relic.tier} (${TIER_LABELS[relic.tier]}) | Epithet: "${relic.currentEpithet}"`);
+  }
+
+  // Chronicle stats
+  const killCount = getItemKillCount(profile.itemChronicle, itemId);
+  const age = getItemAge(profile.itemChronicle, itemId, tick);
+  lines.push(`  Kill count: ${killCount} | Age: ${age} ticks`);
+
+  // Chronicle (last 5)
+  if (chronicle.length > 0) {
+    lines.push('');
+    lines.push('  Chronicle (last 5):');
+    const recent = chronicle.slice(-5);
+    for (const entry of recent) {
+      const zone = entry.zoneId ? ` [${entry.zoneId}]` : '';
+      lines.push(`    tick ${entry.tick}: ${entry.event} — ${entry.detail}${zone}`);
+    }
+  }
+
+  // Stat mods
+  if (item.statModifiers && Object.keys(item.statModifiers).length > 0) {
+    const mods = Object.entries(item.statModifiers).map(([k, v]) => `${k} ${v > 0 ? '+' : ''}${v}`).join(', ');
+    lines.push(`  Stat mods: ${mods}`);
+  }
+
+  // Tags
+  if (item.grantedTags && item.grantedTags.length > 0) {
+    lines.push(`  Tags: ${item.grantedTags.join(', ')}`);
+  }
+
+  lines.push('', DIVIDER, '');
   return lines.join('\n');
 }
 

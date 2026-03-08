@@ -13,7 +13,7 @@ A simulation-grounded terminal RPG where Claude narrates, the engine preserves t
 
 ## What Is Claude RPG?
 
-Claude RPG sits on top of the [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — a deterministic simulation runtime with 17 modules covering combat, cognition, perception, factions, rumors, and belief provenance. Claude's job is to interpret, narrate, and speak. The engine's job is to own truth.
+Claude RPG sits on top of the [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — a deterministic simulation runtime with 29 modules covering combat, cognition, perception, factions, rumors, belief provenance, NPC agency, companions, player leverage, strategic maps, item recognition, and equipment provenance. Claude's job is to interpret, narrate, and speak. The engine's job is to own truth.
 
 The golden rule: **Claude proposes, engine disposes.**
 
@@ -58,6 +58,11 @@ export ANTHROPIC_API_KEY=sk-ant-...
 | **Perception-aware presentation** | Claude receives only what the player character perceived. Low-clarity entities appear as shadowy figures, not named targets. |
 | **Audio/voice immersion runtime** | Structured narration plans drive voice synthesis, sound effects, ambient layers, and music through voice-soundboard. |
 | **Director visibility into hidden truth** | `/inspect pilgrim` shows beliefs. `/trace` shows provenance. `/divergences` shows what you thought happened vs what actually did. |
+| **NPC agency with consequence chains** | NPCs act on goals, track obligations, and retaliate when loyalty breakpoints shift. `/npc` and `/people` surface breakpoints, leverage angles, and active consequence chains. |
+| **Living districts** | Districts have commerce, morale, and safety that shift from player actions, faction moves, and NPC consequence chains. Mood flows into narration and scales gameplay. `/districts` and `/district` inspect the neighborhood pulse. |
+| **Companions with departure risk** | Party members have morale, loyalty, and departure triggers. Push them too far and they leave — for reasons the engine tracks. |
+| **Player leverage and political action** | Spend influence, favors, and intel on social, rumor, diplomacy, and sabotage actions. `/leverage` shows your political capital. |
+| **Equipment provenance and relics** | Items carry history. A sword that kills enough becomes a relic with an epithet. NPCs recognize equipped items and react. `/item` inspects provenance and chronicles. |
 
 ## Architecture
 
@@ -111,7 +116,7 @@ The narrator doesn't output raw prose — it produces a **NarrationPlan**: a str
 | Mode | What It Does |
 |------|-------------|
 | **Play** | Immersive narrated RPG. Claude narrates, NPCs speak from beliefs, actions resolve through the engine. |
-| **Director** | Inspect hidden truth: `/inspect <npc>`, `/faction <id>`, `/trace <belief>`, `/divergences` |
+| **Director** | Inspect hidden truth: `/inspect <npc>`, `/faction <id>`, `/trace <belief>`, `/divergences`, `/npc <name>`, `/people`, `/districts`, `/district <id>`, `/item <name>`, `/leverage`, `/moves` |
 | **Replay** | Walk the event timeline showing objective truth vs player perception side-by-side. |
 
 ## Engine Packages
@@ -121,13 +126,21 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | Package | Purpose |
 |---------|---------|
 | [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | State, entities, actions, events, rules, RNG |
-| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | Combat, cognition, perception, factions, rumors, belief provenance |
+| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29 modules — combat, cognition, perception, factions, rumors, NPC agency, companions, leverage, strategic map, item recognition |
+| [`@ai-rpg-engine/character-profile`](https://www.npmjs.com/package/@ai-rpg-engine/character-profile) | Character progression, injuries, reputation |
+| [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | Equipment, item provenance, relic growth, chronicles |
+| [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | Cross-session memory, relationship effects |
 | [`@ai-rpg-engine/presentation`](https://www.npmjs.com/package/@ai-rpg-engine/presentation) | NarrationPlan schema, render contracts |
 | [`@ai-rpg-engine/audio-director`](https://www.npmjs.com/package/@ai-rpg-engine/audio-director) | Audio cue scheduling, priority, ducking |
 | [`@ai-rpg-engine/soundpack-core`](https://www.npmjs.com/package/@ai-rpg-engine/soundpack-core) | Sound pack registry + core pack |
 | [`@ai-rpg-engine/content-schema`](https://www.npmjs.com/package/@ai-rpg-engine/content-schema) | World content validation |
 | [`@ai-rpg-engine/starter-fantasy`](https://www.npmjs.com/package/@ai-rpg-engine/starter-fantasy) | Chapel Threshold starter world |
-| [`@ai-rpg-engine/starter-cyberpunk`](https://www.npmjs.com/package/@ai-rpg-engine/starter-cyberpunk) | Neon District starter world |
+| [`@ai-rpg-engine/starter-cyberpunk`](https://www.npmjs.com/package/@ai-rpg-engine/starter-cyberpunk) | Neon Lockbox starter world |
+| [`@ai-rpg-engine/starter-detective`](https://www.npmjs.com/package/@ai-rpg-engine/starter-detective) | Gaslight Detective starter world |
+| [`@ai-rpg-engine/starter-pirate`](https://www.npmjs.com/package/@ai-rpg-engine/starter-pirate) | Black Flag Requiem starter world |
+| [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | Ashfall Dead starter world |
+| [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | Dust Devil's Bargain starter world |
+| [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | Signal Loss starter world |
 
 ## Token Budget
 

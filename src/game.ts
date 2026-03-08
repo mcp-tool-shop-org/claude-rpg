@@ -8,10 +8,17 @@
 // v0.9: faction agency — factions as active strategic actors
 // v1.0: player leverage — structured social actions for player counter-agency
 // v1.1: the cockpit — campaign UX, move advisor, contextual suggestions, help system
+// v1.2: NPC agency — named NPCs as individual actors with goals, fears, and autonomous actions
+// v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { ItemCatalog } from '@ai-rpg-engine/equipment';
+import type { ItemCatalog, ItemDefinition } from '@ai-rpg-engine/equipment';
+import { EQUIPMENT_SLOTS, recordItemEvent } from '@ai-rpg-engine/equipment';
+import {
+  evaluateItemRecognition,
+  shouldRecognize,
+} from '@ai-rpg-engine/modules';
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 import {
   grantXp,
@@ -47,8 +54,14 @@ import {
   runFactionAgencyTick,
   buildFactionProfile,
   formatFactionAgencyForNarrator,
+  formatNpcAgencyForNarrator,
+  generateNpcTextures,
   type FactionActionResult,
   type FactionProfile,
+  tickObligations,
+  type NpcActionResult,
+  type NpcProfile,
+  type NpcObligationLedger,
   getLeverageState,
   applyLeverageDeltas,
   isCooldownReady,
@@ -77,6 +90,23 @@ import {
   buryRumor,
   type LeverageResolution,
   type LeverageEffect,
+  computeRelationshipModifiers,
+  getNetObligationWeight,
+  createObligation,
+  addObligation,
+  evaluateConsequenceChainTrigger,
+  buildConsequenceChain,
+  shouldResolveChainStep,
+  resolveConsequenceChainStep,
+  tickConsequenceChain,
+  type LoyaltyBreakpoint,
+  type ConsequenceChain,
+  getDistrictState,
+  getDistrictDefinition,
+  getAllDistrictIds,
+  computeDistrictMood,
+  computeDistrictModifiers,
+  formatDistrictMoodForNarrator,
 } from '@ai-rpg-engine/modules';
 import { getReputation } from '@ai-rpg-engine/character-profile';
 import { createClaudeClient, type ClaudeClient, type ClaudeClientConfig } from './claude-client.js';
@@ -88,6 +118,27 @@ import { narrateScene } from './narrator/narrator.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { buildPresence, buildNPCStancePresence, buildStatusData, type StatusData } from './character/presence.js';
 import { deriveChronicleEvents, type ChronicleEventSource } from './session/chronicle.js';
+import { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
+import {
+  recruitCompanion,
+  dismissCompanion,
+  followPlayer,
+  syncCompanionMorale,
+  inferCompanionRole,
+} from './companion/companion-bridge.js';
+import {
+  createPartyState,
+  isCompanion,
+  adjustCompanionMorale,
+  type PartyState,
+  type CompanionRole,
+  evaluateCompanionReactions,
+  type CompanionReaction,
+  computePartyAbilities,
+  computeAbilityModifiers,
+  formatPartyStatusLine,
+  formatPartyPresence,
+} from '@ai-rpg-engine/modules';
 import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart } from './display/help-system.js';
 import { renderCompactStatus } from './display/status-compact.js';
 import { generateSuggestions } from './display/contextual-suggestions.js';
@@ -125,7 +176,14 @@ export class GameSession {
   mode: GameMode = 'play';
   lastFactionActions: FactionActionResult[] = [];
   lastFactionProfiles: FactionProfile[] = [];
+  lastNpcActions: NpcActionResult[] = [];
+  lastNpcProfiles: NpcProfile[] = [];
+  npcObligations: Map<string, NpcObligationLedger> = new Map();
+  previousBreakpoints: Map<string, LoyaltyBreakpoint> = new Map();
+  activeConsequenceChains: Map<string, ConsequenceChain> = new Map();
   lastLeverageResolution: LeverageResolution | null = null;
+  lastCompanionReactions: CompanionReaction[] = [];
+  partyState: PartyState = createPartyState();
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -199,7 +257,7 @@ export class GameSession {
       // Spawn reputation rumor
       const factionState = this.engine.world.factions[hints.reputationDelta.factionId];
       const districtId = this.getPlayerDistrictId();
-      this.playerRumors.push(
+      this.addRumor(
         spawnReputationRumor(
           hints.reputationDelta.factionId,
           hints.reputationDelta.delta,
@@ -249,7 +307,7 @@ export class GameSession {
       // Spawn milestone rumor
       const witnessedBy = this.getPlayerZoneFaction();
       const districtId = this.getPlayerDistrictId();
-      this.playerRumors.push(
+      this.addRumor(
         spawnPlayerRumor(
           hints.milestoneTriggered,
           this.profile,
@@ -287,6 +345,8 @@ export class GameSession {
   async getOpeningNarration(): Promise<string> {
     const presence = this.getPresence();
     const pressureContext = this.getVisiblePressureContext();
+    const districtDescriptor = this.getDistrictDescriptor();
+    const partyPresenceStr = this.getPartyPresence();
     const result = await narrateScene(
       this.client,
       this.engine.world,
@@ -297,6 +357,8 @@ export class GameSession {
       this.immersion.stateMachine.current,
       presence.narrator,
       pressureContext,
+      districtDescriptor,
+      partyPresenceStr,
     );
     this.history.record({
       tick: this.engine.tick,
@@ -355,6 +417,12 @@ export class GameSession {
         dirRecommendation?.top3[0] ?? null,
         dirRecommendation?.situationTag ?? 'safe',
         this.profile?.custom as Record<string, string | number | boolean> | undefined,
+        this.lastNpcProfiles,
+        this.lastNpcActions,
+        this.npcObligations,
+        this.partyState,
+        this.profile,
+        this.itemCatalog,
       );
     }
 
@@ -391,11 +459,25 @@ export class GameSession {
         if (!this.profile) return '  No profile loaded.';
         return formatLeverageForDirector(getLeverageState(this.profile.custom));
       }
+      if (playCmd === '/recruit') {
+        return this.handleRecruit(cmdParts.slice(1));
+      }
+      if (playCmd === '/dismiss') {
+        return this.handleDismiss(cmdParts[1]);
+      }
     }
 
     // Play mode: execute a turn with immersion + character presence
     const presence = this.getPresence();
     const pressureCtx = this.getVisiblePressureContext();
+
+    // Compute district mood for narration
+    const districtDescriptor = this.getDistrictDescriptor();
+
+    // Track zone before turn for companion following
+    const zoneBefore = this.engine.world.locationId;
+
+    const partyPresenceStr = this.getPartyPresence();
     const turnResult = await executeTurn(
       this.engine,
       this.client,
@@ -409,6 +491,9 @@ export class GameSession {
       this.playerRumors,
       pressureCtx,
       this.activePressures,
+      this.lastNpcActions,
+      districtDescriptor,
+      partyPresenceStr,
     );
 
     // Process leverage actions (social/rumor/diplomacy/sabotage)
@@ -425,6 +510,47 @@ export class GameSession {
 
     // Faction agency: factions evaluate state and take actions
     this.tickFactionAgency();
+
+    // NPC agency: named NPCs evaluate state and take individual actions
+    this.tickNpcAgencyTurn();
+
+    // Item recognition: NPCs notice equipped items with provenance
+    this.tickItemRecognition();
+
+    // Companion zone following: if player moved zones, companions follow
+    if (this.engine.world.locationId !== zoneBefore) {
+      followPlayer(this.engine, this.partyState);
+    }
+
+    // Companion reactions to combat and district conditions
+    if (this.partyState.companions.length > 0) {
+      // Combat reactions
+      const hasCombatWon = turnResult.events.some((e) => e.type === 'combat.entity.defeated');
+      const hasCombatLost = turnResult.events.some(
+        (e) => e.type === 'combat.entity.defeated' &&
+          e.payload.entityId === this.engine.world.playerId,
+      );
+      if (hasCombatLost) {
+        this.processCompanionReactions('combat-lost');
+      } else if (hasCombatWon) {
+        this.processCompanionReactions('combat-won');
+      }
+
+      // District mood reactions (at start of each turn)
+      const playerDistrict = this.getPlayerDistrictId();
+      if (playerDistrict) {
+        const dState = getDistrictState(this.engine.world, playerDistrict);
+        const dDef = getDistrictDefinition(this.engine.world, playerDistrict);
+        if (dState && dDef) {
+          const mood = computeDistrictMood(dState, dDef.tags);
+          if (mood.tone === 'grim' || mood.tone === 'oppressive') {
+            this.processCompanionReactions('district-grim');
+          } else if (mood.tone === 'prosperous') {
+            this.processCompanionReactions('district-prosperous');
+          }
+        }
+      }
+    }
 
     // Propagate existing rumors to new factions
     this.propagateRumors();
@@ -451,6 +577,16 @@ export class GameSession {
       });
     }
 
+    // Build party status line
+    let partyStatusLine: string | undefined;
+    if (this.partyState.companions.length > 0) {
+      const companionNames: Record<string, string> = {};
+      for (const comp of this.partyState.companions) {
+        companionNames[comp.npcId] = this.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
+      }
+      partyStatusLine = formatPartyStatusLine(this.partyState, companionNames) ?? undefined;
+    }
+
     return renderPlayScreen({
       narration: turnResult.narration,
       dialogue: turnResult.dialogue,
@@ -458,6 +594,7 @@ export class GameSession {
       availableActions: this.engine.getAvailableActions(),
       profileStatus: this.getStatusData() ?? undefined,
       leverageStatus,
+      partyStatusLine,
       suggestions,
     });
   }
@@ -476,8 +613,31 @@ export class GameSession {
     const factionIds = Object.keys(this.engine.world.factions);
     if (factionIds.length <= 1) return;
 
+    // District mood scales rumor spread: low spirit → rumors travel faster
+    let rumorSpreadScale = 1.0;
+    const playerDist = this.getPlayerDistrictId();
+    if (playerDist) {
+      const dState = getDistrictState(this.engine.world, playerDist);
+      const dDef = getDistrictDefinition(this.engine.world, playerDist);
+      if (dState && dDef) {
+        const mood = computeDistrictMood(dState, dDef.tags);
+        const mods = computeDistrictModifiers(mood);
+        rumorSpreadScale = mods.rumorSpreadScale;
+      }
+    }
+
+    // Apply companion ability modifiers to rumor spread
+    if (this.partyState.companions.length > 0) {
+      const partyAbilities = computePartyAbilities(this.partyState);
+      if (partyAbilities.length > 0) {
+        const abilityMods = computeAbilityModifiers(partyAbilities);
+        rumorSpreadScale *= abilityMods.rumorSpreadScale;
+      }
+    }
+
+    // Scale the effective max propagations per turn
+    const MAX_PER_TURN = Math.round(3 * rumorSpreadScale);
     let propagations = 0;
-    const MAX_PER_TURN = 3;
 
     for (let i = 0; i < this.playerRumors.length && propagations < MAX_PER_TURN; i++) {
       const rumor = this.playerRumors[i];
@@ -497,6 +657,27 @@ export class GameSession {
   /** Get the district ID the player is currently in. */
   private getPlayerDistrictId(): string | undefined {
     return getDistrictForZone(this.engine.world, this.engine.world.locationId);
+  }
+
+  /** Get a compact district mood descriptor for the narrator. */
+  private getDistrictDescriptor(): string | undefined {
+    const districtId = this.getPlayerDistrictId();
+    if (!districtId) return undefined;
+    const dState = getDistrictState(this.engine.world, districtId);
+    const dDef = getDistrictDefinition(this.engine.world, districtId);
+    if (!dState || !dDef) return undefined;
+    const mood = computeDistrictMood(dState, dDef.tags);
+    return formatDistrictMoodForNarrator(mood, dDef.name);
+  }
+
+  /** Get a compact party presence string for the narrator. */
+  private getPartyPresence(): string | undefined {
+    if (!this.partyState || this.partyState.companions.length === 0) return undefined;
+    const companionNames: Record<string, string> = {};
+    for (const comp of this.partyState.companions) {
+      companionNames[comp.npcId] = this.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
+    }
+    return formatPartyPresence(this.partyState, companionNames) ?? undefined;
   }
 
   /** Get the faction that controls the player's current zone (for witnessing). */
@@ -525,6 +706,16 @@ export class GameSession {
     // Faction agency hints (max 2, from last turn's actions)
     const agencyHints = formatFactionAgencyForNarrator(this.lastFactionActions);
     hints.push(...agencyHints);
+
+    // NPC agency hints (max 2, from last turn's NPC actions)
+    const npcHints = formatNpcAgencyForNarrator(this.lastNpcActions);
+    hints.push(...npcHints);
+
+    // NPC behavioral texture hints (max 3, from current profiles)
+    const textureHints = generateNpcTextures(
+      this.lastNpcProfiles, this.engine.world, this.engine.world.playerId,
+    );
+    hints.push(...textureHints);
 
     // Leverage action hint (from last turn's resolution)
     if (this.lastLeverageResolution?.success && this.lastLeverageResolution.narratorHint) {
@@ -578,6 +769,12 @@ export class GameSession {
 
     this.applyFalloutEffects(fallout);
     this.resolvedPressures.push(fallout);
+
+    // Companion reactions to pressure resolution
+    if (this.partyState.companions.length > 0) {
+      const isGood = resolutionType === 'resolved-by-player' || resolutionType === 'resolved-by-faction';
+      this.processCompanionReactions(isGood ? 'pressure-resolved-well' : 'pressure-resolved-badly');
+    }
   }
 
   /** Apply structured fallout effects to session state. */
@@ -601,7 +798,7 @@ export class GameSession {
 
         case 'rumor':
           if (this.profile) {
-            this.playerRumors.push(
+            this.addRumor(
               spawnPlayerRumor(
                 { label: effect.claim, description: effect.claim, tags: [effect.valence] },
                 this.profile,
@@ -699,11 +896,26 @@ export class GameSession {
       tags: m.tags,
     }));
 
+    // Build district metrics for pressure evaluation
+    const districtIds = getAllDistrictIds(this.engine.world);
+    const districtMetrics: Record<string, { alertPressure: number; rumorDensity: number; stability: number }> = {};
+    for (const dId of districtIds) {
+      const dState = getDistrictState(this.engine.world, dId);
+      if (dState) {
+        districtMetrics[dId] = {
+          alertPressure: dState.alertPressure,
+          rumorDensity: dState.rumorDensity,
+          stability: dState.stability,
+        };
+      }
+    }
+
     return {
       playerRumors: this.playerRumors,
       reputation,
       milestones,
       factionStates,
+      districtMetrics: Object.keys(districtMetrics).length > 0 ? districtMetrics : undefined,
       playerLevel: this.profile?.progression.level ?? 1,
       totalTurns: this.profile?.totalTurns ?? 0,
       activePressures: this.activePressures,
@@ -730,6 +942,84 @@ export class GameSession {
     const derived = deriveChronicleEvents(source, this.engine.world.playerId);
     for (const entry of derived) {
       this.journal.record(entry);
+    }
+
+    // Item chronicle: record acquisitions
+    for (const event of turnResult.events) {
+      if (event.type === 'item.acquired' && this.profile) {
+        const itemId = event.payload.itemId as string;
+        const itemDef = this.itemCatalog?.items.find((i) => i.id === itemId);
+        const itemName = itemDef?.name ?? itemId;
+        this.profile = {
+          ...this.profile,
+          itemChronicle: recordItemEvent(this.profile.itemChronicle, itemId, {
+            event: 'acquired',
+            detail: `Acquired in ${this.engine.world.locationId}`,
+            zoneId: this.engine.world.locationId,
+          }, this.engine.tick),
+        };
+        // Record campaign chronicle event
+        const acqSource: ChronicleEventSource = {
+          kind: 'item-acquired',
+          itemId,
+          itemName,
+          source: this.engine.world.locationId,
+          tick: this.engine.tick,
+        };
+        for (const entry of deriveChronicleEvents(acqSource, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+      }
+    }
+
+    // Companion-specific chronicle events from combat
+    for (const event of turnResult.events) {
+      if (event.type === 'combat.companion.intercepted') {
+        const npcId = event.payload.interceptorId as string;
+        const npcName = event.payload.interceptorName as string ?? npcId;
+        const savedSource: ChronicleEventSource = {
+          kind: 'companion-saved-player',
+          npcId,
+          npcName,
+          tick: this.engine.tick,
+        };
+        for (const entry of deriveChronicleEvents(savedSource, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+      }
+      if (event.type === 'combat.entity.defeated') {
+        const entityId = event.payload.entityId as string;
+        if (entityId && isCompanion(this.partyState, entityId)) {
+          const npcName = event.payload.entityName as string ?? entityId;
+          const diedSource: ChronicleEventSource = {
+            kind: 'companion-died',
+            npcId: entityId,
+            npcName,
+            tick: this.engine.tick,
+          };
+          for (const entry of deriveChronicleEvents(diedSource, this.engine.world.playerId)) {
+            this.journal.record(entry);
+          }
+          // Remove from party
+          this.handleCompanionDeparture(entityId, 'fell in battle');
+        }
+
+        // Item chronicle: record used-in-kill on equipped weapon
+        if (entityId && entityId !== this.engine.world.playerId && !isCompanion(this.partyState, entityId) && this.profile) {
+          const weaponId = this.profile.loadout.equipped.weapon;
+          if (weaponId) {
+            const entityName = (event.payload.entityName as string) ?? entityId;
+            this.profile = {
+              ...this.profile,
+              itemChronicle: recordItemEvent(this.profile.itemChronicle, weaponId, {
+                event: 'used-in-kill',
+                detail: `Slew ${entityName}`,
+                zoneId: this.engine.world.locationId,
+              }, this.engine.tick),
+            };
+          }
+        }
+      }
     }
   }
 
@@ -803,7 +1093,7 @@ export class GameSession {
 
         case 'rumor':
           if (this.profile) {
-            this.playerRumors.push(
+            this.addRumor(
               spawnPlayerRumor(
                 { label: effect.claim, description: effect.claim, tags: [effect.valence] },
                 this.profile,
@@ -849,6 +1139,269 @@ export class GameSession {
         case 'member-count':
           // Member count changes are tracked conceptually — no entity spawning in v0.9
           break;
+      }
+    }
+  }
+
+  // --- v1.2: NPC Agency ---
+
+  /** NPC agency: named NPCs evaluate state and take individual actions. */
+  private tickNpcAgencyTurn(): void {
+    if (!this.profile) return;
+
+    // Tick obligation decay
+    for (const [npcId, ledger] of this.npcObligations) {
+      this.npcObligations.set(npcId, tickObligations(ledger));
+    }
+
+    // Run NPC agency tick (builds profiles, evaluates, resolves)
+    const results = tickNpcAgency(
+      this.engine,
+      this.activePressures,
+      this.playerRumors,
+      this.npcObligations,
+    );
+
+    // Build profiles for director view (even if no actions were taken)
+    this.lastNpcProfiles = buildNpcProfilesForDirector(
+      this.engine,
+      this.activePressures,
+      this.playerRumors,
+      this.npcObligations,
+    );
+
+    // Apply effects from each NPC action
+    for (const result of results) {
+      this.profile = applyNpcEffects(result, {
+        profile: this.profile!,
+        playerRumors: this.playerRumors,
+        activePressures: this.activePressures,
+        engine: this.engine,
+        getPlayerDistrictId: () => this.getPlayerDistrictId(),
+        npcObligations: this.npcObligations,
+      });
+
+      // Record in chronicle
+      const npcEntity = this.engine.world.entities[result.action.npcId];
+      const npcName = npcEntity?.name ?? result.action.npcId;
+      const source: ChronicleEventSource = {
+        kind: 'npc-action',
+        action: result.action,
+        npcName,
+        tick: this.engine.tick,
+      };
+      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+        this.journal.record(entry);
+      }
+
+      // Record obligation events in chronicle
+      for (const effect of result.effects) {
+        if (effect.type === 'obligation') {
+          const oblSource: ChronicleEventSource = {
+            kind: 'obligation-created',
+            obligation: {
+              id: `obl-${result.action.npcId}-${this.engine.tick}`,
+              kind: effect.kind,
+              direction: effect.direction,
+              npcId: effect.npcId,
+              counterpartyId: effect.counterpartyId,
+              magnitude: effect.magnitude,
+              sourceTag: effect.sourceTag,
+              createdAtTick: this.engine.tick,
+              decayTurns: effect.decayTurns,
+            },
+            npcName,
+            tick: this.engine.tick,
+          };
+          for (const entry of deriveChronicleEvents(oblSource, this.engine.world.playerId)) {
+            this.journal.record(entry);
+          }
+        }
+      }
+    }
+
+    // --- Consequence chain management ---
+
+    // Evaluate breakpoint shifts for consequence triggers
+    for (const profile of this.lastNpcProfiles) {
+      const prevBp = this.previousBreakpoints.get(profile.npcId);
+      if (prevBp && prevBp !== profile.breakpoint) {
+        // Breakpoint shifted — check for consequence trigger
+        if (!this.activeConsequenceChains.has(profile.npcId)) {
+          const oblLedger = this.npcObligations.get(profile.npcId);
+          const kind = evaluateConsequenceChainTrigger(profile, prevBp, oblLedger);
+          if (kind) {
+            const chain = buildConsequenceChain(
+              profile.npcId, kind, `${prevBp} → ${profile.breakpoint}`, this.engine.tick,
+            );
+            this.activeConsequenceChains.set(profile.npcId, chain);
+          }
+        }
+      }
+      // Store current breakpoint for next turn comparison
+      this.previousBreakpoints.set(profile.npcId, profile.breakpoint);
+    }
+
+    // Tick and resolve active consequence chains
+    for (const [npcId, chain] of this.activeConsequenceChains) {
+      let updated = tickConsequenceChain(chain);
+      if (shouldResolveChainStep(updated)) {
+        const stepResult = resolveConsequenceChainStep(updated);
+        if (stepResult) {
+          updated = stepResult.chain;
+          // Force the NPC action through existing resolution pipeline
+          const npcEntity = this.engine.world.entities[npcId];
+          const npcName = npcEntity?.name ?? npcId;
+          const forcedAction = {
+            npcId,
+            verb: stepResult.verb,
+            targetEntityId: this.engine.world.playerId,
+            description: `${npcName} ${stepResult.description}`,
+          };
+          const forcedResult = {
+            action: forcedAction,
+            effects: [], // Chain steps use existing NPC action resolution
+            narratorHint: `${npcName} ${stepResult.description}`,
+            dialogueHint: undefined,
+          };
+          // Record chain step in chronicle
+          const chainSource: ChronicleEventSource = {
+            kind: 'npc-action',
+            action: forcedAction,
+            npcName,
+            tick: this.engine.tick,
+          };
+          for (const entry of deriveChronicleEvents(chainSource, this.engine.world.playerId)) {
+            this.journal.record(entry);
+          }
+          results.push(forcedResult);
+
+          // Companion reactions to consequence chain events
+          if (this.partyState.companions.length > 0 && (chain.kind === 'vendetta' || chain.kind === 'retaliation')) {
+            this.processCompanionReactions('betrayal-witnessed');
+          }
+
+          // District drift from consequence chain resolution
+          const npcDistrictId = npcEntity?.zoneId ? getDistrictForZone(this.engine.world, npcEntity.zoneId) : undefined;
+          if (npcDistrictId) {
+            switch (chain.kind) {
+              case 'retaliation':
+              case 'vendetta':
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'alertPressure', 5);
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', -3);
+                break;
+              case 'extortion':
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'commerce', -3);
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', -2);
+                break;
+              case 'abandonment':
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'commerce', -3);
+                break;
+              case 'plea':
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', -1);
+                break;
+              case 'sacrifice':
+                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', 3);
+                break;
+            }
+          }
+        }
+      }
+      this.activeConsequenceChains.set(npcId, updated);
+      // Clean up resolved chains
+      if (updated.resolved) {
+        this.activeConsequenceChains.delete(npcId);
+      }
+    }
+
+    this.lastNpcActions = results;
+  }
+
+  // --- v1.6: Item Recognition ---
+
+  /** Evaluate item recognition: NPCs in the player's zone notice equipped items. */
+  private tickItemRecognition(): void {
+    if (!this.profile || !this.itemCatalog) return;
+
+    // Build list of equipped ItemDefinitions
+    const equippedItems: ItemDefinition[] = [];
+    for (const slot of EQUIPMENT_SLOTS) {
+      const itemId = this.profile.loadout.equipped[slot];
+      if (!itemId) continue;
+      const item = this.itemCatalog.items.find((i) => i.id === itemId);
+      if (item?.provenance) equippedItems.push(item);
+    }
+    if (equippedItems.length === 0) return;
+
+    // Find NPCs in the player's zone (use lastNpcProfiles which are already built)
+    const playerZone = this.engine.world.locationId;
+    const npcsInZone = this.lastNpcProfiles.filter((p) => {
+      const entity = this.engine.world.entities[p.npcId];
+      return entity?.zoneId === playerZone;
+    });
+    if (npcsInZone.length === 0) return;
+
+    for (const npcProfile of npcsInZone) {
+      // Perception clarity derived from relationship — hostile NPCs are more vigilant
+      const clarity = npcProfile.breakpoint === 'hostile' ? 0.8
+        : npcProfile.breakpoint === 'wavering' ? 0.5
+        : npcProfile.breakpoint === 'compromised' ? 0.4
+        : npcProfile.breakpoint === 'favorable' ? 0.2
+        : 0.1; // allied — minimal scrutiny
+
+      const recognitions = evaluateItemRecognition(
+        equippedItems, npcProfile.factionId ?? undefined,
+        this.profile!.itemChronicle, this.engine.tick,
+      );
+
+      for (const recognition of recognitions) {
+        // Probability gate — not every NPC notices every item every turn
+        const notoriety = recognition.stanceDelta !== 0
+          ? Math.abs(recognition.stanceDelta) / 10
+          : 0.5;
+        if (!shouldRecognize(clarity, notoriety)) continue;
+
+        // 1. Record item chronicle entry
+        const npcName = npcProfile.name;
+        this.profile = {
+          ...this.profile!,
+          itemChronicle: recordItemEvent(this.profile!.itemChronicle, recognition.itemId, {
+            event: 'recognized',
+            detail: `Recognized by ${npcName}`,
+            zoneId: playerZone,
+          }, this.engine.tick),
+        };
+
+        // 2. Record campaign chronicle event
+        const recogSource: ChronicleEventSource = {
+          kind: 'item-recognized',
+          itemId: recognition.itemId,
+          itemName: recognition.itemName,
+          recognizedBy: npcName,
+          tick: this.engine.tick,
+        };
+        for (const entry of deriveChronicleEvents(recogSource, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+
+        // 3. Spawn rumor if recognition warrants it
+        if (recognition.rumorClaim) {
+          this.addRumor(
+            spawnPlayerRumor(
+              { label: recognition.rumorClaim, description: recognition.rumorClaim, tags: [recognition.recognitionType] },
+              this.profile!,
+              npcProfile.factionId ?? 'unknown',
+              this.getPlayerDistrictId(),
+              this.engine.tick,
+            ),
+          );
+        }
+
+        // 4. Companion reactions to item recognition
+        if (this.partyState.companions.length > 0) {
+          const reactionTrigger = `item-${recognition.recognitionType.replace('-item', '')}-recognized`;
+          this.processCompanionReactions(reactionTrigger);
+        }
       }
     }
   }
@@ -997,6 +1550,98 @@ export class GameSession {
         return;
     }
 
+    // Apply district modifiers to leverage costs
+    const playerDistrictForLev = this.getPlayerDistrictId();
+    if (playerDistrictForLev) {
+      const dState = getDistrictState(this.engine.world, playerDistrictForLev);
+      const dDef = getDistrictDefinition(this.engine.world, playerDistrictForLev);
+      if (dState && dDef) {
+        const mood = computeDistrictMood(dState, dDef.tags);
+        const mods = computeDistrictModifiers(mood);
+        for (const effect of resolution.effects) {
+          if (effect.type === 'leverage' && effect.delta < 0) {
+            effect.delta = Math.round(effect.delta * mods.leverageCostScale);
+          }
+        }
+      }
+    }
+
+    // Apply companion ability modifiers to leverage costs
+    if (this.partyState.companions.length > 0) {
+      const partyAbilities = computePartyAbilities(this.partyState);
+      if (partyAbilities.length > 0) {
+        // Build companion faction map for faction-route ability
+        const companionFactions: Record<string, string | null> = {};
+        for (const comp of this.partyState.companions) {
+          if (comp.active) {
+            companionFactions[comp.npcId] = getEntityFaction(this.engine.world, comp.npcId) ?? null;
+          }
+        }
+        const abilityMods = computeAbilityModifiers(partyAbilities, companionFactions);
+
+        for (const effect of resolution.effects) {
+          // Apply leverage cost discount (increase negative delta by discount amount)
+          if (effect.type === 'leverage' && effect.delta < 0 && abilityMods.leverageCostDiscount > 0) {
+            effect.delta = Math.min(0, effect.delta + abilityMods.leverageCostDiscount);
+          }
+          // Apply reputation bonus from faction-route
+          if (effect.type === 'reputation' && effect.delta > 0 && abilityMods.reputationBonus[effect.factionId]) {
+            effect.delta += abilityMods.reputationBonus[effect.factionId];
+          }
+          // Apply commerce gain bonus
+          if (effect.type === 'leverage' && effect.delta > 0 && abilityMods.commerceGainBonus > 0) {
+            effect.delta += abilityMods.commerceGainBonus;
+          }
+        }
+      }
+    }
+
+    // Apply relationship modifiers to the resolution
+    if (resolution.success && targetId) {
+      const npcProfile = this.lastNpcProfiles.find((p) => p.npcId === targetId);
+      if (npcProfile) {
+        const oblLedger = this.npcObligations.get(targetId);
+        const netWeight = oblLedger ? getNetObligationWeight(oblLedger, this.engine.world.playerId) : 0;
+        const mods = computeRelationshipModifiers(
+          npcProfile.breakpoint, npcProfile.dominantAxis, netWeight, npcProfile.relationship.trust,
+        );
+
+        // Scale resolution effects by relationship modifiers
+        for (const effect of resolution.effects) {
+          // Scale leverage costs (negative deltas = spending)
+          if (effect.type === 'leverage' && effect.delta < 0) {
+            effect.delta = Math.round(effect.delta * mods.costMultiplier);
+          }
+          // Scale reputation effects
+          if (effect.type === 'reputation') {
+            effect.delta = Math.round(effect.delta * mods.reputationMultiplier);
+          }
+          // Scale heat generation
+          if (effect.type === 'heat') {
+            effect.delta = Math.round(effect.delta * mods.rumorHeatMultiplier);
+          }
+        }
+
+        // Side effect: bonus obligation (friendly) or penalty rep hit (hostile)
+        const sideRoll = simpleHashNum(targetId + this.engine.tick) % 100;
+        if (sideRoll < mods.sideEffectChance * 100) {
+          if (npcProfile.breakpoint === 'allied' || npcProfile.breakpoint === 'favorable') {
+            // Friendly side effect: NPC grants a bonus favor
+            const ledger = this.npcObligations.get(targetId) ?? { obligations: [] };
+            const obl = createObligation(
+              'favor', 'npc-owes-player', targetId, this.engine.world.playerId,
+              2, 'leverage-bonus', this.engine.tick, 15,
+            );
+            this.npcObligations.set(targetId, addObligation(ledger, obl));
+          } else if (npcProfile.breakpoint === 'hostile' || npcProfile.breakpoint === 'compromised') {
+            resolution.effects.push({
+              type: 'reputation', factionId: npcProfile.factionId ?? '', delta: -5,
+            });
+          }
+        }
+      }
+    }
+
     // Apply effects if successful
     if (resolution.success) {
       this.applyLeverageEffects(resolution);
@@ -1012,6 +1657,31 @@ export class GameSession {
         ...this.profile,
         custom: { ...this.profile.custom, [statKey]: prev + 1 },
       };
+
+      // District drift from leverage actions
+      if (playerDistrictForLev) {
+        switch (verb) {
+          case 'sabotage':
+            modifyDistrictMetric(this.engine.world, playerDistrictForLev, 'stability', -3);
+            modifyDistrictMetric(this.engine.world, playerDistrictForLev, 'alertPressure', 5);
+            break;
+          case 'diplomacy':
+            modifyDistrictMetric(this.engine.world, playerDistrictForLev, 'morale', 3);
+            modifyDistrictMetric(this.engine.world, playerDistrictForLev, 'alertPressure', -2);
+            break;
+          case 'rumor':
+            modifyDistrictMetric(this.engine.world, playerDistrictForLev, 'rumorDensity', 3);
+            break;
+          case 'social':
+            modifyDistrictMetric(this.engine.world, playerDistrictForLev, 'commerce', 2);
+            break;
+        }
+      }
+    }
+
+    // Companion reactions to leverage actions
+    if (this.partyState.companions.length > 0) {
+      this.processCompanionReactions(`leverage-${verb}`);
     }
 
     this.lastLeverageResolution = resolution;
@@ -1043,7 +1713,7 @@ export class GameSession {
         }
 
         case 'rumor':
-          this.playerRumors.push(
+          this.addRumor(
             spawnIntentionalRumor(
               effect.claim,
               effect.valence,
@@ -1209,4 +1879,174 @@ export class GameSession {
       (k) => k.startsWith('stats.action.') && (this.profile!.custom[k] as number) > 0,
     );
   }
+
+  // --- Companion Commands ---
+
+  /** Handle /recruit <npc-id> [role] command. */
+  private handleRecruit(args: string[]): string {
+    const npcId = args[0];
+    if (!npcId) return '  Usage: /recruit <npc-id> [role]';
+
+    const entity = this.engine.world.entities[npcId];
+    if (!entity) return `  Entity "${npcId}" not found.`;
+
+    const roleArg = args[1] as CompanionRole | undefined;
+    const role = roleArg ?? inferCompanionRole(entity);
+
+    const result = recruitCompanion(
+      this.engine,
+      this.partyState,
+      npcId,
+      role,
+      this.engine.tick,
+    );
+
+    if (!result.ok) return `  ${result.error}`;
+
+    this.partyState = result.party;
+    syncCompanionMorale(this.engine, this.partyState);
+
+    // Record chronicle event
+    const joinSource: ChronicleEventSource = {
+      kind: 'companion-joined',
+      npcId,
+      npcName: entity.name,
+      role,
+      tick: this.engine.tick,
+    };
+    for (const entry of deriveChronicleEvents(joinSource, this.engine.world.playerId)) {
+      this.journal.record(entry);
+    }
+
+    return `  ${entity.name} has joined your party as ${role}. (${this.partyState.companions.length}/${this.partyState.maxSize})`;
+  }
+
+  /** Handle /dismiss <npc-id> command. */
+  private handleDismiss(npcId?: string): string {
+    if (!npcId) return '  Usage: /dismiss <npc-id>';
+
+    const entity = this.engine.world.entities[npcId];
+    const name = entity?.name ?? npcId;
+
+    const result = dismissCompanion(this.engine, this.partyState, npcId);
+    if (!result.removed) return `  ${name} is not in your party.`;
+
+    this.partyState = result.party;
+
+    // Record chronicle event
+    const dismissSource: ChronicleEventSource = {
+      kind: 'companion-departed',
+      npcId,
+      npcName: name,
+      reason: 'dismissed',
+      tick: this.engine.tick,
+    };
+    for (const entry of deriveChronicleEvents(dismissSource, this.engine.world.playerId)) {
+      this.journal.record(entry);
+    }
+
+    return `  ${name} has left your party.`;
+  }
+
+  /** Add a rumor, applying companion rumor-suppression if applicable. */
+  private addRumor(rumor: PlayerRumor): void {
+    // Companion rumor suppression: negative rumors may be buried
+    if ((rumor.valence === 'fearsome' || rumor.valence === 'tragic') && this.partyState.companions.length > 0) {
+      const partyAbilities = computePartyAbilities(this.partyState);
+      if (partyAbilities.length > 0) {
+        const abilityMods = computeAbilityModifiers(partyAbilities);
+        if (abilityMods.rumorSuppressionChance > 0) {
+          const roll = simpleHashNum(rumor.id + this.engine.tick) % 100;
+          if (roll < abilityMods.rumorSuppressionChance * 100) {
+            // Rumor suppressed — don't add it
+            return;
+          }
+        }
+      }
+    }
+    this.playerRumors.push(rumor);
+  }
+
+  /** Process companion reactions to a trigger. Applies morale deltas and handles departures. */
+  private processCompanionReactions(trigger: string): void {
+    if (this.partyState.companions.length === 0) return;
+
+    // Build breakpoint map for active companions
+    const breakpoints = new Map<string, LoyaltyBreakpoint>();
+    for (const comp of this.partyState.companions) {
+      const profile = this.lastNpcProfiles.find((p) => p.npcId === comp.npcId);
+      if (profile) breakpoints.set(comp.npcId, profile.breakpoint);
+    }
+
+    const reactions = evaluateCompanionReactions(
+      this.partyState.companions,
+      trigger,
+      { breakpoints, tick: this.engine.tick },
+    );
+
+    this.lastCompanionReactions = reactions;
+
+    for (const reaction of reactions) {
+      this.partyState = adjustCompanionMorale(
+        this.partyState, reaction.npcId, reaction.moraleDelta,
+      );
+
+      if (reaction.departure) {
+        this.handleCompanionDeparture(
+          reaction.npcId,
+          reaction.departureReason ?? 'lost faith',
+        );
+      }
+    }
+
+    // Sync morale to entity custom fields for engine-side goal derivation
+    syncCompanionMorale(this.engine, this.partyState);
+  }
+
+  /** Handle companion-departure effects from NPC agency. */
+  handleCompanionDeparture(npcId: string, reason: string): void {
+    const entity = this.engine.world.entities[npcId];
+    const name = entity?.name ?? npcId;
+
+    // Check if this is a betrayal (hostile breakpoint)
+    const npcProfile = this.lastNpcProfiles.find((p) => p.npcId === npcId);
+    const isBetrayal = npcProfile?.breakpoint === 'hostile';
+
+    const result = dismissCompanion(this.engine, this.partyState, npcId);
+    if (result.removed) {
+      this.partyState = result.party;
+
+      if (isBetrayal) {
+        const betraySource: ChronicleEventSource = {
+          kind: 'companion-betrayed',
+          npcId,
+          npcName: name,
+          tick: this.engine.tick,
+        };
+        for (const entry of deriveChronicleEvents(betraySource, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+      } else {
+        const departSource: ChronicleEventSource = {
+          kind: 'companion-departed',
+          npcId,
+          npcName: name,
+          reason,
+          tick: this.engine.tick,
+        };
+        for (const entry of deriveChronicleEvents(departSource, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+      }
+    }
+  }
+}
+
+/** Deterministic hash for side-effect rolls. */
+function simpleHashNum(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
 }

@@ -5,6 +5,10 @@ import type { ItemCatalog } from '@ai-rpg-engine/equipment';
 import type { WorldState } from '@ai-rpg-engine/core';
 import {
   computeLoadoutEffects,
+  evaluateRelicGrowth,
+  getItemHistory,
+  getItemKillCount,
+  TIER_LABELS,
   type LoadoutEffect,
 } from '@ai-rpg-engine/equipment';
 import {
@@ -52,14 +56,26 @@ export function buildPresence(
   const title = profile.custom.title as string | undefined;
   const injuries = getActiveInjuries(profile);
 
-  // Get equipped item names
+  // Get equipped item names, enriched with relic epithets
   const effects = computeLoadoutEffects(profile.loadout, itemCatalog);
   const equipped = profile.loadout.equipped;
   const itemNames: Record<string, string> = {};
   for (const [slot, itemId] of Object.entries(equipped)) {
     if (itemId) {
       const item = itemCatalog.items.find((i) => i.id === itemId);
-      itemNames[slot] = item?.name ?? itemId;
+      if (item) {
+        const chronicle = getItemHistory(profile.itemChronicle, itemId);
+        const relic = evaluateRelicGrowth(item, chronicle, profile.totalTurns);
+        if (relic.currentEpithet) {
+          const killCount = getItemKillCount(profile.itemChronicle, itemId);
+          const tierLabel = TIER_LABELS[relic.tier] ?? '';
+          itemNames[slot] = `${relic.currentEpithet} (${tierLabel}, ${killCount} kills)`;
+        } else {
+          itemNames[slot] = item.name;
+        }
+      } else {
+        itemNames[slot] = itemId;
+      }
     }
   }
 
@@ -86,7 +102,17 @@ export function buildPresence(
   const npcParts: string[] = [];
   npcParts.push(`Player: ${profile.build.name} (${archName}, Lv${level}).`);
 
-  if (itemNames.weapon) npcParts.push(`Armed: ${itemNames.weapon}.`);
+  // Weapon with provenance flags for NPC perception
+  if (equipped.weapon) {
+    const wpnItem = itemCatalog.items.find((i) => i.id === equipped.weapon);
+    if (wpnItem) {
+      const flags = wpnItem.provenance?.flags;
+      const flagStr = flags && flags.length > 0 ? ` (${flags.join(', ')})` : '';
+      npcParts.push(`Armed: ${itemNames.weapon ?? wpnItem.name}${flagStr}.`);
+    } else {
+      npcParts.push(`Armed: ${itemNames.weapon ?? equipped.weapon}.`);
+    }
+  }
   if (itemNames.armor) npcParts.push(`Armor: ${itemNames.armor}.`);
 
   const visibleTags: string[] = [...effects.grantedTags];

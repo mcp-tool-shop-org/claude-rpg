@@ -26,6 +26,20 @@ import {
   formatAllDistrictEconomiesForDirector,
   type DistrictEconomy,
   type SupplyCategory,
+  // Crafting (v1.8)
+  getMaterialInventory,
+  applyMaterialDeltas,
+  hasMaterials,
+  salvageItem,
+  getAvailableRecipes,
+  getRecipeById,
+  canCraft,
+  resolveCraft,
+  resolveRepair,
+  resolveModify,
+  type CraftEffect,
+  type CraftingContext,
+  formatMaterialsCompact,
 } from '@ai-rpg-engine/modules';
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 import {
@@ -438,6 +452,7 @@ export class GameSession {
         this.profile,
         this.itemCatalog,
         this.districtEconomies,
+        this.genre,
       );
     }
 
@@ -458,12 +473,14 @@ export class GameSession {
         const topThreat = this.activePressures.length > 0
           ? { description: this.activePressures[0].description, urgency: this.activePressures[0].urgency }
           : null;
+        const matSummary = formatMaterialsCompact(getMaterialInventory(this.profile.custom));
         return renderCompactStatus({
           statusData: this.getStatusData()!,
           leverageState,
           topThreat,
           suggestedMove: recommendation.top3[0] ?? null,
           situationTag: recommendation.situationTag,
+          materialsSummary: matSummary !== 'No materials' ? matSummary : undefined,
         });
       }
       if (playCmd === '/map') {
@@ -494,6 +511,7 @@ export class GameSession {
 
     const partyPresenceStr = this.getPartyPresence();
     const turnEconomyCtx = this.getEconomyContext();
+    const turnCraftingCtx = this.getCraftingContext();
     const turnResult = await executeTurn(
       this.engine,
       this.client,
@@ -511,10 +529,14 @@ export class GameSession {
       districtDescriptor,
       partyPresenceStr,
       turnEconomyCtx,
+      turnCraftingCtx,
     );
 
     // Process leverage actions (social/rumor/diplomacy/sabotage)
     this.processLeverageAction(turnResult);
+
+    // Process crafting actions (craft/salvage/repair/modify) (v1.8)
+    this.processCraftAction(turnResult);
 
     // Apply profile hints from this turn (may spawn rumors)
     this.applyProfileHints(turnResult.profileHints);
@@ -585,9 +607,12 @@ export class GameSession {
     let suggestions: ReturnType<typeof generateSuggestions> | undefined;
     if (this.profile) {
       const recommendation = this.buildMoveRecommendation();
-      // Economy flags for contextual suggestions
+      // Economy + crafting flags for contextual suggestions
       const hasSupplyCrisis = this.activePressures.some((p) => p.kind === 'supply-crisis');
       const hasBlackMarket = [...this.districtEconomies.values()].some((e) => e.blackMarketActive);
+      const hasCraftingShortage = this.activePressures.some((p) => p.kind === 'crafting-shortage');
+      const matInventory = getMaterialInventory(this.profile.custom);
+      const hasCraftableMaterials = Object.values(matInventory).some((v) => v >= 2);
       suggestions = generateSuggestions({
         turnCount: this.profile.totalTurns,
         leverageState: getLeverageState(this.profile.custom),
@@ -599,6 +624,8 @@ export class GameSession {
         recentMilestone: !!turnResult.profileHints.milestoneTriggered,
         hasSupplyCrisis,
         hasBlackMarket,
+        hasCraftingShortage,
+        hasCraftableMaterials,
       });
     }
 
@@ -713,6 +740,27 @@ export class GameSession {
     if (!economy) return undefined;
     const descriptor = deriveEconomyDescriptor(economy);
     return formatEconomyForNarrator(descriptor);
+  }
+
+  /** Build crafting context string describing notable crafted/modified gear (v1.8). */
+  private getCraftingContext(): string | undefined {
+    if (!this.profile || !this.itemCatalog) return undefined;
+    const parts: string[] = [];
+    for (const slot of ['weapon', 'armor', 'tool', 'accessory', 'trinket'] as const) {
+      const itemId = this.profile.loadout.equipped[slot];
+      if (!itemId) continue;
+      const item = this.itemCatalog.items.find((i) => i.id === itemId);
+      if (!item?.provenance?.flags?.length) continue;
+      const flags = item.provenance.flags;
+      const notable = flags.filter((f) =>
+        ['makeshift', 'blessed', 'cursed', 'contraband', 'faction-marked'].includes(f),
+      );
+      if (notable.length > 0) {
+        const factionNote = item.provenance.factionId ? ` (${item.provenance.factionId})` : '';
+        parts.push(`${item.name}: ${notable.join(', ')}${factionNote}`);
+      }
+    }
+    return parts.length > 0 ? parts.join('; ') : undefined;
   }
 
   /** Get the faction that controls the player's current zone (for witnessing). */
@@ -1520,6 +1568,21 @@ export class GameSession {
         }];
       });
     }
+
+    // Register craft verb (v1.8)
+    this.engine.dispatcher.registerVerb('craft', (action) => {
+      return [{
+        id: `craft-${Date.now()}`,
+        type: 'craft.action.attempted',
+        payload: {
+          subAction: action.parameters?.subAction ?? 'craft',
+          recipeOrItem: action.parameters?.recipeOrItem ?? '',
+          targetIds: action.targetIds,
+        },
+        targetIds: action.targetIds ?? [],
+        tick: 0,
+      }];
+    });
   }
 
   /**
@@ -2095,6 +2158,347 @@ export class GameSession {
 
     // Sync morale to entity custom fields for engine-side goal derivation
     syncCompanionMorale(this.engine, this.partyState);
+  }
+
+  // --- v1.8: Crafting ---
+
+  /** Build crafting context from current session state. */
+  private buildCraftingContext(): CraftingContext | null {
+    if (!this.profile) return null;
+    const districtId = this.getPlayerDistrictId();
+    if (!districtId) return null;
+    const economy = this.districtEconomies.get(districtId) ?? createDistrictEconomy(this.genre);
+    const dState = getDistrictState(this.engine.world, districtId);
+    const dDef = getDistrictDefinition(this.engine.world, districtId);
+    return {
+      districtEconomy: economy,
+      districtId,
+      districtTags: dDef?.tags ?? [],
+      prosperity: dState?.commerce ?? 50,
+      stability: dState?.stability ?? 50,
+      playerHeat: (this.profile.custom['leverage.heat'] as number) ?? 0,
+      isBlackMarket: economy.blackMarketActive,
+      factionAccess: this.getPlayerFactionAccess(),
+    };
+  }
+
+  /** Get the faction the player has highest rep with (for crafting provenance). */
+  private getPlayerFactionAccess(): string | undefined {
+    if (!this.profile) return undefined;
+    const factionIds = Object.keys(this.engine.world.factions);
+    let best: string | undefined;
+    let bestRep = 0;
+    for (const fid of factionIds) {
+      const rep = getReputation(this.profile, fid);
+      if (rep > bestRep) {
+        bestRep = rep;
+        best = fid;
+      }
+    }
+    return bestRep >= 20 ? best : undefined;
+  }
+
+  /** Process craft/salvage/repair/modify actions from a turn result. */
+  private processCraftAction(turnResult: TurnResult): void {
+    if (!this.profile) return;
+
+    const craftEvent = turnResult.events.find((e) => e.type === 'craft.action.attempted');
+    if (!craftEvent) return;
+
+    const subAction = craftEvent.payload.subAction as string;
+    const recipeOrItem = (craftEvent.payload.recipeOrItem as string) ?? '';
+
+    switch (subAction) {
+      case 'salvage':
+        this.handleSalvage(recipeOrItem);
+        break;
+      case 'craft':
+        this.handleCraft(recipeOrItem);
+        break;
+      case 'repair':
+        this.handleRepairAction(recipeOrItem);
+        break;
+      case 'modify':
+        this.handleModify(recipeOrItem);
+        break;
+    }
+  }
+
+  /** Handle salvage: break an item down into materials. */
+  private handleSalvage(itemRef: string): void {
+    if (!this.profile || !this.itemCatalog) return;
+    const lower = itemRef.toLowerCase();
+
+    // Find item in catalog by name or ID
+    const item = this.itemCatalog.items.find(
+      (i) => i.id.toLowerCase().includes(lower) || i.name.toLowerCase().includes(lower),
+    );
+    if (!item) return;
+
+    const districtId = this.getPlayerDistrictId();
+    const economy = districtId ? this.districtEconomies.get(districtId) : undefined;
+    const dDef = districtId ? getDistrictDefinition(this.engine.world, districtId) : undefined;
+    const dState = districtId ? getDistrictState(this.engine.world, districtId) : undefined;
+    const result = salvageItem(item, (economy && districtId) ? {
+      districtEconomy: economy,
+      districtId,
+      districtTags: dDef?.tags ?? [],
+      stability: dState?.stability ?? 50,
+    } : undefined);
+
+    // Apply material yields to profile.custom
+    const deltas: Partial<Record<SupplyCategory, number>> = {};
+    for (const y of result.yields) {
+      deltas[y.category] = (deltas[y.category] ?? 0) + y.quantity;
+    }
+    this.profile = { ...this.profile, custom: applyMaterialDeltas(this.profile.custom, deltas) };
+
+    // Apply economy shifts
+    for (const shift of result.economyShifts) {
+      if (districtId) {
+        this.applyEconomyShiftEffect(districtId, shift.category, shift.delta, shift.cause);
+      }
+    }
+
+    // Record chronicle
+    if (districtId) {
+      const source: ChronicleEventSource = {
+        kind: 'item-salvaged',
+        itemId: item.id,
+        itemName: item.name,
+        districtId,
+        tick: this.engine.tick,
+      };
+      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+        this.journal.record(entry);
+      }
+    }
+  }
+
+  /** Handle craft: create a new item from a recipe. */
+  private handleCraft(recipeRef: string): void {
+    if (!this.profile) return;
+    const ctx = this.buildCraftingContext();
+    if (!ctx) return;
+
+    const recipe = getRecipeById(this.genre, recipeRef);
+    if (!recipe || recipe.category !== 'craft') return;
+
+    const materials = getMaterialInventory(this.profile.custom);
+    const check = canCraft(recipe, materials, ctx);
+    if (!check.affordable || !check.meetsRequirements) return;
+
+    const result = resolveCraft(recipe, ctx);
+    if (!result.success) return;
+
+    // Consume materials
+    const consumeDeltas: Partial<Record<SupplyCategory, number>> = {};
+    for (const input of result.materialsConsumed) {
+      consumeDeltas[input.category] = (consumeDeltas[input.category] ?? 0) - input.quantity;
+    }
+    this.profile = { ...this.profile, custom: applyMaterialDeltas(this.profile.custom, consumeDeltas) };
+
+    // Add output item to catalog
+    if (result.outputItem && this.itemCatalog) {
+      const newId = `crafted-${recipe.id}-${this.engine.tick}`;
+      const newItem = { ...result.outputItem, id: newId } as import('@ai-rpg-engine/equipment').ItemDefinition;
+      this.itemCatalog.items.push(newItem);
+
+      // Record chronicle
+      const districtId = this.getPlayerDistrictId();
+      if (districtId) {
+        const source: ChronicleEventSource = {
+          kind: 'item-crafted',
+          itemId: newId,
+          itemName: newItem.name ?? recipe.name,
+          recipeId: recipe.id,
+          districtId,
+          tick: this.engine.tick,
+        };
+        for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+      }
+    }
+
+    // Apply side effects
+    this.applyCraftEffects(result.sideEffects);
+  }
+
+  /** Handle repair: restore an item's condition. */
+  private handleRepairAction(slotOrItem: string): void {
+    if (!this.profile || !this.itemCatalog) return;
+    const ctx = this.buildCraftingContext();
+    if (!ctx) return;
+
+    // Find repair recipe for slot
+    const slot = slotOrItem.toLowerCase();
+    const recipeId = slot.includes('armor') ? 'repair-armor' : 'repair-weapon';
+    const recipe = getRecipeById(this.genre, recipeId);
+    if (!recipe) return;
+
+    const materials = getMaterialInventory(this.profile.custom);
+    const check = canCraft(recipe, materials, ctx);
+    if (!check.affordable) return;
+
+    // Find equipped item in the slot
+    const player = this.engine.world.entities[this.engine.world.playerId];
+    const inventoryIds = player?.inventory ?? [];
+    const equippedItems = inventoryIds
+      .map((id) => this.itemCatalog!.items.find((i) => i.id === id))
+      .filter((i): i is import('@ai-rpg-engine/equipment').ItemDefinition => !!i);
+    const targetItem = equippedItems.find(
+      (i) => i.slot?.toLowerCase().includes(slot) || i.id.toLowerCase().includes(slot) || i.name.toLowerCase().includes(slot),
+    );
+    if (!targetItem) return;
+
+    const result = resolveRepair(targetItem, recipe, ctx);
+    if (!result.success) return;
+
+    // Consume materials
+    const consumeDeltas: Partial<Record<SupplyCategory, number>> = {};
+    for (const input of result.materialsConsumed) {
+      consumeDeltas[input.category] = (consumeDeltas[input.category] ?? 0) - input.quantity;
+    }
+    this.profile = { ...this.profile, custom: applyMaterialDeltas(this.profile.custom, consumeDeltas) };
+
+    // Record chronicle
+    const districtId = this.getPlayerDistrictId();
+    if (districtId) {
+      const source: ChronicleEventSource = {
+        kind: 'item-repaired',
+        itemId: targetItem.id,
+        itemName: targetItem.name,
+        districtId,
+        tick: this.engine.tick,
+      };
+      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+        this.journal.record(entry);
+      }
+    }
+
+    this.applyCraftEffects(result.sideEffects);
+  }
+
+  /** Handle modify: apply a modification to an item. */
+  private handleModify(args: string): void {
+    if (!this.profile || !this.itemCatalog) return;
+    const ctx = this.buildCraftingContext();
+    if (!ctx) return;
+
+    // Parse: "modify <item> <mod-kind>" or "modify <mod-recipe-id>"
+    const parts = args.split(/\s+/);
+    const recipeId = parts.find((p) => p.startsWith('modify-')) ?? `modify-${parts[parts.length - 1]}`;
+    const recipe = getRecipeById(this.genre, recipeId);
+    if (!recipe || recipe.category !== 'modify') return;
+
+    const materials = getMaterialInventory(this.profile.custom);
+    const check = canCraft(recipe, materials, ctx);
+    if (!check.affordable || !check.meetsRequirements) return;
+
+    // Find target item
+    const itemRef = parts.filter((p) => !p.startsWith('modify-')).join(' ');
+    const lower = itemRef.toLowerCase();
+    const item = this.itemCatalog.items.find(
+      (i) => i.id.toLowerCase().includes(lower) || i.name.toLowerCase().includes(lower),
+    );
+    if (!item) return;
+
+    const result = resolveModify(item, recipe, ctx);
+    if (!result.success) return;
+
+    // Consume materials
+    const consumeDeltas: Partial<Record<SupplyCategory, number>> = {};
+    for (const input of recipe.inputs) {
+      consumeDeltas[input.category] = (consumeDeltas[input.category] ?? 0) - input.quantity;
+    }
+    this.profile = { ...this.profile, custom: applyMaterialDeltas(this.profile.custom, consumeDeltas) };
+
+    // Create derived ItemDefinition (immutable — new ID)
+    const newId = `${item.id}-mod-${this.engine.tick}`;
+    const modifiedItem: import('@ai-rpg-engine/equipment').ItemDefinition = {
+      ...item,
+      id: newId,
+      provenance: result.newProvenance,
+      statModifiers: { ...(item.statModifiers ?? {}) },
+    };
+    // Apply stat deltas
+    for (const [stat, delta] of Object.entries(result.statDelta)) {
+      modifiedItem.statModifiers![stat] = (modifiedItem.statModifiers![stat] ?? 0) + delta;
+    }
+    // Add to catalog
+    this.itemCatalog.items.push(modifiedItem);
+
+    // Record chronicle
+    const districtId = this.getPlayerDistrictId();
+    if (districtId) {
+      const modKind = recipe.modificationKind ?? 'enhancement';
+      const source: ChronicleEventSource = {
+        kind: 'item-modified',
+        itemId: newId,
+        itemName: modifiedItem.name,
+        modKind,
+        districtId,
+        tick: this.engine.tick,
+      };
+      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+        this.journal.record(entry);
+      }
+    }
+
+    this.applyCraftEffects(result.sideEffects);
+  }
+
+  /** Apply CraftEffect side effects to session state. */
+  private applyCraftEffects(effects: CraftEffect[]): void {
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'economy-shift':
+          this.applyEconomyShiftEffect(effect.districtId, effect.category, effect.delta, effect.cause);
+          break;
+
+        case 'rumor':
+          if (this.profile) {
+            const rumorFaction = this.getPlayerFactionAccess() ?? this.engine.world.playerId;
+            this.addRumor(
+              spawnPlayerRumor(
+                { label: effect.claim, description: effect.claim, tags: [effect.valence] },
+                this.profile,
+                rumorFaction,
+                this.getPlayerDistrictId(),
+                this.engine.tick,
+              ),
+            );
+          }
+          break;
+
+        case 'heat':
+          if (this.profile) {
+            const currentHeat = (this.profile.custom['leverage.heat'] as number) ?? 0;
+            this.profile = {
+              ...this.profile,
+              custom: { ...this.profile.custom, 'leverage.heat': Math.min(100, currentHeat + effect.delta) },
+            };
+          }
+          break;
+
+        case 'reputation':
+          if (this.profile) {
+            this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
+          }
+          break;
+
+        case 'suspicion':
+          // Suspicion modifies district alert pressure
+          if (this.profile) {
+            const suspDistrictId = this.getPlayerDistrictId();
+            if (suspDistrictId) {
+              modifyDistrictMetric(this.engine.world, suspDistrictId, 'alertPressure', effect.delta);
+            }
+          }
+          break;
+      }
+    }
   }
 
   /** Handle companion-departure effects from NPC agency. */

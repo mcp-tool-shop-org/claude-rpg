@@ -51,6 +51,8 @@ import {
   computeCompanionRecapEntries,
   computeItemRecapEntries,
   computeEconomyRecapEntries,
+  computeCraftingRecapEntries,
+  computeCraftingRecapFromJournal,
   renderFullRecap,
 } from './character/session-recap.js';
 import type { ItemChronicleEntry } from '@ai-rpg-engine/equipment';
@@ -145,7 +147,8 @@ async function runPlay(args: string[]): Promise<void> {
   const initialParty = structuredClone(session.partyState);
   const initialItemChronicle = structuredClone(result.profile.itemChronicle);
   const initialEconomies = cloneEconomies(session.districtEconomies);
-  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies);
+  const initialCustom = structuredClone(result.profile.custom);
+  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom);
 }
 
 async function runLoad(): Promise<void> {
@@ -273,7 +276,8 @@ async function runLoad(): Promise<void> {
   const initialParty = structuredClone(session.partyState);
   const initialItemChronicle = profile ? structuredClone(profile.itemChronicle) : {};
   const initialEconomies = cloneEconomies(session.districtEconomies);
-  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies);
+  const initialCustom = profile ? structuredClone(profile.custom) : {};
+  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom);
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
@@ -355,6 +359,7 @@ async function runGameLoop(
   initialPartyState?: PartyState,
   initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
   initialEconomies?: Map<string, DistrictEconomy>,
+  initialCustom?: Record<string, string | number | boolean>,
 ): Promise<void> {
   // Welcome
   console.log(session.getWelcome());
@@ -410,7 +415,7 @@ async function runGameLoop(
 
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom,
           );
           if (recapText) console.log(recapText);
           else console.log('');
@@ -439,7 +444,7 @@ async function runGameLoop(
         if (output === '__QUIT__') {
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom,
           );
           if (recapText) console.log(recapText);
           console.log('\n  Farewell.\n');
@@ -468,6 +473,7 @@ function buildUnifiedRecap(
   initialPartyState?: PartyState,
   initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
   initialEconomies?: Map<string, DistrictEconomy>,
+  initialCustom?: Record<string, string | number | boolean>,
 ): string {
   if (!initialSnapshot || !session.profile) return '';
 
@@ -557,6 +563,20 @@ function buildUnifiedRecap(
     districtNameMap,
   );
 
+  // Compute crafting recap entries (v1.8)
+  const craftingMaterials = initialCustom
+    ? computeCraftingRecapEntries(initialCustom, session.profile.custom)
+    : { entries: [], materialChanges: [] };
+  const journalCraftEntries = computeCraftingRecapFromJournal(
+    session.journal,
+    initialWorldSnapshot?.resolvedCount ?? 0,
+  );
+  const craftingData = {
+    entries: [...craftingMaterials.entries, ...journalCraftEntries],
+    materialChanges: craftingMaterials.materialChanges,
+  };
+  const hasCrafting = craftingData.entries.length > 0 || craftingData.materialChanges.length > 0;
+
   return renderFullRecap(
     characterDelta,
     worldDelta,
@@ -568,6 +588,7 @@ function buildUnifiedRecap(
     companionRecapEntries.length > 0 ? companionRecapEntries : undefined,
     itemRecapEntries.length > 0 ? itemRecapEntries : undefined,
     economyRecapEntries.length > 0 ? economyRecapEntries : undefined,
+    hasCrafting ? craftingData : undefined,
   );
 }
 

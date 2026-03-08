@@ -21,6 +21,7 @@ Rules:
 - Companions travel with the player. Reference their presence, reactions, and body language naturally. A fighter companion scans for threats. A diplomat companion reads the room. Show their personality through small details
 - When the player carries items with notable history (relics, trophies, stolen goods, cursed items), reference their presence through environmental reactions — NPCs glancing at a weapon, the weight of a cursed trinket, the gleam of a legendary blade. Show provenance through the world's reaction, not exposition
 - When economy context is provided, show scarcity through empty stalls, rationing queues, hoarded goods, and desperate vendors. Show surplus through overflowing markets, careless abundance, and wasted goods. Show black market activity through whispered offers, coded language, furtive exchanges in alleys. Never state supply levels directly — show the economic reality through sensory detail
+- When crafting context is provided, describe the crafting through sensory detail: the sound of hammering metal, the acrid smell of potion brewing, the careful stitching of bandages, the scrape of salvage work. Modified items feel different — a sharpened blade catches light differently, reinforced armor sits heavier on the shoulders. Makeshift items look improvised — rough welds, mismatched parts, functional but ugly. Blessed items emanate subtle warmth; cursed items feel cold, heavy, wrong. Black-market modifications look dangerous — exposed wiring, volatile compounds, illegal markings
 
 Respond with a JSON object (NarrationPlan) with this shape:
 {
@@ -85,6 +86,7 @@ export type SceneNarrationInput = {
   districtDescriptor?: string;
   partyPresence?: string;
   economyContext?: string;
+  craftingContext?: string;
 };
 
 export function buildNarratePrompt(input: SceneNarrationInput): string {
@@ -119,5 +121,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
-Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${recent}`;
+Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${recent}`;
 }

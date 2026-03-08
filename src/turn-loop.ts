@@ -52,6 +52,7 @@ export async function executeTurn(
   districtDescriptor?: string,
   partyPresence?: string,
   economyContext?: string,
+  craftingContext?: string,
 ): Promise<TurnResult> {
   const previousLocationId = engine.world.locationId;
 
@@ -118,6 +119,7 @@ export async function executeTurn(
     districtDescriptor,
     partyPresence,
     economyContext,
+    craftingContext,
   );
 
   // Step 4.5: Process through immersion runtime if available
@@ -146,6 +148,7 @@ export async function executeTurn(
       worldPressures,
       lastNpcActions,
       economyContext,
+      craftingContext,
     );
 
     // Add voice cast to dialogue if immersion is active

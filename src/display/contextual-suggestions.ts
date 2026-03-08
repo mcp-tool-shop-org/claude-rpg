@@ -20,9 +20,11 @@ export function generateSuggestions(opts: {
   recentMilestone: boolean;
   hasSupplyCrisis?: boolean;
   hasBlackMarket?: boolean;
+  hasCraftingShortage?: boolean;
+  hasCraftableMaterials?: boolean;
 }): ContextualSuggestion[] {
   const suggestions: ContextualSuggestion[] = [];
-  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket } = opts;
+  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket, hasCraftingShortage, hasCraftableMaterials } = opts;
 
   // 1. Crisis pressure → suggest top advisor move
   if (recommendation.situationTag === 'crisis' && recommendation.top3.length > 0) {
@@ -92,12 +94,29 @@ export function generateSuggestions(opts: {
     });
   }
 
+  // 9. Crafting shortage → suggest crafting or materials (v1.8)
+  if (suggestions.length < 2 && hasCraftingShortage && hasCraftableMaterials) {
+    suggestions.push({
+      text: 'Components scarce — try "craft" to help restore the workshop',
+      trigger: 'crafting-shortage',
+    });
+  }
+
+  // 10. Has abundant materials → suggest crafting (v1.8)
+  if (suggestions.length < 2 && hasCraftableMaterials && !hasCraftingShortage) {
+    suggestions.push({
+      text: 'You have materials — type "craft" or "salvage" to use them',
+      trigger: 'crafting-hint',
+    });
+  }
+
   // After turn 10, only show on notable events (already handled by crisis/milestone/failed checks)
   if (turnCount > 10) {
     return suggestions.filter((s) =>
       s.trigger === 'crisis-pressure' || s.trigger === 'action-failed' ||
       s.trigger === 'milestone-cash' || s.trigger === 'pressure-hint' ||
-      s.trigger === 'supply-crisis' || s.trigger === 'black-market');
+      s.trigger === 'supply-crisis' || s.trigger === 'black-market' ||
+      s.trigger === 'crafting-shortage');
   }
 
   return suggestions.slice(0, 2);

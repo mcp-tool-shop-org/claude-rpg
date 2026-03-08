@@ -33,7 +33,7 @@
     "@ai-rpg-engine/content-schema": "^2.0.0",
     "@ai-rpg-engine/core": "^2.0.0",
     "@ai-rpg-engine/equipment": "^2.0.0",
-    "@ai-rpg-engine/modules": "^2.0.7",
+    "@ai-rpg-engine/modules": "^2.0.10",
     "@ai-rpg-engine/pack-registry": "^2.0.0",
     "@ai-rpg-engine/presentation": "^2.0.0",
     "@ai-rpg-engine/soundpack-core": "^2.0.0",

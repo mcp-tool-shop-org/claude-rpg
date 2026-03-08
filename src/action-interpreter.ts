@@ -165,6 +165,29 @@ function tryFastInterpret(
     if (saboMatch) return saboMatch;
   }
 
+  // Crafting verbs (craft, salvage, repair, modify)
+  if (/^(craft|salvage|repair|modify)\s*/.test(lower)) {
+    const craftMatch = lower.match(/^(craft|salvage|repair|modify)\s*(.*)/);
+    if (craftMatch) {
+      const craftVerb = craftMatch[1];
+      const craftArg = craftMatch[2]?.trim() || '';
+      let targetId: string | null = null;
+      if (craftArg && (craftVerb === 'salvage' || craftVerb === 'repair' || craftVerb === 'modify')) {
+        const entity = findEntityByName(craftArg, entities);
+        if (entity) targetId = entity.id;
+      }
+      return {
+        verb: 'craft',
+        targetIds: targetId ? [targetId] : null,
+        toolId: null,
+        parameters: { subAction: craftVerb, recipeOrItem: craftArg },
+        confidence: 'high',
+        reasoning: `${craftVerb}${craftArg ? ` ${craftArg}` : ''}`,
+        alternatives: null,
+      };
+    }
+  }
+
   // Use item
   if (/^use\s+/.test(lower) && verbs.includes('use')) {
     const itemName = lower.replace(/^use\s+/i, '');

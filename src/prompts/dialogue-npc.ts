@@ -40,7 +40,13 @@ Rules:
 - When economy context is provided, it affects NPC behavior:
   - In scarce districts: NPCs are desperate — merchants demand supplies as payment, guards demand bribes for access, civilians hoard and share reluctantly
   - In surplus districts: NPCs are generous — merchants offer deals freely, goods are abundant, conversation turns to plenty and waste
-  - When black market is active: NPCs speak in coded language about "special goods," offer contraband in whispers, watch for authorities`;
+  - When black market is active: NPCs speak in coded language about "special goods," offer contraband in whispers, watch for authorities
+- When the player carries crafted or modified gear, NPCs react to its nature:
+  - Makeshift items: comment on resourcefulness ("You made that yourself?"), offer to improve it, or note its rough quality
+  - Faction-marked items: NPCs of that faction show recognition and respect; rival factions show wariness or hostility
+  - Black-market modified items: NPCs who notice show suspicion, may threaten to report, or offer to buy; merchants may refuse service
+  - Blessed items: NPCs react with awe, reverence, or superstitious fear depending on their personality
+  - Cursed items: NPCs recoil, make warding gestures, warn the player, or try to distance themselves`;
 
 export type DialogueInput = {
   npcName: string;
@@ -89,6 +95,8 @@ export type DialogueInput = {
   npcAgencyPresence?: string;
   // v1.7: Economy context
   economyContext?: string;
+  // v1.8: Crafting context
+  craftingContext?: string;
 };
 
 function formatActivePressures(
@@ -158,6 +166,6 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
+${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
 Player says: "${input.playerUtterance}"`;
 }

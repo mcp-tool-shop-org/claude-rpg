@@ -14,8 +14,9 @@ export function renderCompactStatus(opts: {
   suggestedMove: ScoredMove | null;
   situationTag: string;
   economySummary?: string;
+  materialsSummary?: string;
 }): string {
-  const { statusData: s, leverageState, topThreat, suggestedMove, situationTag, economySummary } = opts;
+  const { statusData: s, leverageState, topThreat, suggestedMove, situationTag, economySummary, materialsSummary } = opts;
   const lines: string[] = [];
 
   lines.push('');
@@ -46,6 +47,11 @@ export function renderCompactStatus(opts: {
   // Economy line
   if (economySummary) {
     lines.push(`  Market: ${economySummary}`);
+  }
+
+  // Materials line (v1.8)
+  if (materialsSummary) {
+    lines.push(`  ${materialsSummary}`);
   }
 
   // Threat line

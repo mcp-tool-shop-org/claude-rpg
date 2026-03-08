@@ -28,7 +28,12 @@ export type ChronicleEventSource =
   | { kind: 'item-transformed'; itemId: string; itemName: string; transformation: string; tick: number }
   | { kind: 'supply-crisis'; districtId: string; category: string; level: number; tick: number }
   | { kind: 'trade-completed'; districtId: string; category: string; delta: number; cause: string; tick: number }
-  | { kind: 'black-market-opened'; districtId: string; tick: number };
+  | { kind: 'black-market-opened'; districtId: string; tick: number }
+  // Crafting (v1.8)
+  | { kind: 'item-crafted'; itemId: string; itemName: string; recipeId: string; districtId: string; tick: number }
+  | { kind: 'item-salvaged'; itemId: string; itemName: string; districtId: string; tick: number }
+  | { kind: 'item-modified'; itemId: string; itemName: string; modKind: string; districtId: string; tick: number }
+  | { kind: 'item-repaired'; itemId: string; itemName: string; districtId: string; tick: number };
 
 // --- Compaction Types ---
 
@@ -134,6 +139,14 @@ export function deriveChronicleEvents(
       return deriveTradeCompleted(source);
     case 'black-market-opened':
       return deriveBlackMarketOpened(source);
+    case 'item-crafted':
+      return deriveItemCrafted(source, playerId);
+    case 'item-salvaged':
+      return deriveItemSalvaged(source, playerId);
+    case 'item-modified':
+      return deriveItemModified(source, playerId);
+    case 'item-repaired':
+      return deriveItemRepaired(source, playerId);
   }
 }
 
@@ -680,5 +693,71 @@ function deriveBlackMarketOpened(
     significance: 0.5,
     witnesses: [],
     data: {},
+  }];
+}
+
+// --- Crafting Chronicle Events (v1.8) ---
+
+function deriveItemCrafted(
+  source: Extract<ChronicleEventSource, { kind: 'item-crafted' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'item-transformed' as RecordCategory,
+    actorId: playerId,
+    zoneId: source.districtId,
+    description: `Crafted ${source.itemName}`,
+    significance: 0.5,
+    witnesses: [],
+    data: { itemId: source.itemId, recipeId: source.recipeId },
+  }];
+}
+
+function deriveItemSalvaged(
+  source: Extract<ChronicleEventSource, { kind: 'item-salvaged' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'action' as RecordCategory,
+    actorId: playerId,
+    zoneId: source.districtId,
+    description: `Salvaged ${source.itemName} for materials`,
+    significance: 0.3,
+    witnesses: [],
+    data: { itemId: source.itemId },
+  }];
+}
+
+function deriveItemModified(
+  source: Extract<ChronicleEventSource, { kind: 'item-modified' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'item-transformed' as RecordCategory,
+    actorId: playerId,
+    zoneId: source.districtId,
+    description: `Modified ${source.itemName} (${source.modKind})`,
+    significance: 0.5,
+    witnesses: [],
+    data: { itemId: source.itemId, modKind: source.modKind },
+  }];
+}
+
+function deriveItemRepaired(
+  source: Extract<ChronicleEventSource, { kind: 'item-repaired' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  return [{
+    tick: source.tick,
+    category: 'action' as RecordCategory,
+    actorId: playerId,
+    zoneId: source.districtId,
+    description: `Repaired ${source.itemName}`,
+    significance: 0.2,
+    witnesses: [],
+    data: { itemId: source.itemId },
   }];
 }

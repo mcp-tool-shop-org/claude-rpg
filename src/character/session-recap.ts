@@ -64,6 +64,12 @@ export type EconomyRecapEntry = {
   changes: string[];
 };
 
+export type CraftingRecapEntry = {
+  action: 'crafted' | 'salvaged' | 'modified' | 'repaired';
+  itemName: string;
+  detail?: string;
+};
+
 // --- Computation ---
 
 export function computeFactionDeltas(
@@ -370,6 +376,52 @@ export function computeEconomyRecapEntries(
   return entries;
 }
 
+export function computeCraftingRecapEntries(
+  beforeCustom: Record<string, string | number | boolean>,
+  afterCustom: Record<string, string | number | boolean>,
+): { entries: CraftingRecapEntry[], materialChanges: { category: string; before: number; after: number }[] } {
+  const entries: CraftingRecapEntry[] = [];
+
+  // Derive crafting actions from item chronicle changes in profile.custom
+  // Crafting events are tracked as materials.crafted.*, materials.salvaged.*, etc.
+  // But simpler: we scan for material changes — material deltas imply crafting activity
+  const materialChanges: { category: string; before: number; after: number }[] = [];
+  const categories = new Set<string>();
+  for (const key of Object.keys(afterCustom)) {
+    if (key.startsWith('materials.')) categories.add(key.replace('materials.', ''));
+  }
+  for (const key of Object.keys(beforeCustom)) {
+    if (key.startsWith('materials.')) categories.add(key.replace('materials.', ''));
+  }
+  for (const cat of categories) {
+    const before = Number(beforeCustom[`materials.${cat}`] ?? 0);
+    const after = Number(afterCustom[`materials.${cat}`] ?? 0);
+    if (before !== after) {
+      materialChanges.push({ category: cat, before, after });
+    }
+  }
+
+  return { entries, materialChanges };
+}
+
+export function computeCraftingRecapFromJournal(
+  journal: { query(filters: { category?: string; afterTick?: number }): { description: string; data: Record<string, unknown> }[] },
+  sessionStartTick: number,
+): CraftingRecapEntry[] {
+  const entries: CraftingRecapEntry[] = [];
+
+  const records = journal.query({ category: 'item-transformed', afterTick: sessionStartTick });
+  for (const r of records) {
+    const action = r.data?.craftAction as string | undefined;
+    const itemName = r.data?.itemName as string ?? 'unknown';
+    if (action === 'crafted' || action === 'salvaged' || action === 'modified' || action === 'repaired') {
+      entries.push({ action, itemName, detail: r.description });
+    }
+  }
+
+  return entries;
+}
+
 // --- Rendering ---
 
 export function renderFullRecap(
@@ -383,6 +435,7 @@ export function renderFullRecap(
   companionRecapEntries?: CompanionRecapEntry[],
   itemRecapEntries?: ItemRecapEntry[],
   economyRecapEntries?: EconomyRecapEntry[],
+  craftingData?: { entries: CraftingRecapEntry[]; materialChanges: { category: string; before: number; after: number }[] },
 ): string {
   // Nothing to show if nothing happened
   if (
@@ -597,6 +650,34 @@ export function renderFullRecap(
     for (const entry of itemRecapEntries) {
       const detail = entry.detail ? ` — ${entry.detail}` : '';
       lines.push(`  ${entry.name}: ${entry.event}${detail}`);
+    }
+  }
+
+  // Section: Crafting Activity (v1.8)
+  const hasCraftingData = craftingData &&
+    (craftingData.entries.length > 0 || craftingData.materialChanges.length > 0);
+  if (hasCraftingData) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  CRAFTING ACTIVITY');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    if (craftingData!.entries.length > 0) {
+      for (const entry of craftingData!.entries) {
+        const detail = entry.detail ? ` — ${entry.detail}` : '';
+        lines.push(`  ${entry.action}: ${entry.itemName}${detail}`);
+      }
+    }
+
+    if (craftingData!.materialChanges.length > 0) {
+      const parts: string[] = [];
+      for (const mc of craftingData!.materialChanges) {
+        const diff = mc.after - mc.before;
+        const sign = diff > 0 ? '+' : '';
+        parts.push(`${mc.category} ${sign}${diff}`);
+      }
+      lines.push(`  Materials: ${parts.join(', ')}`);
     }
   }
 

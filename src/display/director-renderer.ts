@@ -32,6 +32,13 @@ import {
   formatAllDistrictEconomiesForDirector,
   formatEconomyForDirector,
   deriveEconomyDescriptor,
+  // Crafting (v1.8)
+  getMaterialInventory,
+  getAvailableRecipes,
+  formatAvailableRecipesForDirector,
+  formatMaterialsForDirector,
+  salvageItem,
+  formatSalvagePreview,
   type PlayerRumor,
   type WorldPressure,
   type PressureFallout,
@@ -92,6 +99,9 @@ ${DIVIDER}
   /district <id>                Deep inspect a specific district
   /market                       Show all district economies at a glance
   /trade <district-id>          Detailed district economy + value modifiers
+  /craft                        List available recipes and material costs
+  /materials                    Show current material inventory
+  /salvage <item-id>            Preview salvage yields without executing
   /status                       Compact strategic snapshot
   /stats                        Session balance metrics
   /help leverage                Full leverage verb reference
@@ -132,6 +142,7 @@ export function executeDirectorCommand(
   profile?: CharacterProfile | null,
   itemCatalog?: ItemCatalog | null,
   districtEconomies?: Map<string, DistrictEconomy>,
+  genre?: string,
 ): string {
   const parts = command.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
@@ -400,6 +411,34 @@ export function executeDirectorCommand(
       }
       if (!profile || !itemCatalog) return '  No profile or item catalog loaded.';
       return renderItemInspection(itemId, profile, itemCatalog, currentTick ?? 0);
+    }
+
+    // --- Crafting Commands (v1.8) ---
+
+    case '/craft': {
+      if (!profileCustom) return '  No profile loaded.';
+      const recipes = getAvailableRecipes(genre ?? 'fantasy');
+      const materials = getMaterialInventory(profileCustom);
+      return formatAvailableRecipesForDirector(recipes, materials);
+    }
+
+    case '/materials': {
+      if (!profileCustom) return '  No profile loaded.';
+      const materials = getMaterialInventory(profileCustom);
+      return formatMaterialsForDirector(materials);
+    }
+
+    case '/salvage': {
+      const itemId = parts[1];
+      if (!itemId) return '  Usage: /salvage <item-id>';
+      if (!itemCatalog) return '  No item catalog loaded.';
+      const item = itemCatalog.items.find(
+        (i) => i.id.toLowerCase().includes(itemId.toLowerCase()) ||
+          i.name.toLowerCase().includes(itemId.toLowerCase()),
+      );
+      if (!item) return `  Item "${itemId}" not found.`;
+      const result = salvageItem(item);
+      return formatSalvagePreview(item, result);
     }
 
     default:

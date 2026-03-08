@@ -3,7 +3,7 @@
 
 import type { SessionDelta } from './recap-delta.js';
 import type { WorldDelta } from './world-delta.js';
-import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState, DistrictEconomy } from '@ai-rpg-engine/modules';
+import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState, DistrictEconomy, OpportunityState, OpportunityFallout } from '@ai-rpg-engine/modules';
 import { deriveEconomyDescriptor, type SupplyCategory } from '@ai-rpg-engine/modules';
 
 const DIVIDER = '─'.repeat(60);
@@ -67,6 +67,14 @@ export type EconomyRecapEntry = {
 export type CraftingRecapEntry = {
   action: 'crafted' | 'salvaged' | 'modified' | 'repaired';
   itemName: string;
+  detail?: string;
+};
+
+export type OpportunityRecapEntry = {
+  opportunityId: string;
+  title: string;
+  kind: string;
+  event: 'spawned' | 'accepted' | 'completed' | 'failed' | 'abandoned' | 'betrayed' | 'expired' | 'declined';
   detail?: string;
 };
 
@@ -422,7 +430,64 @@ export function computeCraftingRecapFromJournal(
   return entries;
 }
 
+export function computeOpportunityRecapEntries(
+  beforeOpportunities: OpportunityState[],
+  afterOpportunities: OpportunityState[],
+  resolvedOpportunities: OpportunityFallout[],
+): OpportunityRecapEntry[] {
+  const entries: OpportunityRecapEntry[] = [];
+  const beforeIds = new Set(beforeOpportunities.map((o) => o.id));
+
+  // New opportunities spawned this session
+  for (const opp of afterOpportunities) {
+    if (!beforeIds.has(opp.id)) {
+      entries.push({
+        opportunityId: opp.id,
+        title: opp.title,
+        kind: opp.kind,
+        event: opp.status === 'accepted' ? 'accepted' : 'spawned',
+      });
+    }
+  }
+
+  // Accepted: was available before, now accepted
+  for (const opp of afterOpportunities) {
+    if (beforeIds.has(opp.id) && opp.status === 'accepted') {
+      const before = beforeOpportunities.find((o) => o.id === opp.id);
+      if (before && before.status === 'available') {
+        entries.push({
+          opportunityId: opp.id,
+          title: opp.title,
+          kind: opp.kind,
+          event: 'accepted',
+        });
+      }
+    }
+  }
+
+  // Resolved opportunities
+  for (const fallout of resolvedOpportunities) {
+    const res = fallout.resolution;
+    const event = res.resolutionType as OpportunityRecapEntry['event'];
+    entries.push({
+      opportunityId: res.opportunityId,
+      title: `${res.opportunityKind} opportunity`,
+      kind: res.opportunityKind,
+      event,
+      detail: fallout.summary,
+    });
+  }
+
+  return entries;
+}
+
 // --- Rendering ---
+
+export type ArcRecapData = {
+  dominantArc: string | null;
+  momentum: string;
+  endgameTriggers: { resolutionClass: string; reason: string }[];
+};
 
 export function renderFullRecap(
   characterDelta: SessionDelta,
@@ -436,6 +501,8 @@ export function renderFullRecap(
   itemRecapEntries?: ItemRecapEntry[],
   economyRecapEntries?: EconomyRecapEntry[],
   craftingData?: { entries: CraftingRecapEntry[]; materialChanges: { category: string; before: number; after: number }[] },
+  opportunityRecapEntries?: OpportunityRecapEntry[],
+  arcRecapData?: ArcRecapData,
 ): string {
   // Nothing to show if nothing happened
   if (
@@ -678,6 +745,36 @@ export function renderFullRecap(
         parts.push(`${mc.category} ${sign}${diff}`);
       }
       lines.push(`  Materials: ${parts.join(', ')}`);
+    }
+  }
+
+  // Section: Opportunities & Contracts (v1.9)
+  if (opportunityRecapEntries && opportunityRecapEntries.length > 0) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  OPPORTUNITIES & CONTRACTS');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    for (const entry of opportunityRecapEntries) {
+      const detail = entry.detail ? ` — ${entry.detail}` : '';
+      lines.push(`  ${entry.title} (${entry.kind}): ${entry.event}${detail}`);
+    }
+  }
+
+  // Section: Campaign Arc (v2.0)
+  if (arcRecapData && (arcRecapData.dominantArc || arcRecapData.endgameTriggers.length > 0)) {
+    lines.push('');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('  CAMPAIGN ARC');
+    lines.push(`  ${DIVIDER}`);
+    lines.push('');
+
+    if (arcRecapData.dominantArc) {
+      lines.push(`  Dominant arc: ${arcRecapData.dominantArc} (${arcRecapData.momentum})`);
+    }
+    for (const trigger of arcRecapData.endgameTriggers) {
+      lines.push(`  Turning point: ${trigger.resolutionClass} — ${trigger.reason}`);
     }
   }
 

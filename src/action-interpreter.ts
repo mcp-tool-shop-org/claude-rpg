@@ -165,6 +165,24 @@ function tryFastInterpret(
     if (saboMatch) return saboMatch;
   }
 
+  // Opportunity verbs (accept, decline, abandon, betray, complete job/contract/bounty/mission)
+  const oppMatch = lower.match(/^(accept|decline|abandon|betray|complete|finish|deliver|turn\s+in)\s+(the\s+)?(job|contract|offer|bounty|mission|quest|task)/i);
+  if (oppMatch) {
+    const oppVerb = oppMatch[1].replace(/\s+/g, '-');
+    const subAction = oppVerb === 'finish' || oppVerb === 'deliver' || oppVerb === 'turn-in'
+      ? 'complete'
+      : oppVerb;
+    return {
+      verb: 'opportunity',
+      targetIds: null,
+      toolId: null,
+      parameters: { subAction },
+      confidence: 'high',
+      reasoning: `opportunity: ${subAction}`,
+      alternatives: null,
+    };
+  }
+
   // Crafting verbs (craft, salvage, repair, modify)
   if (/^(craft|salvage|repair|modify)\s*/.test(lower)) {
     const craftMatch = lower.match(/^(craft|salvage|repair|modify)\s*(.*)/);

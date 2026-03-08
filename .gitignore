@@ -3,3 +3,7 @@ dist/
 *.tsbuildinfo
 .env
 .claude-rpg/
+site/.astro/
+site/dist/
+site/node_modules/
+.polyglot-cache.json

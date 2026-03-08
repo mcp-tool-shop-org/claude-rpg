@@ -46,7 +46,12 @@ Rules:
   - Faction-marked items: NPCs of that faction show recognition and respect; rival factions show wariness or hostility
   - Black-market modified items: NPCs who notice show suspicion, may threaten to report, or offer to buy; merchants may refuse service
   - Blessed items: NPCs react with awe, reverence, or superstitious fear depending on their personality
-  - Cursed items: NPCs recoil, make warding gestures, warn the player, or try to distance themselves`;
+  - Cursed items: NPCs recoil, make warding gestures, warn the player, or try to distance themselves
+- When the player has active contracts or opportunities involving this NPC:
+  - Quest-giver NPCs ask about progress, grow impatient near deadlines, express gratitude on completion
+  - NPCs react to abandonment with anger or disappointment; to betrayal with fear, rage, or cold fury
+  - NPCs who offered contracts may raise the stakes or sweeten the deal if the player hesitates
+  - Deadlines create urgency — NPCs mention time pressure, look stressed, or warn of consequences`;
 
 export type DialogueInput = {
   npcName: string;
@@ -97,6 +102,8 @@ export type DialogueInput = {
   economyContext?: string;
   // v1.8: Crafting context
   craftingContext?: string;
+  // v1.9: Opportunity context
+  opportunityContext?: string;
 };
 
 function formatActivePressures(
@@ -166,6 +173,6 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
+${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
 Player says: "${input.playerUtterance}"`;
 }

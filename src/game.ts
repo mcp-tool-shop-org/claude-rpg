@@ -40,8 +40,31 @@ import {
   type CraftEffect,
   type CraftingContext,
   formatMaterialsCompact,
+  // Opportunities (v1.9)
+  evaluateOpportunities,
+  tickOpportunities,
+  getAvailableOpportunities,
+  getAcceptedOpportunities,
+  formatOpportunityListForDirector,
+  type OpportunityState,
+  type OpportunityInputs,
+  computeOpportunityFallout,
+  type OpportunityFallout,
+  type OpportunityFalloutEffect,
+  type OpportunityResolutionType,
+  // Arc Detection + Endgame (v2.0)
+  buildArcSnapshot,
+  formatArcForDirector,
+  formatArcForNarrator,
+  type ArcSnapshot,
+  type ArcInputs,
+  evaluateEndgame,
+  formatEndgameForDirector,
+  formatEndgameForNarrator,
+  type EndgameTrigger,
+  type EndgameInputs,
 } from '@ai-rpg-engine/modules';
-import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
+import { CampaignJournal, buildFinaleOutline, formatFinaleForDirector, formatFinaleForTerminal, type FinaleOutline, type FinaleNpcInput, type FinaleFactionInput, type FinaleDistrictInput } from '@ai-rpg-engine/campaign-memory';
 import {
   grantXp,
   addInjury,
@@ -137,6 +160,7 @@ import { executeTurn, type TurnResult, type ProfileUpdateHints } from './turn-lo
 import { renderPlayScreen, renderWelcome, renderThinking } from './display/play-renderer.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { narrateScene } from './narrator/narrator.js';
+import { narrateFinale } from './narrator/finale-narrator.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { buildPresence, buildNPCStancePresence, buildStatusData, type StatusData } from './character/presence.js';
 import { deriveChronicleEvents, type ChronicleEventSource } from './session/chronicle.js';
@@ -207,6 +231,12 @@ export class GameSession {
   lastCompanionReactions: CompanionReaction[] = [];
   partyState: PartyState = createPartyState();
   districtEconomies: Map<string, DistrictEconomy> = new Map();
+  activeOpportunities: OpportunityState[] = [];
+  resolvedOpportunities: OpportunityFallout[] = [];
+  arcSnapshot: ArcSnapshot | null = null;
+  endgameTriggers: EndgameTrigger[] = [];
+  finaleOutline: FinaleOutline | null = null;
+  campaignStatus: 'active' | 'completed' = 'active';
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -387,6 +417,10 @@ export class GameSession {
       districtDescriptor,
       partyPresenceStr,
       economyCtx,
+      undefined, // craftingContext
+      undefined, // opportunityContext
+      this.getArcContext(),
+      this.getEndgameContext(),
     );
     this.history.record({
       tick: this.engine.tick,
@@ -453,6 +487,10 @@ export class GameSession {
         this.itemCatalog,
         this.districtEconomies,
         this.genre,
+        this.activeOpportunities,
+        this.arcSnapshot,
+        this.endgameTriggers,
+        this.finaleOutline,
       );
     }
 
@@ -474,6 +512,9 @@ export class GameSession {
           ? { description: this.activePressures[0].description, urgency: this.activePressures[0].urgency }
           : null;
         const matSummary = formatMaterialsCompact(getMaterialInventory(this.profile.custom));
+        const arcInd = this.arcSnapshot?.dominantArc
+          ? `${this.arcSnapshot.dominantArc} (${this.arcSnapshot.signals.find((s) => s.kind === this.arcSnapshot!.dominantArc)?.momentum ?? 'steady'})`
+          : undefined;
         return renderCompactStatus({
           statusData: this.getStatusData()!,
           leverageState,
@@ -481,6 +522,7 @@ export class GameSession {
           suggestedMove: recommendation.top3[0] ?? null,
           situationTag: recommendation.situationTag,
           materialsSummary: matSummary !== 'No materials' ? matSummary : undefined,
+          arcIndicator: arcInd,
         });
       }
       if (playCmd === '/map') {
@@ -490,6 +532,16 @@ export class GameSession {
       if (playCmd === '/leverage') {
         if (!this.profile) return '  No profile loaded.';
         return formatLeverageForDirector(getLeverageState(this.profile.custom));
+      }
+      if (playCmd === '/jobs' || playCmd === '/contracts') {
+        return formatOpportunityListForDirector(this.activeOpportunities);
+      }
+      if (playCmd === '/arcs') {
+        if (!this.arcSnapshot) return '  No arc data yet — play a few turns first.';
+        return formatArcForDirector(this.arcSnapshot);
+      }
+      if (playCmd === '/conclude') {
+        return await this.handleConclude();
       }
       if (playCmd === '/recruit') {
         return this.handleRecruit(cmdParts.slice(1));
@@ -530,6 +582,9 @@ export class GameSession {
       partyPresenceStr,
       turnEconomyCtx,
       turnCraftingCtx,
+      this.getOpportunityContext(),
+      this.getArcContext(),
+      this.getEndgameContext(),
     );
 
     // Process leverage actions (social/rumor/diplomacy/sabotage)
@@ -600,6 +655,16 @@ export class GameSession {
     // Evaluate and tick world pressures
     this.evaluateAndTickPressures();
 
+    // Evaluate and tick opportunities (v1.9)
+    this.evaluateAndTickOpportunities();
+
+    // Arc detection + endgame evaluation (v2.0)
+    this.tickArcDetection();
+    this.evaluateEndgameTrigger();
+
+    // Process opportunity actions from this turn (accept/decline/complete/etc.)
+    this.processOpportunityAction(turnResult);
+
     // Move advisor + contextual suggestions
     const leverageStatus = this.profile
       ? formatLeverageStatus(getLeverageState(this.profile.custom))
@@ -626,6 +691,10 @@ export class GameSession {
         hasBlackMarket,
         hasCraftingShortage,
         hasCraftableMaterials,
+        hasNewOpportunity: this.activeOpportunities.some((o) => o.status === 'available' && o.createdAtTick === this.engine.tick),
+        hasExpiringOpportunity: this.activeOpportunities.some((o) => o.status === 'available' && o.turnsRemaining != null && o.turnsRemaining <= 3),
+        hasStaleAcceptedOpportunity: this.activeOpportunities.some((o) => o.status === 'accepted' && o.acceptedAtTick != null && this.engine.tick - o.acceptedAtTick >= 4),
+        hasEndgameDetected: this.endgameTriggers.some((t) => !t.acknowledged),
       });
     }
 
@@ -1012,6 +1081,480 @@ export class GameSession {
     };
   }
 
+  // --- Opportunity System (v1.9) ---
+
+  /** Assemble OpportunityInputs from current session state. */
+  private buildOpportunityInputs(): OpportunityInputs {
+    const factionIds = Object.keys(this.engine.world.factions);
+
+    const playerReputations = factionIds.map((fid) => ({
+      factionId: fid,
+      value: this.profile ? getReputation(this.profile, fid) : 0,
+    }));
+
+    const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
+    for (const factionId of factionIds) {
+      const fcog = getFactionCognition(this.engine.world, factionId);
+      if (fcog) {
+        const state = fcog as Record<string, unknown>;
+        factionStates[factionId] = {
+          alertLevel: (state.alertLevel as number) ?? 0,
+          cohesion: (state.cohesion as number) ?? 1,
+        };
+      } else {
+        factionStates[factionId] = { alertLevel: 0, cohesion: 1 };
+      }
+    }
+
+    return {
+      activeOpportunities: this.activeOpportunities,
+      activePressures: this.activePressures,
+      npcProfiles: this.lastNpcProfiles,
+      npcObligations: this.npcObligations,
+      factionStates,
+      playerReputations,
+      playerLeverage: this.profile ? getLeverageState(this.profile.custom) : { favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0 },
+      districtEconomies: this.districtEconomies,
+      companions: this.partyState.companions,
+      playerDistrictId: this.getPlayerDistrictId() ?? 'unknown',
+      playerLevel: this.profile?.progression.level ?? 1,
+      currentTick: this.engine.tick,
+      genre: this.genre,
+      totalTurns: this.profile?.totalTurns ?? 0,
+    };
+  }
+
+  /** Tick existing opportunities and evaluate for new ones. */
+  private evaluateAndTickOpportunities(): void {
+    // Tick: decrement timers, expire overdue
+    const tickResult = tickOpportunities(this.activeOpportunities, this.engine.tick);
+    this.activeOpportunities = tickResult.active;
+
+    // Process expired opportunities → fallout
+    for (const expired of tickResult.expired) {
+      this.resolveOpportunity(expired, 'expired');
+    }
+
+    // Evaluate for new opportunity
+    if (!this.profile) return;
+    const inputs = this.buildOpportunityInputs();
+    const result = evaluateOpportunities(inputs);
+    if (result) {
+      this.activeOpportunities.push(result.opportunity);
+    }
+  }
+
+  /** Process opportunity verb from a turn result. */
+  private processOpportunityAction(turnResult: TurnResult): void {
+    if (turnResult.interpreted.verb !== 'opportunity') return;
+    const subAction = turnResult.interpreted.parameters?.subAction as string | undefined;
+    if (!subAction) return;
+
+    switch (subAction) {
+      case 'accept': {
+        const available = getAvailableOpportunities(this.activeOpportunities);
+        if (available.length === 0) break;
+        // Accept the first available (most recent)
+        const target = available[available.length - 1];
+        target.status = 'accepted';
+        target.acceptedAtTick = this.engine.tick;
+        // Chronicle
+        const source: ChronicleEventSource = { kind: 'opportunity-accepted', opportunity: target, tick: this.engine.tick };
+        for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+          this.journal.record(entry);
+        }
+        break;
+      }
+      case 'decline': {
+        const available = getAvailableOpportunities(this.activeOpportunities);
+        if (available.length === 0) break;
+        const target = available[available.length - 1];
+        this.resolveOpportunity(target, 'declined');
+        break;
+      }
+      case 'abandon': {
+        const accepted = getAcceptedOpportunities(this.activeOpportunities);
+        if (accepted.length === 0) break;
+        const target = accepted[accepted.length - 1];
+        this.resolveOpportunity(target, 'abandoned');
+        break;
+      }
+      case 'betray': {
+        const accepted = getAcceptedOpportunities(this.activeOpportunities);
+        if (accepted.length === 0) break;
+        const target = accepted[accepted.length - 1];
+        this.resolveOpportunity(target, 'betrayed');
+        break;
+      }
+      case 'complete': {
+        const accepted = getAcceptedOpportunities(this.activeOpportunities);
+        if (accepted.length === 0) break;
+        const target = accepted[accepted.length - 1];
+        this.resolveOpportunity(target, 'completed');
+        break;
+      }
+    }
+  }
+
+  /** Resolve an opportunity and apply its fallout effects. */
+  private resolveOpportunity(
+    opp: OpportunityState,
+    resolutionType: OpportunityResolutionType,
+  ): void {
+    // Remove from active list
+    this.activeOpportunities = this.activeOpportunities.filter((o) => o.id !== opp.id);
+
+    // Update status
+    opp.status = resolutionType === 'completed' ? 'completed'
+      : resolutionType === 'failed' ? 'failed'
+      : resolutionType === 'expired' ? 'expired'
+      : resolutionType === 'declined' ? 'declined'
+      : resolutionType === 'abandoned' ? 'abandoned'
+      : resolutionType === 'betrayed' ? 'betrayed'
+      : 'failed';
+    opp.resolvedAtTick = this.engine.tick;
+
+    // Compute fallout
+    const fallout = computeOpportunityFallout(opp, resolutionType, {
+      currentTick: this.engine.tick,
+      playerDistrictId: this.getPlayerDistrictId(),
+      genre: this.genre,
+    });
+
+    // Record chronicle
+    const chronicleKind =
+      resolutionType === 'completed' ? 'opportunity-completed' as const
+      : resolutionType === 'abandoned' ? 'opportunity-abandoned' as const
+      : resolutionType === 'betrayed' ? 'opportunity-betrayed' as const
+      : resolutionType === 'expired' ? 'opportunity-expired' as const
+      : 'opportunity-failed' as const;
+    const source: ChronicleEventSource = { kind: chronicleKind, opportunity: opp, tick: this.engine.tick };
+    for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+      this.journal.record(entry);
+    }
+
+    // Apply fallout effects
+    this.applyOpportunityFalloutEffects(fallout);
+    this.resolvedOpportunities.push(fallout);
+  }
+
+  /** Apply structured opportunity fallout effects to session state. */
+  private applyOpportunityFalloutEffects(fallout: OpportunityFallout): void {
+    for (const effect of fallout.effects) {
+      switch (effect.type) {
+        case 'reputation':
+          if (this.profile) {
+            this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
+          }
+          break;
+        case 'leverage':
+          if (this.profile) {
+            this.profile = {
+              ...this.profile,
+              custom: applyLeverageDeltas(this.profile.custom, { [effect.currency]: effect.delta }),
+            };
+          }
+          break;
+        case 'heat':
+          if (this.profile) {
+            this.profile = {
+              ...this.profile,
+              custom: applyLeverageDeltas(this.profile.custom, { heat: effect.delta }),
+            };
+          }
+          break;
+        case 'rumor':
+          if (this.profile) {
+            this.addRumor(
+              spawnPlayerRumor(
+                { label: effect.claim, description: effect.claim, tags: [effect.valence] },
+                this.profile,
+                effect.spreadTo[0],
+                this.getPlayerDistrictId(),
+                this.engine.tick,
+              ),
+            );
+          }
+          break;
+        case 'spawn-pressure': {
+          const MAX_ACTIVE = 3;
+          if (this.activePressures.length < MAX_ACTIVE) {
+            const chainPressure = makePressure({
+              kind: effect.kind,
+              sourceFactionId: effect.sourceFactionId,
+              description: effect.description,
+              triggeredBy: `opportunity:${fallout.resolution.opportunityKind}`,
+              urgency: effect.urgency,
+              visibility: 'known',
+              turnsRemaining: 10,
+              potentialOutcomes: [],
+              tags: effect.tags,
+              currentTick: this.engine.tick,
+            });
+            this.activePressures.push(chainPressure);
+          }
+          break;
+        }
+        case 'obligation': {
+          const counterparty = effect.direction === 'npc-owes-player'
+            ? this.engine.world.playerId
+            : effect.npcId;
+          const obl = createObligation(
+            effect.kind, effect.direction, effect.npcId, counterparty,
+            effect.magnitude, `opportunity-${fallout.resolution.resolutionType}`,
+            this.engine.tick,
+          );
+          const ledger = this.npcObligations.get(effect.npcId) ?? { obligations: [] };
+          this.npcObligations.set(effect.npcId, addObligation(ledger, obl));
+          break;
+        }
+        case 'npc-relationship':
+          // Applied through NPC cognition system
+          break;
+        case 'companion-morale':
+          if (this.partyState.companions.some((c) => c.npcId === effect.npcId)) {
+            this.partyState = adjustCompanionMorale(this.partyState, effect.npcId, effect.delta);
+          }
+          break;
+        case 'alert':
+          // Alert changes through faction cognition
+          break;
+        case 'economy-shift':
+          this.applyEconomyShiftEffect(effect.districtId, effect.category, effect.delta, effect.cause);
+          break;
+        case 'milestone-tag':
+          if (this.profile) {
+            this.profile = recordMilestone(this.profile, {
+              label: effect.tag,
+              description: `Achievement: ${effect.tag}`,
+              at: `turn-${this.engine.tick}`,
+              tags: [effect.tag],
+            });
+          }
+          break;
+        case 'title-trigger':
+          if (this.profile) {
+            const allTags = [
+              ...this.profile.milestones.flatMap((m) => m.tags),
+              effect.tag,
+            ];
+            const newTitle = evolveTitle(
+              this.profile.custom.title as string | undefined,
+              allTags,
+              this.getTitleEvolutions(),
+            );
+            if (newTitle && newTitle !== this.profile.custom.title) {
+              this.profile = {
+                ...this.profile,
+                custom: { ...this.profile.custom, title: newTitle },
+              };
+              console.log(`\n  Title evolved: "${newTitle}"\n`);
+            }
+          }
+          break;
+        case 'materials':
+        case 'spawn-opportunity':
+          // Materials don't apply from resolution (they're rewards for completing)
+          // Spawn-opportunity would add to activeOpportunities — deferred to NPC agency
+          break;
+      }
+    }
+  }
+
+  /** Get compact opportunity context string for narrator (~20 tokens). */
+  getOpportunityContext(): string | undefined {
+    const accepted = getAcceptedOpportunities(this.activeOpportunities);
+    if (accepted.length === 0) return undefined;
+    const opp = accepted[0];
+    const deadline = opp.turnsRemaining != null ? ` (${opp.turnsRemaining} turns left)` : '';
+    return `Active ${opp.kind}: ${opp.title}${deadline}`;
+  }
+
+  // --- v2.0: Arc Detection & Endgame ---
+
+  /** Assemble ArcInputs from current session state. */
+  private buildArcInputs(): ArcInputs {
+    const factionIds = Object.keys(this.engine.world.factions);
+    const factionStates = factionIds.map((factionId) => {
+      const fcog = getFactionCognition(this.engine.world, factionId);
+      const state = fcog as Record<string, unknown> | undefined;
+      return {
+        factionId,
+        alertLevel: (state?.alertLevel as number) ?? 0,
+        cohesion: (state?.cohesion as number) ?? 1,
+      };
+    });
+    const playerReputations = factionIds.map((fid) => ({
+      factionId: fid,
+      value: this.profile ? getReputation(this.profile, fid) : 0,
+    }));
+    const player = this.engine.world.entities[this.engine.world.playerId];
+    return {
+      factionStates,
+      playerReputations,
+      playerLeverage: this.profile ? getLeverageState(this.profile.custom) : { favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0 },
+      activePressures: this.activePressures,
+      npcProfiles: this.lastNpcProfiles,
+      npcObligations: this.npcObligations,
+      companions: this.partyState.companions,
+      districtEconomies: this.districtEconomies,
+      activeOpportunities: this.activeOpportunities,
+      resolvedPressures: this.resolvedPressures,
+      resolvedOpportunities: this.resolvedOpportunities,
+      playerHp: player?.resources?.hp,
+      playerMaxHp: player?.resources?.maxHp,
+      playerLevel: this.profile?.progression.level ?? 1,
+      totalTurns: this.profile?.totalTurns ?? 0,
+      currentTick: this.engine.tick,
+    };
+  }
+
+  /** Evaluate arc signals and update snapshot. */
+  private tickArcDetection(): void {
+    if (!this.profile) return;
+    const inputs = this.buildArcInputs();
+    this.arcSnapshot = buildArcSnapshot(inputs, this.arcSnapshot ?? undefined);
+  }
+
+  /** Evaluate endgame trigger conditions. */
+  private evaluateEndgameTrigger(): void {
+    if (!this.profile || !this.arcSnapshot) return;
+    const player = this.engine.world.entities[this.engine.world.playerId];
+    const inputs: EndgameInputs = {
+      ...this.buildArcInputs(),
+      arcSnapshot: this.arcSnapshot,
+      playerHp: player?.resources?.hp ?? 0,
+      playerMaxHp: player?.resources?.maxHp ?? 100,
+      previousTriggers: this.endgameTriggers,
+    };
+    const trigger = evaluateEndgame(inputs);
+    if (trigger) {
+      this.endgameTriggers.push(trigger);
+      // Record in chronicle
+      this.journal.record({
+        tick: this.engine.tick,
+        category: 'endgame-detected',
+        actorId: 'world',
+        description: `Endgame detected: ${trigger.resolutionClass} — ${trigger.reason}`,
+        significance: 0.9,
+        witnesses: [],
+        data: { resolutionClass: trigger.resolutionClass },
+      });
+    }
+  }
+
+  /** Get compact arc context for narrator (~15 tokens). */
+  getArcContext(): string | undefined {
+    if (!this.arcSnapshot) return undefined;
+    const text = formatArcForNarrator(this.arcSnapshot);
+    return text || undefined;
+  }
+
+  /** Get endgame turning-point context for narrator. */
+  getEndgameContext(): string | undefined {
+    if (this.endgameTriggers.length === 0) return undefined;
+    const latest = this.endgameTriggers[this.endgameTriggers.length - 1];
+    if (latest.acknowledged) return undefined;
+    return formatEndgameForNarrator(latest);
+  }
+
+  /** Build the finale outline from current campaign state. */
+  buildFinale(): FinaleOutline {
+    const resolutionClass = this.endgameTriggers.length > 0
+      ? this.endgameTriggers[this.endgameTriggers.length - 1].resolutionClass
+      : 'quiet-retirement';
+    const dominantArc = this.arcSnapshot?.dominantArc ?? null;
+
+    const npcs: FinaleNpcInput[] = this.lastNpcProfiles.map((p) => ({
+      npcId: p.npcId,
+      name: p.name,
+      breakpoint: p.breakpoint,
+      isCompanion: isCompanion(this.partyState, p.npcId),
+    }));
+
+    const factionIds = Object.keys(this.engine.world.factions);
+    const factions: FinaleFactionInput[] = factionIds.map((fid) => {
+      const fcog = getFactionCognition(this.engine.world, fid);
+      const state = fcog as Record<string, unknown> | undefined;
+      return {
+        factionId: fid,
+        playerReputation: this.profile ? getReputation(this.profile, fid) : 0,
+        alertLevel: (state?.alertLevel as number) ?? 0,
+        cohesion: (state?.cohesion as number) ?? 1,
+      };
+    });
+
+    const districtIds = getAllDistrictIds(this.engine.world);
+    const districts: FinaleDistrictInput[] = districtIds.map((did) => {
+      const dState = getDistrictState(this.engine.world, did);
+      const dDef = getDistrictDefinition(this.engine.world, did);
+      const economy = this.districtEconomies.get(did);
+      const descriptor = economy ? deriveEconomyDescriptor(economy) : undefined;
+      return {
+        districtId: did,
+        name: dDef?.name ?? did,
+        stability: dState?.stability ?? 50,
+        controllingFaction: dDef?.controllingFaction,
+        economyTone: descriptor?.overallTone ?? 'stable',
+      };
+    });
+
+    const outline = buildFinaleOutline(
+      resolutionClass, dominantArc, this.journal,
+      npcs, factions, districts,
+      this.profile?.totalTurns ?? this.engine.tick,
+      this.profile?.custom.title as string | undefined,
+      this.profile?.progression.level,
+    );
+
+    this.finaleOutline = outline;
+
+    // Record campaign-concluded in chronicle
+    this.journal.record({
+      tick: this.engine.tick,
+      category: 'campaign-concluded',
+      actorId: 'world',
+      description: `Campaign concluded: ${resolutionClass}`,
+      significance: 1.0,
+      witnesses: [],
+      data: { resolutionClass, dominantArc },
+    });
+
+    return outline;
+  }
+
+  /** Handle /conclude: build finale, generate LLM epilogue, return formatted. */
+  async handleConclude(): Promise<string> {
+    const outline = this.buildFinale();
+
+    // Mark all triggers as acknowledged and campaign as completed
+    for (const trigger of this.endgameTriggers) {
+      trigger.acknowledged = true;
+    }
+    this.campaignStatus = 'completed';
+
+    // Generate LLM epilogue
+    const result = await narrateFinale(
+      this.client,
+      outline,
+      this.genre,
+      this.profile?.build.name,
+    );
+
+    const lines: string[] = [];
+    lines.push(result.deterministicSummary);
+    if (result.epilogue) {
+      lines.push('');
+      lines.push('  ─'.repeat(30));
+      lines.push('');
+      lines.push(`  ${result.epilogue.split('\n').join('\n  ')}`);
+      lines.push('');
+    }
+    lines.push('  Continue playing  |  Type "save" to archive  |  Type "quit" to exit');
+
+    return lines.join('\n');
+  }
+
   /** Get the "thinking" indicator. */
   getThinking(): string {
     return renderThinking();
@@ -1320,6 +1863,8 @@ export class GameSession {
         engine: this.engine,
         getPlayerDistrictId: () => this.getPlayerDistrictId(),
         npcObligations: this.npcObligations,
+        activeOpportunities: this.activeOpportunities,
+        genre: this.genre,
       });
 
       // Record in chronicle
@@ -1995,6 +2540,7 @@ export class GameSession {
       playerReputations,
       this.lastFactionActions,
       this.districtEconomies,
+      this.activeOpportunities,
     );
   }
 
@@ -2025,6 +2571,7 @@ export class GameSession {
       currentTick: this.engine.tick,
       cooldowns,
       playerHeat: (leverageState as Record<string, number>).heat ?? 0,
+      activeOpportunities: this.activeOpportunities,
     };
     return recommendMoves(inputs);
   }

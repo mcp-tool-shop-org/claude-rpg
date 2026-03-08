@@ -22,9 +22,13 @@ export function generateSuggestions(opts: {
   hasBlackMarket?: boolean;
   hasCraftingShortage?: boolean;
   hasCraftableMaterials?: boolean;
+  hasNewOpportunity?: boolean;
+  hasExpiringOpportunity?: boolean;
+  hasStaleAcceptedOpportunity?: boolean;
+  hasEndgameDetected?: boolean;
 }): ContextualSuggestion[] {
   const suggestions: ContextualSuggestion[] = [];
-  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket, hasCraftingShortage, hasCraftableMaterials } = opts;
+  const { turnCount, recommendation, hasUsedLeverage, lastLeverageResolution, recentMilestone, activePressures, hasSupplyCrisis, hasBlackMarket, hasCraftingShortage, hasCraftableMaterials, hasNewOpportunity, hasExpiringOpportunity, hasStaleAcceptedOpportunity, hasEndgameDetected } = opts;
 
   // 1. Crisis pressure → suggest top advisor move
   if (recommendation.situationTag === 'crisis' && recommendation.top3.length > 0) {
@@ -110,13 +114,47 @@ export function generateSuggestions(opts: {
     });
   }
 
+  // 11. New opportunity available → suggest /jobs (v1.9)
+  if (suggestions.length < 2 && hasNewOpportunity) {
+    suggestions.push({
+      text: 'A new opportunity is available — type /jobs to see contracts',
+      trigger: 'new-opportunity',
+    });
+  }
+
+  // 12. Opportunity expiring within 3 turns → suggest action (v1.9)
+  if (suggestions.length < 2 && hasExpiringOpportunity) {
+    suggestions.push({
+      text: 'An opportunity is about to expire — accept or decline soon',
+      trigger: 'expiring-opportunity',
+    });
+  }
+
+  // 13. Stale accepted opportunity → reminder (v1.9)
+  if (suggestions.length < 2 && hasStaleAcceptedOpportunity) {
+    suggestions.push({
+      text: 'You have an accepted contract with no recent progress',
+      trigger: 'stale-opportunity',
+    });
+  }
+
+  // 14. Endgame detected → suggest /conclude (v2.0)
+  if (suggestions.length < 2 && hasEndgameDetected) {
+    suggestions.push({
+      text: 'A turning point approaches — type /conclude to see your legacy',
+      trigger: 'endgame-detected',
+    });
+  }
+
   // After turn 10, only show on notable events (already handled by crisis/milestone/failed checks)
   if (turnCount > 10) {
     return suggestions.filter((s) =>
       s.trigger === 'crisis-pressure' || s.trigger === 'action-failed' ||
       s.trigger === 'milestone-cash' || s.trigger === 'pressure-hint' ||
       s.trigger === 'supply-crisis' || s.trigger === 'black-market' ||
-      s.trigger === 'crafting-shortage');
+      s.trigger === 'crafting-shortage' ||
+      s.trigger === 'new-opportunity' || s.trigger === 'expiring-opportunity' ||
+      s.trigger === 'stale-opportunity' || s.trigger === 'endgame-detected');
   }
 
   return suggestions.slice(0, 2);

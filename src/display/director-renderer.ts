@@ -39,6 +39,12 @@ import {
   formatMaterialsForDirector,
   salvageItem,
   formatSalvagePreview,
+  // Opportunities (v1.9)
+  getAvailableOpportunities,
+  getAcceptedOpportunities,
+  getOpportunityById,
+  formatOpportunityListForDirector,
+  formatOpportunityForDirector,
   type PlayerRumor,
   type WorldPressure,
   type PressureFallout,
@@ -51,7 +57,14 @@ import {
   type StrategicMap,
   type PartyState,
   type DistrictEconomy,
+  type OpportunityState,
+  // Arc Detection + Endgame (v2.0)
+  formatArcForDirector,
+  formatEndgameForDirector,
+  type ArcSnapshot,
+  type EndgameTrigger,
 } from '@ai-rpg-engine/modules';
+import { formatFinaleForDirector, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
 import {
@@ -102,6 +115,13 @@ ${DIVIDER}
   /craft                        List available recipes and material costs
   /materials                    Show current material inventory
   /salvage <item-id>            Preview salvage yields without executing
+  /jobs                         Available + accepted opportunities
+  /contracts                    Alias for /jobs
+  /contract <id>                Detailed opportunity view
+  /accepted                     List accepted/in-progress opportunities
+  /arcs                         Campaign arc signals + dominant arc
+  /endgame                      Endgame trigger history
+  /finale                       Campaign finale outline (if concluded)
   /status                       Compact strategic snapshot
   /stats                        Session balance metrics
   /help leverage                Full leverage verb reference
@@ -143,6 +163,10 @@ export function executeDirectorCommand(
   itemCatalog?: ItemCatalog | null,
   districtEconomies?: Map<string, DistrictEconomy>,
   genre?: string,
+  activeOpportunities?: OpportunityState[],
+  arcSnapshot?: ArcSnapshot | null,
+  endgameTriggers?: EndgameTrigger[],
+  finaleOutline?: FinaleOutline | null,
 ): string {
   const parts = command.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
@@ -358,6 +382,17 @@ export function executeDirectorCommand(
         if (surplusParts.length > 0) parts.push(`${surplusParts.join(', ')} plentiful`);
         if (parts.length > 0) economySummary = parts.join(', ');
       }
+      // Build opportunity summary
+      let opportunitySummary: string | undefined;
+      const opps = activeOpportunities ?? [];
+      const acceptedCount = getAcceptedOpportunities(opps).length;
+      const availableCount = getAvailableOpportunities(opps).length;
+      if (acceptedCount > 0 || availableCount > 0) {
+        const parts: string[] = [];
+        if (acceptedCount > 0) parts.push(`${acceptedCount} active`);
+        if (availableCount > 0) parts.push(`${availableCount} available`);
+        opportunitySummary = parts.join(', ');
+      }
       return renderCompactStatus({
         statusData,
         leverageState,
@@ -365,6 +400,7 @@ export function executeDirectorCommand(
         suggestedMove: suggestedMove ?? null,
         situationTag: situationTag ?? 'safe',
         economySummary,
+        opportunitySummary,
       });
     }
 
@@ -413,6 +449,30 @@ export function executeDirectorCommand(
       return renderItemInspection(itemId, profile, itemCatalog, currentTick ?? 0);
     }
 
+    // --- Opportunity Commands (v1.9) ---
+
+    case '/jobs':
+    case '/contracts': {
+      const opps = activeOpportunities ?? [];
+      if (opps.length === 0) return '  No opportunities available.';
+      return formatOpportunityListForDirector(opps);
+    }
+
+    case '/contract': {
+      const oppId = parts[1];
+      if (!oppId) return '  Usage: /contract <opportunity-id>';
+      const opps = activeOpportunities ?? [];
+      const opp = getOpportunityById(opps, oppId);
+      if (!opp) return `  Opportunity "${oppId}" not found.`;
+      return formatOpportunityForDirector(opp);
+    }
+
+    case '/accepted': {
+      const accepted = getAcceptedOpportunities(activeOpportunities ?? []);
+      if (accepted.length === 0) return '  No accepted opportunities.';
+      return formatOpportunityListForDirector(accepted);
+    }
+
     // --- Crafting Commands (v1.8) ---
 
     case '/craft': {
@@ -439,6 +499,28 @@ export function executeDirectorCommand(
       if (!item) return `  Item "${itemId}" not found.`;
       const result = salvageItem(item);
       return formatSalvagePreview(item, result);
+    }
+
+    case '/arcs': {
+      if (!arcSnapshot) return '  No arc data yet — play a few turns first.';
+      return formatArcForDirector(arcSnapshot);
+    }
+
+    case '/endgame': {
+      if (!endgameTriggers || endgameTriggers.length === 0) {
+        return '  No endgame triggers detected yet.';
+      }
+      const lines: string[] = ['', `  ${DIVIDER}`, '  ENDGAME TRIGGERS', `  ${DIVIDER}`, ''];
+      for (const trigger of endgameTriggers) {
+        lines.push(formatEndgameForDirector(trigger));
+        lines.push('');
+      }
+      return lines.join('\n');
+    }
+
+    case '/finale': {
+      if (!finaleOutline) return '  No finale generated yet. Use /conclude in play mode to generate one.';
+      return formatFinaleForDirector(finaleOutline);
     }
 
     default:

@@ -4,7 +4,7 @@
 
 import type { CampaignJournal, CampaignRecord, RecordCategory } from '@ai-rpg-engine/campaign-memory';
 import type { ResolvedEvent } from '@ai-rpg-engine/core';
-import type { PressureFallout, PlayerRumor, FactionAction, NpcAction, NpcObligation } from '@ai-rpg-engine/modules';
+import type { PressureFallout, PlayerRumor, FactionAction, NpcAction, NpcObligation, OpportunityState, OpportunityFallout } from '@ai-rpg-engine/modules';
 import type { ProfileUpdateHints } from '../turn-loop.js';
 
 // --- Event Source Types ---
@@ -33,7 +33,14 @@ export type ChronicleEventSource =
   | { kind: 'item-crafted'; itemId: string; itemName: string; recipeId: string; districtId: string; tick: number }
   | { kind: 'item-salvaged'; itemId: string; itemName: string; districtId: string; tick: number }
   | { kind: 'item-modified'; itemId: string; itemName: string; modKind: string; districtId: string; tick: number }
-  | { kind: 'item-repaired'; itemId: string; itemName: string; districtId: string; tick: number };
+  | { kind: 'item-repaired'; itemId: string; itemName: string; districtId: string; tick: number }
+  // Opportunities (v1.9)
+  | { kind: 'opportunity-accepted'; opportunity: OpportunityState; tick: number }
+  | { kind: 'opportunity-completed'; opportunity: OpportunityState; tick: number }
+  | { kind: 'opportunity-failed'; opportunity: OpportunityState; tick: number }
+  | { kind: 'opportunity-abandoned'; opportunity: OpportunityState; tick: number }
+  | { kind: 'opportunity-betrayed'; opportunity: OpportunityState; tick: number }
+  | { kind: 'opportunity-expired'; opportunity: OpportunityState; tick: number };
 
 // --- Compaction Types ---
 
@@ -75,6 +82,12 @@ const BASE_SIGNIFICANCE: Record<RecordCategory, number> = {
   'item-lost': 0.5,
   'item-recognized': 0.3,
   'item-transformed': 0.7,
+  'opportunity-accepted': 0.4,
+  'opportunity-completed': 0.7,
+  'opportunity-failed': 0.6,
+  'opportunity-abandoned': 0.5,
+  'endgame-detected': 0.9,
+  'campaign-concluded': 1.0,
 };
 
 export function computeSignificance(
@@ -147,6 +160,18 @@ export function deriveChronicleEvents(
       return deriveItemModified(source, playerId);
     case 'item-repaired':
       return deriveItemRepaired(source, playerId);
+    case 'opportunity-accepted':
+      return deriveOpportunityAccepted(source, playerId);
+    case 'opportunity-completed':
+      return deriveOpportunityCompleted(source, playerId);
+    case 'opportunity-failed':
+      return deriveOpportunityFailed(source, playerId);
+    case 'opportunity-abandoned':
+      return deriveOpportunityAbandoned(source, playerId);
+    case 'opportunity-betrayed':
+      return deriveOpportunityBetrayed(source, playerId);
+    case 'opportunity-expired':
+      return deriveOpportunityExpired(source);
   }
 }
 
@@ -759,5 +784,102 @@ function deriveItemRepaired(
     significance: 0.2,
     witnesses: [],
     data: { itemId: source.itemId },
+  }];
+}
+
+// --- Opportunity Chronicle Events (v1.9) ---
+
+function deriveOpportunityAccepted(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-accepted' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    category: 'opportunity-accepted' as RecordCategory,
+    actorId: playerId,
+    description: `Accepted ${opp.kind}: "${opp.title}"`,
+    significance: 0.4,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind },
+  }];
+}
+
+function deriveOpportunityCompleted(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-completed' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    category: 'opportunity-completed' as RecordCategory,
+    actorId: playerId,
+    description: `Completed ${opp.kind}: "${opp.title}"`,
+    significance: 0.7,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind },
+  }];
+}
+
+function deriveOpportunityFailed(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-failed' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    category: 'opportunity-failed' as RecordCategory,
+    actorId: playerId,
+    description: `Failed ${opp.kind}: "${opp.title}"`,
+    significance: 0.6,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind },
+  }];
+}
+
+function deriveOpportunityAbandoned(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-abandoned' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    category: 'opportunity-abandoned' as RecordCategory,
+    actorId: playerId,
+    description: `Abandoned ${opp.kind}: "${opp.title}"`,
+    significance: 0.5,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind },
+  }];
+}
+
+function deriveOpportunityBetrayed(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-betrayed' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    category: 'opportunity-abandoned' as RecordCategory,
+    actorId: playerId,
+    description: `Betrayed ${opp.kind}: "${opp.title}"`,
+    significance: 0.7,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind, betrayal: true },
+  }];
+}
+
+function deriveOpportunityExpired(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-expired' }>,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    category: 'opportunity-failed' as RecordCategory,
+    actorId: 'world',
+    description: `Expired ${opp.kind}: "${opp.title}"`,
+    significance: 0.3,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind, expired: true },
   }];
 }

@@ -24,6 +24,11 @@ import {
   loadConsequenceChainsFromSession,
   loadPartyFromSession,
   loadEconomiesFromSession,
+  loadOpportunitiesFromSession,
+  loadResolvedOpportunitiesFromSession,
+  loadArcSnapshotFromSession,
+  loadEndgameTriggersFromSession,
+  loadFinaleFromSession,
   listSaves,
   getSavePath,
   getDefaultSaveDir,
@@ -53,10 +58,13 @@ import {
   computeEconomyRecapEntries,
   computeCraftingRecapEntries,
   computeCraftingRecapFromJournal,
+  computeOpportunityRecapEntries,
   renderFullRecap,
+  type ArcRecapData,
 } from './character/session-recap.js';
 import type { ItemChronicleEntry } from '@ai-rpg-engine/equipment';
-import type { PartyState, DistrictEconomy } from '@ai-rpg-engine/modules';
+import type { PartyState, DistrictEconomy, OpportunityState, OpportunityFallout, ArcSnapshot, EndgameTrigger } from '@ai-rpg-engine/modules';
+import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import {
   computeNpcRecapEntries,
   getAllDistrictIds,
@@ -75,10 +83,17 @@ Usage:
   claude-rpg --help                             Show this help
 
 Commands in-game:
-  save         Save the current game
-  /sheet       View character sheet
-  /director    Inspect hidden truth
-  quit         Exit the game
+  save           Save the current game
+  /sheet         View character sheet
+  /status        Compact strategic snapshot
+  /map           Strategic map overview
+  /leverage      View political capital
+  /jobs          View available opportunities
+  /arcs          View campaign arc trajectory
+  /conclude      Trigger campaign finale
+  /director      Inspect hidden truth
+  /help          In-game help system
+  quit           Exit the game
 
 Environment:
   ANTHROPIC_API_KEY   Required. Your Claude API key.
@@ -148,7 +163,8 @@ async function runPlay(args: string[]): Promise<void> {
   const initialItemChronicle = structuredClone(result.profile.itemChronicle);
   const initialEconomies = cloneEconomies(session.districtEconomies);
   const initialCustom = structuredClone(result.profile.custom);
-  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom);
+  const initialOpportunities = structuredClone(session.activeOpportunities);
+  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities);
 }
 
 async function runLoad(): Promise<void> {
@@ -242,6 +258,11 @@ async function runLoad(): Promise<void> {
   const restoredChains = loadConsequenceChainsFromSession(savedSession);
   const restoredParty = loadPartyFromSession(savedSession);
   const restoredEconomies = loadEconomiesFromSession(savedSession);
+  const restoredOpportunities = loadOpportunitiesFromSession(savedSession);
+  const restoredResolvedOpps = loadResolvedOpportunitiesFromSession(savedSession);
+  const restoredArcSnapshot = loadArcSnapshotFromSession(savedSession);
+  const restoredEndgameTriggers = loadEndgameTriggersFromSession(savedSession);
+  const restoredFinale = loadFinaleFromSession(savedSession);
 
   const session = new GameSession({
     engine,
@@ -264,6 +285,11 @@ async function runLoad(): Promise<void> {
   session.activeConsequenceChains = restoredChains;
   session.partyState = restoredParty;
   if (restoredEconomies.size > 0) session.districtEconomies = restoredEconomies;
+  session.activeOpportunities = restoredOpportunities;
+  session.resolvedOpportunities = restoredResolvedOpps;
+  if (restoredArcSnapshot) session.arcSnapshot = restoredArcSnapshot;
+  session.endgameTriggers = restoredEndgameTriggers;
+  if (restoredFinale) session.finaleOutline = restoredFinale;
 
   // Show recap
   console.log(renderRecap(profile, history));
@@ -277,7 +303,8 @@ async function runLoad(): Promise<void> {
   const initialItemChronicle = profile ? structuredClone(profile.itemChronicle) : {};
   const initialEconomies = cloneEconomies(session.districtEconomies);
   const initialCustom = profile ? structuredClone(profile.custom) : {};
-  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom);
+  const initialOpportunities = structuredClone(session.activeOpportunities);
+  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities);
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
@@ -360,6 +387,7 @@ async function runGameLoop(
   initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
   initialEconomies?: Map<string, DistrictEconomy>,
   initialCustom?: Record<string, string | number | boolean>,
+  initialOpportunities?: OpportunityState[],
 ): Promise<void> {
   // Welcome
   console.log(session.getWelcome());
@@ -410,12 +438,18 @@ async function runGameLoop(
             session.activeConsequenceChains,
             session.partyState,
             session.districtEconomies,
+            session.activeOpportunities,
+            session.resolvedOpportunities,
+            session.arcSnapshot,
+            session.endgameTriggers,
+            session.finaleOutline,
+            session.campaignStatus,
           );
           console.log(`\n  Saved to ${savePath}`);
 
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,
           );
           if (recapText) console.log(recapText);
           else console.log('');
@@ -444,7 +478,7 @@ async function runGameLoop(
         if (output === '__QUIT__') {
           // Show unified session recap
           const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom,
+            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,
           );
           if (recapText) console.log(recapText);
           console.log('\n  Farewell.\n');
@@ -474,6 +508,7 @@ function buildUnifiedRecap(
   initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
   initialEconomies?: Map<string, DistrictEconomy>,
   initialCustom?: Record<string, string | number | boolean>,
+  initialOpportunities?: OpportunityState[],
 ): string {
   if (!initialSnapshot || !session.profile) return '';
 
@@ -577,6 +612,29 @@ function buildUnifiedRecap(
   };
   const hasCrafting = craftingData.entries.length > 0 || craftingData.materialChanges.length > 0;
 
+  // Compute opportunity recap entries (v1.9)
+  const opportunityRecapEntries = computeOpportunityRecapEntries(
+    initialOpportunities ?? [],
+    session.activeOpportunities,
+    session.resolvedOpportunities,
+  );
+
+  // Build arc recap data (v2.0)
+  let arcRecapData: ArcRecapData | undefined;
+  if (session.arcSnapshot?.dominantArc || session.endgameTriggers.length > 0) {
+    const dominantSignal = session.arcSnapshot?.signals.find(
+      (s) => s.kind === session.arcSnapshot?.dominantArc,
+    );
+    arcRecapData = {
+      dominantArc: session.arcSnapshot?.dominantArc ?? null,
+      momentum: dominantSignal?.momentum ?? 'steady',
+      endgameTriggers: session.endgameTriggers.map((t) => ({
+        resolutionClass: t.resolutionClass,
+        reason: t.reason,
+      })),
+    };
+  }
+
   return renderFullRecap(
     characterDelta,
     worldDelta,
@@ -589,6 +647,8 @@ function buildUnifiedRecap(
     itemRecapEntries.length > 0 ? itemRecapEntries : undefined,
     economyRecapEntries.length > 0 ? economyRecapEntries : undefined,
     hasCrafting ? craftingData : undefined,
+    opportunityRecapEntries.length > 0 ? opportunityRecapEntries : undefined,
+    arcRecapData,
   );
 }
 

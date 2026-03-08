@@ -4,7 +4,10 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/claude-rpg"><img src="https://img.shields.io/npm/v/claude-rpg.svg" alt="npm version"></a>
+  <a href="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg"><img src="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
 </p>
 
 # Claude RPG
@@ -13,7 +16,7 @@ A simulation-grounded terminal RPG where Claude narrates, the engine preserves t
 
 ## What Is Claude RPG?
 
-Claude RPG sits on top of the [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — a deterministic simulation runtime with 29 modules covering combat, cognition, perception, factions, rumors, belief provenance, NPC agency, companions, player leverage, strategic maps, item recognition, and equipment provenance. Claude's job is to interpret, narrate, and speak. The engine's job is to own truth.
+Claude RPG sits on top of the [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — a deterministic simulation runtime with 29 modules covering combat, cognition, perception, factions, rumors, belief provenance, NPC agency, companions, player leverage, strategic maps, item recognition, equipment provenance, emergent opportunities, campaign arc detection, and endgame triggers. Claude's job is to interpret, narrate, and speak. The engine's job is to own truth.
 
 The golden rule: **Claude proposes, engine disposes.**
 
@@ -63,6 +66,8 @@ export ANTHROPIC_API_KEY=sk-ant-...
 | **Companions with departure risk** | Party members have morale, loyalty, and departure triggers. Push them too far and they leave — for reasons the engine tracks. |
 | **Player leverage and political action** | Spend influence, favors, and intel on social, rumor, diplomacy, and sabotage actions. `/leverage` shows your political capital. |
 | **Equipment provenance and relics** | Items carry history. A sword that kills enough becomes a relic with an epithet. NPCs recognize equipped items and react. `/item` inspects provenance and chronicles. |
+| **Emergent opportunities** | Contracts, bounties, favors, supply runs, and investigations spawn from world conditions — pressure, scarcity, NPC goals, obligations. Accept, decline, abandon, or betray. `/jobs` and `/accepted` track available and active work. |
+| **Campaign arcs and endgames** | The engine detects 10 narrative arc kinds (rising-power, hunted, kingmaker, resistance, etc.) and 8 endgame resolution classes (victory, exile, overthrow, martyrdom, etc.) from accumulated state. `/arcs` shows trajectory. `/conclude` renders a structured epilogue with optional LLM narration. |
 
 ## Architecture
 
@@ -116,7 +121,7 @@ The narrator doesn't output raw prose — it produces a **NarrationPlan**: a str
 | Mode | What It Does |
 |------|-------------|
 | **Play** | Immersive narrated RPG. Claude narrates, NPCs speak from beliefs, actions resolve through the engine. |
-| **Director** | Inspect hidden truth: `/inspect <npc>`, `/faction <id>`, `/trace <belief>`, `/divergences`, `/npc <name>`, `/people`, `/districts`, `/district <id>`, `/item <name>`, `/leverage`, `/moves` |
+| **Director** | Inspect hidden truth: `/inspect <npc>`, `/faction <id>`, `/trace <belief>`, `/divergences`, `/npc <name>`, `/people`, `/districts`, `/district <id>`, `/item <name>`, `/leverage`, `/moves`, `/jobs`, `/accepted` |
 | **Replay** | Walk the event timeline showing objective truth vs player perception side-by-side. |
 
 ## Engine Packages
@@ -126,7 +131,7 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | Package | Purpose |
 |---------|---------|
 | [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | State, entities, actions, events, rules, RNG |
-| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29 modules — combat, cognition, perception, factions, rumors, NPC agency, companions, leverage, strategic map, item recognition |
+| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29 modules — combat, cognition, perception, factions, rumors, NPC agency, companions, leverage, strategic map, item recognition, emergent opportunities |
 | [`@ai-rpg-engine/character-profile`](https://www.npmjs.com/package/@ai-rpg-engine/character-profile) | Character progression, injuries, reputation |
 | [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | Equipment, item provenance, relic growth, chronicles |
 | [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | Cross-session memory, relationship effects |
@@ -153,6 +158,21 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 
 Default model: `claude-sonnet-4-20250514`. World generation uses Opus for quality.
 
+## Security
+
+Claude RPG is a local CLI application that makes outbound API calls to Anthropic.
+
+- **Data touched:** player save files in `~/.claude-rpg/saves/`, Anthropic API (outbound HTTPS only)
+- **Data NOT touched:** no telemetry, no analytics, no filesystem outside the save directory
+- **API key:** read from `ANTHROPIC_API_KEY` environment variable — never stored, logged, or transmitted beyond the Anthropic API
+- **No secrets in source** — no embedded tokens, credentials, or API keys
+
+See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability reporting.
+
 ## License
 
 MIT
+
+---
+
+Built by [MCP Tool Shop](https://mcp-tool-shop.github.io/)

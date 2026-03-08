@@ -15,6 +15,7 @@ import {
   spawnPlayerRumor,
   spawnNpcOriginatedRumor,
   makePressure,
+  makeOpportunity,
   createObligation,
   addObligation,
   type NpcActionResult,
@@ -23,6 +24,7 @@ import {
   type NpcObligationLedger,
   type PlayerRumor,
   type WorldPressure,
+  type OpportunityState,
 } from '@ai-rpg-engine/modules';
 
 // --- Types ---
@@ -39,6 +41,8 @@ export type NpcEffectApplicationContext = {
   engine: Engine;
   getPlayerDistrictId: () => string | undefined;
   npcObligations?: Map<string, NpcObligationLedger>;
+  activeOpportunities?: OpportunityState[];
+  genre?: string;
 };
 
 // --- Tick ---
@@ -201,6 +205,33 @@ export function applyNpcEffects(
       case 'companion-departure':
         // Handled by GameSession.handleCompanionDeparture() — flagged here for caller
         break;
+
+      case 'spawn-opportunity': {
+        const MAX_OPPS = 5;
+        const opps = ctx.activeOpportunities;
+        if (opps && opps.length < MAX_OPPS) {
+          const npcEntity = engine.world.entities[result.action.npcId];
+          const factionId = npcEntity?.tags.find((t) => t.startsWith('faction:'))?.replace('faction:', '');
+          opps.push(makeOpportunity({
+            kind: effect.kind,
+            sourceNpcId: effect.targetNpcId ?? result.action.npcId,
+            sourceFactionId: factionId,
+            title: effect.description,
+            description: effect.description,
+            objectiveDescription: `Complete the ${effect.kind} from ${npcEntity?.name ?? 'an NPC'}`,
+            linkedNpcIds: [effect.targetNpcId ?? result.action.npcId],
+            urgency: 0.4,
+            turnsRemaining: 12,
+            visibility: 'offered',
+            rewards: [{ type: 'reputation', factionId: factionId ?? '', delta: 10 }],
+            risks: [{ type: 'reputation', factionId: factionId ?? '', delta: -5 }],
+            genre: ctx.genre ?? 'fantasy',
+            currentTick: tick,
+            tags: ['npc-spawned'],
+          }));
+        }
+        break;
+      }
     }
   }
 

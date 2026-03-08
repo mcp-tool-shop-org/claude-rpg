@@ -39,10 +39,12 @@ export async function generateDialogue(
   lastNpcActions?: NpcActionResult[],
   economyContext?: string,
   craftingContext?: string,
+  opportunityContext?: string,
 ): Promise<DialogueResult | null> {
   const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
   if (context && economyContext) context.economyContext = economyContext;
   if (context && craftingContext) context.craftingContext = craftingContext;
+  if (context && opportunityContext) context.opportunityContext = opportunityContext;
   if (!context) return null;
 
   const prompt = buildDialoguePrompt(context);

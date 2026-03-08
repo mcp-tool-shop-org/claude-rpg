@@ -10,12 +10,12 @@ import { join, dirname } from 'node:path';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
-import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState, type DistrictEconomy } from '@ai-rpg-engine/modules';
-import { CampaignJournal, type CampaignRecord } from '@ai-rpg-engine/campaign-memory';
+import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState, type DistrictEconomy, type OpportunityState, type OpportunityFallout, type ArcSnapshot, type EndgameTrigger } from '@ai-rpg-engine/modules';
+import { CampaignJournal, type CampaignRecord, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import { TurnHistory } from './history.js';
 
 export type SavedSession = {
-  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0' | '0.8.0' | '0.9.0' | '1.0.0' | '1.1.0' | '1.2.0';
+  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0' | '0.8.0' | '0.9.0' | '1.0.0' | '1.1.0' | '1.2.0' | '1.3.0' | '1.4.0';
   engineState: string;
   turnHistory: ReturnType<TurnHistory['toJSON']>;
   worldPrompt?: string;
@@ -48,6 +48,14 @@ export type SavedSession = {
   partyState?: string;
   // v1.2.0 fields
   districtEconomies?: string;
+  // v1.3.0 fields
+  activeOpportunities?: string;
+  resolvedOpportunities?: string;
+  // v1.4.0 fields
+  arcSnapshot?: string;
+  endgameTriggers?: string;
+  finaleOutline?: string;
+  campaignStatus?: 'active' | 'completed';
 };
 
 export type SaveSlotSummary = {
@@ -83,6 +91,12 @@ export async function saveSession(
   consequenceChains?: Map<string, ConsequenceChain>,
   partyState?: PartyState,
   districtEconomies?: Map<string, DistrictEconomy>,
+  activeOpportunities?: OpportunityState[],
+  resolvedOpportunities?: OpportunityFallout[],
+  arcSnapshot?: ArcSnapshot | null,
+  endgameTriggers?: EndgameTrigger[],
+  finaleOutline?: FinaleOutline | null,
+  campaignStatus?: 'active' | 'completed',
 ): Promise<void> {
   // Compute leverage snapshot for save summary
   const leverageSnap = profile
@@ -90,7 +104,7 @@ export async function saveSession(
     : undefined;
 
   const session: SavedSession = {
-    version: '1.2.0',
+    version: '1.4.0',
     engineState: engine.serialize(),
     turnHistory: history.toJSON(),
     worldPrompt,
@@ -130,6 +144,22 @@ export async function saveSession(
     districtEconomies: districtEconomies && districtEconomies.size > 0
       ? JSON.stringify(Object.fromEntries(districtEconomies))
       : undefined,
+    activeOpportunities: activeOpportunities && activeOpportunities.length > 0
+      ? JSON.stringify(activeOpportunities)
+      : undefined,
+    resolvedOpportunities: resolvedOpportunities && resolvedOpportunities.length > 0
+      ? JSON.stringify(resolvedOpportunities)
+      : undefined,
+    arcSnapshot: arcSnapshot
+      ? JSON.stringify(arcSnapshot)
+      : undefined,
+    endgameTriggers: endgameTriggers && endgameTriggers.length > 0
+      ? JSON.stringify(endgameTriggers)
+      : undefined,
+    finaleOutline: finaleOutline
+      ? JSON.stringify(finaleOutline)
+      : undefined,
+    campaignStatus: campaignStatus ?? 'active',
   };
 
   await mkdir(dirname(savePath), { recursive: true });
@@ -246,6 +276,56 @@ export function loadEconomiesFromSession(
     return new Map(Object.entries(obj));
   } catch {
     return new Map();
+  }
+}
+
+/** Load active opportunities from a saved session. */
+export function loadOpportunitiesFromSession(session: SavedSession): OpportunityState[] {
+  if (!session.activeOpportunities) return [];
+  try {
+    return JSON.parse(session.activeOpportunities) as OpportunityState[];
+  } catch {
+    return [];
+  }
+}
+
+/** Load resolved opportunities (fallout history) from a saved session. */
+export function loadResolvedOpportunitiesFromSession(session: SavedSession): OpportunityFallout[] {
+  if (!session.resolvedOpportunities) return [];
+  try {
+    return JSON.parse(session.resolvedOpportunities) as OpportunityFallout[];
+  } catch {
+    return [];
+  }
+}
+
+/** Load arc snapshot from a saved session. */
+export function loadArcSnapshotFromSession(session: SavedSession): ArcSnapshot | null {
+  if (!session.arcSnapshot) return null;
+  try {
+    return JSON.parse(session.arcSnapshot) as ArcSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+/** Load endgame triggers from a saved session. */
+export function loadEndgameTriggersFromSession(session: SavedSession): EndgameTrigger[] {
+  if (!session.endgameTriggers) return [];
+  try {
+    return JSON.parse(session.endgameTriggers) as EndgameTrigger[];
+  } catch {
+    return [];
+  }
+}
+
+/** Load finale outline from a saved session. */
+export function loadFinaleFromSession(session: SavedSession): FinaleOutline | null {
+  if (!session.finaleOutline) return null;
+  try {
+    return JSON.parse(session.finaleOutline) as FinaleOutline;
+  } catch {
+    return null;
   }
 }
 

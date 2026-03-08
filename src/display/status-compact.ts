@@ -15,6 +15,8 @@ export function renderCompactStatus(opts: {
   situationTag: string;
   economySummary?: string;
   materialsSummary?: string;
+  opportunitySummary?: string;
+  arcIndicator?: string;
 }): string {
   const { statusData: s, leverageState, topThreat, suggestedMove, situationTag, economySummary, materialsSummary } = opts;
   const lines: string[] = [];
@@ -52,6 +54,16 @@ export function renderCompactStatus(opts: {
   // Materials line (v1.8)
   if (materialsSummary) {
     lines.push(`  ${materialsSummary}`);
+  }
+
+  // Opportunities line (v1.9)
+  if (opts.opportunitySummary) {
+    lines.push(`  Jobs: ${opts.opportunitySummary}`);
+  }
+
+  // Arc line (v2.0)
+  if (opts.arcIndicator) {
+    lines.push(`  Arc: ${opts.arcIndicator}`);
   }
 
   // Threat line

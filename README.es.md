@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.md">English</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português</a>
+  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.md">English</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
 </p>
 
 <p align="center">
@@ -16,166 +16,195 @@
 
 # Claude RPG
 
-Un RPG de terminal basado en simulacion donde Claude narra, el motor preserva la verdad, y el runtime de inmersion coordina voz, sonido y presentacion.
+Un juego de rol basado en la simulación, donde Claude crea la historia, el motor garantiza la veracidad, y los mundos evolucionan a través de rumores, presión, facciones, relaciones, economía y sistemas de arcos narrativos, llegando a conclusiones significativas. Juega o construye sobre él.
 
-## Que es Claude RPG?
+## ¿Qué es Claude RPG?
 
-Claude RPG se construye sobre el [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — un runtime de simulacion determinista con 29 modulos que cubren combate, cognicion, percepcion, facciones, rumores, procedencia de creencias, agencia de NPCs, companeros, influencia del jugador, mapas estrategicos, reconocimiento de objetos, procedencia de equipamiento, oportunidades emergentes, deteccion de arcos de campana, y disparadores de final. El trabajo de Claude es interpretar, narrar y hablar. El trabajo del motor es poseer la verdad.
+Claude RPG se basa en el [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine), un entorno de simulación determinista con 29 módulos que cubren combate, cognición, percepción, facciones, rumores, origen de las creencias, autonomía de los personajes no jugables (PNJ), compañeros, influencia del jugador, mapas estratégicos, reconocimiento de objetos, origen del equipo, oportunidades emergentes, detección de arcos narrativos y desencadenantes del final del juego. La función de Claude es interpretar, narrar y hablar. La función del motor es mantener la veracidad.
 
-La regla de oro: **Claude propone, el motor dispone.**
+La regla de oro: **Claude propone, el motor decide.**
 
-Los jugadores escriben texto libre. Claude interpreta la intencion, el motor resuelve las acciones de forma determinista, los filtros de percepcion deciden lo que el jugador realmente vio, y entonces Claude narra solo lo que el personaje percibio — con voz, efectos de sonido y audio ambiental coordinados por el runtime de inmersion.
+Los jugadores escriben texto libre. Claude interpreta la intención, el motor resuelve las acciones de forma determinista, los filtros de percepción deciden lo que el jugador realmente ve, y luego Claude narra solo lo que el personaje percibió, con voz, efectos de sonido y audio ambiental, todo gestionado por el motor de inmersión.
 
-Los NPCs no recitan guiones. Hablan desde creencias, recuerdos, lealtad de faccion y rumores. Mienten por razones. Dudan por razones. Se niegan por razones. El modo Director te permite inspeccionar exactamente por que.
+Los PNJ no recitan guiones. Hablan basándose en sus creencias, recuerdos, lealtad a una facción y rumores. Mienten por razones. Están inseguros por razones. Se niegan por razones. El modo de director te permite inspeccionar exactamente por qué.
 
-## Instalacion
+## Crea tu propio juego
+
+Claude RPG no es solo un juego, sino una implementación de referencia para el ecosistema del AI RPG Engine. Úsalo como punto de partida para tus propias experiencias narrativas basadas en la simulación.
+
+| ¿Quieres...? | Usar |
+|------------|-----|
+| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — Estudio de creación 2D con editor de mapas, creador de PNJ y validación. |
+| **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — Validación de esquemas, pruebas de guiones gráficos y flujos de exportación. |
+| **Build a custom runtime** | Importa paquetes de [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) directamente: reemplaza a Claude con cualquier modelo de lenguaje grande (LLM), agrega tu propia interfaz de usuario. |
+| **Add new game modules** | Crea una bifurcación del motor, agrega módulos a la línea de procesamiento y regístralos. |
+
+El motor es independiente de los LLM. Claude RPG utiliza modelos de Anthropic, pero el motor central no tiene ninguna dependencia de LLM; puedes conectarlo a cualquier modelo o incluso ejecutarlo de forma completamente determinista sin narración.
+
+## Instalar
 
 ```bash
 npm install claude-rpg
 ```
 
-O ejecutar directamente:
+O ejecútalo directamente:
 
 ```bash
 npx claude-rpg play --world fantasy
 ```
 
-## Inicio Rapido
+## Guía rápida
 
 ```bash
-# Jugar el escenario incluido Chapel Threshold
+# Play the built-in Chapel Threshold scenario
 npx claude-rpg play --world fantasy
 
-# Generar un nuevo mundo a partir de un prompt
-npx claude-rpg new "Una ciudad comercial gotica inundada gobernada por tres casas mercantes"
+# Generate a new world from a prompt
+npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+
+# Use the engine in your own project
+npm install @ai-rpg-engine/core @ai-rpg-engine/modules
 ```
 
-Configura tu clave de API de Anthropic:
+Configura tu clave de API de Anthropic (solo necesaria para la narración de Claude):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Por Que Es Diferente
+## ¿Qué lo hace diferente?
 
-| Que | Como |
-|-----|------|
-| **Verdad de simulacion separada de la narracion** | El motor resuelve combate, movimiento, dialogo — Claude solo narra el resultado. Sin desenlaces alucinados. |
-| **Dialogo de NPCs fundamentado en cognicion** | Cada linea de dialogo de un NPC se construye a partir de sus creencias, recuerdos, moral, sospecha, faccion y rumores. |
-| **Presentacion consciente de la percepcion** | Claude recibe solo lo que el personaje del jugador percibio. Las entidades de baja claridad aparecen como figuras sombrias, no como objetivos identificados. |
-| **Runtime de inmersion con audio y voz** | Los planes de narracion estructurados impulsan la sintesis de voz, efectos de sonido, capas ambientales y musica a traves de voice-soundboard. |
-| **Visibilidad del Director sobre la verdad oculta** | `/inspect pilgrim` muestra creencias. `/trace` muestra procedencia. `/divergences` muestra lo que creias que paso vs lo que realmente ocurrio. |
-| **Agencia de NPCs con cadenas de consecuencias** | Los NPCs actuan segun objetivos, rastrean obligaciones y toman represalias cuando los puntos de quiebre de lealtad cambian. `/npc` y `/people` muestran puntos de quiebre, angulos de influencia y cadenas de consecuencias activas. |
-| **Distritos vivientes** | Los distritos tienen comercio, moral y seguridad que cambian por las acciones del jugador, movimientos de facciones y cadenas de consecuencias de NPCs. El estado de animo fluye hacia la narracion y escala la jugabilidad. `/districts` y `/district` inspeccionan el pulso del vecindario. |
-| **Companeros con riesgo de abandono** | Los miembros del grupo tienen moral, lealtad y disparadores de partida. Presionalos demasiado y se iran — por razones que el motor rastrea. |
-| **Influencia del jugador y accion politica** | Gasta influencia, favores e inteligencia en acciones sociales, de rumores, diplomacia y sabotaje. `/leverage` muestra tu capital politico. |
-| **Procedencia de equipamiento y reliquias** | Los objetos llevan historia. Una espada que mata suficiente se convierte en reliquia con un epiteto. Los NPCs reconocen los objetos equipados y reaccionan. `/item` inspecciona la procedencia y las cronicas. |
-| **Oportunidades emergentes** | Contratos, recompensas, favores, suministros e investigaciones surgen de las condiciones del mundo — presion, escasez, objetivos de NPCs, obligaciones. Acepta, rechaza, abandona o traiciona. `/jobs` y `/accepted` rastrean el trabajo disponible y activo. |
-| **Arcos de campana y finales** | El motor detecta 10 tipos de arcos narrativos (rising-power, hunted, kingmaker, resistance, etc.) y 8 clases de resolucion de final (victory, exile, overthrow, martyrdom, etc.) a partir del estado acumulado. `/arcs` muestra la trayectoria. `/conclude` genera un epilogo estructurado con narracion LLM opcional. |
+| ¿Qué? | ¿Cómo? |
+|------|-----|
+| **Veracidad de la simulación separada de la narración** | El motor resuelve el combate, el movimiento, el diálogo; Claude solo narra el resultado. No hay resultados imaginarios. |
+| **Diálogo de los PNJ basado en la cognición** | Cada línea del diálogo de los PNJ se construye a partir de sus creencias, recuerdos, moral, sospechas, facción y rumores. |
+| **Presentación consciente de la percepción** | Claude solo recibe lo que el personaje del jugador percibió. Las entidades de baja claridad aparecen como figuras sombrías, no como objetivos nombrados. |
+| **Motor de inmersión de audio/voz** | Los planes de narración estructurados impulsan la síntesis de voz, los efectos de sonido, las capas ambientales y la música a través de voice-soundboard. |
+| **Visibilidad del director sobre la verdad oculta** | `/inspect pilgrim` muestra las creencias. `/trace` muestra el origen. `/divergences` muestra lo que creías que había sucedido frente a lo que realmente sucedió. |
+| **Autonomía de los PNJ con cadenas de consecuencias** | Los PNJ actúan según sus objetivos, rastrean sus obligaciones y se vengan cuando los puntos de inflexión de la lealtad cambian. `/npc` y `/people` muestran los puntos de inflexión, los ángulos de influencia y las cadenas de consecuencias activas. |
+| **Living districts** | Los distritos tienen aspectos como el comercio, la moral y la seguridad que cambian según las acciones del jugador, los movimientos de las facciones y las consecuencias de los personajes no jugables (PNJ). El estado de ánimo influye en la narración y afecta la jugabilidad. Los comandos `/distritos` y `/distrito` permiten analizar el estado del vecindario. |
+| **Compañeros con riesgo de abandono** | Los miembros del grupo tienen moral, lealtad y factores que pueden provocar su abandono. Si los presionas demasiado, se irán, y el sistema registra las razones. |
+| **Influencia del jugador y acciones políticas** | Utiliza influencia, favores e información para realizar acciones sociales, difundir rumores, llevar a cabo negociaciones y sabotajes. El comando `/leverage` muestra tu capital político. |
+| **Origen y reliquias de los objetos** | Los objetos tienen una historia. Una espada que causa suficientes muertes se convierte en una reliquia con un apodo. Los PNJ reconocen los objetos equipados y reaccionan ante ellos. El comando `/item` permite examinar el origen y la historia de los objetos. |
+| **Emergent opportunities** | Los contratos, recompensas, favores, misiones de suministro e investigaciones surgen de las condiciones del mundo: presión, escasez, objetivos de los PNJ, obligaciones. Puedes aceptar, rechazar, abandonar o traicionar. Los comandos `/jobs` y `/accepted` rastrean el trabajo disponible y el trabajo en curso. |
+| **Arcos de la campaña y finales** | El sistema detecta 10 tipos de arcos narrativos (ascenso al poder, perseguido, artífice de reyes, resistencia, etc.) y 8 clases de resolución final (victoria, exilio, derrocamiento, martirio, etc.) a partir del estado acumulado. El comando `/arcs` muestra la trayectoria. El comando `/conclude` genera un epílogo estructurado con una narración opcional generada por un modelo de lenguaje. |
 
 ## Arquitectura
 
 ```
-El jugador escribe texto libre
+Player types freeform text
     |
-[1] INTERPRETACION DE ACCION (Claude)
-    Entrada: texto del jugador + verbos + entidades + salidas
-    Salida: { verb, targetIds, confidence }
+[1] ACTION INTERPRETATION (Claude)
+    Input: player text + verbs + entities + exits
+    Output: { verb, targetIds, confidence }
     |
-[2] RESOLUCION DEL MOTOR (determinista)
+[2] ENGINE RESOLUTION (deterministic)
     engine.submitAction() -> ResolvedEvent[]
     |
-[3] FILTRADO DE PERCEPCION (determinista)
-    presentForObserver() -> lo que el jugador vio
+[3] PERCEPTION FILTERING (deterministic)
+    presentForObserver() -> what the player saw
     |
-[4] HOOKS: pre-narracion
-    Ambiente de zona, alertas de combate, efectos de muerte
+[4] HOOKS: pre-narration
+    Zone ambient, combat alerts, death effects
     |
-[5] PLAN DE NARRACION (Claude)
-    Entrada: escena filtrada + estado de presentacion
-    Salida: NarrationPlan { text, sfx, ambient, music, UI }
+[5] NARRATION PLAN (Claude)
+    Input: filtered scene + presentation state
+    Output: NarrationPlan { text, sfx, ambient, music, UI }
     |
-[6] DIRECTOR DE AUDIO
-    Prioridad, ducking, cooldowns -> AudioCommand[]
+[6] AUDIO DIRECTOR
+    Priority, ducking, cooldowns -> AudioCommand[]
     |
-[7] PRESENTACION
-    Sintesis de voz + SFX + ambiente via voice-soundboard
-    Renderizado de texto en terminal
+[7] PRESENTATION
+    Voice synthesis + SFX + ambient via voice-soundboard
+    Text rendering to terminal
     |
-[8] DIALOGO DE NPC (Claude, si habla)
-    Fundamentado en cognicion: creencias, recuerdos, faccion, rumores
-    Voz asignada por NPC
+[8] NPC DIALOGUE (Claude, if speaking)
+    Grounded in cognition: beliefs, memories, faction, rumors
+    Voice-cast per NPC
 ```
 
-## Runtime de Inmersion (v0.2)
+## Entorno de ejecución inmersivo (v0.2)
 
-El narrador no produce prosa sin formato — produce un **NarrationPlan**: una receta estructurada que describe texto, efectos de sonido, capas ambientales, senales musicales y parametros de voz.
+El narrador no genera texto sin procesar; en cambio, produce un **Plan de Narración**: una receta estructurada que describe texto, efectos de sonido, capas ambientales, indicaciones musicales y parámetros de voz.
 
-| Modulo | Proposito |
-|--------|-----------|
-| **Maquina de Estado de Presentacion** | Rastrea exploracion / dialogo / combate / desenlace — impulsa la seleccion de capas de audio |
-| **Ciclo de Vida de Hooks** | `enter-room`, `combat-start`, `combat-end`, `death`, `npc-speaking` — inyecta audio consciente del contexto |
-| **Asignador de Voces** | Asigna automaticamente NPCs a voces de [voice-soundboard](https://github.com/mcp-tool-shop-org/original_voice-soundboard) por tipo, genero, faccion |
-| **Director de Audio** | Programa senales con prioridad, ducking, cooldowns, anti-spam |
-| **Registro de Sonidos** | Entradas de audio direccionables por contenido — consulta por etiquetas, estado de animo, intensidad |
-| **Puente MCP** | Traduce AudioCommands a llamadas de herramientas de voice-soundboard |
+| Módulo | Propósito |
+|--------|---------|
+| **Máquina de estados de presentación** | Realiza un seguimiento de la exploración, el diálogo, el combate y las consecuencias, y controla la selección de la capa de audio. |
+| **Hook Lifecycle** | `entrar-habitación`, `inicio-combate`, `fin-combate`, `muerte`, `pNJ-hablando`: inyecta audio contextual. |
+| **Voice Caster** | Asigna automáticamente PNJ a voces del [panel de sonido](https://github.com/mcp-tool-shop-org/original_voice-soundboard) según el tipo, el género y la facción. |
+| **Audio Director** | Programa señales con prioridad, supresión, tiempos de espera y prevención de spam. |
+| **Sound Registry** | Entradas de audio direccionables por contenido: consulta por etiquetas, estado de ánimo e intensidad. |
+| **MCP Bridge** | Traduce los comandos de audio a llamadas de herramientas del panel de sonido. |
 
-## Tres Modos
+## Tres modos
 
-| Modo | Que Hace |
-|------|----------|
-| **Play** | RPG narrado e inmersivo. Claude narra, los NPCs hablan desde creencias, las acciones se resuelven a traves del motor. |
-| **Director** | Inspecciona la verdad oculta: `/inspect <npc>`, `/faction <id>`, `/trace <belief>`, `/divergences`, `/npc <name>`, `/people`, `/districts`, `/district <id>`, `/item <name>`, `/leverage`, `/moves`, `/jobs`, `/accepted` |
-| **Replay** | Recorre la linea temporal de eventos mostrando la verdad objetiva vs la percepcion del jugador lado a lado. |
+| Modo | Lo que hace |
+|------|-------------|
+| **Play** | RPG narrativo inmersivo. Claude narra, los PNJ hablan según sus creencias, y las acciones se resuelven a través del sistema. |
+| **Director** | Examina la verdad oculta: `/inspect <pNJ>`, `/facción <id>`, `/rastrear <creencia>`, `/divergencias`, `/pNJ <nombre>`, `/personas`, `/distritos`, `/distrito <id>`, `/objeto <nombre>`, `/leverage`, `/movimientos`, `/trabajos`, `/aceptados`. |
+| **Replay** | Visualiza la línea de tiempo de los eventos, mostrando la verdad objetiva frente a la percepción del jugador, lado a lado. |
 
-## Paquetes del Motor
+## Ecosistema
+
+Claude RPG es una parte de un conjunto de herramientas más amplio para crear juegos narrativos basados en simulaciones:
+
+| Proyecto | Lo que hace |
+|---------|-------------|
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Entorno de ejecución de simulación determinista: 29 módulos, sin dependencias de modelos de lenguaje. |
+| [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | Estudio de creación de mundos 2D: editor de mapas, creador de PNJ, renderizador, exportación. |
+| [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | Validación de esquemas, pruebas de guiones gráficos, flujos de trabajo de exportación de RPG con IA. |
+| **Claude RPG** (this repo) | Entorno de referencia: narración de Claude, audio inmersivo, herramientas de dirección. |
+
+## Paquetes del motor
 
 Claude RPG depende de estos paquetes de [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine):
 
-| Paquete | Proposito |
-|---------|-----------|
-| [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | Estado, entidades, acciones, eventos, reglas, RNG |
-| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29 modulos — combate, cognicion, percepcion, facciones, rumores, agencia de NPCs, companeros, influencia, mapa estrategico, reconocimiento de objetos, oportunidades emergentes |
-| [`@ai-rpg-engine/character-profile`](https://www.npmjs.com/package/@ai-rpg-engine/character-profile) | Progresion de personaje, heridas, reputacion |
-| [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | Equipamiento, procedencia de objetos, crecimiento de reliquias, cronicas |
-| [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | Memoria entre sesiones, efectos de relaciones |
-| [`@ai-rpg-engine/presentation`](https://www.npmjs.com/package/@ai-rpg-engine/presentation) | Esquema de NarrationPlan, contratos de renderizado |
-| [`@ai-rpg-engine/audio-director`](https://www.npmjs.com/package/@ai-rpg-engine/audio-director) | Programacion de senales de audio, prioridad, ducking |
-| [`@ai-rpg-engine/soundpack-core`](https://www.npmjs.com/package/@ai-rpg-engine/soundpack-core) | Registro de paquetes de sonido + paquete base |
-| [`@ai-rpg-engine/content-schema`](https://www.npmjs.com/package/@ai-rpg-engine/content-schema) | Validacion de contenido del mundo |
-| [`@ai-rpg-engine/starter-fantasy`](https://www.npmjs.com/package/@ai-rpg-engine/starter-fantasy) | Mundo inicial Chapel Threshold |
-| [`@ai-rpg-engine/starter-cyberpunk`](https://www.npmjs.com/package/@ai-rpg-engine/starter-cyberpunk) | Mundo inicial Neon Lockbox |
-| [`@ai-rpg-engine/starter-detective`](https://www.npmjs.com/package/@ai-rpg-engine/starter-detective) | Mundo inicial Gaslight Detective |
-| [`@ai-rpg-engine/starter-pirate`](https://www.npmjs.com/package/@ai-rpg-engine/starter-pirate) | Mundo inicial Black Flag Requiem |
-| [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | Mundo inicial Ashfall Dead |
-| [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | Mundo inicial Dust Devil's Bargain |
-| [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | Mundo inicial Signal Loss |
+| Paquete | Propósito |
+|---------|---------|
+| [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | Estado, entidades, acciones, eventos, reglas, RNG. |
+| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29 módulos: combate, cognición, percepción, facciones, rumores, agencia de PNJ, compañeros, influencia, mapa estratégico, reconocimiento de objetos, oportunidades emergentes. |
+| [`@ai-rpg-engine/character-profile`](https://www.npmjs.com/package/@ai-rpg-engine/character-profile) | Progresión del personaje, lesiones, reputación. |
+| [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | Equipamiento, origen de los objetos, crecimiento de los artefactos, crónicas. |
+| [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | Memoria entre sesiones, efectos de las relaciones. |
+| [`@ai-rpg-engine/presentation`](https://www.npmjs.com/package/@ai-rpg-engine/presentation) | Esquema de narración, contratos de renderizado. |
+| [`@ai-rpg-engine/audio-director`](https://www.npmjs.com/package/@ai-rpg-engine/audio-director) | Programación de señales de audio, prioridad, atenuación. |
+| [`@ai-rpg-engine/soundpack-core`](https://www.npmjs.com/package/@ai-rpg-engine/soundpack-core) | Registro de paquetes de sonido + paquete principal. |
+| [`@ai-rpg-engine/content-schema`](https://www.npmjs.com/package/@ai-rpg-engine/content-schema) | Validación del contenido del mundo. |
+| [`@ai-rpg-engine/starter-fantasy`](https://www.npmjs.com/package/@ai-rpg-engine/starter-fantasy) | Mundo inicial "Chapel Threshold". |
+| [`@ai-rpg-engine/starter-cyberpunk`](https://www.npmjs.com/package/@ai-rpg-engine/starter-cyberpunk) | Mundo inicial "Neon Lockbox". |
+| [`@ai-rpg-engine/starter-detective`](https://www.npmjs.com/package/@ai-rpg-engine/starter-detective) | Mundo inicial "Gaslight Detective". |
+| [`@ai-rpg-engine/starter-pirate`](https://www.npmjs.com/package/@ai-rpg-engine/starter-pirate) | Mundo inicial "Black Flag Requiem". |
+| [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | Mundo inicial "Ashfall Dead". |
+| [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | Mundo inicial "Dust Devil's Bargain". |
+| [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | Mundo inicial "Signal Loss". |
 
-## Presupuesto de Tokens
+## Presupuesto de tokens
 
-| Paso | Entrada | Salida |
-|------|---------|--------|
-| Interpretacion de accion | ~800 tokens | ~100 tokens |
-| Narracion de escena (NarrationPlan) | ~1400 tokens | ~300 tokens |
-| Dialogo de NPC | ~1400 tokens | ~100 tokens |
-| **Total por turno** | **~3600 tokens** | **~500 tokens** |
+| Paso. | Entrada. | Salida. |
+|------|-------|--------|
+| Interpretación de la acción. | ~800 tokens. | ~100 tokens. |
+| Narración de la escena (NarrationPlan). | ~1400 tokens. | ~300 tokens. |
+| Diálogo de personajes no jugables (PNJs). | ~1400 tokens. | ~100 tokens. |
+| **Total per turn** | **~3600 tokens** | **~500 tokens** |
 
-Modelo por defecto: `claude-sonnet-4-20250514`. La generacion de mundos usa Opus para mayor calidad.
+Modelo predeterminado: `claude-sonnet-4-20250514`. La generación de mundos utiliza Opus para mejorar la calidad.
 
 ## Seguridad
 
-Claude RPG es una aplicacion CLI local que realiza llamadas de API salientes a Anthropic.
+Claude RPG es una aplicación de línea de comandos local que realiza llamadas de API salientes a Anthropic.
 
-- **Datos accedidos:** archivos de guardado del jugador en `~/.claude-rpg/saves/`, API de Anthropic (solo HTTPS saliente)
-- **Datos NO accedidos:** sin telemetria, sin analiticas, sin acceso al sistema de archivos fuera del directorio de guardado
-- **Clave de API:** se lee de la variable de entorno `ANTHROPIC_API_KEY` — nunca se almacena, registra ni transmite mas alla de la API de Anthropic
-- **Sin secretos en el codigo fuente** — sin tokens, credenciales ni claves de API integradas
+- **Datos accedidos:** archivos de guardado del jugador en `~/.claude-rpg/saves/`, API de Anthropic (solo HTTPS saliente).
+- **Datos NO accedidos:** no hay telemetría, ni análisis, ni acceso al sistema de archivos fuera del directorio de guardado.
+- **Clave de API:** se lee de la variable de entorno `ANTHROPIC_API_KEY`; nunca se almacena, se registra ni se transmite más allá de la API de Anthropic.
+- **No hay secretos en el código fuente:** no hay tokens, credenciales ni claves de API incrustados.
 
-Consulta [SECURITY.md](SECURITY.md) para la politica de seguridad completa y el reporte de vulnerabilidades.
+Consulte [SECURITY.md](SECURITY.md) para obtener la política de seguridad completa y el procedimiento de notificación de vulnerabilidades.
 
 ## Licencia
 
-MIT
+MIT.
 
 ---
 

@@ -16,7 +16,7 @@
 
 # Claude RPG
 
-A simulation-grounded campaign RPG where Claude stages the story, the engine preserves truth, and worlds evolve through rumor, pressure, faction, relationship, economy, and arc systems toward meaningful conclusions.
+A simulation-grounded campaign RPG where Claude stages the story, the engine preserves truth, and worlds evolve through rumor, pressure, faction, relationship, economy, and arc systems toward meaningful conclusions. Play it or build on it.
 
 ## What Is Claude RPG?
 
@@ -27,6 +27,21 @@ The golden rule: **Claude proposes, engine disposes.**
 Players type freeform text. Claude interprets intent, the engine resolves actions deterministically, perception filters decide what the player actually saw, and then Claude narrates only what the character perceived — with voice, sound effects, and ambient audio staged by the immersion runtime.
 
 NPCs don't recite scripts. They speak from beliefs, memories, faction loyalty, and rumors. They lie for reasons. They're uncertain for reasons. They refuse for reasons. Director mode lets you inspect exactly why.
+
+## Build Your Own
+
+Claude RPG isn't just a game — it's a reference implementation for the AI RPG Engine ecosystem. Use it as a starting point for your own simulation-grounded narrative experiences.
+
+| Want to... | Use |
+|------------|-----|
+| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — 2D authoring studio with map editor, NPC builder, and validation |
+| **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — schema validation, storyboard testing, export pipelines |
+| **Build a custom runtime** | Import [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) packages directly — swap Claude for any LLM, add your own UI |
+| **Add new game modules** | Fork the engine, add modules to the resolution pipeline, and register them |
+
+The engine is LLM-agnostic. Claude RPG uses Anthropic models, but the core engine has zero LLM dependencies — you can wire it to any model or even run fully deterministic without narration.
 
 ## Install
 
@@ -48,9 +63,12 @@ npx claude-rpg play --world fantasy
 
 # Generate a new world from a prompt
 npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+
+# Use the engine in your own project
+npm install @ai-rpg-engine/core @ai-rpg-engine/modules
 ```
 
-Set your Anthropic API key:
+Set your Anthropic API key (only needed for Claude narration):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -127,6 +145,17 @@ The narrator doesn't output raw prose — it produces a **NarrationPlan**: a str
 | **Play** | Immersive narrated RPG. Claude narrates, NPCs speak from beliefs, actions resolve through the engine. |
 | **Director** | Inspect hidden truth: `/inspect <npc>`, `/faction <id>`, `/trace <belief>`, `/divergences`, `/npc <name>`, `/people`, `/districts`, `/district <id>`, `/item <name>`, `/leverage`, `/moves`, `/jobs`, `/accepted` |
 | **Replay** | Walk the event timeline showing objective truth vs player perception side-by-side. |
+
+## Ecosystem
+
+Claude RPG is one piece of a larger toolchain for building simulation-grounded narrative games:
+
+| Project | What It Does |
+|---------|-------------|
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Deterministic simulation runtime — 29 modules, zero LLM dependencies |
+| [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | 2D world authoring studio — map editor, NPC builder, renderer, export |
+| [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | Schema validation, storyboard testing, AI RPG export pipelines |
+| **Claude RPG** (this repo) | Reference runtime — Claude narration, immersion audio, director tools |
 
 ## Engine Packages
 

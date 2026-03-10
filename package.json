@@ -1,6 +1,6 @@
 {
   "name": "claude-rpg",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Simulation-grounded narrative RPG where worlds are generated live, but truth remains coherent",
   "type": "module",
   "main": "./dist/index.js",
@@ -42,7 +42,10 @@
     "@ai-rpg-engine/starter-cyberpunk": "^2.0.0",
     "@ai-rpg-engine/starter-detective": "^2.0.0",
     "@ai-rpg-engine/starter-fantasy": "^2.0.0",
+    "@ai-rpg-engine/starter-gladiator": "^2.1.0",
     "@ai-rpg-engine/starter-pirate": "^2.0.0",
+    "@ai-rpg-engine/starter-ronin": "^2.1.0",
+    "@ai-rpg-engine/starter-vampire": "^2.1.0",
     "@ai-rpg-engine/starter-weird-west": "^2.0.0",
     "@ai-rpg-engine/starter-zombie": "^2.0.0",
     "@ai-rpg-engine/terminal-ui": "^2.0.0",

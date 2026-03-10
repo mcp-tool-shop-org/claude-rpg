@@ -179,6 +179,9 @@ Player types freeform text
 | [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | एशफॉल डेड शुरुआती दुनिया |
 | [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | डस्ट डेविल का सौदा शुरुआती दुनिया |
 | [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | सिग्नल लॉस शुरुआती दुनिया |
+| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | आयरन कोलोसियम: शुरुआती दुनिया |
+| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | जेड वेल: शुरुआती दुनिया |
+| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | क्रिmson कोर्ट: शुरुआती दुनिया |
 
 ## टोकन बजट
 

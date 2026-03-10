@@ -179,6 +179,9 @@ Claude RPG dépend de ces paquets [@ai-rpg-engine](https://github.com/mcp-tool-s
 | [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | Monde de départ "Ashfall Dead". |
 | [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | Monde de départ "Dust Devil's Bargain". |
 | [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | Monde de départ "Signal Loss". |
+| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | Monde de départ "Iron Colosseum". |
+| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Monde de départ "Jade Veil". |
+| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Monde de départ "Crimson Court". |
 
 ## Budget de jetons
 

@@ -185,6 +185,7 @@ import {
   sanitizeFilename,
 } from './game/game-state.js';
 import { generateOpeningNarration, generateFinaleNarration } from './game/game-narration.js';
+import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, renderConcludeOutput, renderPlayOutput, buildPartyStatusLine } from './game/game-presenter.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
@@ -301,7 +302,7 @@ export class GameSession {
 
   /** Get the welcome screen text. */
   getWelcome(): string {
-    return renderWelcome(this.title, this.tone);
+    return renderWelcomeScreen(this.title, this.tone);
   }
 
   /** Get presence strings from current profile state. */
@@ -456,20 +457,13 @@ export class GameSession {
       verb: 'look',
       narration: result.narration,
     });
-    let output = renderPlayScreen({
-      narration: result.narration,
-      world: this.engine.world,
-      availableActions: this.engine.getAvailableActions(),
-      profileStatus: this.getStatusData() ?? undefined,
-    });
-
-    // D3: First-turn onboarding — show pack-specific orientation on new games
-    const onboarding = getOnboardingByGenre(this.genre);
-    if (onboarding) {
-      output += renderFirstTurnOrientation(onboarding);
-    }
-
-    return output;
+    return renderOpeningOutput(
+      result.narration,
+      this.engine.world,
+      this.engine.getAvailableActions(),
+      this.getStatusData() ?? undefined,
+      this.genre,
+    );
   }
 
   /** Process one player input and return the rendered output. */
@@ -749,24 +743,14 @@ export class GameSession {
       });
     }
 
-    // Build party status line
-    let partyStatusLine: string | undefined;
-    if (this.partyState.companions.length > 0) {
-      const companionNames: Record<string, string> = {};
-      for (const comp of this.partyState.companions) {
-        companionNames[comp.npcId] = this.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
-      }
-      partyStatusLine = formatPartyStatusLine(this.partyState, companionNames) ?? undefined;
-    }
-
-    return renderPlayScreen({
+    return renderPlayOutput({
       narration: turnResult.narration,
       dialogue: turnResult.dialogue,
       world: this.engine.world,
       availableActions: this.engine.getAvailableActions(),
       profileStatus: this.getStatusData() ?? undefined,
       leverageStatus,
-      partyStatusLine,
+      partyStatusLine: buildPartyStatusLine(this.partyState, this.engine.world),
       suggestions,
       hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
     });
@@ -1365,26 +1349,7 @@ export class GameSession {
       characterName: this.profile?.build.name,
     });
 
-    const lines: string[] = [];
-    lines.push('');
-    lines.push('  ═'.repeat(30));
-    lines.push('  CAMPAIGN CONCLUSION');
-    lines.push('  ═'.repeat(30));
-    lines.push('');
-    lines.push(result.deterministicSummary);
-    if (result.epilogue) {
-      lines.push('');
-      lines.push('  ─'.repeat(30));
-      lines.push('');
-      lines.push(`  ${result.epilogue.split('\n').join('\n  ')}`);
-    }
-    lines.push('');
-    lines.push(result.worldAfter);
-    lines.push('');
-    lines.push('  ─'.repeat(30));
-    lines.push('  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit');
-
-    return lines.join('\n');
+    return renderConcludeOutput(result);
   }
 
   /** Browse completed campaign archive. */
@@ -1462,7 +1427,7 @@ export class GameSession {
 
   /** Get the "thinking" indicator. */
   getThinking(): string {
-    return renderThinking();
+    return renderThinkingIndicator();
   }
 
   /** Record chronicle events derived from a turn result. */

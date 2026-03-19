@@ -8,6 +8,7 @@
 import { readFile, writeFile, mkdir, readdir, rename, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { CURRENT_SCHEMA_VERSION, migrateSave } from './migrate.js';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
@@ -16,7 +17,9 @@ import { CampaignJournal, type CampaignRecord, type FinaleOutline } from '@ai-rp
 import { TurnHistory } from './history.js';
 
 export type SavedSession = {
-  version: '0.1.0' | '0.2.0' | '0.3.0' | '0.4.0' | '0.5.0' | '0.6.0' | '0.7.0' | '0.8.0' | '0.9.0' | '1.0.0' | '1.1.0' | '1.2.0' | '1.3.0' | '1.4.0';
+  schemaVersion: number;
+  createdWithVersion?: string;
+  version: string; // legacy compat — always '1.4.0' for new saves
   engineState: string;
   turnHistory: ReturnType<TurnHistory['toJSON']>;
   worldPrompt?: string;
@@ -105,6 +108,7 @@ export async function saveSession(
     : undefined;
 
   const session: SavedSession = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     version: '1.4.0',
     engineState: engine.serialize(),
     turnHistory: history.toJSON(),
@@ -191,7 +195,14 @@ export class SaveValidationError extends Error {
   }
 }
 
-export async function loadSession(savePath: string): Promise<SavedSession> {
+export type LoadResult = {
+  session: SavedSession;
+  migrated: boolean;
+  sourceVersion: number;
+  stepsApplied: number;
+};
+
+export async function loadSession(savePath: string): Promise<LoadResult> {
   const raw = await readFile(savePath, 'utf-8');
 
   let parsed: unknown;
@@ -203,10 +214,23 @@ export async function loadSession(savePath: string): Promise<SavedSession> {
     );
   }
 
-  return validateSaveShape(parsed);
+  if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new SaveValidationError('Save file is not a JSON object');
+  }
+
+  // Run migration pipeline
+  const result = migrateSave(parsed as Record<string, unknown>);
+  const session = validateSaveShape(result.data);
+
+  return {
+    session,
+    migrated: result.stepsApplied > 0,
+    sourceVersion: result.sourceVersion,
+    stepsApplied: result.stepsApplied,
+  };
 }
 
-/** Validate that parsed JSON has the required SavedSession shape. */
+/** Validate that parsed/migrated JSON has the required SavedSession shape. */
 export function validateSaveShape(data: unknown): SavedSession {
   if (data == null || typeof data !== 'object' || Array.isArray(data)) {
     throw new SaveValidationError('Save file is not a JSON object');
@@ -214,8 +238,8 @@ export function validateSaveShape(data: unknown): SavedSession {
 
   const obj = data as Record<string, unknown>;
 
-  if (typeof obj.version !== 'string') {
-    throw new SaveValidationError('Save file missing required field: version');
+  if (typeof obj.schemaVersion !== 'number') {
+    throw new SaveValidationError('Save file missing required field: schemaVersion (migration may have failed)');
   }
   if (typeof obj.engineState !== 'string') {
     throw new SaveValidationError('Save file missing required field: engineState');

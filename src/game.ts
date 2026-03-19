@@ -1395,6 +1395,7 @@ export class GameSession {
   /** Build a lightweight SavedSession snapshot for export (no engine serialization needed). */
   private buildSavedSessionSnapshot(): import('./session/session.js').SavedSession {
     return {
+      schemaVersion: 2,
       version: '1.4.0',
       engineState: '',
       turnHistory: this.history.toJSON(),

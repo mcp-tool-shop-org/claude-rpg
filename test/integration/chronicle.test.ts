@@ -204,8 +204,8 @@ describe('chronicle persistence stability', () => {
     const path = join(tmpDir, 'test.json');
     await writeFile(path, JSON.stringify(save), 'utf-8');
 
-    const loaded = await loadSession(path);
-    const restoredJournal = loadChronicleFromSession(loaded);
+    const result = await loadSession(path);
+    const restoredJournal = loadChronicleFromSession(result.session);
     const restoredRecords = restoredJournal.serialize();
 
     expect(restoredRecords.length).toBe(originalRecords.length);
@@ -229,8 +229,8 @@ describe('chronicle persistence stability', () => {
     const path = join(tmpDir, 'corrupt.json');
     await writeFile(path, JSON.stringify(save), 'utf-8');
 
-    const loaded = await loadSession(path);
-    const journal = loadChronicleFromSession(loaded);
+    const result = await loadSession(path);
+    const journal = loadChronicleFromSession(result.session);
     expect(journal.size()).toBe(0);
   });
 });

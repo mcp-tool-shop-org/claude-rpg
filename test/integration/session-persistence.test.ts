@@ -44,14 +44,16 @@ describe('save/load round-trip', () => {
     const path = savePath();
 
     await saveSession(engine, history, 'dark fantasy', path);
-    const loaded = await loadSession(path);
+    const result = await loadSession(path);
+    const loaded = result.session;
 
-    expect(loaded.version).toBe('1.4.0');
+    expect(loaded.schemaVersion).toBe(2);
     expect(loaded.tone).toBe('dark fantasy');
     expect(loaded.engineState).toBeTruthy();
     expect(loaded.turnHistory).toBeTruthy();
     expect(loaded.savedAt).toBeTruthy();
     expect(loaded.campaignStatus).toBe('active');
+    expect(result.migrated).toBe(false);
   });
 
   it('session with history survives round-trip', async () => {
@@ -62,7 +64,8 @@ describe('save/load round-trip', () => {
 
     const path = savePath();
     await saveSession(engine, history, 'dark fantasy', path);
-    const loaded = await loadSession(path);
+    const result = await loadSession(path);
+    const loaded = result.session;
 
     // turnHistory is TurnRecord[] (from TurnHistory.toJSON())
     const turns = loaded.turnHistory as unknown as Array<{ verb: string }>;
@@ -72,7 +75,7 @@ describe('save/load round-trip', () => {
   });
 
   it('missing optional fields deserialize to safe defaults', async () => {
-    // Simulate an old v0.1.0 save with minimal fields
+    // Simulate an old v0.1.0 save with minimal fields (schema v1 — will be migrated)
     const minimal = {
       version: '0.1.0',
       engineState: '{}',
@@ -83,7 +86,9 @@ describe('save/load round-trip', () => {
     const path = savePath();
     await writeFile(path, JSON.stringify(minimal), 'utf-8');
 
-    const loaded = await loadSession(path);
+    const result = await loadSession(path);
+    expect(result.migrated).toBe(true);
+    const loaded = result.session;
     expect(loadRumorsFromSession(loaded)).toEqual([]);
     expect(loadPressuresFromSession(loaded)).toEqual([]);
     expect(loadPartyFromSession(loaded)).toHaveProperty('companions');
@@ -102,9 +107,9 @@ describe('save/load round-trip', () => {
     const history = new TurnHistory();
     await saveSession(engine, history, 'dark fantasy', path);
 
-    const loaded = await loadSession(path);
+    const result = await loadSession(path);
     // Engine state should contain the zone we moved to
-    expect(loaded.engineState).toContain('chapel-nave');
+    expect(result.session.engineState).toContain('chapel-nave');
   });
 });
 
@@ -136,10 +141,10 @@ describe('save corruption handling', () => {
 
   it('missing version field is rejected', async () => {
     const path = savePath();
+    // No version or schemaVersion — migration can't detect schema
     await writeFile(path, JSON.stringify({ tone: 'x', engineState: '{}', turnHistory: {}, savedAt: 'x' }), 'utf-8');
 
     await expect(loadSession(path)).rejects.toThrow(SaveValidationError);
-    await expect(loadSession(path)).rejects.toThrow('version');
   });
 
   it('missing engineState field is rejected', async () => {
@@ -183,7 +188,8 @@ describe('save corruption handling', () => {
     const path = savePath();
     await writeFile(path, JSON.stringify(save), 'utf-8');
 
-    const loaded = await loadSession(path);
+    const result = await loadSession(path);
+    const loaded = result.session;
     // Should not crash — individual loaders catch and return defaults
     expect(loadRumorsFromSession(loaded)).toEqual([]);
     expect(loadPressuresFromSession(loaded)).toEqual([]);
@@ -195,6 +201,7 @@ describe('save corruption handling', () => {
 describe('validateSaveShape', () => {
   it('accepts a valid minimal save', () => {
     const valid = {
+      schemaVersion: 2,
       version: '1.4.0',
       engineState: '{}',
       turnHistory: { turns: [] },
@@ -256,7 +263,7 @@ describe('write integrity', () => {
     const deepPath = join(tmpDir, 'a', 'b', 'c', 'save.json');
 
     await saveSession(engine, history, 'dark fantasy', deepPath);
-    const loaded = await loadSession(deepPath);
-    expect(loaded.version).toBe('1.4.0');
+    const result = await loadSession(deepPath);
+    expect(result.session.schemaVersion).toBe(2);
   });
 });

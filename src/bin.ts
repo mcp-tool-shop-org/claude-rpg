@@ -234,7 +234,11 @@ async function runLoad(): Promise<void> {
   }
 
   const savePath = join(getDefaultSaveDir(), saves[idx].filename);
-  const savedSession = await loadSession(savePath);
+  const loadResult = await loadSession(savePath);
+  const savedSession = loadResult.session;
+  if (loadResult.migrated) {
+    console.log(`\n  Save upgraded from older format (schema v${loadResult.sourceVersion} → v${loadResult.stepsApplied + loadResult.sourceVersion}).`);
+  }
 
   // Restore engine from pack (recreate with modules, then swap world state)
   let engine;

@@ -16,6 +16,7 @@ export { saveSession, loadSession, validateSaveShape, SaveValidationError, loadP
 export { migrateSave, detectSchemaVersion, CURRENT_SCHEMA_VERSION } from './session/migrate.js';
 export { renderPlayScreen, renderWelcome } from './display/play-renderer.js';
 export { executeDirectorCommand } from './display/director-renderer.js';
+export { createStreamPresenter, renderStreamInterruption, type StreamSession } from './cli/stream-presenter.js';
 
 // v0.2: Immersion Runtime
 export { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';

@@ -16,6 +16,6 @@
   "genre": "dark fantasy",
   "playerRumors": "[{\"id\":\"r1\",\"text\":\"The chapel guards whisper of a sealed crypt.\",\"source\":\"guard\",\"tick\":1}]",
   "activePressures": "[{\"id\":\"p1\",\"kind\":\"faction-conflict\",\"description\":\"Rival guilds clash over chapel territory\",\"severity\":2}]",
-  "chronicleRecords": "[{\"tick\":1,\"category\":\"discovery\",\"description\":\"Entered the haunted chapel\",\"significance\":3}]",
+  "chronicleRecords": "[{\"id\":\"cr_1\"},{\"id\":\"cr_2\"}]",
   "campaignStatus": "active"
 }

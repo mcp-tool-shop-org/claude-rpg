@@ -14,26 +14,35 @@ export type NarrationResult = {
   sceneContext: SceneContext;
 };
 
+export type NarrateSceneOpts = {
+  client: ClaudeClient;
+  world: WorldState;
+  recentEvents: ResolvedEvent[];
+  tone: string;
+  recentNarration: string[];
+  previousLocationId?: string;
+  presentationState?: PresentationState;
+  characterPresence?: string;
+  activePressures?: string[];
+  districtDescriptor?: string;
+  partyPresence?: string;
+  economyContext?: string;
+  craftingContext?: string;
+  opportunityContext?: string;
+  arcContext?: string;
+  endgameContext?: string;
+  onChunk?: StreamCallback;
+};
+
 /** Narrate the current scene after action resolution. Returns structured plan when possible. */
-export async function narrateScene(
-  client: ClaudeClient,
-  world: WorldState,
-  recentEvents: ResolvedEvent[],
-  tone: string,
-  recentNarration: string[],
-  previousLocationId?: string,
-  presentationState?: PresentationState,
-  characterPresence?: string,
-  activePressures?: string[],
-  districtDescriptor?: string,
-  partyPresence?: string,
-  economyContext?: string,
-  craftingContext?: string,
-  opportunityContext?: string,
-  arcContext?: string,
-  endgameContext?: string,
-  onChunk?: StreamCallback,
-): Promise<NarrationResult> {
+export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationResult> {
+  const {
+    client, world, recentEvents, tone, recentNarration,
+    previousLocationId, presentationState, characterPresence,
+    activePressures, districtDescriptor, partyPresence,
+    economyContext, craftingContext, opportunityContext,
+    arcContext, endgameContext, onChunk,
+  } = opts;
   const sceneContext = buildSceneContext(
     world,
     recentEvents,

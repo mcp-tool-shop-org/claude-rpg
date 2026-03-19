@@ -604,28 +604,28 @@ export class GameSession {
     const partyPresenceStr = this.getPartyPresence();
     const turnEconomyCtx = this.getEconomyContext();
     const turnCraftingCtx = this.getCraftingContext();
-    const turnResult = await executeTurn(
-      this.engine,
-      this.client,
-      this.history,
-      trimmed,
-      this.tone,
-      this.immersion,
-      presence.narrator,
-      presence.npc,
-      this.profile,
-      this.playerRumors,
-      pressureCtx,
-      this.activePressures,
-      this.lastNpcActions,
+    const turnResult = await executeTurn({
+      engine: this.engine,
+      client: this.client,
+      history: this.history,
+      playerInput: trimmed,
+      tone: this.tone,
+      immersion: this.immersion,
+      characterPresence: presence.narrator,
+      npcPlayerPresence: presence.npc,
+      playerProfile: this.profile,
+      playerRumors: this.playerRumors,
+      pressureContext: pressureCtx,
+      worldPressures: this.activePressures,
+      lastNpcActions: this.lastNpcActions,
       districtDescriptor,
-      partyPresenceStr,
-      turnEconomyCtx,
-      turnCraftingCtx,
-      this.getOpportunityContext(),
-      this.getArcContext(),
-      this.getEndgameContext(),
-    );
+      partyPresence: partyPresenceStr,
+      economyContext: turnEconomyCtx,
+      craftingContext: turnCraftingCtx,
+      opportunityContext: this.getOpportunityContext(),
+      arcContext: this.getArcContext(),
+      endgameContext: this.getEndgameContext(),
+    });
 
     // Process leverage actions (social/rumor/diplomacy/sabotage)
     this.processLeverageAction(turnResult);

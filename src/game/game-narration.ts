@@ -28,25 +28,22 @@ export type OpeningNarrationContext = {
 
 /** Call the LLM to generate the opening scene narration. Returns narration text only. */
 export async function generateOpeningNarration(ctx: OpeningNarrationContext): Promise<NarrationResult> {
-  return narrateScene(
-    ctx.client,
-    ctx.world,
-    [],
-    ctx.tone,
-    [],
-    undefined,
-    ctx.immersionState,
-    ctx.narratorPresence,
-    ctx.pressureContext,
-    ctx.districtDescriptor,
-    ctx.partyPresence,
-    ctx.economyContext,
-    undefined, // craftingContext
-    undefined, // opportunityContext
-    ctx.arcContext,
-    ctx.endgameContext,
-    ctx.onChunk,
-  );
+  return narrateScene({
+    client: ctx.client,
+    world: ctx.world,
+    recentEvents: [],
+    tone: ctx.tone,
+    recentNarration: [],
+    presentationState: ctx.immersionState,
+    characterPresence: ctx.narratorPresence,
+    activePressures: ctx.pressureContext,
+    districtDescriptor: ctx.districtDescriptor,
+    partyPresence: ctx.partyPresence,
+    economyContext: ctx.economyContext,
+    arcContext: ctx.arcContext,
+    endgameContext: ctx.endgameContext,
+    onChunk: ctx.onChunk,
+  });
 }
 
 // ─── Finale Narration ────────────────────────────────────────

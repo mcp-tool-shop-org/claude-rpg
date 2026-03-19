@@ -34,30 +34,39 @@ export type TurnResult = {
   profileHints: ProfileUpdateHints;
 };
 
+export type ExecuteTurnOpts = {
+  engine: Engine;
+  client: ClaudeClient;
+  history: TurnHistory;
+  playerInput: string;
+  tone: string;
+  immersion?: ImmersionRuntime;
+  characterPresence?: string;
+  npcPlayerPresence?: string;
+  playerProfile?: CharacterProfile | null;
+  playerRumors?: PlayerRumor[];
+  pressureContext?: string[];
+  worldPressures?: WorldPressure[];
+  lastNpcActions?: NpcActionResult[];
+  districtDescriptor?: string;
+  partyPresence?: string;
+  economyContext?: string;
+  craftingContext?: string;
+  opportunityContext?: string;
+  arcContext?: string;
+  endgameContext?: string;
+  onNarrationChunk?: StreamCallback;
+};
+
 /** Execute one full turn of the game loop. */
-export async function executeTurn(
-  engine: Engine,
-  client: ClaudeClient,
-  history: TurnHistory,
-  playerInput: string,
-  tone: string,
-  immersion?: ImmersionRuntime,
-  characterPresence?: string,
-  npcPlayerPresence?: string,
-  playerProfile?: CharacterProfile | null,
-  playerRumors?: PlayerRumor[],
-  pressureContext?: string[],
-  worldPressures?: WorldPressure[],
-  lastNpcActions?: NpcActionResult[],
-  districtDescriptor?: string,
-  partyPresence?: string,
-  economyContext?: string,
-  craftingContext?: string,
-  opportunityContext?: string,
-  arcContext?: string,
-  endgameContext?: string,
-  onNarrationChunk?: StreamCallback,
-): Promise<TurnResult> {
+export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
+  const {
+    engine, client, history, playerInput, tone, immersion,
+    characterPresence, npcPlayerPresence, playerProfile, playerRumors,
+    pressureContext, worldPressures, lastNpcActions, districtDescriptor,
+    partyPresence, economyContext, craftingContext, opportunityContext,
+    arcContext, endgameContext, onNarrationChunk,
+  } = opts;
   const previousLocationId = engine.world.locationId;
 
   // Step 1: Interpret player input into an action
@@ -110,16 +119,16 @@ export async function executeTurn(
   // Step 3 + 4: Build scene context with perception filtering and narrate
   const recentNarration = history.getRecentNarration(3);
   const presentationState = immersion?.stateMachine.current;
-  const narrationResult: NarrationResult = await narrateScene(
+  const narrationResult: NarrationResult = await narrateScene({
     client,
-    engine.world,
-    events,
+    world: engine.world,
+    recentEvents: events,
     tone,
     recentNarration,
     previousLocationId,
     presentationState,
     characterPresence,
-    pressureContext,
+    activePressures: pressureContext,
     districtDescriptor,
     partyPresence,
     economyContext,
@@ -127,8 +136,8 @@ export async function executeTurn(
     opportunityContext,
     arcContext,
     endgameContext,
-    onNarrationChunk,
-  );
+    onChunk: onNarrationChunk,
+  });
 
   // Step 4.5: Process through immersion runtime if available
   let audioCalls: McpToolCall[] = [];

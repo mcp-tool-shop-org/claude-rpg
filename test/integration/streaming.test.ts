@@ -27,15 +27,17 @@ describe('streaming: normal completion', () => {
     // Streaming client
     const client2 = createFakeClient({ narration: CANNED_NARRATION, callLog: log2, streaming: true });
 
-    const result1 = await executeTurn(engine1, client1, history1, 'look', 'dark fantasy');
+    const result1 = await executeTurn({
+      engine: engine1, client: client1, history: history1,
+      playerInput: 'look', tone: 'dark fantasy',
+    });
 
     const chunks: string[] = [];
-    const result2 = await executeTurn(
-      engine2, client2, history2, 'look', 'dark fantasy',
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, (chunk) => { chunks.push(chunk); },
-    );
+    const result2 = await executeTurn({
+      engine: engine2, client: client2, history: history2,
+      playerInput: 'look', tone: 'dark fantasy',
+      onNarrationChunk: (chunk) => { chunks.push(chunk); },
+    });
 
     // Canonical narration is identical
     expect(result2.narration).toBe(result1.narration);
@@ -58,12 +60,11 @@ describe('streaming: normal completion', () => {
     const history = new TurnHistory();
     const client = createFakeClient({ narration: CANNED_NARRATION, streaming: true });
 
-    await executeTurn(
-      engine, client, history, 'look', 'dark fantasy',
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, () => {},
-    );
+    await executeTurn({
+      engine, client, history,
+      playerInput: 'look', tone: 'dark fantasy',
+      onNarrationChunk: () => {},
+    });
 
     const turns = history.toJSON();
     expect(turns).toHaveLength(1);
@@ -80,14 +81,13 @@ describe('streaming: fallback to non-streaming', () => {
     const log = createCallLog();
     const client = createFakeClient({ narration: CANNED_NARRATION, callLog: log });
 
-    // Pass onChunk but client has no generateStream
+    // Pass onNarrationChunk but client has no generateStream
     const chunks: string[] = [];
-    const result = await executeTurn(
-      engine, client, history, 'look', 'dark fantasy',
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, (chunk) => { chunks.push(chunk); },
-    );
+    const result = await executeTurn({
+      engine, client, history,
+      playerInput: 'look', tone: 'dark fantasy',
+      onNarrationChunk: (chunk) => { chunks.push(chunk); },
+    });
 
     // Should have used generate(), not streaming
     expect(log.generate).toBeGreaterThan(0);
@@ -118,12 +118,11 @@ describe('streaming: interruption handling', () => {
     const chunks: string[] = [];
     // executeTurn should propagate the error (narration failure)
     await expect(
-      executeTurn(
-        engine, client, history, 'look', 'dark fantasy',
-        undefined, undefined, undefined, undefined, undefined, undefined,
-        undefined, undefined, undefined, undefined, undefined, undefined,
-        undefined, undefined, undefined, (chunk) => { chunks.push(chunk); },
-      ),
+      executeTurn({
+        engine, client, history,
+        playerInput: 'look', tone: 'dark fantasy',
+        onNarrationChunk: (chunk) => { chunks.push(chunk); },
+      }),
     ).rejects.toThrow();
 
     // Some chunks were emitted before interruption
@@ -147,12 +146,10 @@ describe('streaming: narrateScene direct', () => {
     const client = createFakeClient({ narration: CANNED_NARRATION, callLog: log, streaming: true });
 
     const chunks: string[] = [];
-    const result = await narrateScene(
-      client, engine.world, [], 'dark', [],
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined, undefined,
-      (chunk) => { chunks.push(chunk); },
-    );
+    const result = await narrateScene({
+      client, world: engine.world, recentEvents: [], tone: 'dark', recentNarration: [],
+      onChunk: (chunk) => { chunks.push(chunk); },
+    });
 
     expect(log.generateStream).toBe(1);
     expect(chunks.join('')).toBe(CANNED_NARRATION);
@@ -165,12 +162,10 @@ describe('streaming: narrateScene direct', () => {
     const client = createFakeClient({ narration: CANNED_NARRATION, callLog: log });
 
     const chunks: string[] = [];
-    const result = await narrateScene(
-      client, engine.world, [], 'dark', [],
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      undefined, undefined, undefined, undefined, undefined,
-      (chunk) => { chunks.push(chunk); },
-    );
+    const result = await narrateScene({
+      client, world: engine.world, recentEvents: [], tone: 'dark', recentNarration: [],
+      onChunk: (chunk) => { chunks.push(chunk); },
+    });
 
     expect(log.generate).toBe(1);
     expect(log.generateStream).toBe(0);

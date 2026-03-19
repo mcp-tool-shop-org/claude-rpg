@@ -1,4 +1,5 @@
-// GameSession: master orchestrator wiring Engine + Claude + UI + Immersion
+// GameSession: runtime coordinator. Pure state → game-state, LLM calls → game-narration,
+// terminal output → game-presenter. This file wires seams + owns turn loop + complex mutations.
 // v0.2: integrated with ImmersionRuntime
 // v0.3: character profile awareness
 // v0.4: social consequence — reputation, milestones, title evolution
@@ -190,12 +191,9 @@ import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
 import { executeTurn, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
-import { renderPlayScreen, renderWelcome, renderThinking } from './display/play-renderer.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
-import { narrateScene } from './narrator/narrator.js';
-import { narrateFinale } from './narrator/finale-narrator.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
-import { buildPresence, buildNPCStancePresence, buildStatusData, type StatusData } from './character/presence.js';
+import type { StatusData } from './character/presence.js';
 import { deriveChronicleEvents, type ChronicleEventSource } from './session/chronicle.js';
 import { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
 import {
@@ -215,10 +213,8 @@ import {
   type CompanionReaction,
   computePartyAbilities,
   computeAbilityModifiers,
-  formatPartyStatusLine,
-  formatPartyPresence,
 } from '@ai-rpg-engine/modules';
-import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp, renderConcludeHelp, getOnboardingByGenre, renderFirstTurnOrientation } from './display/help-system.js';
+import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp, renderConcludeHelp } from './display/help-system.js';
 import { renderCompactStatus } from './display/status-compact.js';
 import { generateSuggestions } from './display/contextual-suggestions.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';

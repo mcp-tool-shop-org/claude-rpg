@@ -184,6 +184,7 @@ import {
   simpleHashNum,
   sanitizeFilename,
 } from './game/game-state.js';
+import { generateOpeningNarration, generateFinaleNarration } from './game/game-narration.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
@@ -436,28 +437,19 @@ export class GameSession {
   /** Get the initial scene narration. */
   async getOpeningNarration(): Promise<string> {
     const presence = this.getPresence();
-    const pressureContext = this.getVisiblePressureContext();
-    const districtDescriptor = this.getDistrictDescriptor();
-    const partyPresenceStr = this.getPartyPresence();
-    const economyCtx = this.getEconomyContext();
-    const result = await narrateScene(
-      this.client,
-      this.engine.world,
-      [],
-      this.tone,
-      [],
-      undefined,
-      this.immersion.stateMachine.current,
-      presence.narrator,
-      pressureContext,
-      districtDescriptor,
-      partyPresenceStr,
-      economyCtx,
-      undefined, // craftingContext
-      undefined, // opportunityContext
-      this.getArcContext(),
-      this.getEndgameContext(),
-    );
+    const result = await generateOpeningNarration({
+      client: this.client,
+      world: this.engine.world,
+      tone: this.tone,
+      immersionState: this.immersion.stateMachine.current,
+      narratorPresence: presence.narrator,
+      pressureContext: this.getVisiblePressureContext(),
+      districtDescriptor: this.getDistrictDescriptor(),
+      partyPresence: this.getPartyPresence(),
+      economyContext: this.getEconomyContext(),
+      arcContext: this.getArcContext(),
+      endgameContext: this.getEndgameContext(),
+    });
     this.history.record({
       tick: this.engine.tick,
       playerInput: '',
@@ -1366,12 +1358,12 @@ export class GameSession {
     this.campaignStatus = 'completed';
 
     // Generate LLM epilogue
-    const result = await narrateFinale(
-      this.client,
+    const result = await generateFinaleNarration({
+      client: this.client,
       outline,
-      this.genre,
-      this.profile?.build.name,
-    );
+      genre: this.genre,
+      characterName: this.profile?.build.name,
+    });
 
     const lines: string[] = [];
     lines.push('');

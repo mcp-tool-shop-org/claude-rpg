@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] - 2026-03-19
+
+### Added
+- **Streaming narration**: optional `onChunk` / `onNarrationChunk` callbacks for incremental CLI rendering; engine resolves first, streaming is presentation only
+- **Stream presenter**: `createStreamPresenter()` for terminal streaming with interruption display
+- **Save migration pipeline**: versioned schema with ordered migration steps (`migrateSave`, `detectSchemaVersion`), historical fixtures, chronicle continuity through upgrades
+- **Central error presenter**: `--debug` flag, structured CLI error rendering with distinct messages for future-version saves, missing-version saves, and generic corruption
+- **Typed runtime contracts**: `ExecuteTurnOpts` and `NarrateSceneOpts` replace 21-param and 16-param positional signatures — field miswires are now compile-time errors
+- **Claude adapter**: `createAdaptedClient()` with typed `NarrationError` (rate-limit, timeout, overloaded, auth, unknown) and streaming support
+- **Coverage floors**: CI enforces per-module coverage on runtime-critical paths (session, narrator, turn-loop)
+- Turn-loop integration harness with fake Claude client for deterministic testing
+- Save validation guards and round-trip persistence tests
+- Chronicle append-order, integrity, and persistence stability tests
+- Archive/export and finale continuity proofs
+- Canonical delta computation and no-drift recap tests
+
+### Changed
+- `executeTurn()` and `narrateScene()` now accept a single typed options object instead of positional parameters
+- `game.ts` reduced to thin runtime coordinator; narration pipeline, presentation, and game-state helpers extracted to dedicated modules
+- `loadSession()` returns `LoadResult` with migration metadata (`migrated`, `sourceVersion`, `stepsApplied`)
+- `SaveValidationError` distinguishes future versions and missing version metadata
+
+### Fixed
+- Streaming callback miswire through `executeTurn` → `narrateScene` (positional arg drift; eliminated by typed opts)
+
 ## [1.3.0] - 2026-03-08
 
 ### Added

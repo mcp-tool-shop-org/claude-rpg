@@ -1,0 +1,21 @@
+{
+  "version": "1.4.0",
+  "engineState": "{\"zones\":{\"chapel-nave\":{\"id\":\"chapel-nave\"}},\"entities\":{\"player\":{\"currentZone\":\"chapel-nave\"}}}",
+  "turnHistory": {
+    "turns": [
+      { "tick": 1, "playerInput": "look", "verb": "look", "narration": "You see a dim chapel." },
+      { "tick": 2, "playerInput": "go nave", "verb": "move", "narration": "You enter the nave." }
+    ]
+  },
+  "tone": "dark fantasy",
+  "savedAt": "2026-02-20T14:30:00Z",
+  "characterName": "Aldric",
+  "characterLevel": 3,
+  "characterTitle": "Wanderer",
+  "packId": "starter-fantasy",
+  "genre": "dark fantasy",
+  "playerRumors": "[{\"id\":\"r1\",\"text\":\"The chapel guards whisper of a sealed crypt.\",\"source\":\"guard\",\"tick\":1}]",
+  "activePressures": "[{\"id\":\"p1\",\"kind\":\"faction-conflict\",\"description\":\"Rival guilds clash over chapel territory\",\"severity\":2}]",
+  "chronicleRecords": "[{\"tick\":1,\"category\":\"discovery\",\"description\":\"Entered the haunted chapel\",\"significance\":3}]",
+  "campaignStatus": "active"
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "version": "1.4.0",
+  "createdWithVersion": "1.4.0",
+  "engineState": "{\"zones\":{\"chapel-nave\":{\"id\":\"chapel-nave\"}},\"entities\":{\"player\":{\"currentZone\":\"chapel-nave\"}}}",
+  "turnHistory": {
+    "turns": [
+      { "tick": 1, "playerInput": "look", "verb": "look", "narration": "You see a dim chapel." }
+    ]
+  },
+  "tone": "dark fantasy",
+  "savedAt": "2026-03-19T12:00:00Z",
+  "characterName": "Aldric",
+  "characterLevel": 5,
+  "packId": "starter-fantasy",
+  "campaignStatus": "active"
+}

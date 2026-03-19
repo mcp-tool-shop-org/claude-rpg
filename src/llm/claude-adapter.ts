@@ -3,7 +3,7 @@
 // The ClaudeClient interface is unchanged — callers are unaffected.
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { ClaudeClient, ClaudeClientConfig, GenerateResult, StructuredResult } from '../claude-client.js';
+import type { ClaudeClient, ClaudeClientConfig, GenerateResult, StreamCallback, StructuredResult } from '../claude-client.js';
 import { NarrationError } from './claude-errors.js';
 
 export function createAdaptedClient(config: ClaudeClientConfig = {}): ClaudeClient {
@@ -43,6 +43,40 @@ export function createAdaptedClient(config: ClaudeClientConfig = {}): ClaudeClie
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
       };
+    },
+
+    async generateStream(opts: {
+      system: string;
+      prompt: string;
+      maxTokens?: number;
+      onChunk: StreamCallback;
+    }): Promise<GenerateResult> {
+      try {
+        const stream = anthropic.messages.stream({
+          model,
+          max_tokens: opts.maxTokens ?? defaultMaxTokens,
+          system: opts.system,
+          messages: [{ role: 'user', content: opts.prompt }],
+        });
+
+        let accumulated = '';
+
+        stream.on('text', (text) => {
+          accumulated += text;
+          opts.onChunk(text);
+        });
+
+        const finalMessage = await stream.finalMessage();
+
+        return {
+          ok: finalMessage.stop_reason === 'end_turn',
+          text: accumulated,
+          inputTokens: finalMessage.usage.input_tokens,
+          outputTokens: finalMessage.usage.output_tokens,
+        };
+      } catch (err) {
+        throw classifyError(err);
+      }
     },
 
     async generateStructured<T>(opts: {

@@ -4,7 +4,7 @@
 import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { NarrationPlan, PresentationState } from '@ai-rpg-engine/presentation';
 import { isValidNarrationPlan } from '@ai-rpg-engine/presentation';
-import type { ClaudeClient } from '../claude-client.js';
+import type { ClaudeClient, StreamCallback } from '../claude-client.js';
 import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt } from '../prompts/narrate-scene.js';
 import { buildSceneContext, type SceneContext } from './scene-context.js';
 
@@ -32,6 +32,7 @@ export async function narrateScene(
   opportunityContext?: string,
   arcContext?: string,
   endgameContext?: string,
+  onChunk?: StreamCallback,
 ): Promise<NarrationResult> {
   const sceneContext = buildSceneContext(
     world,
@@ -58,11 +59,11 @@ export async function narrateScene(
 
   const prompt = buildNarratePrompt(enrichedInput);
 
-  const result = await client.generate({
-    system: NARRATE_SYSTEM,
-    prompt,
-    maxTokens: 500,
-  });
+  // Use streaming if callback provided and client supports it
+  const streamFn = onChunk ? client.generateStream : undefined;
+  const result = streamFn && onChunk
+    ? await streamFn.call(client, { system: NARRATE_SYSTEM, prompt, maxTokens: 500, onChunk })
+    : await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
 
   // Try to parse as NarrationPlan JSON
   const plan = parseNarrationPlan(result.text);

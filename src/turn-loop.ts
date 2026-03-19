@@ -6,7 +6,7 @@ import type { Engine, ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { NarrationPlan } from '@ai-rpg-engine/presentation';
 import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
-import type { ClaudeClient } from './claude-client.js';
+import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, type NarrationResult } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
@@ -56,6 +56,7 @@ export async function executeTurn(
   opportunityContext?: string,
   arcContext?: string,
   endgameContext?: string,
+  onNarrationChunk?: StreamCallback,
 ): Promise<TurnResult> {
   const previousLocationId = engine.world.locationId;
 
@@ -126,6 +127,7 @@ export async function executeTurn(
     opportunityContext,
     arcContext,
     endgameContext,
+    onNarrationChunk,
   );
 
   // Step 4.5: Process through immersion runtime if available

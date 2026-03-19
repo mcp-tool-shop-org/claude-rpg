@@ -4,7 +4,7 @@
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
-import type { ClaudeClient } from '../claude-client.js';
+import type { ClaudeClient, StreamCallback } from '../claude-client.js';
 import { narrateScene, type NarrationResult } from '../narrator/narrator.js';
 import { narrateFinale } from '../narrator/finale-narrator.js';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
@@ -23,6 +23,7 @@ export type OpeningNarrationContext = {
   economyContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  onChunk?: StreamCallback;
 };
 
 /** Call the LLM to generate the opening scene narration. Returns narration text only. */
@@ -44,6 +45,7 @@ export async function generateOpeningNarration(ctx: OpeningNarrationContext): Pr
     undefined, // opportunityContext
     ctx.arcContext,
     ctx.endgameContext,
+    ctx.onChunk,
   );
 }
 

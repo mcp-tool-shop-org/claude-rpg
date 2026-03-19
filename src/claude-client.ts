@@ -22,11 +22,21 @@ export type StructuredResult<T> = {
   error?: string;
 };
 
+export type StreamCallback = (chunk: string) => void;
+
 export type ClaudeClient = {
   generate(opts: {
     system: string;
     prompt: string;
     maxTokens?: number;
+  }): Promise<GenerateResult>;
+
+  /** Optional streaming variant. Returns same GenerateResult with full accumulated text. */
+  generateStream?(opts: {
+    system: string;
+    prompt: string;
+    maxTokens?: number;
+    onChunk: StreamCallback;
   }): Promise<GenerateResult>;
 
   generateStructured<T>(opts: {

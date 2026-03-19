@@ -214,3 +214,46 @@ describe('error-presenter: exit codes', () => {
     expect(classifyForPresentation(err, 'opening').exitCode).toBe(1);
   });
 });
+
+// ─── Migration Failure Rendering ─────────────────────────────
+
+describe('error-presenter: migration failures', () => {
+  it('future version gets distinct headline and upgrade guidance', () => {
+    const err = new SaveValidationError(
+      'This save was created with a newer version of claude-rpg (schema v99). This version supports up to schema v2. Please upgrade.',
+    );
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Save file too new');
+    expect(p.explanation).toContain('newer version');
+    expect(p.nextAction).toContain('Upgrade');
+    expect(p.preserved).toContain('not modified');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('missing version metadata gets unrecognized format headline', () => {
+    const err = new SaveValidationError(
+      'Save file has no recognizable version field. Cannot determine schema version.',
+    );
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Unrecognized save format');
+    expect(p.nextAction).toContain('Check the file path');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('generic SaveValidationError still falls through to default load error', () => {
+    const err = new SaveValidationError('Save file missing required field: engineState');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Could not load save');
+    expect(p.explanation).toContain('engineState');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('debug mode shows SaveValidationError type and message', () => {
+    const err = new SaveValidationError('This save was created with a newer version of claude-rpg (schema v99). This version supports up to schema v2. Please upgrade.');
+    const p = classifyForPresentation(err, 'load');
+    const output = rendered(p, true, err);
+    expect(output).toContain('[debug]');
+    expect(output).toContain('type: SaveValidationError');
+    expect(output).toContain('newer version');
+  });
+});

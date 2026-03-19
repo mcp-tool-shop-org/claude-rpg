@@ -80,6 +80,29 @@ function presentSaveError(_err: Error): ErrorPresentation {
 
 function presentLoadError(err: Error): ErrorPresentation {
   const isSaveValidation = err instanceof SaveValidationError;
+  const isFutureVersion = isSaveValidation && err.message.includes('newer version');
+  const isMissingVersion = isSaveValidation && err.message.includes('no recognizable version');
+
+  if (isFutureVersion) {
+    return {
+      headline: 'Save file too new',
+      explanation: err.message,
+      preserved: 'No session was started. The save file was not modified.',
+      nextAction: 'Upgrade claude-rpg to load this save.',
+      exitCode: 1,
+    };
+  }
+
+  if (isMissingVersion) {
+    return {
+      headline: 'Unrecognized save format',
+      explanation: 'The file has no version metadata — it may not be a claude-rpg save.',
+      preserved: 'No session was started.',
+      nextAction: 'Check the file path, or start a new game.',
+      exitCode: 1,
+    };
+  }
+
   return {
     headline: 'Could not load save',
     explanation: isSaveValidation

@@ -74,6 +74,18 @@ Set your Anthropic API key (only needed for Claude narration):
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+## What's New in v1.4.0
+
+v1.4.0 is a foundation release — seven runtime-proofing sprints that harden everything between the engine and the player.
+
+| Feature | What it means |
+|---------|--------------|
+| **Streaming narration** | Text arrives incrementally at the terminal. The engine resolves first — streaming is presentation only. Interrupted streams cannot corrupt state. |
+| **Save migration pipeline** | Versioned schema with ordered migration steps. Old saves upgrade automatically. Future-version saves are rejected cleanly. |
+| **Structured error handling** | Claude adapter translates SDK failures (timeout, rate-limit, auth, overloaded) into player-safe messages. `--debug` flag shows full diagnostics. |
+| **Typed runtime contracts** | `ExecuteTurnOpts` and `NarrateSceneOpts` replace 21-param and 16-param positional signatures. Field miswires are compile-time errors. |
+| **195 tests** | Turn-loop integration harness, save round-trip and corruption guards, chronicle continuity, streaming proof, coverage floors on critical paths. |
+
 ## Why It's Different
 
 | What | How |
@@ -182,6 +194,16 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | Iron Colosseum starter world |
 | [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Jade Veil starter world |
 | [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Crimson Court starter world |
+
+## Runtime Guarantees (v1.4.0)
+
+| Guarantee | Enforcement |
+|-----------|------------|
+| **Engine resolves before narration** | Turn-loop integration harness with 15 deterministic tests |
+| **Save files survive version drift** | Ordered migration pipeline, historical fixture tests, atomic writes with .bak recovery |
+| **Claude failures become player-safe messages** | Typed `NarrationError` adapter with 9 error-path tests, `--debug` flag for diagnostics |
+| **Streaming cannot corrupt state** | Canonical state finalized before streamed text matters; 6 streaming-specific tests |
+| **Coverage floors on critical paths** | CI enforces per-module thresholds on session, narrator, turn-loop, and LLM adapter |
 
 ## Token Budget
 

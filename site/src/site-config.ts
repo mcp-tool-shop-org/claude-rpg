@@ -58,6 +58,14 @@ export const config: SiteConfig = {
           title: 'Campaign archives',
           desc: 'Browse completed campaigns, export chronicles as markdown or JSON, and share standalone finale documents. Every campaign leaves a record.',
         },
+        {
+          title: 'Streaming narration',
+          desc: 'Text arrives incrementally at the terminal. The engine resolves first — streaming is presentation only. Interrupted streams cannot corrupt game state.',
+        },
+        {
+          title: 'Runtime-proofed',
+          desc: '195 tests across turn-loop integration, save migration, streaming, chronicle continuity, and coverage floors. Typed contracts eliminate field miswires at compile time.',
+        },
       ],
     },
     {
@@ -78,7 +86,7 @@ export const config: SiteConfig = {
     {
       kind: 'data-table',
       id: 'worlds',
-      title: '7 starter worlds',
+      title: '10 starter worlds',
       subtitle: 'Each world comes with factions, NPCs, districts, and genre-specific modules.',
       columns: ['World', 'Genre', 'Theme'],
       rows: [
@@ -89,6 +97,9 @@ export const config: SiteConfig = {
         ['Ashfall Dead', 'Zombie', 'Post-outbreak colony where the living are more dangerous than the dead'],
         ["Dust Devil's Bargain", 'Weird West', 'Frontier town where every deal has a supernatural catch'],
         ['Signal Loss', 'Sci-Fi Colony', 'Deep space colony that lost contact with Earth three years ago'],
+        ['Iron Colosseum', 'Gladiator', 'Arena politics where every fight is a transaction and every champion has a patron'],
+        ['Jade Veil', 'Ronin', 'A masterless warrior navigating clan feuds in a land where honor is currency'],
+        ['Crimson Court', 'Vampire', 'Immortal aristocrats scheming through centuries of debt, blood, and betrayal'],
       ],
     },
     {

@@ -2,7 +2,7 @@
 // Returns canned responses so we can test the turn pipeline without network calls.
 // Supports injecting failures to test error paths.
 
-import type { ClaudeClient, GenerateResult, StructuredResult } from '../../src/claude-client.js';
+import type { ClaudeClient, GenerateResult, StreamCallback, StructuredResult } from '../../src/claude-client.js';
 import { NarrationError, type NarrationErrorKind } from '../../src/llm/claude-errors.js';
 
 export type FakeClientOptions = {
@@ -16,21 +16,26 @@ export type FakeClientOptions = {
   structuredData?: unknown;
   /** Track call counts for assertions. */
   callLog?: CallLog;
+  /** Enable streaming support. If true, generateStream() is implemented. */
+  streaming?: boolean;
+  /** If set and streaming=true, generateStream() throws after emitting this many chunks. */
+  streamInterruptAfter?: number;
 };
 
 export type CallLog = {
   generate: number;
   generateStructured: number;
+  generateStream: number;
 };
 
 export function createCallLog(): CallLog {
-  return { generate: 0, generateStructured: 0 };
+  return { generate: 0, generateStructured: 0, generateStream: 0 };
 }
 
 export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
   const log = opts.callLog ?? createCallLog();
 
-  return {
+  const client: ClaudeClient = {
     model: 'fake-test-model',
 
     async generate(genOpts): Promise<GenerateResult> {
@@ -83,4 +88,51 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
       };
     },
   };
+
+  // Add generateStream as a direct property if streaming is enabled
+  if (opts.streaming) {
+    client.generateStream = async (streamOpts: {
+      system: string;
+      prompt: string;
+      maxTokens?: number;
+      onChunk: StreamCallback;
+    }): Promise<GenerateResult> => {
+      log.generateStream++;
+
+      if (opts.generateFailure) {
+        throw new NarrationError({
+          kind: opts.generateFailure,
+          message: `Fake ${opts.generateFailure} error for testing`,
+        });
+      }
+
+      const narration = opts.narration ?? `The scene unfolds before you.`;
+      // Split narration into word-sized chunks
+      const words = narration.split(' ');
+      let accumulated = '';
+
+      for (let i = 0; i < words.length; i++) {
+        // Interrupt mid-stream if configured
+        if (opts.streamInterruptAfter !== undefined && i >= opts.streamInterruptAfter) {
+          throw new NarrationError({
+            kind: 'timeout',
+            message: 'Fake stream interrupted for testing',
+          });
+        }
+
+        const chunk = (i === 0 ? '' : ' ') + words[i];
+        accumulated += chunk;
+        streamOpts.onChunk(chunk);
+      }
+
+      return {
+        ok: true,
+        text: accumulated,
+        inputTokens: 100,
+        outputTokens: 50,
+      };
+    };
+  }
+
+  return client;
 }

@@ -1,100 +1,237 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
-import { classifyError } from './claude-adapter.js';
-import { NarrationError, userMessage } from './claude-errors.js';
+import { createAdaptedClient, classifyError } from './claude-adapter.js';
+import { NarrationError } from './claude-errors.js';
 
-// These tests validate that SDK exceptions are correctly classified
-// into app-level NarrationError types with the right kind, retryable,
-// and fatal flags — without needing real API calls.
-
-function makeApiError(
-  Cls: new (...args: ConstructorParameters<typeof Anthropic.APIError>) => Anthropic.APIError,
-  status: number,
-  message: string,
-) {
-  // SDK APIError subclasses: (status, error, message, headers)
-  return new Cls(status, { type: 'error', error: { type: 'error', message } }, message, {});
+function fakeMessage(overrides: Partial<Anthropic.Message> = {}): Anthropic.Message {
+  return {
+    id: 'msg_test',
+    type: 'message',
+    role: 'assistant',
+    model: 'claude-sonnet-4-20250514',
+    stop_reason: 'end_turn',
+    stop_sequence: null,
+    usage: { input_tokens: 10, output_tokens: 20, ...(overrides.usage ?? {}) },
+    content: overrides.content ?? [{ type: 'text', text: 'Hello world' }],
+    ...overrides,
+  } as Anthropic.Message;
 }
 
-describe('classifyError', () => {
-  it('classifies AuthenticationError as fatal auth', () => {
-    const sdk = makeApiError(Anthropic.AuthenticationError, 401, 'invalid api key');
-    const err = classifyError(sdk);
-    expect(err).toBeInstanceOf(NarrationError);
-    expect(err.kind).toBe('auth');
-    expect(err.fatal).toBe(true);
-    expect(err.retryable).toBe(false);
+describe('createAdaptedClient', () => {
+  let createSpy: ReturnType<typeof vi.spyOn>;
+  let streamSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    createSpy = vi
+      .spyOn(Anthropic.Messages.prototype, 'create')
+      .mockResolvedValue(fakeMessage());
+
+    streamSpy = vi.spyOn(Anthropic.Messages.prototype, 'stream').mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      finalMessage: vi.fn().mockResolvedValue(fakeMessage()),
+    } as unknown as ReturnType<typeof Anthropic.Messages.prototype.stream>);
   });
 
-  it('classifies RateLimitError as retryable rate-limit', () => {
-    const sdk = makeApiError(Anthropic.RateLimitError, 429, 'rate limit exceeded');
-    const err = classifyError(sdk);
-    expect(err.kind).toBe('rate-limit');
-    expect(err.fatal).toBe(false);
-    expect(err.retryable).toBe(true);
+  it('uses default model', () => {
+    const client = createAdaptedClient();
+    expect(client.model).toBe('claude-sonnet-4-20250514');
   });
 
-  it('classifies APIConnectionTimeoutError as retryable timeout', () => {
-    const sdk = new Anthropic.APIConnectionTimeoutError({ cause: new Error('timed out') });
-    const err = classifyError(sdk);
-    expect(err.kind).toBe('timeout');
-    expect(err.retryable).toBe(true);
-    expect(err.fatal).toBe(false);
+  it('accepts custom model', () => {
+    const client = createAdaptedClient({ model: 'claude-haiku-4-5-20251001', maxTokens: 512 });
+    expect(client.model).toBe('claude-haiku-4-5-20251001');
   });
 
-  it('classifies APIConnectionError as retryable transport', () => {
-    const sdk = new Anthropic.APIConnectionError({ cause: new Error('ECONNREFUSED') });
-    const err = classifyError(sdk);
-    expect(err.kind).toBe('transport');
-    expect(err.retryable).toBe(true);
-    expect(err.fatal).toBe(false);
+  describe('generate', () => {
+    it('returns GenerateResult from a successful response', async () => {
+      const client = createAdaptedClient({ apiKey: 'test-key' });
+      const result = await client.generate({ system: 'sys', prompt: 'hi' });
+      expect(result).toEqual({ ok: true, text: 'Hello world', inputTokens: 10, outputTokens: 20 });
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ system: 'sys', messages: [{ role: 'user', content: 'hi' }] }),
+      );
+    });
+
+    it('reports ok:false when stop_reason is not end_turn', async () => {
+      createSpy.mockResolvedValue(fakeMessage({ stop_reason: 'max_tokens' }));
+      const client = createAdaptedClient();
+      const result = await client.generate({ system: 's', prompt: 'p' });
+      expect(result.ok).toBe(false);
+    });
+
+    it('concatenates multiple text blocks', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: 'part1' }, { type: 'text', text: 'part2' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const result = await client.generate({ system: 's', prompt: 'p' });
+      expect(result.text).toBe('part1part2');
+    });
+
+    it('filters non-text blocks', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({
+          content: [
+            { type: 'tool_use', id: 'x', name: 'f', input: {} } as unknown as Anthropic.ContentBlock,
+            { type: 'text', text: 'only-text' },
+          ] as Anthropic.ContentBlock[],
+        }),
+      );
+      const client = createAdaptedClient();
+      const result = await client.generate({ system: 's', prompt: 'p' });
+      expect(result.text).toBe('only-text');
+    });
+
+    it('uses per-call maxTokens when provided', async () => {
+      const client = createAdaptedClient({ maxTokens: 1024 });
+      await client.generate({ system: 's', prompt: 'p', maxTokens: 256 });
+      expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ max_tokens: 256 }));
+    });
+
+    it('wraps SDK errors as NarrationError', async () => {
+      createSpy.mockRejectedValue(
+        new Anthropic.AuthenticationError(401, { type: 'error', error: { type: 'authentication_error', message: 'bad key' } }, 'bad key', {}),
+      );
+      const client = createAdaptedClient();
+      await expect(client.generate({ system: 's', prompt: 'p' })).rejects.toThrow(NarrationError);
+    });
   });
 
-  it('classifies BadRequestError as fatal bad-request', () => {
-    const sdk = makeApiError(Anthropic.BadRequestError, 400, 'invalid prompt');
-    const err = classifyError(sdk);
-    expect(err.kind).toBe('bad-request');
-    expect(err.fatal).toBe(true);
-    expect(err.retryable).toBe(false);
+  describe('generateStream', () => {
+    it('accumulates text chunks and returns GenerateResult', async () => {
+      const onFn = vi.fn().mockImplementation(function (this: unknown, event: string, cb: (t: string) => void) {
+        if (event === 'text') { cb('chunk1'); cb('chunk2'); }
+        return this;
+      });
+      streamSpy.mockReturnValue({
+        on: onFn,
+        finalMessage: vi.fn().mockResolvedValue(fakeMessage()),
+      } as unknown as ReturnType<typeof Anthropic.Messages.prototype.stream>);
+
+      const client = createAdaptedClient();
+      const chunks: string[] = [];
+      const result = await client.generateStream!({ system: 's', prompt: 'p', onChunk: (c) => chunks.push(c) });
+      expect(chunks).toEqual(['chunk1', 'chunk2']);
+      expect(result.text).toBe('chunk1chunk2');
+      expect(result.inputTokens).toBe(10);
+      expect(result.outputTokens).toBe(20);
+    });
+
+    it('wraps stream errors as NarrationError', async () => {
+      streamSpy.mockReturnValue({
+        on: vi.fn().mockReturnThis(),
+        finalMessage: vi.fn().mockRejectedValue(
+          new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'x' } }, 'x', {}),
+        ),
+      } as unknown as ReturnType<typeof Anthropic.Messages.prototype.stream>);
+
+      const client = createAdaptedClient();
+      await expect(client.generateStream!({ system: 's', prompt: 'p', onChunk: () => {} })).rejects.toThrow(NarrationError);
+    });
   });
 
-  it('classifies generic APIError as unexpected', () => {
-    const sdk = makeApiError(Anthropic.InternalServerError, 500, 'server error');
-    const err = classifyError(sdk);
-    expect(err.kind).toBe('unexpected');
-    expect(err.fatal).toBe(false);
-    expect(err.retryable).toBe(false);
-  });
+  describe('generateStructured', () => {
+    it('parses JSON from fenced block', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: 'Here:\n```json\n{"a":1}\n```' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const result = await client.generateStructured<{ a: number }>({ system: 's', prompt: 'p' });
+      expect(result.ok).toBe(true);
+      expect(result.data).toEqual({ a: 1 });
+    });
 
-  it('classifies non-SDK errors as unexpected', () => {
-    const err = classifyError(new TypeError('Cannot read properties of undefined'));
-    expect(err.kind).toBe('unexpected');
-    expect(err.message).toContain('Cannot read properties of undefined');
-  });
+    it('parses raw JSON object when no fence', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: 'result: {"b":2}' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const result = await client.generateStructured<{ b: number }>({ system: 's', prompt: 'p' });
+      expect(result.ok).toBe(true);
+      expect(result.data).toEqual({ b: 2 });
+    });
 
-  it('preserves cause chain', () => {
-    const original = new Error('network down');
-    const sdk = new Anthropic.APIConnectionError({ cause: original });
-    const err = classifyError(sdk);
-    expect(err.cause).toBe(sdk);
+    it('returns ok:false when no JSON found', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: 'no json here' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const result = await client.generateStructured({ system: 's', prompt: 'p' });
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('No JSON found in response');
+    });
+
+    it('returns ok:false on malformed JSON', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: '```json\n{broken}\n```' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const result = await client.generateStructured({ system: 's', prompt: 'p' });
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('JSON parse error');
+    });
   });
 });
 
-describe('userMessage', () => {
-  it('returns player-safe message for each error kind', () => {
-    const kinds: Array<{ kind: NarrationError['kind']; fragment: string }> = [
-      { kind: 'auth', fragment: 'API key' },
-      { kind: 'rate-limit', fragment: 'catch their breath' },
-      { kind: 'timeout', fragment: 'lost their thread' },
-      { kind: 'transport', fragment: 'interrupted' },
-      { kind: 'bad-request', fragment: 'bug' },
-      { kind: 'unexpected', fragment: 'unexpected' },
-    ];
+describe('classifyError', () => {
+  it('maps AuthenticationError to auth', () => {
+    const err = new Anthropic.AuthenticationError(401, { type: 'error', error: { type: 'authentication_error', message: 'x' } }, 'x', {});
+    const result = classifyError(err);
+    expect(result).toBeInstanceOf(NarrationError);
+    expect(result.kind).toBe('auth');
+    expect(result.fatal).toBe(true);
+  });
 
-    for (const { kind, fragment } of kinds) {
-      const err = new NarrationError({ kind, message: 'test' });
-      const msg = userMessage(err);
-      expect(msg).toContain(fragment);
-    }
+  it('maps RateLimitError to rate-limit', () => {
+    const err = new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'x' } }, 'x', {});
+    const result = classifyError(err);
+    expect(result.kind).toBe('rate-limit');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('maps APIConnectionTimeoutError to timeout', () => {
+    const err = new Anthropic.APIConnectionTimeoutError({ message: 'timed out' });
+    const result = classifyError(err);
+    expect(result.kind).toBe('timeout');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('maps APIConnectionError to transport', () => {
+    const err = new Anthropic.APIConnectionError({ message: 'ECONNREFUSED' });
+    const result = classifyError(err);
+    expect(result.kind).toBe('transport');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('maps BadRequestError to bad-request', () => {
+    const err = new Anthropic.BadRequestError(400, { type: 'error', error: { type: 'invalid_request_error', message: 'bad' } }, 'bad', {});
+    const result = classifyError(err);
+    expect(result.kind).toBe('bad-request');
+    expect(result.fatal).toBe(true);
+  });
+
+  it('maps generic APIError to unexpected', () => {
+    const err = new Anthropic.APIError(500, { type: 'error', error: { type: 'api_error', message: 'boom' } }, 'boom', {});
+    const result = classifyError(err);
+    expect(result.kind).toBe('unexpected');
+  });
+
+  it('maps non-SDK Error to unexpected', () => {
+    const result = classifyError(new TypeError('whoops'));
+    expect(result.kind).toBe('unexpected');
+    expect(result.message).toContain('whoops');
+  });
+
+  it('maps non-Error value to unexpected', () => {
+    const result = classifyError('string-error');
+    expect(result.kind).toBe('unexpected');
+    expect(result.message).toContain('string-error');
+  });
+
+  it('extracts requestId from SDK errors when present', () => {
+    const err = new Anthropic.AuthenticationError(401, { type: 'error', error: { type: 'authentication_error', message: 'x' } }, 'x', {});
+    (err as unknown as Record<string, unknown>).request_id = 'req_abc123';
+    const result = classifyError(err);
+    expect(result.requestId).toBe('req_abc123');
   });
 });

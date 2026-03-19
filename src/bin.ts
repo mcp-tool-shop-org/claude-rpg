@@ -35,6 +35,7 @@ import {
   getDefaultSaveDir,
 } from './session/session.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
+import { presentError } from './cli/error-presenter.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
@@ -81,6 +82,7 @@ claude-rpg — simulation-grounded narrative RPG
 Usage:
   claude-rpg play [--world fantasy|cyberpunk]   Play a starter world
                   [--fast]                      Accelerated campaign pacing
+                  [--debug]                     Show structured error details
   claude-rpg load                               Load a saved game
   claude-rpg new "<prompt>"                     Generate a world from a prompt
   claude-rpg archive                            Browse completed campaigns
@@ -105,10 +107,14 @@ Environment:
   ANTHROPIC_API_KEY   Required. Your Claude API key.
 `;
 
+let debugMode = false;
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+  debugMode = args.includes('--debug');
+  const filteredArgs = args.filter((a) => a !== '--debug');
 
-  if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+  if (filteredArgs.length === 0 || filteredArgs.includes('--help') || filteredArgs.includes('-h')) {
     console.log(USAGE);
     process.exit(0);
   }
@@ -120,16 +126,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const command = args[0];
+  const command = filteredArgs[0];
 
   if (command === 'play') {
-    await runPlay(args.slice(1));
+    await runPlay(filteredArgs.slice(1));
   } else if (command === 'load') {
     await runLoad();
   } else if (command === 'archive') {
     await runArchive();
   } else if (command === 'new') {
-    const prompt = args.slice(1).join(' ').replace(/^["']|["']$/g, '');
+    const prompt = filteredArgs.slice(1).join(' ').replace(/^["']|["']$/g, '');
     if (!prompt) {
       console.error('Error: provide a world prompt. Example:');
       console.error('  claude-rpg new "A flooded gothic trade city ruled by debt-priests"');
@@ -241,8 +247,8 @@ async function runLoad(): Promise<void> {
       try {
         const saved = JSON.parse(savedSession.engineState);
         Object.assign(engine.store.state, saved.world.state);
-      } catch {
-        console.error('  Warning: could not restore world state.');
+      } catch (err) {
+        presentError(err, 'load', debugMode);
       }
     }
   }
@@ -412,9 +418,9 @@ async function runGameLoop(
     const opening = await session.getOpeningNarration();
     console.log(opening);
   } catch (err) {
-    console.error('Error generating opening narration:', err);
+    const exitCode = presentError(err, 'opening', debugMode);
     rl.close();
-    process.exit(1);
+    process.exit(exitCode ?? 1);
   }
 
   // Game loop
@@ -469,7 +475,7 @@ async function runGameLoop(
           if (recapText) console.log(recapText);
           else console.log('');
         } catch (err) {
-          console.error(`  Save failed: ${err}`);
+          presentError(err, 'save', debugMode);
         }
         prompt();
         return;
@@ -503,7 +509,7 @@ async function runGameLoop(
 
         console.log(output);
       } catch (err) {
-        console.error(`  Error: ${err}`);
+        presentError(err, 'turn', debugMode);
       }
 
       prompt();
@@ -668,6 +674,6 @@ function buildUnifiedRecap(
 }
 
 main().catch((err) => {
-  console.error('Fatal error:', err);
+  presentError(err, 'startup', debugMode);
   process.exit(1);
 });

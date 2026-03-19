@@ -154,6 +154,36 @@ import {
   formatDistrictMoodForNarrator,
 } from '@ai-rpg-engine/modules';
 import { getReputation } from '@ai-rpg-engine/character-profile';
+import {
+  getPlayerDistrictId as _getPlayerDistrictId,
+  getDistrictDescriptor as _getDistrictDescriptor,
+  getPartyPresence as _getPartyPresence,
+  getEconomyContext as _getEconomyContext,
+  getCraftingContext as _getCraftingContext,
+  getPlayerZoneFaction as _getPlayerZoneFaction,
+  getPresenceData,
+  getStatusDataFromProfile,
+  getOpportunityContext as _getOpportunityContext,
+  getArcContext as _getArcContext,
+  getEndgameContext as _getEndgameContext,
+  getVisiblePressureContext as _getVisiblePressureContext,
+  getTitleEvolutions,
+  propagateRumors as _propagateRumors,
+  addRumor as _addRumor,
+  buildPressureInputs as _buildPressureInputs,
+  applyFalloutEffects as _applyFalloutEffects,
+  initializeDistrictEconomies,
+  tickDistrictEconomies as _tickDistrictEconomies,
+  applyEconomyShiftToMap,
+  buildArcInputs as _buildArcInputs,
+  buildFinaleFromState,
+  buildCurrentStrategicMap as _buildCurrentStrategicMap,
+  buildMoveRecommendation as _buildMoveRecommendation,
+  hasEverUsedLeverage as _hasEverUsedLeverage,
+  getPlayerFactionAccess as _getPlayerFactionAccess,
+  simpleHashNum,
+  sanitizeFilename,
+} from './game/game-state.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
@@ -275,15 +305,12 @@ export class GameSession {
 
   /** Get presence strings from current profile state. */
   getPresence(): { narrator?: string; npc?: string } {
-    if (!this.profile || !this.itemCatalog) return {};
-    const presence = buildPresence(this.profile, this.itemCatalog);
-    return { narrator: presence.narratorSummary, npc: presence.npcPerception };
+    return getPresenceData(this.profile, this.itemCatalog);
   }
 
   /** Get status data for enhanced status bar. */
   getStatusData(): StatusData | null {
-    if (!this.profile || !this.itemCatalog) return null;
-    return buildStatusData(this.profile, this.itemCatalog);
+    return getStatusDataFromProfile(this.profile, this.itemCatalog);
   }
 
   /** Apply profile update hints from a turn result. */
@@ -755,159 +782,55 @@ export class GameSession {
 
   /** Universal title evolutions based on milestone tags. */
   private getTitleEvolutions(): TitleEvolution[] {
-    return [
-      { requiredTags: ['boss-kill'], minCount: 3, prefix: 'Legendary' },
-      { requiredTags: ['combat'], minCount: 5, suffix: 'the Bloodied' },
-      { requiredTags: ['exploration'], minCount: 3, suffix: 'the Wanderer' },
-    ];
+    return getTitleEvolutions();
   }
 
   /** Propagate existing rumors to new factions (max 3 per turn). */
   private propagateRumors(): void {
-    const factionIds = Object.keys(this.engine.world.factions);
-    if (factionIds.length <= 1) return;
-
-    // District mood scales rumor spread: low spirit → rumors travel faster
-    let rumorSpreadScale = 1.0;
-    const playerDist = this.getPlayerDistrictId();
-    if (playerDist) {
-      const dState = getDistrictState(this.engine.world, playerDist);
-      const dDef = getDistrictDefinition(this.engine.world, playerDist);
-      if (dState && dDef) {
-        const mood = computeDistrictMood(dState, dDef.tags);
-        const mods = computeDistrictModifiers(mood);
-        rumorSpreadScale = mods.rumorSpreadScale;
-      }
-    }
-
-    // Apply companion ability modifiers to rumor spread
-    if (this.partyState.companions.length > 0) {
-      const partyAbilities = computePartyAbilities(this.partyState);
-      if (partyAbilities.length > 0) {
-        const abilityMods = computeAbilityModifiers(partyAbilities);
-        rumorSpreadScale *= abilityMods.rumorSpreadScale;
-      }
-    }
-
-    // Scale the effective max propagations per turn
-    const MAX_PER_TURN = Math.round(3 * rumorSpreadScale);
-    let propagations = 0;
-
-    for (let i = 0; i < this.playerRumors.length && propagations < MAX_PER_TURN; i++) {
-      const rumor = this.playerRumors[i];
-      if (rumor.confidence <= 0.3) continue;
-
-      // Find factions that haven't heard this rumor yet
-      const eligible = factionIds.filter((f) => !rumor.spreadTo.includes(f));
-      if (eligible.length === 0) continue;
-
-      // Pick one faction to propagate to
-      const target = eligible[propagations % eligible.length];
-      this.playerRumors[i] = propagateRumor(rumor, target);
-      propagations++;
-    }
+    this.playerRumors = _propagateRumors(this.playerRumors, this.engine.world, this.partyState);
   }
 
   /** Get the district ID the player is currently in. */
   private getPlayerDistrictId(): string | undefined {
-    return getDistrictForZone(this.engine.world, this.engine.world.locationId);
+    return _getPlayerDistrictId(this.engine.world);
   }
 
   /** Get a compact district mood descriptor for the narrator. */
   private getDistrictDescriptor(): string | undefined {
-    const districtId = this.getPlayerDistrictId();
-    if (!districtId) return undefined;
-    const dState = getDistrictState(this.engine.world, districtId);
-    const dDef = getDistrictDefinition(this.engine.world, districtId);
-    if (!dState || !dDef) return undefined;
-    const mood = computeDistrictMood(dState, dDef.tags);
-    return formatDistrictMoodForNarrator(mood, dDef.name);
+    return _getDistrictDescriptor(this.engine.world);
   }
 
   /** Get a compact party presence string for the narrator. */
   private getPartyPresence(): string | undefined {
-    if (!this.partyState || this.partyState.companions.length === 0) return undefined;
-    const companionNames: Record<string, string> = {};
-    for (const comp of this.partyState.companions) {
-      companionNames[comp.npcId] = this.engine.world.entities[comp.npcId]?.name ?? comp.npcId;
-    }
-    return formatPartyPresence(this.partyState, companionNames) ?? undefined;
+    return _getPartyPresence(this.engine.world, this.partyState);
   }
 
   /** Get economy context for narrator (~10-15 tokens). */
   private getEconomyContext(): string | undefined {
-    const districtId = this.getPlayerDistrictId();
-    if (!districtId) return undefined;
-    const economy = this.districtEconomies.get(districtId);
-    if (!economy) return undefined;
-    const descriptor = deriveEconomyDescriptor(economy);
-    return formatEconomyForNarrator(descriptor);
+    return _getEconomyContext(this.engine.world, this.districtEconomies);
   }
 
   /** Build crafting context string describing notable crafted/modified gear (v1.8). */
   private getCraftingContext(): string | undefined {
-    if (!this.profile || !this.itemCatalog) return undefined;
-    const parts: string[] = [];
-    for (const slot of ['weapon', 'armor', 'tool', 'accessory', 'trinket'] as const) {
-      const itemId = this.profile.loadout.equipped[slot];
-      if (!itemId) continue;
-      const item = this.itemCatalog.items.find((i) => i.id === itemId);
-      if (!item?.provenance?.flags?.length) continue;
-      const flags = item.provenance.flags;
-      const notable = flags.filter((f) =>
-        ['makeshift', 'blessed', 'cursed', 'contraband', 'faction-marked'].includes(f),
-      );
-      if (notable.length > 0) {
-        const factionNote = item.provenance.factionId ? ` (${item.provenance.factionId})` : '';
-        parts.push(`${item.name}: ${notable.join(', ')}${factionNote}`);
-      }
-    }
-    return parts.length > 0 ? parts.join('; ') : undefined;
+    return _getCraftingContext(this.profile, this.itemCatalog);
   }
 
   /** Get the faction that controls the player's current zone (for witnessing). */
   private getPlayerZoneFaction(): string | undefined {
-    // Find an NPC in the current zone that belongs to a faction
-    for (const entity of Object.values(this.engine.world.entities)) {
-      if (entity.zoneId === this.engine.world.locationId && entity.ai) {
-        const factionId = getEntityFaction(this.engine.world, entity.id);
-        if (factionId) return factionId;
-      }
-    }
-    return undefined;
+    return _getPlayerZoneFaction(this.engine.world);
   }
 
   /** Format visible pressures + faction agency hints for narrator prompt injection. */
   private getVisiblePressureContext(): string[] | undefined {
-    const hints: string[] = [];
-
-    // Pressure hints (max 2)
-    const visible = getVisiblePressures(this.activePressures).slice(0, 2);
-    for (const p of visible) {
-      const urgency = p.urgency >= 0.7 ? 'urgent' : p.urgency >= 0.4 ? 'growing' : 'distant';
-      hints.push(`${p.kind}: ${p.description} (${urgency})`);
-    }
-
-    // Faction agency hints (max 2, from last turn's actions)
-    const agencyHints = formatFactionAgencyForNarrator(this.lastFactionActions);
-    hints.push(...agencyHints);
-
-    // NPC agency hints (max 2, from last turn's NPC actions)
-    const npcHints = formatNpcAgencyForNarrator(this.lastNpcActions);
-    hints.push(...npcHints);
-
-    // NPC behavioral texture hints (max 3, from current profiles)
-    const textureHints = generateNpcTextures(
-      this.lastNpcProfiles, this.engine.world, this.engine.world.playerId,
+    return _getVisiblePressureContext(
+      this.activePressures,
+      this.lastFactionActions,
+      this.lastNpcActions,
+      this.lastNpcProfiles,
+      this.engine.world,
+      this.engine.world.playerId,
+      this.lastLeverageResolution,
     );
-    hints.push(...textureHints);
-
-    // Leverage action hint (from last turn's resolution)
-    if (this.lastLeverageResolution?.success && this.lastLeverageResolution.narratorHint) {
-      hints.push(formatLeverageActionForNarrator(this.lastLeverageResolution));
-    }
-
-    return hints.length > 0 ? hints : undefined;
   }
 
   /** Tick existing pressures, process expired → fallout, evaluate for new ones. */
@@ -1056,62 +979,10 @@ export class GameSession {
 
   /** Assemble PressureInputs from current session state. */
   private buildPressureInputs(): PressureInputs {
-    const factionIds = Object.keys(this.engine.world.factions);
-
-    // Build reputation array from profile
-    const reputation = factionIds.map((factionId) => ({
-      factionId,
-      value: this.profile ? getReputation(this.profile, factionId) : 0,
-    }));
-
-    // Build faction states from cognition
-    const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
-    for (const factionId of factionIds) {
-      const fcog = getFactionCognition(this.engine.world, factionId);
-      if (fcog) {
-        const state = fcog as Record<string, unknown>;
-        factionStates[factionId] = {
-          alertLevel: (state.alertLevel as number) ?? 0,
-          cohesion: (state.cohesion as number) ?? 1,
-        };
-      } else {
-        factionStates[factionId] = { alertLevel: 0, cohesion: 1 };
-      }
-    }
-
-    // Build milestones array from profile
-    const milestones = (this.profile?.milestones ?? []).map((m) => ({
-      label: m.label,
-      tags: m.tags,
-    }));
-
-    // Build district metrics for pressure evaluation
-    const districtIds = getAllDistrictIds(this.engine.world);
-    const districtMetrics: Record<string, { alertPressure: number; rumorDensity: number; stability: number }> = {};
-    for (const dId of districtIds) {
-      const dState = getDistrictState(this.engine.world, dId);
-      if (dState) {
-        districtMetrics[dId] = {
-          alertPressure: dState.alertPressure,
-          rumorDensity: dState.rumorDensity,
-          stability: dState.stability,
-        };
-      }
-    }
-
-    return {
-      playerRumors: this.playerRumors,
-      reputation,
-      milestones,
-      factionStates,
-      districtMetrics: Object.keys(districtMetrics).length > 0 ? districtMetrics : undefined,
-      playerLevel: this.profile?.progression.level ?? 1,
-      totalTurns: this.profile?.totalTurns ?? 0,
-      activePressures: this.activePressures,
-      genre: this.genre,
-      currentTick: this.engine.tick,
-      districtEconomies: this.districtEconomies.size > 0 ? this.districtEconomies : undefined,
-    };
+    return _buildPressureInputs(
+      this.engine.world, this.profile, this.playerRumors,
+      this.activePressures, this.genre, this.engine.tick, this.districtEconomies,
+    );
   }
 
   // --- Opportunity System (v1.9) ---
@@ -1396,69 +1267,20 @@ export class GameSession {
 
   /** Get compact opportunity context string for narrator (~20 tokens). */
   getOpportunityContext(): string | undefined {
-    const accepted = getAcceptedOpportunities(this.activeOpportunities);
-    if (accepted.length === 0) return undefined;
-    const opp = accepted[0];
-    const deadline = opp.turnsRemaining != null ? ` (${opp.turnsRemaining} turns left)` : '';
-    return `Active ${opp.kind}: ${opp.title}${deadline}`;
+    return _getOpportunityContext(this.activeOpportunities);
   }
 
   // --- v2.0: Arc Detection & Endgame ---
 
   /** Assemble ArcInputs from current session state. */
   private buildArcInputs(): ArcInputs {
-    const factionIds = Object.keys(this.engine.world.factions);
-    const factionStates = factionIds.map((factionId) => {
-      const fcog = getFactionCognition(this.engine.world, factionId);
-      const state = fcog as Record<string, unknown> | undefined;
-      return {
-        factionId,
-        alertLevel: (state?.alertLevel as number) ?? 0,
-        cohesion: (state?.cohesion as number) ?? 1,
-      };
-    });
-    const playerReputations = factionIds.map((fid) => ({
-      factionId: fid,
-      value: this.profile ? getReputation(this.profile, fid) : 0,
-    }));
-    const player = this.engine.world.entities[this.engine.world.playerId];
-    const leverage = this.profile ? getLeverageState(this.profile.custom) : { favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0 };
-    const totalTurns = this.profile?.totalTurns ?? 0;
-    const currentTick = this.engine.tick;
-
-    // Fast mode: inflate turn counts and leverage values to accelerate arc/endgame detection
-    const turnScale = this.fastMode ? 2 : 1;
-    const leverageScale = this.fastMode ? 1.5 : 1;
-
-    return {
-      factionStates,
-      playerReputations: this.fastMode
-        ? playerReputations.map((r) => ({ ...r, value: Math.round(r.value * leverageScale) }))
-        : playerReputations,
-      playerLeverage: this.fastMode
-        ? {
-            favor: Math.round(leverage.favor * leverageScale),
-            debt: Math.round(leverage.debt * leverageScale),
-            blackmail: Math.round(leverage.blackmail * leverageScale),
-            influence: Math.round(leverage.influence * leverageScale),
-            heat: leverage.heat, // don't scale heat — it's a penalty
-            legitimacy: Math.round(leverage.legitimacy * leverageScale),
-          }
-        : leverage,
-      activePressures: this.activePressures,
-      npcProfiles: this.lastNpcProfiles,
-      npcObligations: this.npcObligations,
-      companions: this.partyState.companions,
-      districtEconomies: this.districtEconomies,
-      activeOpportunities: this.activeOpportunities,
-      resolvedPressures: this.resolvedPressures,
-      resolvedOpportunities: this.resolvedOpportunities,
-      playerHp: player?.resources?.hp,
-      playerMaxHp: player?.resources?.maxHp,
-      playerLevel: this.profile?.progression.level ?? 1,
-      totalTurns: totalTurns * turnScale,
-      currentTick: currentTick * turnScale,
-    };
+    return _buildArcInputs(
+      this.engine.world, this.profile, this.activePressures,
+      this.lastNpcProfiles, this.npcObligations, this.partyState,
+      this.districtEconomies, this.activeOpportunities,
+      this.resolvedPressures, this.resolvedOpportunities,
+      this.engine.tick, this.fastMode,
+    );
   }
 
   /** Evaluate arc signals and update snapshot. */
@@ -1497,71 +1319,29 @@ export class GameSession {
 
   /** Get compact arc context for narrator (~15 tokens). */
   getArcContext(): string | undefined {
-    if (!this.arcSnapshot) return undefined;
-    const text = formatArcForNarrator(this.arcSnapshot);
-    return text || undefined;
+    return _getArcContext(this.arcSnapshot);
   }
 
   /** Get endgame turning-point context for narrator. */
   getEndgameContext(): string | undefined {
-    if (this.endgameTriggers.length === 0) return undefined;
-    const latest = this.endgameTriggers[this.endgameTriggers.length - 1];
-    if (latest.acknowledged) return undefined;
-    return formatEndgameForNarrator(latest);
+    return _getEndgameContext(this.endgameTriggers);
   }
 
   /** Build the finale outline from current campaign state. */
   buildFinale(): FinaleOutline {
-    const resolutionClass = this.endgameTriggers.length > 0
-      ? this.endgameTriggers[this.endgameTriggers.length - 1].resolutionClass
-      : 'quiet-retirement';
-    const dominantArc = this.arcSnapshot?.dominantArc ?? null;
-
-    const npcs: FinaleNpcInput[] = this.lastNpcProfiles.map((p) => ({
-      npcId: p.npcId,
-      name: p.name,
-      breakpoint: p.breakpoint,
-      isCompanion: isCompanion(this.partyState, p.npcId),
-    }));
-
-    const factionIds = Object.keys(this.engine.world.factions);
-    const factions: FinaleFactionInput[] = factionIds.map((fid) => {
-      const fcog = getFactionCognition(this.engine.world, fid);
-      const state = fcog as Record<string, unknown> | undefined;
-      return {
-        factionId: fid,
-        playerReputation: this.profile ? getReputation(this.profile, fid) : 0,
-        alertLevel: (state?.alertLevel as number) ?? 0,
-        cohesion: (state?.cohesion as number) ?? 1,
-      };
-    });
-
-    const districtIds = getAllDistrictIds(this.engine.world);
-    const districts: FinaleDistrictInput[] = districtIds.map((did) => {
-      const dState = getDistrictState(this.engine.world, did);
-      const dDef = getDistrictDefinition(this.engine.world, did);
-      const economy = this.districtEconomies.get(did);
-      const descriptor = economy ? deriveEconomyDescriptor(economy) : undefined;
-      return {
-        districtId: did,
-        name: dDef?.name ?? did,
-        stability: dState?.stability ?? 50,
-        controllingFaction: dDef?.controllingFaction,
-        economyTone: descriptor?.overallTone ?? 'stable',
-      };
-    });
-
-    const outline = buildFinaleOutline(
-      resolutionClass, dominantArc, this.journal,
-      npcs, factions, districts,
-      this.profile?.totalTurns ?? this.engine.tick,
-      this.profile?.custom.title as string | undefined,
-      this.profile?.progression.level,
+    const outline = buildFinaleFromState(
+      this.engine.world, this.profile, this.journal,
+      this.arcSnapshot, this.endgameTriggers, this.partyState,
+      this.lastNpcProfiles, this.districtEconomies, this.engine.tick,
     );
 
     this.finaleOutline = outline;
 
     // Record campaign-concluded in chronicle
+    const resolutionClass = this.endgameTriggers.length > 0
+      ? this.endgameTriggers[this.endgameTriggers.length - 1].resolutionClass
+      : 'quiet-retirement';
+    const dominantArc = this.arcSnapshot?.dominantArc ?? null;
     this.journal.record({
       tick: this.engine.tick,
       category: 'campaign-concluded',
@@ -1791,30 +1571,12 @@ export class GameSession {
 
   /** Initialize district economies from genre + district tags. */
   private initializeDistrictEconomies(): void {
-    const districtIds = getAllDistrictIds(this.engine.world);
-    for (const districtId of districtIds) {
-      const def = getDistrictDefinition(this.engine.world, districtId);
-      const tags = def?.tags ?? [];
-      this.districtEconomies.set(
-        districtId,
-        createDistrictEconomy(this.genre, tags),
-      );
-    }
+    this.districtEconomies = initializeDistrictEconomies(this.engine.world, this.genre);
   }
 
   /** Tick all district economies — baseline-seeking decay, stability modulation. */
   private tickDistrictEconomies(): void {
-    for (const [districtId, economy] of this.districtEconomies) {
-      const dState = getDistrictState(this.engine.world, districtId);
-      if (!dState) continue;
-      const updated = tickDistrictEconomy(
-        economy,
-        dState.commerce,
-        dState.stability,
-        this.engine.tick,
-      );
-      this.districtEconomies.set(districtId, updated);
-    }
+    _tickDistrictEconomies(this.districtEconomies, this.engine.world, this.engine.tick);
   }
 
   /** Apply an economy-shift effect to a district's economy. */
@@ -1824,15 +1586,7 @@ export class GameSession {
     delta: number,
     cause: string,
   ): void {
-    const economy = this.districtEconomies.get(districtId);
-    if (!economy) return;
-    const updated = applyEconomyShift(economy, {
-      districtId,
-      category: category as SupplyCategory,
-      delta,
-      cause,
-    });
-    this.districtEconomies.set(districtId, updated);
+    applyEconomyShiftToMap(this.districtEconomies, districtId, category, delta, cause);
   }
 
   /** Faction agency: factions evaluate state and take strategic actions. */
@@ -2662,59 +2416,26 @@ export class GameSession {
 
   /** Build a StrategicMap from current session state. */
   private buildCurrentStrategicMap(): StrategicMap {
-    const playerReputations = Object.keys(this.engine.world.factions).map((fid) => ({
-      factionId: fid,
-      value: this.profile ? getReputation(this.profile, fid) : 0,
-    }));
-    return buildStrategicMap(
-      this.engine.world,
-      this.playerRumors,
-      this.activePressures,
-      playerReputations,
-      this.lastFactionActions,
-      this.districtEconomies,
-      this.activeOpportunities,
+    return _buildCurrentStrategicMap(
+      this.engine.world, this.profile, this.playerRumors,
+      this.activePressures, this.lastFactionActions,
+      this.districtEconomies, this.activeOpportunities,
     );
   }
 
   /** Build a MoveRecommendation from current session state. */
   private buildMoveRecommendation(): MoveRecommendation {
-    if (!this.profile) return { top3: [], situationTag: 'safe' };
-    const leverageState = getLeverageState(this.profile.custom);
-    const map = this.buildCurrentStrategicMap();
-    const playerReputations = Object.keys(this.engine.world.factions).map((fid) => ({
-      factionId: fid,
-      value: getReputation(this.profile!, fid),
-    }));
-
-    // Extract cooldowns from profile.custom
-    const cooldowns: Record<string, number> = {};
-    for (const [key, val] of Object.entries(this.profile.custom)) {
-      if (key.startsWith('cooldown.') && typeof val === 'number') {
-        cooldowns[key.replace('cooldown.', '')] = val;
-      }
-    }
-
-    const inputs: AdvisorInputs = {
-      leverageState,
-      activePressures: this.activePressures,
-      factionViews: map.factions,
-      districtViews: map.districts,
-      playerReputation: playerReputations,
-      currentTick: this.engine.tick,
-      cooldowns,
-      playerHeat: (leverageState as Record<string, number>).heat ?? 0,
-      activeOpportunities: this.activeOpportunities,
-    };
-    return recommendMoves(inputs);
+    return _buildMoveRecommendation(
+      this.engine.world, this.profile, this.playerRumors,
+      this.activePressures, this.lastFactionActions,
+      this.districtEconomies, this.activeOpportunities,
+      this.engine.tick,
+    );
   }
 
   /** Check whether the player has ever used any leverage action. */
   private hasEverUsedLeverage(): boolean {
-    if (!this.profile) return false;
-    return Object.keys(this.profile.custom).some(
-      (k) => k.startsWith('stats.action.') && (this.profile!.custom[k] as number) > 0,
-    );
+    return _hasEverUsedLeverage(this.profile);
   }
 
   // --- Companion Commands ---
@@ -2787,21 +2508,7 @@ export class GameSession {
 
   /** Add a rumor, applying companion rumor-suppression if applicable. */
   private addRumor(rumor: PlayerRumor): void {
-    // Companion rumor suppression: negative rumors may be buried
-    if ((rumor.valence === 'fearsome' || rumor.valence === 'tragic') && this.partyState.companions.length > 0) {
-      const partyAbilities = computePartyAbilities(this.partyState);
-      if (partyAbilities.length > 0) {
-        const abilityMods = computeAbilityModifiers(partyAbilities);
-        if (abilityMods.rumorSuppressionChance > 0) {
-          const roll = simpleHashNum(rumor.id + this.engine.tick) % 100;
-          if (roll < abilityMods.rumorSuppressionChance * 100) {
-            // Rumor suppressed — don't add it
-            return;
-          }
-        }
-      }
-    }
-    this.playerRumors.push(rumor);
+    this.playerRumors = _addRumor(rumor, this.playerRumors, this.partyState, this.engine.tick);
   }
 
   /** Process companion reactions to a trigger. Applies morale deltas and handles departures. */
@@ -2864,18 +2571,7 @@ export class GameSession {
 
   /** Get the faction the player has highest rep with (for crafting provenance). */
   private getPlayerFactionAccess(): string | undefined {
-    if (!this.profile) return undefined;
-    const factionIds = Object.keys(this.engine.world.factions);
-    let best: string | undefined;
-    let bestRep = 0;
-    for (const fid of factionIds) {
-      const rep = getReputation(this.profile, fid);
-      if (rep > bestRep) {
-        bestRep = rep;
-        best = fid;
-      }
-    }
-    return bestRep >= 20 ? best : undefined;
+    return _getPlayerFactionAccess(this.engine.world, this.profile);
   }
 
   /** Process craft/salvage/repair/modify actions from a turn result. */
@@ -3220,16 +2916,4 @@ export class GameSession {
   }
 }
 
-/** Sanitize a string for use in filenames. */
-function sanitizeFilename(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase().replace(/-+/g, '-').replace(/^-|-$/g, '') || 'campaign';
-}
-
-/** Deterministic hash for side-effect rolls. */
-function simpleHashNum(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
+// sanitizeFilename and simpleHashNum now live in game/game-state.ts

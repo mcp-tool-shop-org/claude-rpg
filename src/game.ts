@@ -154,7 +154,8 @@ import {
   formatDistrictMoodForNarrator,
 } from '@ai-rpg-engine/modules';
 import { getReputation } from '@ai-rpg-engine/character-profile';
-import { createClaudeClient, type ClaudeClient, type ClaudeClientConfig } from './claude-client.js';
+import { createAdaptedClient } from './llm/claude-adapter.js';
+import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
 import { executeTurn, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
 import { renderPlayScreen, renderWelcome, renderThinking } from './display/play-renderer.js';
@@ -245,7 +246,7 @@ export class GameSession {
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
-    this.client = createClaudeClient(config.clientConfig);
+    this.client = createAdaptedClient(config.clientConfig);
     this.history = new TurnHistory();
     this.tone = config.tone ?? 'dark fantasy, concise, atmospheric';
     this.title = config.title ?? 'claude-rpg';

@@ -2,6 +2,8 @@
 
 export { GameSession, type GameConfig, type GameMode } from './game.js';
 export { createClaudeClient, type ClaudeClient, type ClaudeClientConfig } from './claude-client.js';
+export { createAdaptedClient } from './llm/claude-adapter.js';
+export { NarrationError, userMessage, type NarrationErrorKind } from './llm/claude-errors.js';
 export { executeTurn, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
 export { interpretAction, type InterpretedAction } from './action-interpreter.js';
 export { narrateScene } from './narrator/narrator.js';

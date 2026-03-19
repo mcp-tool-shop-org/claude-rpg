@@ -9,7 +9,7 @@
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { GameSession } from './game.js';
-import { createClaudeClient } from './claude-client.js';
+import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld } from './foundry/world-gen.js';
 import {
   saveSession,
@@ -325,7 +325,7 @@ async function runArchive(): Promise<void> {
 async function runNew(worldPrompt: string): Promise<void> {
   console.log('\n  Generating world...\n');
 
-  const client = createClaudeClient();
+  const client = createAdaptedClient();
   const result = await generateWorld(client, worldPrompt);
 
   if (!result.ok || !result.engine) {

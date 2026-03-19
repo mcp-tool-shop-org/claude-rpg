@@ -198,6 +198,8 @@ export type GameMode = 'play' | 'director';
 export type GameConfig = {
   engine: Engine;
   clientConfig?: ClaudeClientConfig;
+  /** Pre-built client — bypasses createAdaptedClient. Use for testing. */
+  client?: ClaudeClient;
   tone?: string;
   title?: string;
   worldPrompt?: string;
@@ -246,7 +248,7 @@ export class GameSession {
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
-    this.client = createAdaptedClient(config.clientConfig);
+    this.client = config.client ?? createAdaptedClient(config.clientConfig);
     this.history = new TurnHistory();
     this.tone = config.tone ?? 'dark fantasy, concise, atmospheric';
     this.title = config.title ?? 'claude-rpg';

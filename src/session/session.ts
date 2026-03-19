@@ -5,8 +5,9 @@
 // v0.5: resolved pressure / fallout persistence
 // v0.7: leverage snapshot + enhanced save summaries
 
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, rename, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
@@ -162,13 +163,74 @@ export async function saveSession(
     campaignStatus: campaignStatus ?? 'active',
   };
 
-  await mkdir(dirname(savePath), { recursive: true });
-  await writeFile(savePath, JSON.stringify(session, null, 2), 'utf-8');
+  const dir = dirname(savePath);
+  await mkdir(dir, { recursive: true });
+
+  // Atomic write: temp file → rename prevents corruption from interrupted writes
+  const tmpPath = savePath + '.tmp.' + randomBytes(4).toString('hex');
+  const json = JSON.stringify(session, null, 2);
+  await writeFile(tmpPath, json, 'utf-8');
+
+  // Keep one-deep backup of the previous save
+  try {
+    await readFile(savePath, 'utf-8'); // check if previous exists
+    const bakPath = savePath + '.bak';
+    try { await unlink(bakPath); } catch { /* no previous backup */ }
+    await rename(savePath, bakPath);
+  } catch {
+    // No previous save — first write
+  }
+
+  await rename(tmpPath, savePath);
+}
+
+export class SaveValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SaveValidationError';
+  }
 }
 
 export async function loadSession(savePath: string): Promise<SavedSession> {
   const raw = await readFile(savePath, 'utf-8');
-  return JSON.parse(raw) as SavedSession;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new SaveValidationError(
+      `Save file is not valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  return validateSaveShape(parsed);
+}
+
+/** Validate that parsed JSON has the required SavedSession shape. */
+export function validateSaveShape(data: unknown): SavedSession {
+  if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+    throw new SaveValidationError('Save file is not a JSON object');
+  }
+
+  const obj = data as Record<string, unknown>;
+
+  if (typeof obj.version !== 'string') {
+    throw new SaveValidationError('Save file missing required field: version');
+  }
+  if (typeof obj.engineState !== 'string') {
+    throw new SaveValidationError('Save file missing required field: engineState');
+  }
+  if (obj.turnHistory == null || typeof obj.turnHistory !== 'object') {
+    throw new SaveValidationError('Save file missing required field: turnHistory');
+  }
+  if (typeof obj.tone !== 'string') {
+    throw new SaveValidationError('Save file missing required field: tone');
+  }
+  if (typeof obj.savedAt !== 'string') {
+    throw new SaveValidationError('Save file missing required field: savedAt');
+  }
+
+  return data as SavedSession;
 }
 
 /** Load and deserialize the profile from a saved session (null for v0.1.0 saves). */

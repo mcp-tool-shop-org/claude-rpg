@@ -12,7 +12,7 @@ export { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.
 export { buildNPCDialogueContext } from './dialogue/npc-context.js';
 export { generateWorld, type WorldGenResult, type WorldGenProposal } from './foundry/world-gen.js';
 export { TurnHistory } from './session/history.js';
-export { saveSession, loadSession, loadProfileFromSession, loadRumorsFromSession, loadPressuresFromSession, loadResolvedPressuresFromSession, loadNpcAgencyFromSession, listSaves, type SaveSlotSummary } from './session/session.js';
+export { saveSession, loadSession, validateSaveShape, SaveValidationError, loadProfileFromSession, loadRumorsFromSession, loadPressuresFromSession, loadResolvedPressuresFromSession, loadNpcAgencyFromSession, listSaves, type SaveSlotSummary } from './session/session.js';
 export { renderPlayScreen, renderWelcome } from './display/play-renderer.js';
 export { executeDirectorCommand } from './display/director-renderer.js';
 

@@ -8,6 +8,10 @@
 
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { version: pkgVersion } = require('../package.json') as { version: string };
 import { GameSession } from './game.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld } from './foundry/world-gen.js';
@@ -86,6 +90,7 @@ Usage:
   claude-rpg load                               Load a saved game
   claude-rpg new "<prompt>"                     Generate a world from a prompt
   claude-rpg archive                            Browse completed campaigns
+  claude-rpg --version                          Show version
   claude-rpg --help                             Show this help
 
 Commands in-game:
@@ -113,6 +118,11 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   debugMode = args.includes('--debug');
   const filteredArgs = args.filter((a) => a !== '--debug');
+
+  if (filteredArgs.includes('--version') || filteredArgs.includes('-v')) {
+    console.log(`claude-rpg v${pkgVersion}`);
+    process.exit(0);
+  }
 
   if (filteredArgs.length === 0 || filteredArgs.includes('--help') || filteredArgs.includes('-h')) {
     console.log(USAGE);

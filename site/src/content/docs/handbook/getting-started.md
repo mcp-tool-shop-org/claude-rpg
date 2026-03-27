@@ -41,25 +41,33 @@ set ANTHROPIC_API_KEY=sk-ant-...
 
 ## Play your first game
 
-Start with the built-in Chapel Threshold scenario:
+Launch play mode and choose a world interactively:
 
 ```bash
-claude-rpg play --world fantasy
+claude-rpg play
 ```
 
-You'll see a narrated scene. Type anything — explore, talk to NPCs, pick up items, fight, negotiate, sneak. Claude interprets your freeform text and the engine resolves what happens.
+You'll be presented with a menu of starter worlds and then guided through character creation (name, archetype, background, traits, disciplines, and stat allocation). Once creation is complete, the game begins with a narrated opening scene. Type anything — explore, talk to NPCs, pick up items, fight, negotiate, sneak. Claude interprets your freeform text and the engine resolves what happens.
+
+For faster campaign pacing, add the `--fast` flag:
+
+```bash
+claude-rpg play --fast
+```
 
 ## Available starter worlds
 
-| Flag | World | Genre |
-|------|-------|-------|
-| `fantasy` | Chapel Threshold | Mountain monastery under siege |
-| `cyberpunk` | Neon Lockbox | Corporate arcology where data is currency |
-| `detective` | Gaslight Detective | Victorian conspiracy reaching the crown |
-| `pirate` | Black Flag Requiem | Dying pirate republic |
-| `zombie` | Ashfall Dead | Post-outbreak survival colony |
-| `weird-west` | Dust Devil's Bargain | Supernatural frontier town |
-| `colony` | Signal Loss | Deep space colony that lost Earth contact |
+The interactive world selector offers these 7 worlds:
+
+| World | Genre |
+|-------|-------|
+| Chapel Threshold | Mountain monastery under siege (fantasy) |
+| Neon Lockbox | Corporate arcology where data is currency (cyberpunk) |
+| Gaslight Detective | Victorian conspiracy reaching the crown (detective) |
+| Black Flag Requiem | Dying pirate republic (pirate) |
+| Ashfall Dead | Post-outbreak survival colony (zombie) |
+| Dust Devil's Bargain | Supernatural frontier town (weird-west) |
+| Signal Loss | Deep space colony that lost Earth contact (colony) |
 
 ## Generate a custom world
 

@@ -7,7 +7,7 @@ sidebar:
 
 ## The foundation
 
-v1.4.0 introduced seven runtime-proofing sprints that harden the boundary between the engine and the player. This page documents what those guarantees are, how they're enforced, and what they mean for players and developers.
+v1.4 introduced seven runtime-proofing sprints that harden the boundary between the engine and the player. This page documents what those guarantees are, how they're enforced, and what they mean for players and developers.
 
 ## Turn integrity
 
@@ -86,7 +86,7 @@ Changed-file regression detection surfaces coverage drops on pull requests that 
 
 ## Test inventory
 
-195 tests across 19 test files:
+209 tests across 19 test files:
 
 | Category | Tests | What they prove |
 |----------|-------|-----------------|

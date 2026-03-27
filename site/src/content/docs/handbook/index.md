@@ -19,9 +19,13 @@ NPCs don't recite scripts. They speak from beliefs, memories, faction loyalty, a
 
 | Chapter | What you'll learn |
 |---------|-------------------|
+| [Beginners](beginners/) | First-timer orientation — prerequisites, first 5 minutes, common mistakes, glossary |
 | [Getting Started](getting-started/) | Install, configure your API key, and play your first game |
 | [Play Guide](play-guide/) | Freeform input, in-game commands, save/load, and play-mode tips |
 | [Director Mode](director-mode/) | Inspect hidden simulation truth — beliefs, factions, consequence chains |
 | [World Generation](world-generation/) | Generate custom worlds from text prompts |
 | [Campaign Arcs](campaign-arcs/) | Arc detection, endgame triggers, and campaign conclusions |
 | [Architecture](architecture/) | The 8-step pipeline from player input to narrated output |
+| [Full Campaign Loop](full-loop/) | Complete walkthrough from world generation through epilogue |
+| [Runtime Guarantees](runtime-guarantees/) | Turn integrity, save migration, streaming law, and failure handling |
+| [Archive & Export](archive-export/) | Browse completed campaigns and export chronicles |

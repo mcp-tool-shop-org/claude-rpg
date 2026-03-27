@@ -64,7 +64,7 @@ The AI RPG Engine provides 29 modules across 16 packages:
 | `audio-director` | Audio cue scheduling, priority, ducking |
 | `soundpack-core` | Sound pack registry and core pack |
 | `content-schema` | World content validation |
-| `starter-*` | 7 starter world content packs |
+| `starter-*` | 10 starter world content packs (7 playable via interactive selection) |
 
 ## Token budget
 

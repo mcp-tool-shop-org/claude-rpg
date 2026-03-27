@@ -34,7 +34,7 @@ Claude RPG isn't just a game — it's a reference implementation for the AI RPG 
 
 | Want to... | Use |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Play right now** | `npx claude-rpg play` (interactive world and character selection) |
 | **Create a new world** | `npx claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — 2D authoring studio with map editor, NPC builder, and validation |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — schema validation, storyboard testing, export pipelines |
@@ -52,14 +52,17 @@ npm install claude-rpg
 Or run directly:
 
 ```bash
-npx claude-rpg play --world fantasy
+npx claude-rpg play
 ```
 
 ## Quick Start
 
 ```bash
-# Play the built-in Chapel Threshold scenario
-npx claude-rpg play --world fantasy
+# Play — interactive world and character selection
+npx claude-rpg play
+
+# Accelerated campaign pacing
+npx claude-rpg play --fast
 
 # Generate a new world from a prompt
 npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
@@ -74,9 +77,9 @@ Set your Anthropic API key (only needed for Claude narration):
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## What's New in v1.4.0
+## What's New in v1.4.1
 
-v1.4.0 is a foundation release — seven runtime-proofing sprints that harden everything between the engine and the player.
+v1.4 is a foundation release — seven runtime-proofing sprints that harden everything between the engine and the player.
 
 | Feature | What it means |
 |---------|--------------|
@@ -84,7 +87,7 @@ v1.4.0 is a foundation release — seven runtime-proofing sprints that harden ev
 | **Save migration pipeline** | Versioned schema with ordered migration steps. Old saves upgrade automatically. Future-version saves are rejected cleanly. |
 | **Structured error handling** | Claude adapter translates SDK failures (timeout, rate-limit, auth, overloaded) into player-safe messages. `--debug` flag shows full diagnostics. |
 | **Typed runtime contracts** | `ExecuteTurnOpts` and `NarrateSceneOpts` replace 21-param and 16-param positional signatures. Field miswires are compile-time errors. |
-| **195 tests** | Turn-loop integration harness, save round-trip and corruption guards, chronicle continuity, streaming proof, coverage floors on critical paths. |
+| **209 tests** | Turn-loop integration harness, save round-trip and corruption guards, chronicle continuity, streaming proof, coverage floors on critical paths. |
 
 ## Why It's Different
 
@@ -195,7 +198,7 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Jade Veil starter world |
 | [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Crimson Court starter world |
 
-## Runtime Guarantees (v1.4.0)
+## Runtime Guarantees (v1.4.1)
 
 | Guarantee | Enforcement |
 |-----------|------------|

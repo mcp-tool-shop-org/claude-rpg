@@ -24,13 +24,21 @@ During play, these slash commands give you information and control:
 | Command | What it does |
 |---------|--------------|
 | `/status` | Health, inventory, location, turn count, arc trajectory |
+| `/sheet` or `/character` | Full character sheet — stats, equipment, progression |
 | `/map` | Strategic map analysis — faction positions, pressure points, power balance |
 | `/leverage` | Your political capital — influence, favors, intel, and available actions |
 | `/jobs` | Available contracts, bounties, favors, supply runs, investigations |
 | `/accepted` | Active work you've committed to |
 | `/arcs` | Campaign arc signals — what trajectory the engine detects |
 | `/conclude` | End the campaign with a structured epilogue |
+| `/archive` | Browse completed campaigns |
+| `/export md` | Export campaign chronicle as markdown |
+| `/export json` | Export campaign chronicle as JSON |
+| `/export finale` | Export standalone epilogue document (after `/conclude`) |
+| `/director` | Enter director mode to inspect hidden truth |
 | `/help` | Full command reference |
+| `save` | Save the current game |
+| `quit` | Exit the game |
 
 ## Perception filtering
 

@@ -4,7 +4,7 @@ import type { WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { PlayerRumor, WorldPressure, NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
-import { DIALOGUE_SYSTEM, buildDialoguePrompt } from '../prompts/dialogue-npc.js';
+import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
 
 export type DialogueResult = {
@@ -40,11 +40,18 @@ export async function generateDialogue(
   economyContext?: string,
   craftingContext?: string,
   opportunityContext?: string,
+  conversationHistory?: ConversationExchange[],
 ): Promise<DialogueResult | null> {
   const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
   if (context && economyContext) context.economyContext = economyContext;
   if (context && craftingContext) context.craftingContext = craftingContext;
   if (context && opportunityContext) context.opportunityContext = opportunityContext;
+  if (context && conversationHistory) context.conversationHistory = conversationHistory;
+  // Resolve NPC tags for voice style
+  if (context) {
+    const npc = world.entities[npcId];
+    if (npc?.tags) context.npcTags = npc.tags;
+  }
   if (!context) return null;
 
   const prompt = buildDialoguePrompt(context);
@@ -52,8 +59,9 @@ export async function generateDialogue(
   // PBR-002: Wrap LLM call in try/catch — return in-character fallback on failure
   let resultText: string;
   try {
+    const systemPrompt = buildDialogueSystemPrompt(context);
     const result = await client.generate({
-      system: DIALOGUE_SYSTEM,
+      system: systemPrompt,
       prompt,
       maxTokens: 200,
     });

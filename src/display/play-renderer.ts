@@ -19,6 +19,16 @@ function makeDivider(): string {
   return dim('─'.repeat(getTerminalWidth()));
 }
 
+/** Build a turn-numbered divider using double-line box characters. */
+export function makeTurnDivider(turnNumber: number): string {
+  const label = ` Turn ${turnNumber} `;
+  const width = getTerminalWidth();
+  const remaining = Math.max(0, width - label.length);
+  const left = Math.floor(remaining / 2);
+  const right = remaining - left;
+  return '\n' + dim('═'.repeat(left)) + cyan(bold(label)) + dim('═'.repeat(right));
+}
+
 function makeThinDivider(): string {
   return dim('·'.repeat(getTerminalWidth()));
 }
@@ -37,11 +47,16 @@ export function renderPlayScreen(opts: {
   partyStatusLine?: string;
   suggestions?: ContextualSuggestion[];
   hasEndgameTriggers?: boolean;
+  turnNumber?: number;
 }): string {
   const parts: string[] = [];
 
   parts.push('');
-  parts.push(makeDivider());
+  if (opts.turnNumber != null && opts.turnNumber > 0) {
+    parts.push(makeTurnDivider(opts.turnNumber));
+  } else {
+    parts.push(makeDivider());
+  }
 
   // Endgame approach banner (v2.1)
   if (opts.hasEndgameTriggers) {

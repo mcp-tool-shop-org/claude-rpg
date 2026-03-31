@@ -67,8 +67,9 @@ describe('save/load round-trip', () => {
     const result = await loadSession(path);
     const loaded = result.session;
 
-    // turnHistory is TurnRecord[] (from TurnHistory.toJSON())
-    const turns = loaded.turnHistory as unknown as Array<{ verb: string }>;
+    // turnHistory is { turns: TurnRecord[], ... } (from TurnHistory.toJSON())
+    const turnData = loaded.turnHistory as unknown as { turns: Array<{ verb: string }> };
+    const turns = turnData.turns;
     expect(turns).toHaveLength(2);
     expect(turns[0].verb).toBe('look');
     expect(turns[1].verb).toBe('move');

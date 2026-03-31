@@ -66,7 +66,7 @@ describe('streaming: normal completion', () => {
       onNarrationChunk: () => {},
     });
 
-    const turns = history.toJSON();
+    const turns = history.toJSON().turns;
     expect(turns).toHaveLength(1);
     expect(turns[0].narration).toBe(CANNED_NARRATION);
   });
@@ -133,7 +133,7 @@ describe('streaming: interruption handling', () => {
     expect(engine.world.locationId).toBe(initialZone);
 
     // History was not updated (turn didn't complete)
-    expect(history.toJSON()).toHaveLength(0);
+    expect(history.toJSON().turns).toHaveLength(0);
   });
 });
 

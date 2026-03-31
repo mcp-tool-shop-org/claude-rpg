@@ -171,19 +171,31 @@ function tryFastInterpret(
   }
 
   // Opportunity verbs (accept, decline, abandon, betray, complete job/contract/bounty/mission)
-  const oppMatch = lower.match(/^(accept|decline|abandon|betray|complete|finish|deliver|turn\s+in)\s+(the\s+)?(job|contract|offer|bounty|mission|quest|task)/i);
+  // FT-B-007: Extended to extract optional name/index for disambiguation
+  const oppMatch = lower.match(/^(accept|decline|abandon|betray|complete|finish|deliver|turn\s+in)\s+(the\s+)?(job|contract|offer|bounty|mission|quest|task)(\s+(.+))?/i);
   if (oppMatch) {
     const oppVerb = oppMatch[1].replace(/\s+/g, '-');
     const subAction = oppVerb === 'finish' || oppVerb === 'deliver' || oppVerb === 'turn-in'
       ? 'complete'
       : oppVerb;
+    const identifier = oppMatch[5]?.trim() || undefined;
+    const params: Record<string, string | number | boolean> = { subAction };
+    if (identifier) {
+      // Check if it's a numeric index (1-based)
+      const numIndex = parseInt(identifier, 10);
+      if (!isNaN(numIndex) && String(numIndex) === identifier) {
+        params.opportunityIndex = numIndex;
+      } else {
+        params.opportunityName = identifier;
+      }
+    }
     return {
       verb: 'opportunity',
       targetIds: null,
       toolId: null,
-      parameters: { subAction },
+      parameters: params,
       confidence: 'high',
-      reasoning: `opportunity: ${subAction}`,
+      reasoning: `opportunity: ${subAction}${identifier ? ` (${identifier})` : ''}`,
       alternatives: null,
     };
   }

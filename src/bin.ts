@@ -41,6 +41,7 @@ import {
 } from './session/session.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError } from './cli/error-presenter.js';
+import { slashCompleter } from './cli/slash-completer.js';
 import { createSpinner } from './cli/spinner.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
@@ -215,6 +216,8 @@ async function runPlay(args: string[]): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
+    completer: slashCompleter,
+    historySize: 100,
   });
 
   // Character creation flow (includes pack selection)
@@ -260,6 +263,8 @@ async function runLoad(): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
+    completer: slashCompleter,
+    historySize: 100,
   });
 
   console.log('\n  Saved Games:\n');
@@ -444,6 +449,8 @@ async function runNew(worldPrompt: string): Promise<void> {
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
+    completer: slashCompleter,
+    historySize: 100,
   });
 
   await runGameLoop({ session, rl });

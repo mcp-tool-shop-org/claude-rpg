@@ -287,6 +287,52 @@ describe('action-interpreter', () => {
       expect(result.confidence).toBe('high');
     });
 
+    // FT-B-007: Opportunity disambiguation
+    it('should extract opportunity name from "accept job escort"', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'accept job escort', engine.getAvailableActions());
+      expect(result.verb).toBe('opportunity');
+      expect(result.parameters?.subAction).toBe('accept');
+      expect(result.parameters?.opportunityName).toBe('escort');
+    });
+
+    it('should extract opportunity index from "complete quest 2"', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'complete quest 2', engine.getAvailableActions());
+      expect(result.verb).toBe('opportunity');
+      expect(result.parameters?.subAction).toBe('complete');
+      expect(result.parameters?.opportunityIndex).toBe(2);
+    });
+
+    it('should handle "decline bounty smuggling run" with name', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'decline bounty smuggling run', engine.getAvailableActions());
+      expect(result.verb).toBe('opportunity');
+      expect(result.parameters?.subAction).toBe('decline');
+      expect(result.parameters?.opportunityName).toBe('smuggling run');
+    });
+
     // FT-B-003: Fast-path inventory verbs
     it('should interpret "inventory" as inventory verb (no turn consumed)', async () => {
       const { interpretAction } = await import('./action-interpreter.js');

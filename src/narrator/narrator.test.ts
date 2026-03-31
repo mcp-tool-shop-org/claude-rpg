@@ -3,6 +3,7 @@ import { narrateScene, narrateSceneLegacy, type NarrateSceneOpts } from './narra
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import { NARRATE_SYSTEM_LEGACY } from '../prompts/narrate-scene.js';
 
 function makeGenerateResult(text: string): GenerateResult {
   return { ok: true, text, inputTokens: 10, outputTokens: 20 };
@@ -117,18 +118,19 @@ describe('narrateScene', () => {
     expect(result.plan).toBeNull();
   });
 
-  // --- (4) Streaming path ---
-  it('should use streaming when onChunk callback is provided', async () => {
+  // --- (4) Streaming path (FT-BR-004: uses LEGACY plain-text prompt) ---
+  it('should use streaming with LEGACY prompt when onChunk callback is provided', async () => {
     const chunks: string[] = [];
     const onChunk = (chunk: string) => chunks.push(chunk);
-    const streamClient = makeClient('unused', VALID_PLAN);
+    const streamClient = makeClient('unused', 'The wind howls through the corridor.');
 
     const opts = makeOpts({ client: streamClient, onChunk });
     const result = await narrateScene(opts);
 
     expect(streamClient.generateStream).toHaveBeenCalled();
-    expect(result.plan).not.toBeNull();
-    expect(result.plan!.sceneText).toBe('You enter a dimly lit chamber.');
+    // FT-BR-004: Streaming uses plain text, no NarrationPlan
+    expect(result.plan).toBeNull();
+    expect(result.narration).toBe('The wind howls through the corridor.');
   });
 
   it('should fall back to non-streaming when client has no generateStream', async () => {
@@ -248,5 +250,45 @@ describe('parseNarrationPlan PBR-004: observability logging', () => {
       expect.stringContaining('broken json'),
     );
     warnSpy.mockRestore();
+  });
+});
+
+// === FT-BR-004: Streaming-friendly narration ===
+describe('narrateScene streaming with LEGACY prompt (FT-BR-004)', () => {
+  it('should use NARRATE_SYSTEM_LEGACY when streaming', async () => {
+    const chunks: string[] = [];
+    const onChunk = (chunk: string) => chunks.push(chunk);
+    const streamClient = makeClient('unused', 'A cool breeze greets you.');
+
+    const opts = makeOpts({ client: streamClient, onChunk });
+    await narrateScene(opts);
+
+    // Verify generateStream was called with the LEGACY system prompt
+    expect(streamClient.generateStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: NARRATE_SYSTEM_LEGACY,
+        maxTokens: 300,
+      }),
+    );
+  });
+
+  it('should return null plan when streaming (plain text mode)', async () => {
+    const chunks: string[] = [];
+    const onChunk = (chunk: string) => chunks.push(chunk);
+    const streamClient = makeClient('unused', 'Mist curls at your feet.');
+
+    const opts = makeOpts({ client: streamClient, onChunk });
+    const result = await narrateScene(opts);
+
+    expect(result.plan).toBeNull();
+    expect(result.narration).toBe('Mist curls at your feet.');
+  });
+
+  it('non-streaming should still use NarrationPlan JSON mode', async () => {
+    const opts = makeOpts({ client: makeClient(VALID_PLAN) });
+    const result = await narrateScene(opts);
+
+    expect(result.plan).not.toBeNull();
+    expect(result.plan!.sceneText).toBe('You enter a dimly lit chamber.');
   });
 });

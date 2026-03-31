@@ -184,7 +184,8 @@ export function buildStatusData(
     disciplineName: profile.build.disciplineId,
     title: profile.custom.title as string | undefined,
     hp: profile.resources.hp ?? 0,
-    maxHp: undefined,
+    maxHp: (profile.resources as Record<string, unknown>).maxHp as number | undefined
+      ?? (profile.custom.maxHp as number | undefined),
     weaponName: weaponItem?.name,
     armorName: armorItem?.name,
     injuryTags,

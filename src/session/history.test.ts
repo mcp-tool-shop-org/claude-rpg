@@ -40,7 +40,7 @@ describe('TurnHistory', () => {
     expect(recent).toEqual(['second', 'third']);
   });
 
-  it('should serialize and deserialize', () => {
+  it('should serialize and deserialize (legacy array format)', () => {
     const history = new TurnHistory();
     history.record({
       tick: 1,
@@ -51,7 +51,7 @@ describe('TurnHistory', () => {
     });
 
     const json = history.toJSON();
-    const restored = TurnHistory.fromJSON(json);
+    const restored = TurnHistory.fromJSON(json.turns);
 
     expect(restored.getAll()).toHaveLength(1);
     expect(restored.getAll()[0].dialogue?.speaker).toBe('NPC');
@@ -116,5 +116,93 @@ describe('TurnHistory', () => {
     history.record({ tick: 1, playerInput: 'a', verb: 'look', narration: 'x' });
     history.clear();
     expect(history.getAll()).toHaveLength(0);
+  });
+});
+
+describe('TurnHistory compaction (FT-B-006)', () => {
+  it('should generate compacted summary when turns are evicted', () => {
+    const history = new TurnHistory(2);
+    history.record({ tick: 1, playerInput: 'go north', verb: 'move', narration: 'You travel north.' });
+    history.record({ tick: 2, playerInput: 'look', verb: 'look', narration: 'A dark room.' });
+    // This evicts tick 1
+    history.record({ tick: 3, playerInput: 'attack goblin', verb: 'attack', narration: 'You fight!' });
+
+    expect(history.compactedSummary).toContain('Traveled');
+    expect(history.compactedChunks).toHaveLength(1);
+    expect(history.compactedChunks[0].fromTick).toBe(1);
+  });
+
+  it('should accumulate multiple evicted turns in compacted summary', () => {
+    const history = new TurnHistory(2);
+    history.record({ tick: 1, playerInput: 'go north', verb: 'move', narration: 'You go north.' });
+    history.record({ tick: 2, playerInput: 'talk to guard', verb: 'speak', narration: 'The guard nods.',
+      dialogue: { speaker: 'Guard', text: 'Hello.' } });
+    // Evicts tick 1
+    history.record({ tick: 3, playerInput: 'look', verb: 'look', narration: 'A plaza.' });
+    // Evicts tick 2
+    history.record({ tick: 4, playerInput: 'attack', verb: 'attack', narration: 'Combat!' });
+
+    expect(history.compactedChunks).toHaveLength(2);
+    expect(history.compactedSummary).toContain('Traveled');
+    expect(history.compactedSummary).toContain('Guard');
+  });
+
+  it('should provide chronicle highlights for narrator context', () => {
+    const history = new TurnHistory(1);
+    history.record({ tick: 1, playerInput: 'attack', verb: 'attack', narration: 'Battle!' });
+    history.record({ tick: 2, playerInput: 'look', verb: 'look', narration: 'Calm.' });
+
+    const highlights = history.getChronicleHighlights();
+    expect(highlights).toBeDefined();
+    expect(highlights).toContain('[Long-term memory]');
+    expect(highlights).toContain('combat');
+  });
+
+  it('should return undefined highlights when no compaction has occurred', () => {
+    const history = new TurnHistory(50);
+    history.record({ tick: 1, playerInput: 'look', verb: 'look', narration: 'Room.' });
+    expect(history.getChronicleHighlights()).toBeUndefined();
+  });
+
+  it('should batch-compact multiple turns', () => {
+    const history = new TurnHistory();
+    const turns = [
+      { tick: 1, playerInput: 'go north', verb: 'move', narration: 'North.' },
+      { tick: 2, playerInput: 'talk', verb: 'speak', narration: 'Chat.',
+        dialogue: { speaker: 'Merchant', text: 'Buy something?' } },
+      { tick: 3, playerInput: 'attack', verb: 'attack', narration: 'Fight!' },
+    ];
+    history.compactBatch(turns);
+
+    expect(history.compactedChunks).toHaveLength(1);
+    expect(history.compactedChunks[0].fromTick).toBe(1);
+    expect(history.compactedChunks[0].toTick).toBe(3);
+    expect(history.compactedSummary).toContain('Merchant');
+    expect(history.compactedSummary).toContain('combat');
+  });
+
+  it('should serialize and deserialize compacted data', () => {
+    const history = new TurnHistory(1);
+    history.record({ tick: 1, playerInput: 'attack', verb: 'attack', narration: 'Fight!' });
+    history.record({ tick: 2, playerInput: 'look', verb: 'look', narration: 'Calm.' });
+
+    const json = history.toJSON();
+    expect(json.compactedChunks).toBeDefined();
+    expect(json.compactedSummary).toBeDefined();
+
+    const restored = TurnHistory.fromJSON(json, 1);
+    expect(restored.compactedSummary).toBe(history.compactedSummary);
+    expect(restored.compactedChunks).toHaveLength(history.compactedChunks.length);
+  });
+
+  it('should clear compacted data when history is cleared', () => {
+    const history = new TurnHistory(1);
+    history.record({ tick: 1, playerInput: 'a', verb: 'attack', narration: 'x' });
+    history.record({ tick: 2, playerInput: 'b', verb: 'look', narration: 'y' });
+
+    expect(history.compactedSummary).not.toBe('');
+    history.clear();
+    expect(history.compactedSummary).toBe('');
+    expect(history.compactedChunks).toHaveLength(0);
   });
 });

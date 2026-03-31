@@ -68,14 +68,24 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
 
   const prompt = buildNarratePrompt(enrichedInput);
 
-  // Use streaming if callback provided and client supports it.
-  // NOTE: When streaming is active, onChunk receives raw JSON fragments (partial
-  // NarrationPlan tokens). Callers should NOT display streamed chunks directly as
-  // narrative text — instead, wait for the full response and use the parsed plan's
-  // sceneText field. Displaying raw chunks will show JSON syntax to the player.
-  const result = onChunk && client.generateStream
-    ? await client.generateStream({ system: NARRATE_SYSTEM, prompt, maxTokens: 500, onChunk })
-    : await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
+  // FT-BR-004: When streaming with onChunk, use LEGACY plain-text prompt so prose
+  // streams naturally to the player (no JSON fragments). Reserve NarrationPlan JSON
+  // mode for non-streaming calls.
+  if (onChunk && client.generateStream) {
+    const result = await client.generateStream({
+      system: NARRATE_SYSTEM_LEGACY,
+      prompt,
+      maxTokens: 300,
+      onChunk,
+    });
+    return {
+      narration: result.text.trim(),
+      plan: null,
+      sceneContext,
+    };
+  }
+
+  const result = await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
 
   // Try to parse as NarrationPlan JSON
   const plan = parseNarrationPlan(result.text);

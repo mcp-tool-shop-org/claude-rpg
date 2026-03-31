@@ -1063,12 +1063,16 @@ export class GameSession {
     const subAction = turnResult.interpreted.parameters?.subAction as string | undefined;
     if (!subAction) return;
 
+    // FT-B-007: Extract optional disambiguation identifier
+    const opportunityName = turnResult.interpreted.parameters?.opportunityName as string | undefined;
+    const opportunityIndex = turnResult.interpreted.parameters?.opportunityIndex as number | undefined;
+
     switch (subAction) {
       case 'accept': {
         const available = getAvailableOpportunities(this.activeOpportunities);
         if (available.length === 0) break;
-        // Accept the first available (most recent) — immutable replacement
-        const original = available[available.length - 1];
+        // FT-B-007: Match by name/index, fallback to most recent
+        const original = this.matchOpportunity(available, opportunityName, opportunityIndex);
         const target: OpportunityState = { ...original, status: 'accepted', acceptedAtTick: this.engine.tick };
         this.activeOpportunities = this.activeOpportunities.map((o) => o.id === target.id ? target : o);
         // Chronicle
@@ -1081,32 +1085,59 @@ export class GameSession {
       case 'decline': {
         const available = getAvailableOpportunities(this.activeOpportunities);
         if (available.length === 0) break;
-        const target = available[available.length - 1];
+        const target = this.matchOpportunity(available, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'declined');
         break;
       }
       case 'abandon': {
         const accepted = getAcceptedOpportunities(this.activeOpportunities);
         if (accepted.length === 0) break;
-        const target = accepted[accepted.length - 1];
+        const target = this.matchOpportunity(accepted, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'abandoned');
         break;
       }
       case 'betray': {
         const accepted = getAcceptedOpportunities(this.activeOpportunities);
         if (accepted.length === 0) break;
-        const target = accepted[accepted.length - 1];
+        const target = this.matchOpportunity(accepted, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'betrayed');
         break;
       }
       case 'complete': {
         const accepted = getAcceptedOpportunities(this.activeOpportunities);
         if (accepted.length === 0) break;
-        const target = accepted[accepted.length - 1];
+        const target = this.matchOpportunity(accepted, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'completed');
         break;
       }
     }
+  }
+
+  /**
+   * FT-B-007: Match an opportunity by name or index.
+   * Falls back to most-recent (last) if no match found.
+   */
+  private matchOpportunity(
+    candidates: OpportunityState[],
+    name?: string,
+    index?: number,
+  ): OpportunityState {
+    // Try by 1-based index
+    if (index !== undefined && index >= 1 && index <= candidates.length) {
+      return candidates[index - 1];
+    }
+
+    // Try by name (case-insensitive partial match on opportunity kind or id)
+    if (name) {
+      const lower = name.toLowerCase();
+      const byKind = candidates.find((o) => o.kind.toLowerCase().includes(lower));
+      if (byKind) return byKind;
+      const byId = candidates.find((o) => o.id.toLowerCase().includes(lower));
+      if (byId) return byId;
+    }
+
+    // Fallback: most recent (last in list)
+    return candidates[candidates.length - 1];
   }
 
   /** Resolve an opportunity and apply its fallout effects. */

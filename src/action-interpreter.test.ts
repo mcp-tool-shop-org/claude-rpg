@@ -155,7 +155,7 @@ describe('action-interpreter', () => {
       expect(result.reasoning).toBe('Player seems curious');
     });
 
-    it('should fall back to look when Claude returns failure', async () => {
+    it('should fall back to look with hazy message when Claude API fails (PB-007)', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();
 
@@ -180,7 +180,9 @@ describe('action-interpreter', () => {
 
       expect(result.verb).toBe('look');
       expect(result.confidence).toBe('low');
-      expect(result.reasoning).toBe('Could not interpret input');
+      // PB-007: API failure gets a player-friendly transient message
+      expect(result.reasoning).toContain('hazy');
+      expect(result.reasoning).toContain('try again');
     });
   });
 

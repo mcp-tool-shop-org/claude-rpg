@@ -281,47 +281,86 @@ export async function generateWorld(
   };
   engine.store.addEntity(playerEntity);
 
-  // Add NPCs
+  // Add NPCs — with collision guard and per-NPC error isolation
+  const usedEntityIds = new Set<string>(Object.keys(engine.world.entities));
   for (const npc of proposal.npcs) {
-    const entity: EntityState = {
-      id: npc.id,
-      blueprintId: npc.id,
-      type: npc.type,
-      name: npc.name,
-      tags: npc.tags,
-      stats: npc.stats,
-      resources: npc.resources,
-      statuses: [],
-      zoneId: npc.zoneId,
-      ai: {
-        profileId: npc.personality,
-        goals: npc.goals,
-        fears: [],
-        alertLevel: 0,
-        knowledge: {},
-      },
-    };
-    engine.store.addEntity(entity);
-
-    // Set initial beliefs
-    for (const belief of npc.beliefs) {
-      const cognition = getCognition(engine.world, npc.id);
-      if (cognition) {
-        setBelief(
-          cognition,
-          belief.subject,
-          belief.key,
-          belief.value,
-          belief.confidence,
-          'initial',
-          0,
-        );
-      } else {
-        console.warn(
-          `[world-gen] Cannot set belief for NPC "${npc.id}": cognition not initialized. ` +
-          `Belief "${belief.key}" on subject "${belief.subject}" was skipped.`,
-        );
+    try {
+      // PBR-001: Defensive coercion for missing stats/resources
+      if (!npc.stats || typeof npc.stats !== 'object') {
+        console.warn(`[world-gen] NPC "${npc.id}" has missing/invalid stats — defaulting to {}`);
+        npc.stats = {};
       }
+      if (!npc.resources || typeof npc.resources !== 'object') {
+        console.warn(`[world-gen] NPC "${npc.id}" has missing/invalid resources — defaulting to {}`);
+        npc.resources = {};
+      }
+      if (!npc.tags || !Array.isArray(npc.tags)) {
+        npc.tags = [];
+      }
+      if (!npc.beliefs || !Array.isArray(npc.beliefs)) {
+        npc.beliefs = [];
+      }
+      if (!npc.goals || !Array.isArray(npc.goals)) {
+        npc.goals = [];
+      }
+      // Shape check: skip NPCs missing critical identity fields
+      if (!npc.id || !npc.name || !npc.zoneId) {
+        console.warn(`[world-gen] Skipping NPC with missing identity fields: id="${npc.id}", name="${npc.name}", zoneId="${npc.zoneId}"`);
+        continue;
+      }
+
+      // PBR-007: Resolve colliding NPC IDs with numeric suffix
+      let entityId = npc.id;
+      if (usedEntityIds.has(entityId)) {
+        let suffix = 2;
+        while (usedEntityIds.has(`${npc.id}-${suffix}`)) suffix++;
+        entityId = `${npc.id}-${suffix}`;
+        console.warn(`[world-gen] NPC ID collision: "${npc.id}" already exists. Using "${entityId}" instead.`);
+      }
+      usedEntityIds.add(entityId);
+
+      const entity: EntityState = {
+        id: entityId,
+        blueprintId: entityId,
+        type: npc.type,
+        name: npc.name,
+        tags: npc.tags,
+        stats: npc.stats,
+        resources: npc.resources,
+        statuses: [],
+        zoneId: npc.zoneId,
+        ai: {
+          profileId: npc.personality,
+          goals: npc.goals,
+          fears: [],
+          alertLevel: 0,
+          knowledge: {},
+        },
+      };
+      engine.store.addEntity(entity);
+
+      // Set initial beliefs
+      for (const belief of npc.beliefs) {
+        const cognition = getCognition(engine.world, entityId);
+        if (cognition) {
+          setBelief(
+            cognition,
+            belief.subject,
+            belief.key,
+            belief.value,
+            belief.confidence,
+            'initial',
+            0,
+          );
+        } else {
+          console.warn(
+            `[world-gen] Cannot set belief for NPC "${entityId}": cognition not initialized. ` +
+            `Belief "${belief.key}" on subject "${belief.subject}" was skipped.`,
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(`[world-gen] Failed to add NPC "${npc.id}": ${err instanceof Error ? err.message : String(err)}. Skipping.`);
     }
   }
 

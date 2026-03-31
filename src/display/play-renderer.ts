@@ -7,8 +7,22 @@ import type { DialogueResult } from '../dialogue/dialogue-mind.js';
 import type { StatusData } from '../character/presence.js';
 import type { ContextualSuggestion } from './contextual-suggestions.js';
 
-const DIVIDER = '─'.repeat(60);
-const THIN_DIVIDER = '·'.repeat(60);
+// PFE-005: Adapt divider width to terminal, clamped to 40-120, fallback 60.
+function getTerminalWidth(): number {
+  const cols = process.stdout.columns ?? 60;
+  return Math.max(40, Math.min(120, cols));
+}
+
+function makeDivider(): string {
+  return '─'.repeat(getTerminalWidth());
+}
+
+function makeThinDivider(): string {
+  return '·'.repeat(getTerminalWidth());
+}
+
+// Exported for testing
+export { getTerminalWidth };
 
 /** Render the full play mode screen. */
 export function renderPlayScreen(opts: {
@@ -25,7 +39,7 @@ export function renderPlayScreen(opts: {
   const parts: string[] = [];
 
   parts.push('');
-  parts.push(DIVIDER);
+  parts.push(makeDivider());
 
   // Endgame approach banner (v2.1)
   if (opts.hasEndgameTriggers) {
@@ -39,12 +53,12 @@ export function renderPlayScreen(opts: {
 
   // Dialogue
   if (opts.dialogue) {
-    parts.push(THIN_DIVIDER);
+    parts.push(makeThinDivider());
     parts.push(`  ${opts.dialogue.speakerName}: "${opts.dialogue.text}"`);
     parts.push('');
   }
 
-  parts.push(THIN_DIVIDER);
+  parts.push(makeThinDivider());
 
   // Player status bar — enhanced when profile available
   if (opts.profileStatus) {
@@ -96,7 +110,7 @@ export function renderPlayScreen(opts: {
     parts.push(`  Location: ${zone.name}${exits ? ` | Exits: ${exits}` : ''}`);
   }
 
-  parts.push(DIVIDER);
+  parts.push(makeDivider());
 
   // Contextual suggestions
   if (opts.suggestions && opts.suggestions.length > 0) {
@@ -122,12 +136,12 @@ export function renderThinking(): string {
 export function renderWelcome(title: string, tone?: string): string {
   const parts: string[] = [];
   parts.push('');
-  parts.push(DIVIDER);
+  parts.push(makeDivider());
   parts.push(`  ${title}`);
   if (tone) {
     parts.push(`  ${tone}`);
   }
-  parts.push(DIVIDER);
+  parts.push(makeDivider());
   parts.push('');
   parts.push('  Type actions in plain English. Type "quit" to exit, "save" to save.');
   parts.push('  Type "/director" to inspect hidden truth, "/sheet" to view character.');

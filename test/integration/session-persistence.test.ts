@@ -43,7 +43,7 @@ describe('save/load round-trip', () => {
     const history = new TurnHistory();
     const path = savePath();
 
-    await saveSession(engine, history, 'dark fantasy', path);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
     const result = await loadSession(path);
     const loaded = result.session;
 
@@ -63,7 +63,7 @@ describe('save/load round-trip', () => {
     history.record({ tick: 2, playerInput: 'go nave', verb: 'move', narration: 'You enter the nave.' });
 
     const path = savePath();
-    await saveSession(engine, history, 'dark fantasy', path);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
     const result = await loadSession(path);
     const loaded = result.session;
 
@@ -105,7 +105,7 @@ describe('save/load round-trip', () => {
 
     const path = savePath();
     const history = new TurnHistory();
-    await saveSession(engine, history, 'dark fantasy', path);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
 
     const result = await loadSession(path);
     // Engine state should contain the zone we moved to
@@ -229,12 +229,12 @@ describe('write integrity', () => {
     const path = savePath();
 
     // First save
-    await saveSession(engine, history, 'dark fantasy', path);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
     const firstContent = await readFile(path, 'utf-8');
 
     // Second save (should create .bak)
     history.record({ tick: 1, playerInput: 'look', verb: 'look', narration: 'test' });
-    await saveSession(engine, history, 'dark fantasy', path);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
 
     const bakContent = await readFile(path + '.bak', 'utf-8');
     const secondContent = await readFile(path, 'utf-8');
@@ -250,7 +250,7 @@ describe('write integrity', () => {
     const history = new TurnHistory();
     const path = savePath();
 
-    await saveSession(engine, history, 'dark fantasy', path);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
 
     const files = await readdir(tmpDir);
     const tmpFiles = files.filter((f) => f.includes('.tmp.'));
@@ -262,7 +262,7 @@ describe('write integrity', () => {
     const history = new TurnHistory();
     const deepPath = join(tmpDir, 'a', 'b', 'c', 'save.json');
 
-    await saveSession(engine, history, 'dark fantasy', deepPath);
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: deepPath });
     const result = await loadSession(deepPath);
     expect(result.session.schemaVersion).toBe(2);
   });

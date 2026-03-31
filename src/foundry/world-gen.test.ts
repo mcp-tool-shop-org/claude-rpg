@@ -189,3 +189,143 @@ describe('generateWorld (BR-018)', () => {
     expect(result.errors).toContain('LLM unavailable');
   });
 });
+
+describe('generateWorld PBR-007: NPC ID collision guard', () => {
+  it('should resolve colliding NPC IDs with numeric suffix', async () => {
+    const proposal = makeValidProposal();
+    proposal.npcs.push({
+      id: 'guard-1',
+      name: 'Guard Clone',
+      type: 'npc',
+      tags: [],
+      zoneId: 'town-square',
+      personality: 'calm',
+      goals: [],
+      stats: { str: 8 },
+      resources: { hp: 50 },
+      beliefs: [],
+    });
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    const ids = Object.keys(result.engine!.world.entities);
+    expect(ids).toContain('guard-1');
+    expect(ids).toContain('guard-1-2');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('NPC ID collision'));
+    warnSpy.mockRestore();
+  });
+
+  it('should handle triple NPC ID collision', async () => {
+    const proposal = makeValidProposal();
+    for (let i = 0; i < 2; i++) {
+      proposal.npcs.push({
+        id: 'guard-1',
+        name: `Guard Clone ${i + 2}`,
+        type: 'npc',
+        tags: [],
+        zoneId: 'town-square',
+        personality: 'calm',
+        goals: [],
+        stats: {},
+        resources: {},
+        beliefs: [],
+      });
+    }
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    const ids = Object.keys(result.engine!.world.entities);
+    expect(ids).toContain('guard-1');
+    expect(ids).toContain('guard-1-2');
+    expect(ids).toContain('guard-1-3');
+    warnSpy.mockRestore();
+  });
+
+  it('should not abort world creation if one NPC throws', async () => {
+    const proposal = makeValidProposal();
+    proposal.npcs.push({
+      id: 'merchant',
+      name: 'Merchant',
+      type: 'npc',
+      tags: [],
+      zoneId: 'town-square',
+      personality: 'friendly',
+      goals: [],
+      stats: {},
+      resources: {},
+      beliefs: [],
+    });
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    expect(Object.keys(result.engine!.world.entities)).toContain('merchant');
+    warnSpy.mockRestore();
+  });
+});
+
+describe('generateWorld PBR-001: defensive NPC coercion', () => {
+  it('should default missing stats to empty object', async () => {
+    const proposal = makeValidProposal();
+    (proposal.npcs[0] as any).stats = undefined;
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing/invalid stats'));
+    warnSpy.mockRestore();
+  });
+
+  it('should default missing resources to empty object', async () => {
+    const proposal = makeValidProposal();
+    (proposal.npcs[0] as any).resources = null;
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing/invalid resources'));
+    warnSpy.mockRestore();
+  });
+
+  it('should skip NPCs missing critical identity fields (validation catches empty id)', async () => {
+    const proposal = makeValidProposal();
+    proposal.npcs.push({
+      id: '',
+      name: 'Ghost',
+      type: 'npc',
+      tags: [],
+      zoneId: 'town-square',
+      personality: 'shy',
+      goals: [],
+      stats: {},
+      resources: {},
+      beliefs: [],
+    });
+    const client = makeMockClient(proposal);
+
+    // Validation catches empty id before we reach the NPC loop
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e: string) => e.includes('missing required field: id'))).toBe(true);
+  });
+
+  it('should default missing tags/beliefs/goals to empty arrays', async () => {
+    const proposal = makeValidProposal();
+    (proposal.npcs[0] as any).tags = undefined;
+    (proposal.npcs[0] as any).beliefs = null;
+    (proposal.npcs[0] as any).goals = 'not-an-array';
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    warnSpy.mockRestore();
+  });
+});

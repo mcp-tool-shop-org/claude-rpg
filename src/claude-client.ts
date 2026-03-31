@@ -39,10 +39,19 @@ export type ClaudeClient = {
     onChunk: StreamCallback;
   }): Promise<GenerateResult>;
 
+  /**
+   * Parse structured JSON from an LLM response.
+   *
+   * **Limitation:** The parsed result is cast to `T` without runtime validation.
+   * Callers should either constrain prompts tightly or validate the returned `data`
+   * themselves. An optional `validator` callback can be provided to reject bad shapes
+   * early — if it throws, the result is returned with `ok: false` and the error message.
+   */
   generateStructured<T>(opts: {
     system: string;
     prompt: string;
     maxTokens?: number;
+    validator?: (data: unknown) => asserts data is T;
   }): Promise<StructuredResult<T>>;
 
   readonly model: string;
@@ -81,6 +90,7 @@ export function createClaudeClient(config: ClaudeClientConfig = {}): ClaudeClien
       system: string;
       prompt: string;
       maxTokens?: number;
+      validator?: (data: unknown) => asserts data is T;
     }): Promise<StructuredResult<T>> {
       const response = await anthropic.messages.create({
         model,
@@ -132,11 +142,16 @@ export function createClaudeClient(config: ClaudeClientConfig = {}): ClaudeClien
         return { ok: false, data: null, raw: text, error: 'No JSON found in response' };
       }
 
-      /**
-       * NOTE: The parsed JSON is cast to T without runtime validation.
-       * Callers must ensure the LLM prompt constrains output to the expected shape,
-       * or add their own validation after receiving the result.
-       */
+      // PFE-003: If a validator is provided, use it to reject bad shapes early.
+      if (opts.validator) {
+        try {
+          opts.validator(parsed);
+        } catch (validationErr) {
+          const msg = validationErr instanceof Error ? validationErr.message : 'Validation failed';
+          return { ok: false, data: null, raw: text, error: msg };
+        }
+      }
+
       return { ok: true, data: parsed, raw: text };
     },
   };

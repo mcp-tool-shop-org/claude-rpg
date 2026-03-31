@@ -77,32 +77,43 @@ export type SaveSlotSummary = {
   hottestPressure?: string;
 };
 
-export async function saveSession(
-  engine: Engine,
-  history: TurnHistory,
-  tone: string,
-  savePath: string,
-  worldPrompt?: string,
-  profile?: CharacterProfile | null,
-  packId?: string,
-  playerRumors?: PlayerRumor[],
-  activePressures?: WorldPressure[],
-  genre?: string,
-  resolvedPressures?: PressureFallout[],
-  journal?: CampaignJournal,
-  npcProfiles?: NpcProfile[],
-  npcActions?: NpcActionResult[],
-  npcObligations?: Map<string, NpcObligationLedger>,
-  consequenceChains?: Map<string, ConsequenceChain>,
-  partyState?: PartyState,
-  districtEconomies?: Map<string, DistrictEconomy>,
-  activeOpportunities?: OpportunityState[],
-  resolvedOpportunities?: OpportunityFallout[],
-  arcSnapshot?: ArcSnapshot | null,
-  endgameTriggers?: EndgameTrigger[],
-  finaleOutline?: FinaleOutline | null,
-  campaignStatus?: 'active' | 'completed',
-): Promise<void> {
+/** PB-005: Single-object input for saveSession — replaces 23 positional params. */
+export type SaveSessionInput = {
+  engine: Engine;
+  history: TurnHistory;
+  tone: string;
+  savePath: string;
+  worldPrompt?: string;
+  profile?: CharacterProfile | null;
+  packId?: string;
+  playerRumors?: PlayerRumor[];
+  activePressures?: WorldPressure[];
+  genre?: string;
+  resolvedPressures?: PressureFallout[];
+  journal?: CampaignJournal;
+  npcProfiles?: NpcProfile[];
+  npcActions?: NpcActionResult[];
+  npcObligations?: Map<string, NpcObligationLedger>;
+  consequenceChains?: Map<string, ConsequenceChain>;
+  partyState?: PartyState;
+  districtEconomies?: Map<string, DistrictEconomy>;
+  activeOpportunities?: OpportunityState[];
+  resolvedOpportunities?: OpportunityFallout[];
+  arcSnapshot?: ArcSnapshot | null;
+  endgameTriggers?: EndgameTrigger[];
+  finaleOutline?: FinaleOutline | null;
+  campaignStatus?: 'active' | 'completed';
+};
+
+export async function saveSession(input: SaveSessionInput): Promise<void> {
+  const {
+    engine, history, tone, savePath, worldPrompt, profile, packId,
+    playerRumors, activePressures, genre, resolvedPressures, journal,
+    npcProfiles, npcActions, npcObligations, consequenceChains,
+    partyState, districtEconomies, activeOpportunities, resolvedOpportunities,
+    arcSnapshot, endgameTriggers, finaleOutline, campaignStatus,
+  } = input;
+
   // Compute leverage snapshot for save summary
   const leverageSnap = profile
     ? formatLeverageStatus(getLeverageState(profile.custom))
@@ -171,22 +182,46 @@ export async function saveSession(
   const dir = dirname(savePath);
   await mkdir(dir, { recursive: true });
 
-  // Atomic write: temp file → rename prevents corruption from interrupted writes
+  // PB-002: Atomic save with race-condition protection.
+  // Sequence: (1) write tmp, (2) rename existing→.bak, (3) rename tmp→save.
+  // If step 3 fails, restore .bak. Clean up tmp on any failure.
   const tmpPath = savePath + '.tmp.' + randomBytes(4).toString('hex');
-  const json = JSON.stringify(session, null, 2);
-  await writeFile(tmpPath, json, 'utf-8');
+  const bakPath = savePath + '.bak';
+  let hasBak = false;
+  let hadPreviousSave = false;
 
-  // Keep one-deep backup of the previous save
   try {
-    await stat(savePath); // check if previous exists (cheaper than readFile)
-    const bakPath = savePath + '.bak';
-    try { await unlink(bakPath); } catch { /* no previous backup */ }
-    await rename(savePath, bakPath);
-  } catch {
-    // No previous save — first write
-  }
+    const json = JSON.stringify(session, null, 2);
 
-  await rename(tmpPath, savePath);
+    // Step 1: Write to temp file
+    await writeFile(tmpPath, json, 'utf-8');
+
+    // Step 2: If a previous save exists, rename it to .bak
+    try {
+      await stat(savePath);
+      hadPreviousSave = true;
+      try { await unlink(bakPath); } catch { /* no previous backup */ }
+      await rename(savePath, bakPath);
+      hasBak = true;
+    } catch {
+      // No previous save — first write
+    }
+
+    // Step 3: Rename tmp → save
+    try {
+      await rename(tmpPath, savePath);
+    } catch (renameErr) {
+      // Step 3 failed — restore backup if we moved it
+      if (hasBak) {
+        try { await rename(bakPath, savePath); } catch { /* best effort */ }
+      }
+      throw renameErr;
+    }
+  } catch (err) {
+    // Clean up tmp on any failure
+    try { await unlink(tmpPath); } catch { /* may not exist */ }
+    throw err;
+  }
 }
 
 export class SaveValidationError extends Error {

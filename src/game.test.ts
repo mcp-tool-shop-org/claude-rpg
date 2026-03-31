@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
+import { createTestLogger } from './game/debug-logger.js';
 
 describe('GameSession', () => {
   it('should create a session with a starter world', () => {
@@ -127,5 +128,72 @@ describe('GameSession', () => {
     // Verify a turn was recorded in history
     expect(h.turnCount()).toBeGreaterThanOrEqual(1);
     expect(h.lastVerb()).toBe('look');
+  });
+
+  it('should contain subsystem warning when a post-turn tick throws (PB-001)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    // Sabotage a subsystem to force an error in the post-turn tick block.
+    // tickFactionAgency reads engine.world.factions — we make it throw.
+    const originalFactions = h.session.engine.world.factions;
+    Object.defineProperty(h.session.engine.world, 'factions', {
+      get() { throw new Error('simulated subsystem failure'); },
+      configurable: true,
+    });
+
+    const output = await h.play('look around');
+    expect(output).toContain('subsystem hiccupped');
+    expect(output).toContain('processed safely');
+
+    // Restore
+    Object.defineProperty(h.session.engine.world, 'factions', {
+      value: originalFactions,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it('should log turn start/end with debug logger (PB-004)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const logger = createTestLogger();
+    const h = createHarness({ gameOpts: { debugLogger: logger } });
+
+    await h.play('look around');
+
+    const entries = logger.getEntries();
+    const turnStart = entries.find((e) => e.message === 'turn-start');
+    const turnEnd = entries.find((e) => e.message === 'turn-end');
+    expect(turnStart).toBeDefined();
+    expect(turnStart!.subsystem).toBe('turn');
+    expect(turnEnd).toBeDefined();
+    expect(turnEnd!.subsystem).toBe('turn');
+  });
+
+  it('should log subsystem error in debug logger on failure (PB-001 + PB-004)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const logger = createTestLogger();
+    const h = createHarness({ gameOpts: { debugLogger: logger } });
+
+    // Sabotage
+    const originalFactions = h.session.engine.world.factions;
+    Object.defineProperty(h.session.engine.world, 'factions', {
+      get() { throw new Error('boom'); },
+      configurable: true,
+    });
+
+    await h.play('look around');
+
+    const errorEntry = logger.getEntries().find((e) => e.level === 'error');
+    expect(errorEntry).toBeDefined();
+    expect(errorEntry!.subsystem).toBe('subsystem');
+    expect(errorEntry!.data?.error).toContain('boom');
+
+    // Restore
+    Object.defineProperty(h.session.engine.world, 'factions', {
+      value: originalFactions,
+      configurable: true,
+      writable: true,
+    });
   });
 });

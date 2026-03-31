@@ -12,14 +12,16 @@ vi.mock('@ai-rpg-engine/modules', async (importOriginal) => {
     getCognition: vi.fn(),
     setBelief: vi.fn(),
     addMemory: vi.fn(),
+    getFactionCognition: vi.fn(),
   };
 });
 
-import { getCognition, setBelief, addMemory } from '@ai-rpg-engine/modules';
+import { getCognition, setBelief, addMemory, getFactionCognition } from '@ai-rpg-engine/modules';
 
 const mockedGetCognition = vi.mocked(getCognition);
 const mockedSetBelief = vi.mocked(setBelief);
 const mockedAddMemory = vi.mocked(addMemory);
+const mockedGetFactionCognition = vi.mocked(getFactionCognition);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -173,5 +175,56 @@ describe('applyNpcEffects — BR-007 null cognition guards', () => {
     expect(() => applyNpcEffects(result, ctx)).not.toThrow();
     expect(mockedSetBelief).not.toHaveBeenCalled();
     expect(fakeCog.morale).toBe(60);
+  });
+});
+
+describe('applyNpcEffects PBR-005: alert null guard', () => {
+  it('should not throw when getFactionCognition returns null for alert effect', () => {
+    mockedGetFactionCognition.mockReturnValue(null as any);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ctx = makeCtx();
+    const result = makeResult([
+      { type: 'alert', factionId: 'nonexistent-faction', delta: 10 },
+    ]);
+
+    expect(() => applyNpcEffects(result, ctx)).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no faction cognition'));
+    warnSpy.mockRestore();
+  });
+
+  it('should not throw when getFactionCognition returns undefined for alert effect', () => {
+    mockedGetFactionCognition.mockReturnValue(undefined as any);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ctx = makeCtx();
+    const result = makeResult([
+      { type: 'alert', factionId: 'ghost-faction', delta: 20 },
+    ]);
+
+    expect(() => applyNpcEffects(result, ctx)).not.toThrow();
+    warnSpy.mockRestore();
+  });
+
+  it('should update alertLevel when getFactionCognition returns valid object', () => {
+    const fakeFcog = { alertLevel: 30 };
+    mockedGetFactionCognition.mockReturnValue(fakeFcog as any);
+    const ctx = makeCtx();
+    const result = makeResult([
+      { type: 'alert', factionId: 'guards', delta: 25 },
+    ]);
+
+    applyNpcEffects(result, ctx);
+    expect(fakeFcog.alertLevel).toBe(55);
+  });
+
+  it('should clamp alertLevel to 0-100 range', () => {
+    const fakeFcog = { alertLevel: 90 };
+    mockedGetFactionCognition.mockReturnValue(fakeFcog as any);
+    const ctx = makeCtx();
+    const result = makeResult([
+      { type: 'alert', factionId: 'guards', delta: 50 },
+    ]);
+
+    applyNpcEffects(result, ctx);
+    expect(fakeFcog.alertLevel).toBe(100);
   });
 });

@@ -204,3 +204,49 @@ describe('narrateSceneLegacy', () => {
     expect(result.sceneContext.narrationInput.isNewZone).toBe(true);
   });
 });
+
+describe('parseNarrationPlan PBR-004: observability logging', () => {
+  it('should warn when no JSON structure found in response', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const plainText = 'Just some narration text with no braces at all.';
+    const opts = makeOpts({ client: makeClient(plainText) });
+
+    await narrateScene(opts);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('no JSON structure found'),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Just some narration'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('should warn when JSON parses but has no sceneText', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const noSceneText = JSON.stringify({ tone: 'calm', urgency: 'normal' });
+    const opts = makeOpts({ client: makeClient(noSceneText) });
+
+    await narrateScene(opts);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('missing sceneText'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('should warn on malformed JSON with truncated raw text', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const opts = makeOpts({ client: makeClient('{ broken json: }') });
+
+    await narrateScene(opts);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('JSON parse failed'),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('broken json'),
+    );
+    warnSpy.mockRestore();
+  });
+});

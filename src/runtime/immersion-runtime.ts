@@ -56,6 +56,9 @@ export class ImmersionRuntime {
     this.voiceCaster.autoCast(engine.world);
   }
 
+  /** Whether debug logging is enabled. Set externally if needed. */
+  debugMode = false;
+
   /** Process events through the presentation pipeline, returning MCP tool calls. */
   async processPresentation(
     engine: Engine,
@@ -78,31 +81,53 @@ export class ImmersionRuntime {
     };
     const preResults = this.hookManager.fire(preContext);
 
-    // 3. Fire specific hooks based on events
-    const specificCalls = await this.fireEventHooks(engine, events);
-
-    // 4. If we have a narration plan, schedule through audio director
+    // PFE-008: Wrap audio/hook pipeline in try/catch so failures degrade to silence
+    // rather than killing the turn. The player should never lose gameplay to an audio glitch.
+    let specificCalls: McpToolCall[] = [];
     let audioCalls: McpToolCall[] = [];
-    if (narrationPlan) {
-      // Merge hook cues into the plan
-      const mergedPlan = this.mergeHookResults(narrationPlan, preResults);
 
-      // Schedule through audio director
-      const commands = this.audioDirector.schedule(mergedPlan);
-
-      // Execute through bridge
-      audioCalls = await this.bridge.executeCommands(commands);
+    try {
+      // 3. Fire specific hooks based on events
+      specificCalls = await this.fireEventHooks(engine, events);
+    } catch (err) {
+      if (this.debugMode) {
+        console.error('[immersion] Hook error (degrading to silence):', err);
+      }
     }
 
-    // 5. Fire post-narration hooks
-    const postContext: HookContext = {
-      hookPoint: 'post-narration',
-      world: engine.world,
-      events,
-      presentationState: this.stateMachine.current,
-      narrationPlan,
-    };
-    this.hookManager.fire(postContext);
+    try {
+      // 4. If we have a narration plan, schedule through audio director
+      if (narrationPlan) {
+        // Merge hook cues into the plan
+        const mergedPlan = this.mergeHookResults(narrationPlan, preResults);
+
+        // Schedule through audio director
+        const commands = this.audioDirector.schedule(mergedPlan);
+
+        // Execute through bridge
+        audioCalls = await this.bridge.executeCommands(commands);
+      }
+    } catch (err) {
+      if (this.debugMode) {
+        console.error('[immersion] Audio pipeline error (degrading to silence):', err);
+      }
+    }
+
+    // 5. Fire post-narration hooks (also guarded)
+    try {
+      const postContext: HookContext = {
+        hookPoint: 'post-narration',
+        world: engine.world,
+        events,
+        presentationState: this.stateMachine.current,
+        narrationPlan,
+      };
+      this.hookManager.fire(postContext);
+    } catch (err) {
+      if (this.debugMode) {
+        console.error('[immersion] Post-narration hook error:', err);
+      }
+    }
 
     return [...specificCalls, ...audioCalls];
   }

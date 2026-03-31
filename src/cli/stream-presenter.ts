@@ -13,6 +13,8 @@ export type StreamSession = {
   chunkCount: number;
   /** Whether the stream was interrupted before finish(). */
   interrupted: boolean;
+  /** Mark the stream as interrupted and render a visual break to the player. */
+  markInterrupted: () => void;
 };
 
 /**
@@ -49,12 +51,23 @@ export function createStreamPresenter(): StreamSession {
     }
   };
 
+  /**
+   * PFE-004: Mark the stream as interrupted and render a visual break.
+   * Call this when a partial stream failure occurs so the player sees
+   * a clean separator before any fallback narration.
+   */
+  const markInterrupted = () => {
+    interrupted = true;
+    renderStreamInterruption();
+  };
+
   const session: StreamSession = {
     onChunk,
     finish,
     get chunkCount() { return chunkCount; },
     get interrupted() { return interrupted; },
     set interrupted(v: boolean) { interrupted = v; },
+    markInterrupted,
   };
 
   return session;

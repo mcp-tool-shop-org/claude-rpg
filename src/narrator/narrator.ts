@@ -140,6 +140,8 @@ function parseNarrationPlan(text: string): NarrationPlan | null {
     if (braceMatch) {
       jsonStr = braceMatch[0];
     } else {
+      // PBR-004: Log when no JSON structure found
+      console.warn(`[narrator] parseNarrationPlan: no JSON structure found in response. Raw (truncated): "${text.slice(0, 200)}"`);
       return null;
     }
   }
@@ -168,8 +170,12 @@ function parseNarrationPlan(text: string): NarrationPlan | null {
         interruptibility: parsed.interruptibility ?? 'free',
       };
     }
+    // PBR-004: Log when parsed JSON doesn't match expected shape
+    console.warn(`[narrator] parseNarrationPlan: parsed JSON but missing sceneText. Raw (truncated): "${text.slice(0, 200)}"`);
     return null;
-  } catch {
+  } catch (err) {
+    // PBR-004: Log JSON parse failures with truncated raw text
+    console.warn(`[narrator] parseNarrationPlan: JSON parse failed: ${err instanceof Error ? err.message : String(err)}. Raw (truncated): "${text.slice(0, 200)}"`);
     return null;
   }
 }

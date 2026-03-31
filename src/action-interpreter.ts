@@ -52,14 +52,19 @@ export async function interpretAction(
     return result.data;
   }
 
-  // Fallback: look around
+  // PB-007: Distinguish API failure from low-confidence interpretation.
+  // API failures get a player-visible message so they know it was transient,
+  // not that their input was invalid.
+  const isApiFailure = !result.ok;
   return {
     verb: 'look',
     targetIds: null,
     toolId: null,
     parameters: null,
     confidence: 'low',
-    reasoning: 'Could not interpret input',
+    reasoning: isApiFailure
+      ? 'The world feels hazy for a moment... (interpretation service unavailable — try again)'
+      : 'Could not interpret input',
     alternatives: null,
   };
 }

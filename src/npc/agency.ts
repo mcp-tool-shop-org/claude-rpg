@@ -175,6 +175,11 @@ export function applyNpcEffects(
 
       case 'alert': {
         const fcog = getFactionCognition(engine.world, effect.factionId);
+        // PBR-005: Null guard — faction cognition may not exist
+        if (!fcog) {
+          console.warn(`[npc-agency] Cannot apply alert effect: no faction cognition for "${effect.factionId}"`);
+          break;
+        }
         fcog.alertLevel = Math.max(0, Math.min(100, fcog.alertLevel + effect.delta));
         break;
       }

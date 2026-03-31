@@ -17,6 +17,7 @@ import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld } from './foundry/world-gen.js';
 import {
   saveSession,
+  type SaveSessionInput,
   loadSession,
   loadProfileFromSession,
   loadRumorsFromSession,
@@ -79,6 +80,36 @@ import {
   getDistrictDefinition,
   computeDistrictMood,
 } from '@ai-rpg-engine/modules';
+
+/** Build a SaveSessionInput from a GameSession + save path. */
+function buildSaveInput(session: GameSession, savePath: string, packId?: string): SaveSessionInput {
+  return {
+    engine: session.engine,
+    history: session.history,
+    tone: session.tone,
+    savePath,
+    worldPrompt: session.worldPrompt,
+    profile: session.profile,
+    packId,
+    playerRumors: session.playerRumors,
+    activePressures: session.activePressures,
+    genre: session.genre,
+    resolvedPressures: session.resolvedPressures,
+    journal: session.journal,
+    npcProfiles: session.lastNpcProfiles,
+    npcActions: session.lastNpcActions,
+    npcObligations: session.npcObligations,
+    consequenceChains: session.activeConsequenceChains,
+    partyState: session.partyState,
+    districtEconomies: session.districtEconomies,
+    activeOpportunities: session.activeOpportunities,
+    resolvedOpportunities: session.resolvedOpportunities,
+    arcSnapshot: session.arcSnapshot,
+    endgameTriggers: session.endgameTriggers,
+    finaleOutline: session.finaleOutline,
+    campaignStatus: session.campaignStatus,
+  };
+}
 
 const USAGE = `
 claude-rpg — simulation-grounded narrative RPG
@@ -147,6 +178,8 @@ async function main(): Promise<void> {
 
   const command = filteredArgs[0];
 
+  // PFE-006: Command dispatch is an if/else chain. If more commands are added,
+  // consider extracting to a command registry map (e.g. Record<string, (args) => Promise<void>>).
   if (command === 'play') {
     await runPlay(filteredArgs.slice(1));
   } else if (command === 'load') {
@@ -283,8 +316,21 @@ async function runLoad(): Promise<void> {
       itemCatalog = pack.itemCatalog;
       try {
         const saved = JSON.parse(savedSession.engineState);
+        // PFE-007: Validate structure before assigning — corrupted saves shouldn't silently break.
+        if (!saved || typeof saved !== 'object' || !saved.world || typeof saved.world.state !== 'object') {
+          console.error('  Save file has invalid engine state structure (missing world.state).');
+          console.error('  Your save may be corrupted. Check for a .bak backup.');
+          rl.close();
+          process.exit(1);
+        }
         Object.assign(engine.store.state, structuredClone(saved.world.state));
       } catch (err) {
+        if (err instanceof SyntaxError) {
+          console.error('  Save file engine state is not valid JSON.');
+          console.error('  Your save may be corrupted. Check for a .bak backup.');
+          rl.close();
+          process.exit(1);
+        }
         presentError(err, 'load', debugMode);
       }
     }
@@ -473,16 +519,70 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
     process.exit(exitCode ?? 1);
   }
 
-  // Promisified readline question helper (avoids recursive callbacks growing the stack)
+  // Promisified readline question helper (avoids recursive callbacks growing the stack).
+  // PFE-001: Rejects on 'close' (Ctrl+D / pipe EOF) so the game loop doesn't hang forever.
   function question(rlInst: ReturnType<typeof createInterface>, promptText: string): Promise<string> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       rlInst.question(promptText, resolve);
+      rlInst.once('close', () => reject(new Error('__STDIN_CLOSED__')));
     });
   }
 
+  // PFE-002: Graceful SIGINT handling — first Ctrl+C attempts save, second force-exits.
+  let sigintCount = 0;
+  process.on('SIGINT', async () => {
+    sigintCount++;
+    if (sigintCount >= 2) {
+      console.log('\n  Force-exiting. Farewell.\n');
+      process.exit(1);
+    }
+    console.log('\n  Interrupted. Saving your progress...');
+    try {
+      const saveName = session.profile
+        ? `${session.profile.build.name}-autosave-${Date.now()}`
+        : `autosave-${Date.now()}`;
+      const savePath = getSavePath(saveName);
+      const expectedDir = resolve(getDefaultSaveDir());
+      if (resolve(savePath).startsWith(expectedDir)) {
+        await saveSession(buildSaveInput(session, savePath, packId));
+        console.log(`  Auto-saved to ${savePath}`);
+      }
+    } catch {
+      console.log('  Auto-save failed. Your in-game progress was not saved.');
+    }
+    console.log('  Farewell.\n');
+    rl.close();
+    process.exit(0);
+  });
+
   // Game loop — iterative to avoid unbounded stack growth
   while (true) {
-    const input = await question(rl, '  > ');
+    let input: string;
+    try {
+      input = await question(rl, '  > ');
+    } catch (err) {
+      // PFE-001: stdin closed (Ctrl+D or pipe EOF) — auto-save and exit cleanly.
+      if (err instanceof Error && err.message === '__STDIN_CLOSED__') {
+        console.log('\n  Input stream closed.');
+        try {
+          const saveName = session.profile
+            ? `${session.profile.build.name}-autosave-${Date.now()}`
+            : `autosave-${Date.now()}`;
+          const savePath = getSavePath(saveName);
+          const expectedDir = resolve(getDefaultSaveDir());
+          if (resolve(savePath).startsWith(expectedDir)) {
+            await saveSession(buildSaveInput(session, savePath, packId));
+            console.log(`  Auto-saved to ${savePath}`);
+          }
+        } catch {
+          console.log('  Auto-save failed.');
+        }
+        console.log('  Farewell.\n');
+        rl.close();
+        process.exit(0);
+      }
+      throw err;
+    }
 
     if (!input.trim()) continue;
 
@@ -501,32 +601,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
           console.error('  Save path escapes save directory — aborting.');
           continue;
         }
-        await saveSession(
-          session.engine,
-          session.history,
-          session.tone,
-          savePath,
-          session.worldPrompt,
-          session.profile,
-          packId,
-          session.playerRumors,
-          session.activePressures,
-          session.genre,
-          session.resolvedPressures,
-          session.journal,
-          session.lastNpcProfiles,
-          session.lastNpcActions,
-          session.npcObligations,
-          session.activeConsequenceChains,
-          session.partyState,
-          session.districtEconomies,
-          session.activeOpportunities,
-          session.resolvedOpportunities,
-          session.arcSnapshot,
-          session.endgameTriggers,
-          session.finaleOutline,
-          session.campaignStatus,
-        );
+        await saveSession(buildSaveInput(session, savePath, packId));
         console.log(`\n  Saved to ${savePath}`);
 
         // Show unified session recap

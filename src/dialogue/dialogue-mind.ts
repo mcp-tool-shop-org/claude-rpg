@@ -49,18 +49,40 @@ export async function generateDialogue(
 
   const prompt = buildDialoguePrompt(context);
 
-  const result = await client.generate({
-    system: DIALOGUE_SYSTEM,
-    prompt,
-    maxTokens: 200,
-  });
+  // PBR-002: Wrap LLM call in try/catch — return in-character fallback on failure
+  let resultText: string;
+  try {
+    const result = await client.generate({
+      system: DIALOGUE_SYSTEM,
+      prompt,
+      maxTokens: 200,
+    });
+    resultText = result.text.trim();
+  } catch (err) {
+    console.warn(
+      `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
+    );
+    const npc = world.entities[npcId];
+    return {
+      speakerId: npcId,
+      speakerName: npc?.name ?? npcId,
+      text: 'The NPC pauses, gathering their thoughts...',
+      grounding: {
+        beliefCount: context.beliefs.length,
+        memoryCount: context.recentMemories.length,
+        factionId: context.faction?.name,
+        morale: context.morale,
+        suspicion: context.suspicion,
+      },
+    };
+  }
 
   const npc = world.entities[npcId];
 
   return {
     speakerId: npcId,
     speakerName: npc?.name ?? npcId,
-    text: result.text.trim(),
+    text: resultText,
     grounding: {
       beliefCount: context.beliefs.length,
       memoryCount: context.recentMemories.length,

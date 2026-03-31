@@ -220,6 +220,7 @@ import { generateSuggestions } from './display/contextual-suggestions.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
 import { listArchivedCampaigns } from './session/session.js';
 import { exportChronicleMarkdown, exportChronicleJSON, exportFinaleMarkdown, writeExport } from './session/chronicle-export.js';
+import { createDebugLogger, type DebugLogger } from './game/debug-logger.js';
 
 export type GameMode = 'play' | 'director';
 
@@ -237,6 +238,8 @@ export type GameConfig = {
   genre?: string;
   journal?: CampaignJournal;
   fastMode?: boolean;
+  /** Debug logger instance — if omitted, auto-detected from --debug / CLAUDE_RPG_DEBUG. */
+  debugLogger?: DebugLogger;
 };
 
 export class GameSession {
@@ -273,6 +276,8 @@ export class GameSession {
   finaleOutline: FinaleOutline | null = null;
   campaignStatus: 'active' | 'completed' = 'active';
   readonly fastMode: boolean;
+  /** Structured debug logger — gated behind --debug flag. */
+  readonly debugLog: DebugLogger;
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -288,6 +293,7 @@ export class GameSession {
     this.journal = config.journal ?? new CampaignJournal();
     this.genre = config.genre ?? 'fantasy';
     this.fastMode = config.fastMode ?? false;
+    this.debugLog = config.debugLogger ?? createDebugLogger();
 
     // Initialize district economies from genre + district tags
     this.initializeDistrictEconomies();
@@ -627,83 +633,101 @@ export class GameSession {
       endgameContext: this.getEndgameContext(),
     });
 
-    // Process leverage actions (social/rumor/diplomacy/sabotage)
-    this.processLeverageAction(turnResult);
+    // PB-001: Post-turn subsystem ticks wrapped in error containment.
+    // The critical path (executeTurn) already completed — subsystem failures
+    // should degrade gracefully, not crash the session.
+    this.debugLog.setTick(this.engine.tick);
+    this.debugLog.info('turn', 'turn-start', { input: trimmed, tick: this.engine.tick });
+    let subsystemWarning: string | undefined;
+    try {
+      // Process leverage actions (social/rumor/diplomacy/sabotage)
+      this.processLeverageAction(turnResult);
 
-    // Process crafting actions (craft/salvage/repair/modify) (v1.8)
-    this.processCraftAction(turnResult);
+      // Process crafting actions (craft/salvage/repair/modify) (v1.8)
+      this.processCraftAction(turnResult);
 
-    // Apply profile hints from this turn (may spawn rumors)
-    this.applyProfileHints(turnResult.profileHints);
+      // Apply profile hints from this turn (may spawn rumors)
+      this.applyProfileHints(turnResult.profileHints);
+      this.debugLog.debug('profile', 'hints-applied', {
+        xp: turnResult.profileHints.xpGained ?? 0,
+        milestone: turnResult.profileHints.milestoneTriggered ?? null,
+      });
 
-    // Apply natural leverage gains + passive tick
-    this.tickPlayerLeverage(turnResult.profileHints);
+      // Apply natural leverage gains + passive tick
+      this.tickPlayerLeverage(turnResult.profileHints);
 
-    // Record chronicle events from this turn
-    this.recordChronicleEvents(turnResult);
+      // Record chronicle events from this turn
+      this.recordChronicleEvents(turnResult);
 
-    // Faction agency: factions evaluate state and take actions
-    this.tickFactionAgency();
+      // Faction agency: factions evaluate state and take actions
+      this.tickFactionAgency();
 
-    // Economy tick: baseline-seeking decay per district (v1.7)
-    this.tickDistrictEconomies();
+      // Economy tick: baseline-seeking decay per district (v1.7)
+      this.tickDistrictEconomies();
 
-    // NPC agency: named NPCs evaluate state and take individual actions
-    this.tickNpcAgencyTurn();
+      // NPC agency: named NPCs evaluate state and take individual actions
+      this.tickNpcAgencyTurn();
 
-    // Item recognition: NPCs notice equipped items with provenance
-    this.tickItemRecognition();
+      // Item recognition: NPCs notice equipped items with provenance
+      this.tickItemRecognition();
 
-    // Companion zone following: if player moved zones, companions follow
-    if (this.engine.world.locationId !== zoneBefore) {
-      followPlayer(this.engine, this.partyState);
-    }
-
-    // Companion reactions to combat and district conditions
-    if (this.partyState.companions.length > 0) {
-      // Combat reactions
-      const hasCombatWon = turnResult.events.some((e) => e.type === 'combat.entity.defeated');
-      const hasCombatLost = turnResult.events.some(
-        (e) => e.type === 'combat.entity.defeated' &&
-          e.payload.entityId === this.engine.world.playerId,
-      );
-      if (hasCombatLost) {
-        this.processCompanionReactions('combat-lost');
-      } else if (hasCombatWon) {
-        this.processCompanionReactions('combat-won');
+      // Companion zone following: if player moved zones, companions follow
+      if (this.engine.world.locationId !== zoneBefore) {
+        followPlayer(this.engine, this.partyState);
       }
 
-      // District mood reactions (at start of each turn)
-      const playerDistrict = this.getPlayerDistrictId();
-      if (playerDistrict) {
-        const dState = getDistrictState(this.engine.world, playerDistrict);
-        const dDef = getDistrictDefinition(this.engine.world, playerDistrict);
-        if (dState && dDef) {
-          const mood = computeDistrictMood(dState, dDef.tags);
-          if (mood.tone === 'grim' || mood.tone === 'oppressive') {
-            this.processCompanionReactions('district-grim');
-          } else if (mood.tone === 'prosperous') {
-            this.processCompanionReactions('district-prosperous');
+      // Companion reactions to combat and district conditions
+      if (this.partyState.companions.length > 0) {
+        // Combat reactions
+        const hasCombatWon = turnResult.events.some((e) => e.type === 'combat.entity.defeated');
+        const hasCombatLost = turnResult.events.some(
+          (e) => e.type === 'combat.entity.defeated' &&
+            e.payload.entityId === this.engine.world.playerId,
+        );
+        if (hasCombatLost) {
+          this.processCompanionReactions('combat-lost');
+        } else if (hasCombatWon) {
+          this.processCompanionReactions('combat-won');
+        }
+
+        // District mood reactions (at start of each turn)
+        const playerDistrict = this.getPlayerDistrictId();
+        if (playerDistrict) {
+          const dState = getDistrictState(this.engine.world, playerDistrict);
+          const dDef = getDistrictDefinition(this.engine.world, playerDistrict);
+          if (dState && dDef) {
+            const mood = computeDistrictMood(dState, dDef.tags);
+            if (mood.tone === 'grim' || mood.tone === 'oppressive') {
+              this.processCompanionReactions('district-grim');
+            } else if (mood.tone === 'prosperous') {
+              this.processCompanionReactions('district-prosperous');
+            }
           }
         }
       }
+
+      // Propagate existing rumors to new factions
+      this.propagateRumors();
+
+      // Evaluate and tick world pressures
+      this.evaluateAndTickPressures();
+
+      // Evaluate and tick opportunities (v1.9)
+      this.evaluateAndTickOpportunities();
+
+      // Arc detection + endgame evaluation (v2.0)
+      this.tickArcDetection();
+      this.evaluateEndgameTrigger();
+
+      // Process opportunity actions from this turn (accept/decline/complete/etc.)
+      this.processOpportunityAction(turnResult);
+    } catch (err) {
+      // Subsystem failure — the turn itself was processed safely.
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.debugLog.error('subsystem', 'post-turn tick failed', { error: errMsg });
+      subsystemWarning = '\n  [A subsystem hiccupped — your turn was processed safely]';
     }
-
-    // Propagate existing rumors to new factions
-    this.propagateRumors();
-
-    // Evaluate and tick world pressures
-    this.evaluateAndTickPressures();
-
-    // Evaluate and tick opportunities (v1.9)
-    this.evaluateAndTickOpportunities();
-
-    // Arc detection + endgame evaluation (v2.0)
-    this.tickArcDetection();
-    this.evaluateEndgameTrigger();
-
-    // Process opportunity actions from this turn (accept/decline/complete/etc.)
-    this.processOpportunityAction(turnResult);
+    this.debugLog.info('turn', 'turn-end', { tick: this.engine.tick });
 
     // Move advisor + contextual suggestions
     const leverageStatus = this.profile
@@ -739,7 +763,7 @@ export class GameSession {
       });
     }
 
-    return renderPlayOutput({
+    const output = renderPlayOutput({
       narration: turnResult.narration,
       dialogue: turnResult.dialogue,
       world: this.engine.world,
@@ -750,6 +774,7 @@ export class GameSession {
       suggestions,
       hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
     });
+    return subsystemWarning ? output + subsystemWarning : output;
   }
 
   /** Universal title evolutions based on milestone tags. */
@@ -900,11 +925,13 @@ export class GameSession {
     const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
     for (const factionId of factionIds) {
       const fcog = getFactionCognition(this.engine.world, factionId);
-      if (fcog) {
+      if (fcog && typeof fcog === 'object') {
         const state = fcog as Record<string, unknown>;
+        const rawAlert = state.alertLevel;
+        const rawCohesion = state.cohesion;
         factionStates[factionId] = {
-          alertLevel: (state.alertLevel as number) ?? 0,
-          cohesion: (state.cohesion as number) ?? 1,
+          alertLevel: typeof rawAlert === 'number' ? rawAlert : 0,
+          cohesion: typeof rawCohesion === 'number' ? rawCohesion : 1,
         };
       } else {
         factionStates[factionId] = { alertLevel: 0, cohesion: 1 };
@@ -1576,13 +1603,17 @@ export class GameSession {
 
         case 'cohesion': {
           const cog = getFactionCognition(this.engine.world, effect.factionId);
-          cog.cohesion = Math.max(0, Math.min(1, cog.cohesion + effect.delta));
+          if (cog && typeof cog === 'object' && typeof (cog as Record<string, unknown>).cohesion === 'number') {
+            (cog as Record<string, unknown>).cohesion = Math.max(0, Math.min(1, ((cog as Record<string, unknown>).cohesion as number) + effect.delta));
+          }
           break;
         }
 
         case 'alert': {
           const cog = getFactionCognition(this.engine.world, effect.factionId);
-          cog.alertLevel = Math.max(0, Math.min(100, cog.alertLevel + effect.delta));
+          if (cog && typeof cog === 'object' && typeof (cog as Record<string, unknown>).alertLevel === 'number') {
+            (cog as Record<string, unknown>).alertLevel = Math.max(0, Math.min(100, ((cog as Record<string, unknown>).alertLevel as number) + effect.delta));
+          }
           break;
         }
 
@@ -2224,14 +2255,18 @@ export class GameSession {
         }
 
         case 'cohesion': {
-          const cog = getFactionCognition(this.engine.world, effect.factionId);
-          cog.cohesion = Math.max(0, Math.min(1, cog.cohesion + effect.delta));
+          const cog2 = getFactionCognition(this.engine.world, effect.factionId);
+          if (cog2 && typeof cog2 === 'object' && typeof (cog2 as Record<string, unknown>).cohesion === 'number') {
+            (cog2 as Record<string, unknown>).cohesion = Math.max(0, Math.min(1, ((cog2 as Record<string, unknown>).cohesion as number) + effect.delta));
+          }
           break;
         }
 
         case 'alert': {
-          const cog = getFactionCognition(this.engine.world, effect.factionId);
-          cog.alertLevel = Math.max(0, Math.min(100, cog.alertLevel + effect.delta));
+          const cog2 = getFactionCognition(this.engine.world, effect.factionId);
+          if (cog2 && typeof cog2 === 'object' && typeof (cog2 as Record<string, unknown>).alertLevel === 'number') {
+            (cog2 as Record<string, unknown>).alertLevel = Math.max(0, Math.min(100, ((cog2 as Record<string, unknown>).alertLevel as number) + effect.delta));
+          }
           break;
         }
 

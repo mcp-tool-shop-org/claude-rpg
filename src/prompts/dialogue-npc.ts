@@ -143,6 +143,17 @@ function formatNpcAgencyContext(input: DialogueInput): string {
   return `\nNPC agency state:\n${parts.map((p) => `  ${p}`).join('\n')}\n`;
 }
 
+/** PBR-008: Sanitize player utterance — truncate with indicator, strip XML-like tags */
+export function sanitizePlayerUtterance(raw: string): string {
+  const MAX_LEN = 500;
+  // Strip XML-like tags to prevent prompt injection via fake tags
+  let sanitized = raw.replace(/<\/?[a-zA-Z][^>]*>/g, '');
+  if (sanitized.length > MAX_LEN) {
+    sanitized = sanitized.slice(0, MAX_LEN) + '...[truncated]';
+  }
+  return sanitized;
+}
+
 export function buildDialoguePrompt(input: DialogueInput): string {
   const beliefs = input.beliefs
     .map((b) => {
@@ -178,6 +189,6 @@ Tone: ${input.tone}
 ${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}
 Player says:
 <player_speech>
-${input.playerUtterance.slice(0, 500)}
+${sanitizePlayerUtterance(input.playerUtterance)}
 </player_speech>`;
 }

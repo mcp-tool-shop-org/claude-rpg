@@ -190,6 +190,41 @@ describe('generateWorld (BR-018)', () => {
   });
 });
 
+describe('generateWorld FT-BR-006: quest passthrough', () => {
+  it('should include generated quests in the result', async () => {
+    const proposal = makeValidProposal();
+    const client = makeMockClient(proposal);
+    const result = await generateWorld(client, 'A test world', 42);
+
+    expect(result.ok).toBe(true);
+    expect(result.quests).toEqual(proposal.quests);
+    expect(result.quests).toHaveLength(1);
+    expect(result.quests[0].id).toBe('q1');
+  });
+
+  it('should return empty quests array on LLM failure', async () => {
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured: vi.fn().mockResolvedValue({
+        ok: false, data: null, raw: '', error: 'fail',
+      }),
+    };
+    const result = await generateWorld(client, 'test');
+    expect(result.ok).toBe(false);
+    expect(result.quests).toEqual([]);
+  });
+
+  it('should default to empty quests when proposal has no quests field', async () => {
+    const proposal = makeValidProposal();
+    (proposal as any).quests = undefined;
+    const client = makeMockClient(proposal);
+    const result = await generateWorld(client, 'test', 1);
+    // Validation may pass or fail depending on other checks, but quests should be []
+    expect(result.quests).toEqual([]);
+  });
+});
+
 describe('generateWorld PBR-007: NPC ID collision guard', () => {
   it('should resolve colliding NPC IDs with numeric suffix', async () => {
     const proposal = makeValidProposal();

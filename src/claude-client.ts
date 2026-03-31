@@ -57,6 +57,10 @@ export type ClaudeClient = {
   readonly model: string;
 };
 
+/**
+ * @deprecated Use {@link createAdaptedClient} from `./llm/claude-adapter.js` instead.
+ * This factory lacks streaming support and adapter-layer features.
+ */
 export function createClaudeClient(config: ClaudeClientConfig = {}): ClaudeClient {
   const anthropic = new Anthropic({ apiKey: config.apiKey });
   const model = config.model ?? 'claude-sonnet-4-20250514';

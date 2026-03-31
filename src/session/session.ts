@@ -75,6 +75,8 @@ export type SaveSlotSummary = {
   campaignAge?: number;
   leverageHighlight?: string;
   hottestPressure?: string;
+  companionCount?: number;
+  lastZoneName?: string;
 };
 
 /** PB-005: Single-object input for saveSession — replaces 23 positional params. */
@@ -588,6 +590,34 @@ export async function listSaves(): Promise<SaveSlotSummary[]> {
         }
       }
 
+      // Extract companion count from party state
+      let companionCount: number | undefined;
+      if (session.partyState) {
+        try {
+          const party = JSON.parse(session.partyState) as { companions?: unknown[] };
+          if (party.companions && party.companions.length > 0) {
+            companionCount = party.companions.length;
+          }
+        } catch {
+          // Skip corrupted party data
+        }
+      }
+
+      // Extract last zone name from engine state
+      let lastZoneName: string | undefined;
+      try {
+        const engineData = JSON.parse(session.engineState) as {
+          world?: { state?: { locationId?: string; zones?: Record<string, { name?: string }> } };
+        };
+        const locationId = engineData?.world?.state?.locationId;
+        const zones = engineData?.world?.state?.zones;
+        if (locationId && zones && zones[locationId]?.name) {
+          lastZoneName = zones[locationId].name;
+        }
+      } catch {
+        // Skip corrupted engine data
+      }
+
       summaries.push({
         filename: file,
         savedAt: session.savedAt,
@@ -600,6 +630,8 @@ export async function listSaves(): Promise<SaveSlotSummary[]> {
         campaignAge,
         leverageHighlight: session.leverageSnapshot,
         hottestPressure,
+        companionCount,
+        lastZoneName,
       });
     } catch {
       // Skip corrupted saves

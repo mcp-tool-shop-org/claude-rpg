@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
 import { createTestLogger } from './game/debug-logger.js';
+import { createProfile } from '@ai-rpg-engine/character-profile';
 
 describe('GameSession', () => {
   it('should create a session with a starter world', () => {
@@ -282,6 +283,81 @@ describe('GameSession', () => {
       const result = await h.session.checkAutosave();
       // turnsSinceLastAutosave is 1 after this call, but intervalTurns is 5
       expect(result).toBe(null);
+    });
+  });
+
+  describe('structured announcements (FT-B-008)', () => {
+    function makeTestProfile() {
+      return createProfile(
+        {
+          name: 'Aldric',
+          archetypeId: 'penitent-knight',
+          backgroundId: 'oath-breaker',
+          traitIds: ['iron-frame'],
+          disciplineId: 'occultist',
+          portraitRef: 'abc123',
+        },
+        { vigor: 7, instinct: 4, will: 1 },
+        { hp: 25, stamina: 8 },
+        ['martial'],
+        'fantasy',
+      );
+    }
+
+    it('should push level-up announcement instead of console.log', () => {
+      const engine = createGame();
+      const profile = makeTestProfile();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        profile,
+      });
+
+      expect(session.pendingAnnouncements).toEqual([]);
+
+      // Grant 100 XP triggers level 2
+      session.applyProfileHints({
+        xpGained: 100,
+      });
+
+      expect(session.pendingAnnouncements).toContainEqual(
+        expect.stringContaining('Level up!'),
+      );
+      expect(session.pendingAnnouncements).toContainEqual(
+        expect.stringContaining('level 2'),
+      );
+    });
+
+    it('should not push announcement when XP does not trigger level-up', () => {
+      const engine = createGame();
+      const profile = makeTestProfile();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        profile,
+      });
+
+      session.applyProfileHints({ xpGained: 10 });
+      expect(session.pendingAnnouncements).toEqual([]);
+    });
+
+    it('should drain announcements into processInput output', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const profile = makeTestProfile();
+      const h = createHarness({ gameOpts: { profile } });
+
+      // Manually push announcements to verify they appear in output
+      h.session.pendingAnnouncements.push('Level up! You are now level 5.');
+      h.session.pendingAnnouncements.push('Title evolved: "Grandmaster"');
+
+      const output = await h.play('look around');
+      expect(output).toContain('Level up! You are now level 5.');
+      expect(output).toContain('Title evolved: "Grandmaster"');
+
+      // Announcements should be drained after processInput
+      expect(h.session.pendingAnnouncements).toEqual([]);
     });
   });
 });

@@ -86,6 +86,9 @@ export type WorldGenResult = {
   proposal: WorldGenProposal | null;
   tone: string;
   errors: string[];
+  /** FT-BR-006: Generated quests from the LLM proposal. Stored here so callers can consume them.
+   *  TODO: Wire quests into a proper quest journal / quest tracker system when the engine supports it. */
+  quests: WorldGenProposal['quests'];
 };
 
 /** Validate that a WorldGenProposal has the required structure. Returns error strings. */
@@ -158,6 +161,7 @@ export async function generateWorld(
       proposal: null,
       tone: '',
       errors: [result.error ?? 'Failed to generate world proposal'],
+      quests: [],
     };
   }
 
@@ -165,7 +169,7 @@ export async function generateWorld(
   const errors = validateWorldGenProposal(proposal);
 
   if (errors.length > 0) {
-    return { ok: false, engine: null, proposal, tone: proposal.toneGuide ?? '', errors };
+    return { ok: false, engine: null, proposal, tone: proposal.toneGuide ?? '', errors, quests: proposal.quests ?? [] };
   }
 
   // Build ruleset
@@ -384,5 +388,7 @@ export async function generateWorld(
     proposal,
     tone: proposal.toneGuide ?? '',
     errors: [],
+    // FT-BR-006: Preserve generated quests so callers can consume them
+    quests: proposal.quests ?? [],
   };
 }

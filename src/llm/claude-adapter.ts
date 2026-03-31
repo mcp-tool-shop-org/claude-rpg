@@ -3,6 +3,17 @@
 // The ClaudeClient interface is unchanged — callers are unaffected.
 
 import Anthropic from '@anthropic-ai/sdk';
+/**
+ * Re-exported for convenience. The {@link ClaudeClient} interface is defined in
+ * `../claude-client.ts`.
+ *
+ * @deprecated The legacy factory `createClaudeClient` in `../claude-client.ts` is
+ * superseded by {@link createAdaptedClient} in this module, which adds retry logic,
+ * error classification, and streaming support. New code should always use
+ * `createAdaptedClient` from `src/llm/claude-adapter.ts`.
+ *
+ * FT-BR-008: Consolidate duplicate client implementations.
+ */
 import type { ClaudeClient, ClaudeClientConfig, GenerateResult, StreamCallback, StructuredResult } from '../claude-client.js';
 import { NarrationError } from './claude-errors.js';
 

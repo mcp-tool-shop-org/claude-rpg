@@ -49,7 +49,6 @@
     "@ai-rpg-engine/starter-vampire": "^2.1.0",
     "@ai-rpg-engine/starter-weird-west": "^2.0.0",
     "@ai-rpg-engine/starter-zombie": "^2.0.0",
-    "@ai-rpg-engine/terminal-ui": "^2.0.0",
     "@anthropic-ai/sdk": "^0.39.0"
   },
   "devDependencies": {

@@ -295,6 +295,8 @@ export class GameSession {
   private turnsSinceLastAutosave = 0;
   /** Last autosave message (appended to output when triggered). */
   private lastAutosaveMessage: string | null = null;
+  /** Structured announcements from subsystem processing (level-ups, title changes, etc.). */
+  pendingAnnouncements: string[] = [];
   /** Structured debug logger — gated behind --debug flag. */
   readonly debugLog: DebugLogger;
 
@@ -346,7 +348,7 @@ export class GameSession {
       const { profile: updated, leveledUp, newLevel } = grantXp(this.profile, hints.xpGained);
       this.profile = updated;
       if (leveledUp) {
-        console.log(`\n  Level up! You are now level ${newLevel}.\n`);
+        this.pendingAnnouncements.push(`Level up! You are now level ${newLevel}.`);
       }
     }
 
@@ -406,7 +408,7 @@ export class GameSession {
           ...this.profile,
           custom: { ...this.profile.custom, title: newTitle },
         };
-        console.log(`\n  Title evolved: "${newTitle}"\n`);
+        this.pendingAnnouncements.push(`Title evolved: "${newTitle}"`);
 
         // Record title change in chronicle
         const titleSource: ChronicleEventSource = {
@@ -798,6 +800,14 @@ export class GameSession {
       hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
     });
     let finalOutput = output;
+    // Drain structured announcements into the output
+    if (this.pendingAnnouncements.length > 0) {
+      const announcementBlock = this.pendingAnnouncements
+        .map((a) => `\n  ${a}`)
+        .join('');
+      finalOutput += announcementBlock + '\n';
+      this.pendingAnnouncements = [];
+    }
     if (subsystemWarning) finalOutput += subsystemWarning;
     if (autosaveMsg) finalOutput += autosaveMsg;
     return finalOutput;
@@ -980,7 +990,7 @@ export class GameSession {
     this.playerRumors = result.playerRumors;
     this.activePressures = result.activePressures;
     if (result.titleChanged) {
-      console.log(`\n  Title evolved: "${result.titleChanged.newTitle}"\n`);
+      this.pendingAnnouncements.push(`Title evolved: "${result.titleChanged.newTitle}"`);
     }
   }
 
@@ -1292,7 +1302,7 @@ export class GameSession {
                 ...this.profile,
                 custom: { ...this.profile.custom, title: newTitle },
               };
-              console.log(`\n  Title evolved: "${newTitle}"\n`);
+              this.pendingAnnouncements.push(`Title evolved: "${newTitle}"`);
             }
           }
           break;

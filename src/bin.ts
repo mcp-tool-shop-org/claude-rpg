@@ -277,6 +277,15 @@ async function runLoad(): Promise<void> {
     console.log(`    ${i + 1}. ${identity} — ${date}`);
     // Enhanced details
     const details: string[] = [];
+    if (s.packId) {
+      details.push(`pack: ${s.packId}`);
+    }
+    if (s.companionCount != null && s.companionCount > 0) {
+      details.push(`${s.companionCount} companion${s.companionCount > 1 ? 's' : ''}`);
+    }
+    if (s.lastZoneName) {
+      details.push(`zone: ${s.lastZoneName}`);
+    }
     if (s.chronicleEvents != null && s.chronicleEvents > 0) {
       details.push(`${s.chronicleEvents} chronicle events`);
     }

@@ -34,7 +34,7 @@ Claude RPG不仅仅是一个游戏，它还是AI RPG 引擎生态系统的参考
 
 | 想... | 使用 |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Play right now** | `npx claude-rpg play` (交互式世界和角色选择) |
 | **Create a new world** | `npx claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — 具有地图编辑器、NPC构建器和验证功能的2D创作工作室。 |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — 模式验证、故事板测试、导出流水线。 |
@@ -52,14 +52,17 @@ npm install claude-rpg
 或者直接运行：
 
 ```bash
-npx claude-rpg play --world fantasy
+npx claude-rpg play
 ```
 
 ## 快速开始
 
 ```bash
-# Play the built-in Chapel Threshold scenario
-npx claude-rpg play --world fantasy
+# Play — interactive world and character selection
+npx claude-rpg play
+
+# Accelerated campaign pacing
+npx claude-rpg play --fast
 
 # Generate a new world from a prompt
 npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
@@ -73,6 +76,24 @@ npm install @ai-rpg-engine/core @ai-rpg-engine/modules
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+## v1.5.0 版本更新
+
+v1.5 版本经过了严格的测试，修复了 67 个 bug，进行了 22 次安全加固，并带来了三波新功能，让游戏体验更加生动。
+
+| 功能 | 功能说明 |
+|---------|--------------|
+| **API retry with backoff** | 当 Claude API 出现临时故障时，系统会自动重试，并采用指数退避和随机延迟机制。 |
+| **Periodic autosave** | 游戏状态会定期保存。不再因为崩溃或断线而丢失进度。 |
+| **Fast-path inventory** | 常用的动词（使用、装备、掉落、检查）可以立即执行，无需经过 LLM 的处理。 |
+| **Terminal colors + spinner** | 伤害、治疗和 NPC 名字使用 ANSI 颜色显示。在 LLM 调用时，会显示动画加载指示器。 |
+| **Tab completion** | 命令、NPC 名字、物品和地点支持 Readline 自动补全。 |
+| **NPC voice archetypes** | 每个 NPC 类型都有独特的对话风格，例如学者、粗鲁的人、商人、贵族等等。 |
+| **NPC conversation memory** | NPC 会记住你所说的话，并在未来的对话中引用之前的对话内容。 |
+| **Token/cost tracking** | 每个回合和累积的令牌使用量以及预估成本会显示出来，用户可以根据需要查看。 |
+| **Turn history compaction** | 较早的回合会被总结，以保持上下文窗口的效率，同时不会丢失叙事内容。 |
+| **任务系统 + 场景 NPC** | 任务目标会记录在叙述内容中。背景 NPC 的对话会根据区域的情绪而变化。 |
+| **625 个测试用例** | 从 209 个增加到 625 个，分布在 53 个测试文件中。通过内部测试，修复了 bug，提高了容错性，并增强了可观察性。 |
 
 ## 它与众不同之处
 
@@ -182,6 +203,16 @@ Claude RPG依赖于以下[@ai-rpg-engine](https://github.com/mcp-tool-shop-org/a
 | [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | Iron Colosseum 初始世界 |
 | [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Jade Veil 初始世界 |
 | [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Crimson Court 初始世界 |
+
+## 运行时保障 (v1.5.0)
+
+| 保障 | 执行方式 |
+|-----------|------------|
+| **引擎在叙述之前完成处理** | 回合循环集成测试框架，包含 15 个确定性测试。 |
+| **存档文件能够兼容版本更新** | 有序的迁移流水线，历史存档测试，原子写入以及带有 .bak 备份机制。 |
+| **Claude 出现故障时，会显示对玩家友好的提示信息** | 使用 `NarrationError` 类型适配器，包含 9 个错误处理路径测试，以及 `--debug` 标志用于诊断。 |
+| **流式传输不会损坏游戏状态** | 在处理流式文本之前，会先完成规范化状态的确认；包含 6 个与流式传输相关的特定测试。 |
+| **关键路径覆盖率达到最低要求** | CI 系统会强制执行每个模块的阈值，包括会话、叙述器、回合循环和 LLM 适配器。 |
 
 ## 令牌预算
 

@@ -34,7 +34,7 @@ Claude RPG सिर्फ एक गेम नहीं है - यह AI RPG 
 
 | क्या आप चाहते हैं... | उपयोग करें |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Play right now** | `npx claude-rpg play` (इंटरैक्टिव दुनिया और चरित्र चयन) |
 | **Create a new world** | `npx claude-rpg new "your world concept"` |
 | **Author worlds visually** | [वर्ल्ड फोर्ज](https://github.com/mcp-tool-shop-org/world-forge) - 2D रचना स्टूडियो जिसमें मानचित्र संपादक, NPC बिल्डर और सत्यापन शामिल हैं। |
 | **Validate world data** | [कैनन आर्काइव](https://github.com/mcp-tool-shop-org/cannon-archive) - स्कीमा सत्यापन, स्टोरीबोर्ड परीक्षण, निर्यात पाइपलाइन। |
@@ -52,14 +52,17 @@ npm install claude-rpg
 या सीधे चलाएं:
 
 ```bash
-npx claude-rpg play --world fantasy
+npx claude-rpg play
 ```
 
 ## शुरुआत कैसे करें
 
 ```bash
-# Play the built-in Chapel Threshold scenario
-npx claude-rpg play --world fantasy
+# Play — interactive world and character selection
+npx claude-rpg play
+
+# Accelerated campaign pacing
+npx claude-rpg play --fast
 
 # Generate a new world from a prompt
 npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
@@ -73,6 +76,24 @@ npm install @ai-rpg-engine/core @ai-rpg-engine/modules
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+## v1.5.0 में क्या नया है
+
+v1.5 एक मजबूत संस्करण है — 67 बग ठीक किए गए हैं, 22 सुरक्षात्मक उपाय किए गए हैं, और तीन नई सुविधाएँ हैं जो गेम को जीवंत महसूस कराती हैं।
+
+| सुविधा | इसका क्या मतलब है |
+|---------|--------------|
+| **API retry with backoff** | अस्थायी क्लाउड एपीआई विफलताओं को घातीय बैकऑफ़ और जिटर के साथ स्वचालित रूप से पुनः प्रयास किया जाता है। |
+| **Periodic autosave** | गेम की स्थिति को कॉन्फ़िगर करने योग्य अंतराल पर सहेजा जाता है। अब क्रैश या डिस्कनेक्ट होने के कारण प्रगति खोने की कोई चिंता नहीं। |
+| **Fast-path inventory** | सामान्य क्रियाएँ (उपयोग, उपकरण, त्याग, जांच) तुरंत हल हो जाती हैं, बिना एलएलएम (LLM) के साथ किसी भी अतिरिक्त प्रक्रिया के। |
+| **Terminal colors + spinner** | क्षति, उपचार और एनपीसी (NPC) नामों के लिए एएनएसआई रंग। एलएलएम (LLM) कॉल के दौरान एनिमेटेड स्पिनर। |
+| **Tab completion** | कमांड, एनपीसी (NPC) नामों, वस्तुओं और स्थानों के लिए रीडलाइन ऑटो-कंप्लीशन। |
+| **NPC voice archetypes** | प्रत्येक एनपीसी (NPC) प्रकार के लिए अलग-अलग संवाद शैलियाँ — विद्वान, कर्कश, व्यापारी, कुलीन, और अन्य। |
+| **NPC conversation memory** | एनपीसी (NPC) याद रखते हैं कि आपने क्या कहा है और भविष्य के संवाद में पिछली बातचीत का संदर्भ देते हैं। |
+| **Token/cost tracking** | प्रत्येक टर्न (बारी) और संचयी टोकन उपयोग, अनुमानित लागत के साथ, आवश्यकतानुसार प्रदर्शित किया जाता है। |
+| **Turn history compaction** | पुराने टर्न (बारी) का सारांश दिया जाता है ताकि संदर्भ विंडो कुशल रहे, बिना कहानी के प्रवाह को खोए। |
+| **क्वेस्ट (Quest) वायरिंग + परिवेशीय एनपीसी (NPC)** | क्वेस्ट (Quest) उद्देश्यों को कथा संदर्भ में ट्रैक किया जाता है। पृष्ठभूमि एनपीसी (NPC) जिले के मूड के आधार पर बातचीत करते हैं। |
+| **625 परीक्षण** | 53 परीक्षण फ़ाइलों में 209 से बढ़ाकर 625 परीक्षण किए गए। बग ठीक किए गए, त्रुटि नियंत्रण, सुचारू गिरावट, और अवलोकन क्षमता को "डॉगफूड" (dogfood) स्वार्म द्वारा मजबूत किया गया है। |
 
 ## यह इतना अलग क्यों है
 
@@ -179,9 +200,19 @@ Player types freeform text
 | [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | एशफॉल डेड शुरुआती दुनिया |
 | [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | डस्ट डेविल का सौदा शुरुआती दुनिया |
 | [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | सिग्नल लॉस शुरुआती दुनिया |
-| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | आयरन कोलोसियम: शुरुआती दुनिया |
-| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | जेड वेल: शुरुआती दुनिया |
-| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | क्रिmson कोर्ट: शुरुआती दुनिया |
+| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | आयरन कोलोसियम शुरुआती दुनिया |
+| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | जेड वेल शुरुआती दुनिया |
+| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | क्रिmson कोर्ट शुरुआती दुनिया |
+
+## रनटाइम गारंटी (v1.5.0)
+
+| गारंटी | कार्यान्वयन |
+|-----------|------------|
+| **इंजन, कथा से पहले हल होता है** | 15 नियतात्मक परीक्षणों के साथ टर्न-लूप एकीकरण हार्नेस। |
+| **सेव फाइलें संस्करण परिवर्तन से सुरक्षित रहती हैं** | क्रमिक माइग्रेशन पाइपलाइन, ऐतिहासिक फिक्स्चर परीक्षण, एटॉमिक राइट्स (atomic writes) और .bak रिकवरी। |
+| **क्लाउड (Claude) की विफलताएँ खिलाड़ी के लिए सुरक्षित संदेश बन जाती हैं** | 9 त्रुटि-पथ परीक्षणों के साथ टाइप किया गया `NarrationError` एडाप्टर, निदान के लिए `--debug` फ़्लैग। |
+| **स्ट्रीमिंग (Streaming) स्थिति को दूषित नहीं कर सकता** | स्ट्रीम किए गए टेक्स्ट से पहले कैनोनिकल स्थिति को अंतिम रूप दिया जाता है; 6 स्ट्रीमिंग-विशिष्ट परीक्षण। |
+| **महत्वपूर्ण रास्तों पर कवरेज सीमा** | सीआई (CI) सत्र, कथाकार, टर्न-लूप और एलएलएम (LLM) एडाप्टर पर मॉड्यूल-दर-मॉड्यूल थ्रेसहोल्ड लागू करता है। |
 
 ## टोकन बजट
 

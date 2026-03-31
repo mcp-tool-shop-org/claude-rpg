@@ -34,7 +34,7 @@ Claude RPG n'est pas seulement un jeu, mais une implémentation de référence p
 
 | Vous souhaitez... | Utiliser |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Play right now** | `npx claude-rpg play` (sélection interactive du monde et du personnage) |
 | **Create a new world** | `npx claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — Studio d'édition 2D avec éditeur de cartes, constructeur de PNJ et validation. |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — Validation de schéma, tests de storyboard, pipelines d'exportation. |
@@ -52,14 +52,17 @@ npm install claude-rpg
 Ou exécutez-le directement :
 
 ```bash
-npx claude-rpg play --world fantasy
+npx claude-rpg play
 ```
 
 ## Démarrage rapide
 
 ```bash
-# Play the built-in Chapel Threshold scenario
-npx claude-rpg play --world fantasy
+# Play — interactive world and character selection
+npx claude-rpg play
+
+# Accelerated campaign pacing
+npx claude-rpg play --fast
 
 # Generate a new world from a prompt
 npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
@@ -73,6 +76,24 @@ Définissez votre clé API Anthropic (uniquement nécessaire pour la narration d
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+## Nouveautés de la version 1.5.0
+
+La version 1.5 est une version optimisée pour la robustesse, comprenant 67 corrections de bugs, 22 améliorations proactives et trois ensembles de fonctionnalités qui donnent vie au jeu.
+
+| Fonctionnalité | Ce que cela signifie |
+|---------|--------------|
+| **API retry with backoff** | Les échecs temporaires de l'API Claude sont automatiquement retentés avec un délai exponentiel et une variation aléatoire. |
+| **Periodic autosave** | Les sauvegardes de l'état du jeu sont effectuées à intervalles configurables. Fini les pertes de progression dues aux plantages ou aux déconnexions. |
+| **Fast-path inventory** | Les verbes courants (utiliser, équiper, laisser tomber, examiner) sont résolus instantanément, sans nécessiter un aller-retour auprès du modèle de langage. |
+| **Terminal colors + spinner** | Couleurs ANSI pour les dégâts, les soins et les noms des PNJ. Indicateur de chargement animé pendant les appels au modèle de langage. |
+| **Tab completion** | Complétion automatique pour les commandes, les noms des PNJ, les objets et les lieux. |
+| **NPC voice archetypes** | Différents styles de langage pour chaque type de PNJ : érudit, bourru, commerçant, noble, et plus encore. |
+| **NPC conversation memory** | Les PNJ se souviennent de ce que vous avez dit et font référence aux échanges précédents dans les dialogues futurs. |
+| **Token/cost tracking** | Utilisation des jetons par tour et cumulée, avec un coût estimé, affichée sur demande. |
+| **Turn history compaction** | Les tours précédents sont résumés pour maintenir l'efficacité des fenêtres de contexte sans perdre le fil narratif. |
+| **Système de quêtes + PNJ de l'environnement** | Les objectifs des quêtes sont suivis dans le contexte de la narration. Les PNJ de l'arrière-plan bavardent en fonction de l'ambiance du quartier. |
+| **625 tests** | Passage de 209 à 625 tests répartis sur 53 fichiers de test. Corrections de bugs, confinement des erreurs, dégradation contrôlée et robustesse améliorée grâce à des tests internes. |
 
 ## Ce qui le rend différent
 
@@ -179,9 +200,19 @@ Claude RPG dépend de ces paquets [@ai-rpg-engine](https://github.com/mcp-tool-s
 | [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | Monde de départ "Ashfall Dead". |
 | [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | Monde de départ "Dust Devil's Bargain". |
 | [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | Monde de départ "Signal Loss". |
-| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | Monde de départ "Iron Colosseum". |
-| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Monde de départ "Jade Veil". |
-| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Monde de départ "Crimson Court". |
+| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | Monde de départ "Iron Colosseum" |
+| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Monde de départ "Jade Veil" |
+| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Monde de départ "Crimson Court" |
+
+## Garanties de fonctionnement (v1.5.0)
+
+| Garantie | Mise en œuvre |
+|-----------|------------|
+| **Le moteur résout les problèmes avant la narration** | Harnais d'intégration de la boucle de tour avec 15 tests déterministes. |
+| **Les fichiers de sauvegarde sont compatibles avec les nouvelles versions** | Processus de migration ordonné, tests historiques, écritures atomiques avec récupération via .bak. |
+| **Les erreurs de Claude sont transformées en messages sûrs pour le joueur** | Adaptateur `NarrationError` typé avec 9 tests de gestion des erreurs, option `--debug` pour le diagnostic. |
+| **Le streaming ne peut pas corrompre l'état** | L'état canonique est finalisé avant que le texte en streaming ne soit pris en compte ; 6 tests spécifiques au streaming. |
+| **Couverture minimale des chemins critiques** | L'intégration continue applique des seuils par module pour la session, le narrateur, la boucle de tour et l'adaptateur du modèle de langage. |
 
 ## Budget de jetons
 

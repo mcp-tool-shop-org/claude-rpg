@@ -34,7 +34,7 @@ Claude RPG non è solo un gioco, ma un'implementazione di riferimento per l'ecos
 
 | Vuoi... | Usare |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play --world fantasy` |
+| **Play right now** | `npx claude-rpg play` (selezione interattiva del mondo e del personaggio) |
 | **Create a new world** | `npx claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — studio di authoring 2D con editor di mappe, costruttore di PNG e sistema di validazione. |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — validazione dello schema, test degli storyboard, pipeline di esportazione. |
@@ -52,14 +52,17 @@ npm install claude-rpg
 Oppure eseguirlo direttamente:
 
 ```bash
-npx claude-rpg play --world fantasy
+npx claude-rpg play
 ```
 
 ## Guida rapida
 
 ```bash
-# Play the built-in Chapel Threshold scenario
-npx claude-rpg play --world fantasy
+# Play — interactive world and character selection
+npx claude-rpg play
+
+# Accelerated campaign pacing
+npx claude-rpg play --fast
 
 # Generate a new world from a prompt
 npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
@@ -73,6 +76,24 @@ Impostare la tua chiave API di Anthropic (necessaria solo per la narrazione di C
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+## Novità nella versione 1.5.0
+
+La versione 1.5 è una release ottimizzata per l'utilizzo in ambienti distribuiti, con 67 correzioni di bug, 22 passaggi di ottimizzazione preventiva e tre nuove funzionalità che rendono il gioco più coinvolgente.
+
+| Funzionalità | Cosa significa |
+|---------|--------------|
+| **API retry with backoff** | In caso di errori temporanei dell'API di Claude, i tentativi di connessione vengono ripetuti automaticamente con un ritardo esponenziale e casuale. |
+| **Periodic autosave** | I salvataggi dello stato del gioco vengono effettuati a intervalli configurabili. Non perderete più progressi a causa di crash o disconnessioni. |
+| **Fast-path inventory** | I comandi comuni (usa, equipaggia, lascia cadere, esamina) vengono risolti istantaneamente, senza richiedere un'interazione con il modello linguistico. |
+| **Terminal colors + spinner** | Colori ANSI per i danni, la guarigione e i nomi dei personaggi non giocanti (NPC). Animazione durante le chiamate al modello linguistico. |
+| **Tab completion** | Completamento automatico per comandi, nomi di NPC, oggetti e località. |
+| **NPC voice archetypes** | Modelli di dialogo distinti per ogni tipo di NPC: erudito, burbero, mercante, nobile e altro. |
+| **NPC conversation memory** | Gli NPC ricordano ciò che avete detto e fanno riferimento a conversazioni precedenti nei dialoghi successivi. |
+| **Token/cost tracking** | Utilizzo dei token per turno e cumulativo, con stima dei costi, visualizzato su richiesta. |
+| **Turn history compaction** | I turni precedenti vengono riassunti per mantenere efficienti le finestre di contesto, senza perdere il filo della narrazione. |
+| **Sistema di missioni + NPC ambientali** | Gli obiettivi delle missioni vengono tracciati nel contesto della narrazione. Gli NPC di sfondo chiacchierano in base all'atmosfera del quartiere. |
+| **625 test** | Aumentati da 209 a 625, distribuiti in 53 file di test. Correzioni di bug, gestione degli errori, resilienza e osservabilità migliorate grazie a test interni. |
 
 ## Perché è diverso
 
@@ -182,6 +203,16 @@ Claude RPG dipende da questi pacchetti [@ai-rpg-engine](https://github.com/mcp-t
 | [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | Mondo iniziale "Iron Colosseum" |
 | [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Mondo iniziale "Jade Veil" |
 | [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Mondo iniziale "Crimson Court" |
+
+## Garanzie di runtime (versione 1.5.0)
+
+| Garanzia | Implementazione |
+|-----------|------------|
+| **Il motore risolve prima della narrazione** | Integrazione del ciclo di gioco con 15 test deterministici. |
+| **I file di salvataggio sopravvivono alle modifiche di versione** | Pipeline di migrazione ordinata, test storici, scritture atomiche con ripristino tramite file .bak. |
+| **Gli errori di Claude vengono trasformati in messaggi sicuri per il giocatore** | Adattatore `NarrationError` con 9 test per i percorsi di errore, flag `--debug` per la diagnostica. |
+| **Lo streaming non può corrompere lo stato** | Lo stato canonico viene finalizzato prima che il testo in streaming abbia effetto; 6 test specifici per lo streaming. |
+| **Copertura minima dei percorsi critici** | Il sistema di Continuous Integration (CI) impone soglie per modulo per sessione, narratore, ciclo di gioco e adattatore del modello linguistico. |
 
 ## Budget dei token
 

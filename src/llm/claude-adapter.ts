@@ -6,22 +6,63 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ClaudeClient, ClaudeClientConfig, GenerateResult, StreamCallback, StructuredResult } from '../claude-client.js';
 import { NarrationError } from './claude-errors.js';
 
-export function createAdaptedClient(config: ClaudeClientConfig = {}): ClaudeClient {
+/** Default retry configuration for retryable errors. */
+export type RetryConfig = {
+  /** Maximum number of retry attempts (default: 2). */
+  maxRetries: number;
+  /** Initial backoff delay in milliseconds (default: 1000). */
+  initialDelayMs: number;
+};
+
+const DEFAULT_RETRY: RetryConfig = { maxRetries: 2, initialDelayMs: 1000 };
+
+/**
+ * Retry wrapper with exponential backoff.
+ * Only retries when the thrown NarrationError has retryable === true.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  config: RetryConfig = DEFAULT_RETRY,
+  /** Injectable delay for testing — defaults to real setTimeout. */
+  delayFn: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<T> {
+  let lastError: NarrationError | undefined;
+  for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const narrationErr = err instanceof NarrationError ? err : classifyError(err);
+      if (!narrationErr.retryable || attempt >= config.maxRetries) {
+        throw narrationErr;
+      }
+      lastError = narrationErr;
+      const delay = config.initialDelayMs * Math.pow(2, attempt);
+      await delayFn(delay);
+    }
+  }
+  // Should never reach here, but satisfy TypeScript
+  throw lastError!;
+}
+
+export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig?: Partial<RetryConfig>): ClaudeClient {
   const anthropic = new Anthropic({ apiKey: config.apiKey });
   const model = config.model ?? 'claude-sonnet-4-20250514';
   const defaultMaxTokens = config.maxTokens ?? 1024;
+  const retry: RetryConfig = { ...DEFAULT_RETRY, ...retryConfig };
 
   async function callApi(system: string, prompt: string, maxTokens: number) {
-    try {
-      return await anthropic.messages.create({
-        model,
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: 'user', content: prompt }],
-      });
-    } catch (err) {
-      throw classifyError(err);
-    }
+    return withRetry(async () => {
+      try {
+        return await anthropic.messages.create({
+          model,
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: 'user', content: prompt }],
+        });
+      } catch (err) {
+        throw classifyError(err);
+      }
+    }, retry);
   }
 
   function extractText(response: Anthropic.Message): string {
@@ -51,32 +92,34 @@ export function createAdaptedClient(config: ClaudeClientConfig = {}): ClaudeClie
       maxTokens?: number;
       onChunk: StreamCallback;
     }): Promise<GenerateResult> {
-      try {
-        const stream = anthropic.messages.stream({
-          model,
-          max_tokens: opts.maxTokens ?? defaultMaxTokens,
-          system: opts.system,
-          messages: [{ role: 'user', content: opts.prompt }],
-        });
+      return withRetry(async () => {
+        try {
+          const stream = anthropic.messages.stream({
+            model,
+            max_tokens: opts.maxTokens ?? defaultMaxTokens,
+            system: opts.system,
+            messages: [{ role: 'user', content: opts.prompt }],
+          });
 
-        let accumulated = '';
+          let accumulated = '';
 
-        stream.on('text', (text) => {
-          accumulated += text;
-          opts.onChunk(text);
-        });
+          stream.on('text', (text) => {
+            accumulated += text;
+            opts.onChunk(text);
+          });
 
-        const finalMessage = await stream.finalMessage();
+          const finalMessage = await stream.finalMessage();
 
-        return {
-          ok: finalMessage.stop_reason === 'end_turn',
-          text: accumulated,
-          inputTokens: finalMessage.usage.input_tokens,
-          outputTokens: finalMessage.usage.output_tokens,
-        };
-      } catch (err) {
-        throw classifyError(err);
-      }
+          return {
+            ok: finalMessage.stop_reason === 'end_turn',
+            text: accumulated,
+            inputTokens: finalMessage.usage.input_tokens,
+            outputTokens: finalMessage.usage.output_tokens,
+          };
+        } catch (err) {
+          throw classifyError(err);
+        }
+      }, retry);
     },
 
     async generateStructured<T>(opts: {

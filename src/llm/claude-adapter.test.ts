@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
-import { createAdaptedClient, classifyError } from './claude-adapter.js';
+import { createAdaptedClient, classifyError, withRetry } from './claude-adapter.js';
 import { NarrationError } from './claude-errors.js';
 
 function fakeMessage(overrides: Partial<Anthropic.Message> = {}): Anthropic.Message {
@@ -233,5 +233,101 @@ describe('classifyError', () => {
     (err as unknown as Record<string, unknown>).request_id = 'req_abc123';
     const result = classifyError(err);
     expect(result.requestId).toBe('req_abc123');
+  });
+});
+
+describe('withRetry', () => {
+  const noDelay = async () => {};
+
+  it('returns immediately on first success', async () => {
+    let callCount = 0;
+    const result = await withRetry(async () => {
+      callCount++;
+      return 'ok';
+    }, { maxRetries: 2, initialDelayMs: 1000 }, noDelay);
+    expect(result).toBe('ok');
+    expect(callCount).toBe(1);
+  });
+
+  it('retries retryable errors and succeeds on second attempt', async () => {
+    let callCount = 0;
+    const result = await withRetry(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new NarrationError({ kind: 'rate-limit', message: 'rate limited' });
+      }
+      return 'recovered';
+    }, { maxRetries: 2, initialDelayMs: 100 }, noDelay);
+    expect(result).toBe('recovered');
+    expect(callCount).toBe(2);
+  });
+
+  it('does not retry non-retryable (fatal) errors', async () => {
+    let callCount = 0;
+    await expect(withRetry(async () => {
+      callCount++;
+      throw new NarrationError({ kind: 'auth', message: 'bad key' });
+    }, { maxRetries: 2, initialDelayMs: 100 }, noDelay)).rejects.toThrow(NarrationError);
+    expect(callCount).toBe(1);
+  });
+
+  it('throws after max retries exhausted', async () => {
+    let callCount = 0;
+    await expect(withRetry(async () => {
+      callCount++;
+      throw new NarrationError({ kind: 'timeout', message: 'timed out' });
+    }, { maxRetries: 2, initialDelayMs: 100 }, noDelay)).rejects.toThrow(NarrationError);
+    // 1 initial + 2 retries = 3 attempts
+    expect(callCount).toBe(3);
+  });
+
+  it('applies exponential backoff delays', async () => {
+    const delays: number[] = [];
+    const trackDelay = async (ms: number) => { delays.push(ms); };
+
+    let callCount = 0;
+    await expect(withRetry(async () => {
+      callCount++;
+      throw new NarrationError({ kind: 'transport', message: 'ECONNREFUSED' });
+    }, { maxRetries: 2, initialDelayMs: 1000 }, trackDelay)).rejects.toThrow();
+
+    // First retry: 1000 * 2^0 = 1000, Second retry: 1000 * 2^1 = 2000
+    expect(delays).toEqual([1000, 2000]);
+  });
+
+  it('classifies non-NarrationError throws and checks retryability', async () => {
+    let callCount = 0;
+    await expect(withRetry(async () => {
+      callCount++;
+      throw new Error('random error');
+    }, { maxRetries: 2, initialDelayMs: 100 }, noDelay)).rejects.toThrow(NarrationError);
+    // Non-NarrationError gets classified as 'unexpected' which is NOT retryable
+    expect(callCount).toBe(1);
+  });
+
+  it('retries generate call on retryable error then succeeds', async () => {
+    // Integration test: create an adapted client and verify retry behavior end-to-end
+    let callCount = 0;
+    vi.spyOn(Anthropic.Messages.prototype, 'create').mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'retry' } }, 'retry', {});
+      }
+      return {
+        id: 'msg_test',
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-sonnet-4-20250514',
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 5, output_tokens: 10 },
+        content: [{ type: 'text', text: 'retried ok' }],
+      } as Anthropic.Message;
+    });
+
+    const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1 });
+    const result = await client.generate({ system: 's', prompt: 'p' });
+    expect(result.text).toBe('retried ok');
+    expect(callCount).toBe(2);
   });
 });

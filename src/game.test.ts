@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
 import { createTestLogger } from './game/debug-logger.js';
@@ -194,6 +194,94 @@ describe('GameSession', () => {
       value: originalFactions,
       configurable: true,
       writable: true,
+    });
+  });
+
+  describe('autosave (FT-B-002)', () => {
+    it('should trigger autosave after configured number of turns', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      // Use a mock getSavePath to avoid real filesystem writes
+      const savePaths: string[] = [];
+      const { saveSession } = await import('./session/session.js');
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockImplementation(async (input) => {
+          savePaths.push(input.savePath);
+        });
+
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: true, intervalTurns: 2 },
+        },
+      });
+
+      // Turn 1 — no autosave
+      const out1 = await h.play('look around');
+      expect(out1).not.toContain('[autosaved]');
+
+      // Turn 2 — autosave triggers
+      const out2 = await h.play('look around');
+      expect(out2).toContain('[autosaved]');
+
+      // Turn 3 — counter reset, no autosave
+      const out3 = await h.play('look around');
+      expect(out3).not.toContain('[autosaved]');
+
+      // Turn 4 — autosave again
+      const out4 = await h.play('look around');
+      expect(out4).toContain('[autosaved]');
+
+      saveSpy.mockRestore();
+    });
+
+    it('should not autosave when disabled', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockImplementation(async () => {});
+
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: false, intervalTurns: 1 },
+        },
+      });
+
+      const out = await h.play('look around');
+      expect(out).not.toContain('[autosaved]');
+      expect(saveSpy).not.toHaveBeenCalled();
+
+      saveSpy.mockRestore();
+    });
+
+    it('should silently handle autosave failures', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockRejectedValue(new Error('disk full'));
+
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: true, intervalTurns: 1 },
+        },
+      });
+
+      // Should not throw, and should not show [autosaved]
+      const out = await h.play('look around');
+      expect(out).not.toContain('[autosaved]');
+      // But the output should still be valid turn output
+      expect(out.length).toBeGreaterThan(0);
+
+      saveSpy.mockRestore();
+    });
+
+    it('checkAutosave returns null when not yet time', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: true, intervalTurns: 5 },
+        },
+      });
+
+      const result = await h.session.checkAutosave();
+      // turnsSinceLastAutosave is 1 after this call, but intervalTurns is 5
+      expect(result).toBe(null);
     });
   });
 });

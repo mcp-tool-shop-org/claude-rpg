@@ -211,6 +211,79 @@ function tryFastInterpret(
     }
   }
 
+  // Inventory check (no turn consumed)
+  if (/^(inventory|i)$/.test(lower)) {
+    return {
+      verb: 'inventory',
+      targetIds: null,
+      toolId: null,
+      parameters: null,
+      confidence: 'high',
+      reasoning: 'Check inventory',
+      alternatives: null,
+    };
+  }
+
+  // Pick up / take / grab / loot
+  if (/^(pick\s+up|take|grab|loot)\s+/.test(lower)) {
+    const targetName = lower.replace(/^(pick\s+up|take|grab|loot)\s+(the\s+)?/i, '');
+    const target = findEntityByName(targetName, entities);
+    return {
+      verb: 'take',
+      targetIds: target ? [target.id] : null,
+      toolId: null,
+      parameters: { item: targetName },
+      confidence: 'high',
+      reasoning: target ? `Take ${target.name}` : `Take ${targetName}`,
+      alternatives: null,
+    };
+  }
+
+  // Drop
+  if (/^drop\s+/.test(lower)) {
+    const targetName = lower.replace(/^drop\s+(the\s+)?/i, '');
+    const target = findEntityByName(targetName, entities);
+    return {
+      verb: 'drop',
+      targetIds: target ? [target.id] : null,
+      toolId: null,
+      parameters: { item: targetName },
+      confidence: 'high',
+      reasoning: target ? `Drop ${target.name}` : `Drop ${targetName}`,
+      alternatives: null,
+    };
+  }
+
+  // Equip / wear / wield
+  if (/^(equip|wear|wield)\s+/.test(lower)) {
+    const targetName = lower.replace(/^(equip|wear|wield)\s+(the\s+)?/i, '');
+    const target = findEntityByName(targetName, entities);
+    return {
+      verb: 'equip',
+      targetIds: target ? [target.id] : null,
+      toolId: null,
+      parameters: { item: targetName },
+      confidence: 'high',
+      reasoning: target ? `Equip ${target.name}` : `Equip ${targetName}`,
+      alternatives: null,
+    };
+  }
+
+  // Unequip / remove
+  if (/^(unequip|remove)\s+/.test(lower)) {
+    const targetName = lower.replace(/^(unequip|remove)\s+(the\s+)?/i, '');
+    const target = findEntityByName(targetName, entities);
+    return {
+      verb: 'unequip',
+      targetIds: target ? [target.id] : null,
+      toolId: null,
+      parameters: { item: targetName },
+      confidence: 'high',
+      reasoning: target ? `Unequip ${target.name}` : `Unequip ${targetName}`,
+      alternatives: null,
+    };
+  }
+
   // Use item
   if (/^use\s+/.test(lower) && verbs.includes('use')) {
     const itemName = lower.replace(/^use\s+/i, '');

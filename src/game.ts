@@ -218,11 +218,22 @@ import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp
 import { renderCompactStatus } from './display/status-compact.js';
 import { generateSuggestions } from './display/contextual-suggestions.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
-import { listArchivedCampaigns } from './session/session.js';
+import { listArchivedCampaigns, saveSession, type SaveSessionInput, getSavePath as getDefaultSavePath } from './session/session.js';
 import { exportChronicleMarkdown, exportChronicleJSON, exportFinaleMarkdown, writeExport } from './session/chronicle-export.js';
 import { createDebugLogger, type DebugLogger } from './game/debug-logger.js';
 
 export type GameMode = 'play' | 'director';
+
+export type AutosaveConfig = {
+  /** Whether autosave is enabled (default: true). */
+  enabled: boolean;
+  /** Autosave every N turns (default: 5). */
+  intervalTurns: number;
+  /** Function to resolve the autosave file path given a character name. */
+  getSavePath?: (characterName: string) => string;
+};
+
+const DEFAULT_AUTOSAVE: AutosaveConfig = { enabled: true, intervalTurns: 5 };
 
 export type GameConfig = {
   engine: Engine;
@@ -238,6 +249,8 @@ export type GameConfig = {
   genre?: string;
   journal?: CampaignJournal;
   fastMode?: boolean;
+  /** Autosave configuration. */
+  autosave?: Partial<AutosaveConfig>;
   /** Debug logger instance — if omitted, auto-detected from --debug / CLAUDE_RPG_DEBUG. */
   debugLogger?: DebugLogger;
 };
@@ -276,6 +289,12 @@ export class GameSession {
   finaleOutline: FinaleOutline | null = null;
   campaignStatus: 'active' | 'completed' = 'active';
   readonly fastMode: boolean;
+  /** Autosave configuration. */
+  readonly autosaveConfig: AutosaveConfig;
+  /** Track turns since last autosave to avoid counting non-turn inputs. */
+  private turnsSinceLastAutosave = 0;
+  /** Last autosave message (appended to output when triggered). */
+  private lastAutosaveMessage: string | null = null;
   /** Structured debug logger — gated behind --debug flag. */
   readonly debugLog: DebugLogger;
 
@@ -293,6 +312,7 @@ export class GameSession {
     this.journal = config.journal ?? new CampaignJournal();
     this.genre = config.genre ?? 'fantasy';
     this.fastMode = config.fastMode ?? false;
+    this.autosaveConfig = { ...DEFAULT_AUTOSAVE, ...config.autosave };
     this.debugLog = config.debugLogger ?? createDebugLogger();
 
     // Initialize district economies from genre + district tags
@@ -763,6 +783,9 @@ export class GameSession {
       });
     }
 
+    // Autosave check after turn processing
+    const autosaveMsg = await this.checkAutosave();
+
     const output = renderPlayOutput({
       narration: turnResult.narration,
       dialogue: turnResult.dialogue,
@@ -774,7 +797,65 @@ export class GameSession {
       suggestions,
       hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
     });
-    return subsystemWarning ? output + subsystemWarning : output;
+    let finalOutput = output;
+    if (subsystemWarning) finalOutput += subsystemWarning;
+    if (autosaveMsg) finalOutput += autosaveMsg;
+    return finalOutput;
+  }
+
+  /**
+   * Check if autosave should trigger and perform it silently.
+   * Returns a brief message if autosave fired, null otherwise.
+   */
+  async checkAutosave(): Promise<string | null> {
+    if (!this.autosaveConfig.enabled) return null;
+    this.turnsSinceLastAutosave++;
+    if (this.turnsSinceLastAutosave < this.autosaveConfig.intervalTurns) return null;
+
+    // Reset counter
+    this.turnsSinceLastAutosave = 0;
+
+    // Determine character name for autosave slot
+    const charName = this.profile?.build.name ?? this.title ?? 'game';
+    const safeName = sanitizeFilename(charName);
+    const savePath = this.autosaveConfig.getSavePath
+      ? this.autosaveConfig.getSavePath(safeName)
+      : getDefaultSavePath(`${safeName}-autosave`);
+
+    try {
+      const input: SaveSessionInput = {
+        engine: this.engine,
+        history: this.history,
+        tone: this.tone,
+        savePath,
+        worldPrompt: this.worldPrompt,
+        profile: this.profile,
+        playerRumors: this.playerRumors,
+        activePressures: this.activePressures,
+        genre: this.genre,
+        resolvedPressures: this.resolvedPressures,
+        journal: this.journal,
+        npcProfiles: this.lastNpcProfiles,
+        npcActions: this.lastNpcActions,
+        npcObligations: this.npcObligations,
+        consequenceChains: this.activeConsequenceChains,
+        partyState: this.partyState,
+        districtEconomies: this.districtEconomies,
+        activeOpportunities: this.activeOpportunities,
+        resolvedOpportunities: this.resolvedOpportunities,
+        arcSnapshot: this.arcSnapshot,
+        endgameTriggers: this.endgameTriggers,
+        finaleOutline: this.finaleOutline,
+        campaignStatus: this.campaignStatus,
+      };
+      await saveSession(input);
+      this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
+      return '\n  [autosaved]';
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.debugLog.error('autosave', 'autosave-failed', { error: errMsg });
+      return null; // Silent failure — don't disrupt gameplay
+    }
   }
 
   /** Universal title evolutions based on milestone tags. */

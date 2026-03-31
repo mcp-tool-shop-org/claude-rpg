@@ -1,11 +1,13 @@
 // Play mode terminal renderer
 // v0.2: enhanced status bar with profile data
 // v1.1: leverage status line + contextual suggestions
+// v1.2: semantic terminal coloring
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
 import type { StatusData } from '../character/presence.js';
 import type { ContextualSuggestion } from './contextual-suggestions.js';
+import { bold, dim, secondary, speaker, danger, positive, hint, cyan, yellow, red } from '../cli/colors.js';
 
 // PFE-005: Adapt divider width to terminal, clamped to 40-120, fallback 60.
 function getTerminalWidth(): number {
@@ -14,11 +16,11 @@ function getTerminalWidth(): number {
 }
 
 function makeDivider(): string {
-  return '─'.repeat(getTerminalWidth());
+  return dim('─'.repeat(getTerminalWidth()));
 }
 
 function makeThinDivider(): string {
-  return '·'.repeat(getTerminalWidth());
+  return dim('·'.repeat(getTerminalWidth()));
 }
 
 // Exported for testing
@@ -43,7 +45,7 @@ export function renderPlayScreen(opts: {
 
   // Endgame approach banner (v2.1)
   if (opts.hasEndgameTriggers) {
-    parts.push('  ── approaching conclusion ──');
+    parts.push(yellow('  ── approaching conclusion ──'));
   }
 
   // Narration
@@ -54,7 +56,7 @@ export function renderPlayScreen(opts: {
   // Dialogue
   if (opts.dialogue) {
     parts.push(makeThinDivider());
-    parts.push(`  ${opts.dialogue.speakerName}: "${opts.dialogue.text}"`);
+    parts.push(`  ${speaker(opts.dialogue.speakerName)}: "${opts.dialogue.text}"`);
     parts.push('');
   }
 
@@ -71,10 +73,10 @@ export function renderPlayScreen(opts: {
     if (ps.weaponName) statParts.push(ps.weaponName);
     if (ps.armorName) statParts.push(ps.armorName);
     if (ps.injuryTags.length > 0) {
-      statParts.push(`[${ps.injuryTags.join(', ')}]`);
+      statParts.push(red(`[${ps.injuryTags.join(', ')}]`));
     }
 
-    parts.push(`  ${nameLine} | ${statParts.join(' | ')}`);
+    parts.push(`  ${bold(nameLine)} | ${statParts.join(' | ')}`);
   } else {
     // Legacy status bar
     const player = opts.world.entities[opts.world.playerId];
@@ -115,21 +117,21 @@ export function renderPlayScreen(opts: {
   // Contextual suggestions
   if (opts.suggestions && opts.suggestions.length > 0) {
     for (const s of opts.suggestions) {
-      parts.push(`  hint: ${s.text}`);
+      parts.push(hint(`  hint: ${s.text}`));
     }
   }
 
   // Prompt
   parts.push('');
-  parts.push('  What do you do?');
+  parts.push(bold('  What do you do?'));
   parts.push('');
 
   return parts.join('\n');
 }
 
-/** Render a simple status line for between turns. */
+/** Render a simple status line for between turns (non-TTY fallback). */
 export function renderThinking(): string {
-  return '\n  ...\n';
+  return dim('\n  ...\n');
 }
 
 /** Render the welcome screen. */
@@ -137,14 +139,14 @@ export function renderWelcome(title: string, tone?: string): string {
   const parts: string[] = [];
   parts.push('');
   parts.push(makeDivider());
-  parts.push(`  ${title}`);
+  parts.push(`  ${bold(title)}`);
   if (tone) {
-    parts.push(`  ${tone}`);
+    parts.push(`  ${secondary(tone)}`);
   }
   parts.push(makeDivider());
   parts.push('');
-  parts.push('  Type actions in plain English. Type "quit" to exit, "save" to save.');
-  parts.push('  Type "/director" to inspect hidden truth, "/sheet" to view character.');
+  parts.push(hint('  Type actions in plain English. Type "quit" to exit, "save" to save.'));
+  parts.push(hint('  Type "/director" to inspect hidden truth, "/sheet" to view character.'));
   parts.push('');
   return parts.join('\n');
 }

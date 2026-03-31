@@ -1,9 +1,11 @@
 // error-presenter.ts: Central CLI error rendering.
 // All user-visible error output routes through this module.
 // Consumes app-owned error types, never SDK internals.
+// v1.1: semantic terminal coloring
 
 import { NarrationError } from '../llm/claude-errors.js';
 import { SaveValidationError } from '../session/session.js';
+import { yellow, red, dim, cyan } from './colors.js';
 
 export type ErrorPresentation = {
   headline: string;
@@ -161,10 +163,10 @@ export function classifyForPresentation(err: unknown, context: ErrorContext): Er
 export function renderError(presentation: ErrorPresentation, debug: boolean, err?: unknown): string {
   const lines: string[] = [];
   lines.push('');
-  lines.push(`  \u26A0 ${presentation.headline}`);
+  lines.push(yellow(`  \u26A0 ${presentation.headline}`));
   lines.push(`  ${presentation.explanation}`);
-  lines.push(`  ${presentation.preserved}`);
-  lines.push(`  \u2192 ${presentation.nextAction}`);
+  lines.push(dim(`  ${presentation.preserved}`));
+  lines.push(cyan(`  \u2192 ${presentation.nextAction}`));
 
   if (debug && err) {
     lines.push('');

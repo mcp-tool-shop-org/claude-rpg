@@ -41,6 +41,7 @@ import {
 } from './session/session.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError } from './cli/error-presenter.js';
+import { createSpinner } from './cli/spinner.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
@@ -627,8 +628,14 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
     }
 
     try {
-      process.stdout.write(session.getThinking());
-      const output = await session.processInput(input.trim());
+      const spinner = createSpinner('thinking');
+      spinner.start();
+      let output: string;
+      try {
+        output = await session.processInput(input.trim());
+      } finally {
+        spinner.stop();
+      }
 
       if (output === '__QUIT__') {
         // Show unified session recap

@@ -287,6 +287,183 @@ describe('action-interpreter', () => {
       expect(result.confidence).toBe('high');
     });
 
+    // FT-B-003: Fast-path inventory verbs
+    it('should interpret "inventory" as inventory verb (no turn consumed)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'inventory', engine.getAvailableActions());
+      expect(result.verb).toBe('inventory');
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "i" as inventory verb shorthand', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'i', engine.getAvailableActions());
+      expect(result.verb).toBe('inventory');
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "pick up sword" as take verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'pick up sword', engine.getAvailableActions());
+      expect(result.verb).toBe('take');
+      expect(result.parameters).toEqual({ item: 'sword' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "take the gem" as take verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'take the gem', engine.getAvailableActions());
+      expect(result.verb).toBe('take');
+      expect(result.parameters).toEqual({ item: 'gem' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "grab key" as take verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'grab key', engine.getAvailableActions());
+      expect(result.verb).toBe('take');
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "loot chest" as take verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'loot chest', engine.getAvailableActions());
+      expect(result.verb).toBe('take');
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "drop shield" as drop verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'drop shield', engine.getAvailableActions());
+      expect(result.verb).toBe('drop');
+      expect(result.parameters).toEqual({ item: 'shield' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "equip armor" as equip verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'equip armor', engine.getAvailableActions());
+      expect(result.verb).toBe('equip');
+      expect(result.parameters).toEqual({ item: 'armor' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "wear helmet" as equip verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'wear helmet', engine.getAvailableActions());
+      expect(result.verb).toBe('equip');
+      expect(result.parameters).toEqual({ item: 'helmet' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "wield staff" as equip verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'wield staff', engine.getAvailableActions());
+      expect(result.verb).toBe('equip');
+      expect(result.parameters).toEqual({ item: 'staff' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "unequip ring" as unequip verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'unequip ring', engine.getAvailableActions());
+      expect(result.verb).toBe('unequip');
+      expect(result.parameters).toEqual({ item: 'ring' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should interpret "remove gauntlets" as unequip verb', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'remove gauntlets', engine.getAvailableActions());
+      expect(result.verb).toBe('unequip');
+      expect(result.parameters).toEqual({ item: 'gauntlets' });
+      expect(result.confidence).toBe('high');
+    });
+
     it('should interpret "use potion" as use verb when item exists in inventory', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();

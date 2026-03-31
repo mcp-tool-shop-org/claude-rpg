@@ -84,17 +84,18 @@ import { renderDirectorHelpExtended } from './help-system.js';
 import { renderCompactStatus } from './status-compact.js';
 import type { ScoredMove } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
+import { bold, dim, cyan } from '../cli/colors.js';
 
-const DIVIDER = '─'.repeat(60);
+const DIVIDER = dim('─'.repeat(60));
 
 /** Render director mode help. */
 export function renderDirectorHelp(): string {
   return `
 ${DIVIDER}
-  DIRECTOR MODE — inspect the hidden truth
+  ${bold('DIRECTOR MODE')} ${dim('— inspect the hidden truth')}
 ${DIVIDER}
 
-  /inspect <entity-id>          Show entity cognition state
+  ${cyan('/inspect')} <entity-id>          Show entity cognition state
   /faction <faction-id>         Show faction beliefs and alert
   /zone <zone-id>               Show zone properties
   /trace <entity> <subject> <key>  Trace belief provenance

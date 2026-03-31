@@ -51,7 +51,7 @@ export type ClaudeClient = {
     system: string;
     prompt: string;
     maxTokens?: number;
-    validator?: (data: unknown) => asserts data is T;
+    validator?: (data: unknown) => void;
   }): Promise<StructuredResult<T>>;
 
   readonly model: string;
@@ -94,7 +94,7 @@ export function createClaudeClient(config: ClaudeClientConfig = {}): ClaudeClien
       system: string;
       prompt: string;
       maxTokens?: number;
-      validator?: (data: unknown) => asserts data is T;
+      validator?: (data: unknown) => void;
     }): Promise<StructuredResult<T>> {
       const response = await anthropic.messages.create({
         model,

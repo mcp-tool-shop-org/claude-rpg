@@ -154,7 +154,7 @@ export function generateSuggestions(opts: {
       s.trigger === 'crisis-pressure' || s.trigger === 'action-failed' ||
       s.trigger === 'milestone-cash' || s.trigger === 'pressure-hint' ||
       s.trigger === 'supply-crisis' || s.trigger === 'black-market' ||
-      s.trigger === 'crafting-shortage' ||
+      s.trigger === 'crafting-shortage' || s.trigger === 'crafting-hint' ||
       s.trigger === 'new-opportunity' || s.trigger === 'expiring-opportunity' ||
       s.trigger === 'stale-opportunity' || s.trigger === 'endgame-detected');
   }

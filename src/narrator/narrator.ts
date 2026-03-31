@@ -73,9 +73,8 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
   // NarrationPlan tokens). Callers should NOT display streamed chunks directly as
   // narrative text — instead, wait for the full response and use the parsed plan's
   // sceneText field. Displaying raw chunks will show JSON syntax to the player.
-  const streamFn = onChunk ? client.generateStream : undefined;
-  const result = streamFn && onChunk
-    ? await streamFn.call(client, { system: NARRATE_SYSTEM, prompt, maxTokens: 500, onChunk })
+  const result = onChunk && client.generateStream
+    ? await client.generateStream({ system: NARRATE_SYSTEM, prompt, maxTokens: 500, onChunk })
     : await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
 
   // Try to parse as NarrationPlan JSON

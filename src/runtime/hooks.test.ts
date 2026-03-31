@@ -51,6 +51,29 @@ describe('HookManager', () => {
   });
 });
 
+describe('enter-room edge cases', () => {
+  it('should return null gracefully when zone is missing from world (T-013)', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    // locationId points to a zone that doesn't exist in the zones map
+    const ctx = makeContext({
+      hookPoint: 'enter-room',
+      world: {
+        zones: {},
+        entities: {},
+        playerId: 'player',
+        locationId: 'nonexistent-zone',
+      } as any,
+      events: [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    // Hook should return null (no matching zone), so results should be empty
+    expect(results).toHaveLength(0);
+  });
+});
+
 describe('Built-in hooks', () => {
   it('should register all built-in hooks without error and return expected results (T-012)', () => {
     const manager = new HookManager();

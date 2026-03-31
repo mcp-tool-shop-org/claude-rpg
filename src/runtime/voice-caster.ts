@@ -73,7 +73,6 @@ export class VoiceCaster {
     // Simple gender heuristic from type/tags
     const tags = entity.tags ?? [];
     const isFemale = tags.includes('female') ||
-      entity.type === 'merchant' ||
       entity.name.toLowerCase().includes('priestess') ||
       entity.name.toLowerCase().includes('maiden');
 

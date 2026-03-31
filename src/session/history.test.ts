@@ -100,6 +100,17 @@ describe('TurnHistory', () => {
     expect(restored.getAll()[4].tick).toBe(10);
   });
 
+  it('should handle maxTurns=1 keeping only the last entry (T-020)', () => {
+    const history = new TurnHistory(1);
+    history.record({ tick: 1, playerInput: 'a', verb: 'look', narration: 'first' });
+    history.record({ tick: 2, playerInput: 'b', verb: 'look', narration: 'second' });
+    history.record({ tick: 3, playerInput: 'c', verb: 'look', narration: 'third' });
+
+    expect(history.getAll()).toHaveLength(1);
+    expect(history.getAll()[0].tick).toBe(3);
+    expect(history.getAll()[0].narration).toBe('third');
+  });
+
   it('should clear history', () => {
     const history = new TurnHistory();
     history.record({ tick: 1, playerInput: 'a', verb: 'look', narration: 'x' });

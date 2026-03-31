@@ -1,0 +1,13 @@
+# npm force-includes all README* files regardless of .npmignore rules.
+# To exclude README translations (~140KB), move them to a translations/ directory.
+README.*.md
+
+# Exclude non-package files
+SHIP_GATE.md
+SECURITY.md
+multitask.md
+.github/
+site/
+docs/
+coverage/
+*.tsbuildinfo

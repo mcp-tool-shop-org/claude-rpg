@@ -62,6 +62,12 @@ export class PresentationStateMachine {
    * called twice in the same turn.
    */
   inferFromEvents(events: ResolvedEvent[], verb?: string, tick?: number): PresentationState {
+    // Player death — check first so it isn't masked by general combat/aftermath
+    const hasDeath = events.some(
+      (e) => e.type === 'combat.entity.defeated' && e.payload.entityId === '__player__',
+    );
+    if (hasDeath) return 'menu';
+
     // Check for combat events
     const hasCombat = events.some((e) =>
       e.type.startsWith('combat.'),
@@ -91,12 +97,6 @@ export class PresentationStateMachine {
     // Zone change = exploration
     const hasZoneChange = events.some((e) => e.type === 'world.zone.entered');
     if (hasZoneChange) return 'exploration';
-
-    // Death
-    const hasDeath = events.some(
-      (e) => e.type === 'combat.entity.defeated' && e.payload.entityId === '__player__',
-    );
-    if (hasDeath) return 'menu';
 
     return this._state === 'director' ? 'director' : 'exploration';
   }

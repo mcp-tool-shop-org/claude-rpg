@@ -316,6 +316,11 @@ export async function generateWorld(
           'initial',
           0,
         );
+      } else {
+        console.warn(
+          `[world-gen] Cannot set belief for NPC "${npc.id}": cognition not initialized. ` +
+          `Belief "${belief.key}" on subject "${belief.subject}" was skipped.`,
+        );
       }
     }
   }

@@ -57,6 +57,21 @@ describe('VoiceCaster', () => {
     expect(voice.preset).toBe('whisper');
   });
 
+  it('should not assume merchants are female', () => {
+    const merchantWorld = {
+      playerId: 'player',
+      entities: {
+        player: { id: 'player', type: 'player', name: 'Hero', tags: [] },
+        vendor: { id: 'vendor', type: 'merchant', name: 'Market Vendor', tags: [] },
+      },
+    } as any;
+    const caster = new VoiceCaster();
+    caster.autoCast(merchantWorld);
+    const voice = caster.getVoice('vendor');
+    // Without a 'female' tag, merchant should get a male voice
+    expect(voice.voiceId).toMatch(/^[ab]m_/);
+  });
+
   it('should return narrator voice for unknown entities', () => {
     const caster = new VoiceCaster();
     const voice = caster.getVoice('nonexistent');

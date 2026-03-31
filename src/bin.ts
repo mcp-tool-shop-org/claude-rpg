@@ -208,7 +208,12 @@ async function runPlay(args: string[]): Promise<void> {
   const initialEconomies = cloneEconomies(session.districtEconomies);
   const initialCustom = structuredClone(result.profile.custom);
   const initialOpportunities = structuredClone(session.activeOpportunities);
-  await runGameLoop(session, rl, result.pack.meta.id, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities);
+  await runGameLoop({
+    session, rl, packId: result.pack.meta.id,
+    initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
+    initialPartyState: initialParty, initialItemChronicle, initialEconomies,
+    initialCustom, initialOpportunities,
+  });
 }
 
 async function runLoad(): Promise<void> {
@@ -348,11 +353,16 @@ async function runLoad(): Promise<void> {
   );
   const districtMoods = captureDistrictMoods(session);
   const initialParty = structuredClone(session.partyState);
-  const initialItemChronicle = profile ? structuredClone(profile.itemChronicle) : {};
+  const initialItemChronicle = profile ? structuredClone(profile.itemChronicle) : undefined;
   const initialEconomies = cloneEconomies(session.districtEconomies);
   const initialCustom = profile ? structuredClone(profile.custom) : {};
   const initialOpportunities = structuredClone(session.activeOpportunities);
-  await runGameLoop(session, rl, savedSession.packId, snapshot, worldSnap, districtMoods, initialParty, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities);
+  await runGameLoop({
+    session, rl, packId: savedSession.packId,
+    initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
+    initialPartyState: initialParty, initialItemChronicle, initialEconomies,
+    initialCustom, initialOpportunities,
+  });
 }
 
 async function runArchive(): Promise<void> {
@@ -389,7 +399,7 @@ async function runNew(worldPrompt: string): Promise<void> {
     output: process.stdout,
   });
 
-  await runGameLoop(session, rl);
+  await runGameLoop({ session, rl });
 }
 
 type DistrictMoodSnapshot = {
@@ -429,19 +439,27 @@ function captureDistrictMoods(session: GameSession): DistrictMoodSnapshot {
   return moods;
 }
 
-async function runGameLoop(
-  session: GameSession,
-  rl: ReturnType<typeof createInterface>,
-  packId?: string,
-  initialSnapshot?: SessionSnapshot,
-  initialWorldSnapshot?: WorldSnapshot,
-  initialDistrictMoods?: DistrictMoodSnapshot,
-  initialPartyState?: PartyState,
-  initialItemChronicle?: Record<string, ItemChronicleEntry[]>,
-  initialEconomies?: Map<string, DistrictEconomy>,
-  initialCustom?: Record<string, string | number | boolean>,
-  initialOpportunities?: OpportunityState[],
-): Promise<void> {
+type GameLoopOptions = {
+  session: GameSession;
+  rl: ReturnType<typeof createInterface>;
+  packId?: string;
+  initialSnapshot?: SessionSnapshot;
+  initialWorldSnapshot?: WorldSnapshot;
+  initialDistrictMoods?: DistrictMoodSnapshot;
+  initialPartyState?: PartyState;
+  initialItemChronicle?: Record<string, ItemChronicleEntry[]>;
+  initialEconomies?: Map<string, DistrictEconomy>;
+  initialCustom?: Record<string, string | number | boolean>;
+  initialOpportunities?: OpportunityState[];
+};
+
+async function runGameLoop(opts: GameLoopOptions): Promise<void> {
+  const {
+    session, rl, packId,
+    initialSnapshot, initialWorldSnapshot, initialDistrictMoods,
+    initialPartyState, initialItemChronicle, initialEconomies,
+    initialCustom, initialOpportunities,
+  } = opts;
   // Welcome
   console.log(session.getWelcome());
 
@@ -535,7 +553,7 @@ async function runGameLoop(
 
     try {
       process.stdout.write(session.getThinking());
-      const output = await session.processInput(input);
+      const output = await session.processInput(input.trim());
 
       if (output === '__QUIT__') {
         // Show unified session recap

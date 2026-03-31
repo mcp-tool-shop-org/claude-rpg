@@ -94,18 +94,50 @@ export function createClaudeClient(config: ClaudeClientConfig = {}): ClaudeClien
         .map((b) => b.text)
         .join('');
 
-      // Extract JSON from response (may be wrapped in ```json blocks)
-      const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
-      if (!jsonMatch) {
+      // Extract JSON from response — try full text first, then fenced block, then greedy regex
+      let parsed: T | undefined;
+
+      // 1. Try parsing full text as JSON directly
+      try {
+        parsed = JSON.parse(text) as T;
+      } catch {
+        // not raw JSON, try fenced block
+      }
+
+      // 2. Try fenced ```json block (non-greedy)
+      if (parsed === undefined) {
+        const fencedMatch = text.match(/```json\s*([\s\S]*?)```/);
+        if (fencedMatch) {
+          try {
+            parsed = JSON.parse(fencedMatch[1]) as T;
+          } catch {
+            // fenced block wasn't valid JSON
+          }
+        }
+      }
+
+      // 3. Fallback: greedy regex for outermost { ... }
+      if (parsed === undefined) {
+        const greedyMatch = text.match(/(\{[\s\S]*\})/);
+        if (greedyMatch) {
+          try {
+            parsed = JSON.parse(greedyMatch[1]) as T;
+          } catch {
+            // greedy match wasn't valid JSON either
+          }
+        }
+      }
+
+      if (parsed === undefined) {
         return { ok: false, data: null, raw: text, error: 'No JSON found in response' };
       }
 
-      try {
-        const data = JSON.parse(jsonMatch[1]) as T;
-        return { ok: true, data, raw: text };
-      } catch (e) {
-        return { ok: false, data: null, raw: text, error: `JSON parse error: ${e}` };
-      }
+      /**
+       * NOTE: The parsed JSON is cast to T without runtime validation.
+       * Callers must ensure the LLM prompt constrains output to the expected shape,
+       * or add their own validation after receiving the result.
+       */
+      return { ok: true, data: parsed, raw: text };
     },
   };
 }

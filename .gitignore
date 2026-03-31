@@ -8,3 +8,4 @@ site/dist/
 site/node_modules/
 .polyglot-cache.json
 coverage/
+multitask.md

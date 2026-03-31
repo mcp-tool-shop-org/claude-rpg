@@ -20,6 +20,8 @@ export class PresentationStateMachine {
   private _state: PresentationState = 'exploration';
   private listeners: TransitionListener[] = [];
   private aftermathTurns = 0;
+  /** Tracks the last tick at which inferFromEvents decremented aftermathTurns to prevent double-decrement in the same turn. */
+  private lastDecrementTick = -1;
 
   get current(): PresentationState {
     return this._state;
@@ -52,8 +54,14 @@ export class PresentationStateMachine {
     return t;
   }
 
-  /** Infer state from engine events and verb. */
-  inferFromEvents(events: ResolvedEvent[], verb?: string): PresentationState {
+  /**
+   * Infer state from engine events and verb.
+   *
+   * **Side effects:** mutates `aftermathTurns` countdown. Must only be called
+   * once per turn. A tick guard prevents double-decrement if accidentally
+   * called twice in the same turn.
+   */
+  inferFromEvents(events: ResolvedEvent[], verb?: string, tick?: number): PresentationState {
     // Check for combat events
     const hasCombat = events.some((e) =>
       e.type.startsWith('combat.'),
@@ -70,9 +78,13 @@ export class PresentationStateMachine {
     // Dialogue
     if (verb === 'speak') return 'dialogue';
 
-    // Aftermath countdown
+    // Aftermath countdown — guard prevents double-decrement in the same turn
     if (this.aftermathTurns > 0) {
-      this.aftermathTurns--;
+      const currentTick = tick ?? -2;
+      if (currentTick !== this.lastDecrementTick) {
+        this.lastDecrementTick = currentTick;
+        this.aftermathTurns--;
+      }
       return this.aftermathTurns > 0 ? 'aftermath' : 'exploration';
     }
 

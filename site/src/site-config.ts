@@ -64,7 +64,7 @@ export const config: SiteConfig = {
         },
         {
           title: 'Runtime-proofed',
-          desc: '195 tests across turn-loop integration, save migration, streaming, chronicle continuity, and coverage floors. Typed contracts eliminate field miswires at compile time.',
+          desc: '302 tests across 24 test files covering turn-loop integration, save migration, streaming, chronicle continuity, NPC agency, narration, and coverage floors. Typed contracts eliminate field miswires at compile time.',
         },
       ],
     },

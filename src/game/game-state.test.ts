@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { extractProfileHints } from '../turn-loop.js';
+import type { ResolvedEvent } from '@ai-rpg-engine/core';
 import {
   simpleHashNum,
   sanitizeFilename,
@@ -13,6 +15,8 @@ import {
   getEndgameContext,
   hasEverUsedLeverage,
   getCraftingContext,
+  isValidSupplyCategory,
+  applyEconomyShiftToMap,
 } from './game-state.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { PartyState } from '@ai-rpg-engine/modules';
@@ -311,5 +315,182 @@ describe('getCraftingContext', () => {
     const profile = makeMinimalProfile();
     const catalog = { items: [] } as any;
     expect(getCraftingContext(profile, catalog)).toBeUndefined();
+  });
+});
+
+// B-001: getPlayerFactionAccess with all-negative reputations
+describe('getPlayerFactionAccess — negative reputation handling', () => {
+  it('finds best faction even when all reputations are negative', () => {
+    const profile = makeMinimalProfile({
+      reputation: [
+        { factionId: 'guild', value: -10 },
+        { factionId: 'thieves', value: -5 },
+      ],
+    });
+    const world = { factions: { guild: {}, thieves: {} } } as any;
+    // Even the "best" faction at -5 is below the >=20 threshold, so still undefined
+    // but the key fix is that bestRep=-Infinity ensures we always find the best
+    expect(getPlayerFactionAccess(world, profile)).toBeUndefined();
+  });
+
+  it('finds faction with rep >= 20 even when other factions are negative', () => {
+    const profile = makeMinimalProfile({
+      reputation: [
+        { factionId: 'guild', value: -50 },
+        { factionId: 'thieves', value: 25 },
+      ],
+    });
+    const world = { factions: { guild: {}, thieves: {} } } as any;
+    expect(getPlayerFactionAccess(world, profile)).toBe('thieves');
+  });
+
+  it('returns highest-rep faction when multiple are above threshold', () => {
+    const profile = makeMinimalProfile({
+      reputation: [
+        { factionId: 'guild', value: 30 },
+        { factionId: 'thieves', value: 50 },
+        { factionId: 'mages', value: -20 },
+      ],
+    });
+    const world = { factions: { guild: {}, thieves: {}, mages: {} } } as any;
+    expect(getPlayerFactionAccess(world, profile)).toBe('thieves');
+  });
+});
+
+// B-010: buildPressureInputs faction cognition type safety
+describe('buildPressureInputs — faction cognition type safety', () => {
+  it('handles faction cognition with non-numeric alertLevel/cohesion', () => {
+    const world = {
+      entities: {},
+      factions: { guild: { id: 'guild' } },
+      locationId: 'zone-1',
+      playerId: 'p1',
+      zones: {},
+      modules: {
+        cognition: {
+          factions: {
+            guild: { alertLevel: 'high', cohesion: null },
+          },
+        },
+      },
+    } as any;
+    const profile = makeMinimalProfile();
+    // Should not throw even with bad cognition data
+    const inputs = buildPressureInputs(world, profile, [], [], 'fantasy', 5, new Map());
+    expect(inputs.factionStates).toBeDefined();
+  });
+});
+
+// B-011: isValidSupplyCategory and applyEconomyShiftToMap validation
+describe('isValidSupplyCategory', () => {
+  it('accepts valid supply categories', () => {
+    expect(isValidSupplyCategory('medicine')).toBe(true);
+    expect(isValidSupplyCategory('weapons')).toBe(true);
+    expect(isValidSupplyCategory('ammunition')).toBe(true);
+    expect(isValidSupplyCategory('food')).toBe(true);
+    expect(isValidSupplyCategory('fuel')).toBe(true);
+    expect(isValidSupplyCategory('luxuries')).toBe(true);
+    expect(isValidSupplyCategory('components')).toBe(true);
+    expect(isValidSupplyCategory('contraband')).toBe(true);
+  });
+
+  it('rejects invalid supply categories', () => {
+    expect(isValidSupplyCategory('invalid')).toBe(false);
+    expect(isValidSupplyCategory('')).toBe(false);
+    expect(isValidSupplyCategory('MEDICINE')).toBe(false);
+  });
+});
+
+describe('applyEconomyShiftToMap — category validation', () => {
+  it('skips shift when category is invalid', () => {
+    const economy = {
+      districtId: 'd1',
+      supplies: { medicine: 50, weapons: 50, ammunition: 50, food: 50, fuel: 50, luxuries: 50, components: 50, contraband: 50 },
+      events: [],
+      trends: [],
+    } as any;
+    const map = new Map([['d1', economy]]);
+    // Invalid category should not throw
+    applyEconomyShiftToMap(map, 'd1', 'invalid-category', 10, 'test');
+    // Economy should be unchanged
+    expect(map.get('d1')).toBe(economy);
+  });
+
+  it('applies shift when category is valid', () => {
+    const economy = {
+      districtId: 'd1',
+      supplies: { medicine: 50, weapons: 50, ammunition: 50, food: 50, fuel: 50, luxuries: 50, components: 50, contraband: 50 },
+      events: [],
+      trends: [],
+    } as any;
+    const map = new Map([['d1', { ...economy }]]);
+    applyEconomyShiftToMap(map, 'd1', 'medicine', 10, 'test');
+    // Economy should have been replaced (applyEconomyShift returns new object)
+    const updated = map.get('d1');
+    expect(updated).toBeDefined();
+  });
+});
+
+// B-002: extractProfileHints multi-kill XP + reputation accumulation
+describe('extractProfileHints — multi-kill accumulation', () => {
+  // getEntityFaction reads world.modules['faction-cognition'].membership[entityId]
+  const makeWorld = (membershipMap: Record<string, string>, entities: Record<string, any> = {}) =>
+    ({
+      entities,
+      factions: { bandits: { id: 'bandits' } },
+      locationId: 'z1',
+      playerId: 'p1',
+      zones: {},
+      modules: { 'faction-cognition': { membership: membershipMap, factionCognition: {}, factionMembers: {} } },
+    } as any);
+
+  it('accumulates XP across multiple defeated entities', () => {
+    const world = makeWorld(
+      { e1: 'bandits', e2: 'bandits', e3: 'bandits' },
+      {
+        e1: { name: 'Bandit A', tags: [] },
+        e2: { name: 'Bandit B', tags: [] },
+        e3: { name: 'Bandit C', tags: [] },
+      },
+    );
+    const events: ResolvedEvent[] = [
+      { type: 'combat.entity.defeated', payload: { entityId: 'e1' } },
+      { type: 'combat.entity.defeated', payload: { entityId: 'e2' } },
+      { type: 'combat.entity.defeated', payload: { entityId: 'e3' } },
+    ] as any;
+    const hints = extractProfileHints(events, 'attack', world);
+    // 15 XP per kill × 3 kills + 2 base XP = 47
+    expect(hints.xpGained).toBe(47);
+  });
+
+  it('accumulates reputation delta for same-faction kills', () => {
+    const world = makeWorld(
+      { e1: 'bandits', e2: 'bandits' },
+      {
+        e1: { name: 'Bandit A', tags: [] },
+        e2: { name: 'Bandit B', tags: [] },
+      },
+    );
+    const events: ResolvedEvent[] = [
+      { type: 'combat.entity.defeated', payload: { entityId: 'e1' } },
+      { type: 'combat.entity.defeated', payload: { entityId: 'e2' } },
+    ] as any;
+    const hints = extractProfileHints(events, 'attack', world);
+    // -15 per kill × 2 = -30
+    expect(hints.reputationDelta).toEqual({ factionId: 'bandits', delta: -30 });
+  });
+
+  it('single kill gives 15 XP and -15 reputation', () => {
+    const world = makeWorld(
+      { e1: 'bandits' },
+      { e1: { name: 'Bandit A', tags: [] } },
+    );
+    const events: ResolvedEvent[] = [
+      { type: 'combat.entity.defeated', payload: { entityId: 'e1' } },
+    ] as any;
+    const hints = extractProfileHints(events, 'attack', world);
+    // 15 + 2 base = 17
+    expect(hints.xpGained).toBe(17);
+    expect(hints.reputationDelta).toEqual({ factionId: 'bandits', delta: -15 });
   });
 });

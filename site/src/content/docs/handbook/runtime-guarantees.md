@@ -86,16 +86,21 @@ Changed-file regression detection surfaces coverage drops on pull requests that 
 
 ## Test inventory
 
-209 tests across 19 test files:
+302 tests across 24 test files:
 
 | Category | Tests | What they prove |
 |----------|-------|-----------------|
-| Turn-loop integration | 18 | 5-stage pipeline, failure paths, streaming |
+| Turn-loop integration | 18 | 5-stage pipeline, failure paths, streaming (turn-loop, game-turn-loop) |
 | Session persistence | 19 | Round-trip, corruption, atomic writes |
 | Migration | 22 | Version detection, ordered steps, fixture stability |
-| Chronicle | 17 | Append order, integrity, persistence |
+| Chronicle | 46 | Significance, derivation, compaction, context (unit + integration) |
 | Streaming | 6 | Normal completion, fallback, interruption |
 | Error presenter | 25 | All error kinds, debug mode, migration failures |
 | Recap/export | 27 | Delta computation, archive continuity, finale |
-| Claude adapter | 9 | Error classification, normalized success |
-| Other | 52 | Scene context, hooks, audio, voice, history, play renderer |
+| Claude adapter | 23 | Error classification, normalized success, structured generation, streaming |
+| Game state | 33 | State transitions, entity management, world updates |
+| Narrator | 13 | Scene narration, prompt assembly, LLM interaction |
+| NPC agency | 10 | Goal evaluation, loyalty, retaliation |
+| Action interpreter | 12 | Keyword matching, verb resolution |
+| Prompts | 10 | Dialogue NPC, world gen, interpret action |
+| Other | 38 | Scene context, hooks, audio, voice, history, presentation, play renderer, unhandled rejection |

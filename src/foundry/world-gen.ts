@@ -88,6 +88,48 @@ export type WorldGenResult = {
   errors: string[];
 };
 
+/** Validate that a WorldGenProposal has the required structure. Returns error strings. */
+export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
+  const errors: string[] = [];
+
+  // Validate basic structure
+  if (!proposal.zones?.length) errors.push('No zones generated');
+  if (!proposal.npcs?.length) errors.push('No NPCs generated');
+  if (!proposal.factions?.length) errors.push('No factions generated');
+  if (!proposal.player) errors.push('No player generated');
+
+  // Validate NPC required fields
+  if (proposal.npcs) {
+    const zoneIds = new Set((proposal.zones ?? []).map((z) => z.id));
+    for (const npc of proposal.npcs) {
+      if (!npc.id) errors.push(`NPC missing required field: id`);
+      if (!npc.name) errors.push(`NPC "${npc.id ?? '?'}" missing required field: name`);
+      if (!npc.zoneId) errors.push(`NPC "${npc.id ?? '?'}" missing required field: zoneId`);
+      else if (!zoneIds.has(npc.zoneId)) errors.push(`NPC "${npc.id}" has zoneId "${npc.zoneId}" that does not match any zone`);
+    }
+  }
+
+  // Validate zone required fields
+  if (proposal.zones) {
+    for (const zone of proposal.zones) {
+      if (!zone.id) errors.push('Zone missing required field: id');
+      if (!zone.name) errors.push(`Zone "${zone.id ?? '?'}" missing required field: name`);
+    }
+  }
+
+  // Validate player startZoneId references a real zone
+  if (proposal.player) {
+    const zoneIds = new Set((proposal.zones ?? []).map((z) => z.id));
+    if (!proposal.player.startZoneId) {
+      errors.push('Player missing required field: startZoneId');
+    } else if (!zoneIds.has(proposal.player.startZoneId)) {
+      errors.push(`Player startZoneId "${proposal.player.startZoneId}" does not match any zone`);
+    }
+  }
+
+  return errors;
+}
+
 /** Generate a world from a creative prompt. */
 export async function generateWorld(
   client: ClaudeClient,
@@ -113,13 +155,7 @@ export async function generateWorld(
   }
 
   const proposal = result.data;
-  const errors: string[] = [];
-
-  // Validate basic structure
-  if (!proposal.zones?.length) errors.push('No zones generated');
-  if (!proposal.npcs?.length) errors.push('No NPCs generated');
-  if (!proposal.factions?.length) errors.push('No factions generated');
-  if (!proposal.player) errors.push('No player generated');
+  const errors = validateWorldGenProposal(proposal);
 
   if (errors.length > 0) {
     return { ok: false, engine: null, proposal, tone: proposal.toneGuide ?? '', errors };

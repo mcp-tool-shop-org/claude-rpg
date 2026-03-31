@@ -111,4 +111,21 @@ describe('GameSession', () => {
     const output = await session.processInput('/export badformat');
     expect(output).toContain('Usage');
   });
+
+  it('should process natural language input in play mode via executeTurn', async () => {
+    // T-003: Core play loop — processInput with natural language calls
+    // executeTurn + interpretAction and returns narrated output.
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    // In play mode, a natural language action should go through the turn pipeline
+    const output = await h.play('look around');
+    expect(output).toBeTruthy();
+    expect(typeof output).toBe('string');
+    // The harness fake client returns narration, so output should contain scene text
+    expect(output.length).toBeGreaterThan(0);
+    // Verify a turn was recorded in history
+    expect(h.turnCount()).toBeGreaterThanOrEqual(1);
+    expect(h.lastVerb()).toBe('look');
+  });
 });

@@ -7,7 +7,7 @@
 // v0.7: resolution & fallout — pressures resolve with structured consequences
 
 import { createInterface } from 'node:readline';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -154,7 +154,16 @@ async function main(): Promise<void> {
   } else if (command === 'archive') {
     await runArchive();
   } else if (command === 'new') {
-    const prompt = filteredArgs.slice(1).join(' ').replace(/^["']|["']$/g, '');
+    const raw = filteredArgs.slice(1).join(' ');
+    // Strip matching quote pairs only (e.g. "foo" or 'foo', not "foo')
+    let prompt = raw;
+    if (raw.length >= 2) {
+      const first = raw[0];
+      const last = raw[raw.length - 1];
+      if ((first === '"' || first === "'") && first === last) {
+        prompt = raw.slice(1, -1);
+      }
+    }
     if (!prompt) {
       console.error('Error: provide a world prompt. Example:');
       console.error('  claude-rpg new "A flooded gothic trade city ruled by debt-priests"');
@@ -269,7 +278,7 @@ async function runLoad(): Promise<void> {
       itemCatalog = pack.itemCatalog;
       try {
         const saved = JSON.parse(savedSession.engineState);
-        Object.assign(engine.store.state, saved.world.state);
+        Object.assign(engine.store.state, structuredClone(saved.world.state));
       } catch (err) {
         presentError(err, 'load', debugMode);
       }
@@ -446,100 +455,104 @@ async function runGameLoop(
     process.exit(exitCode ?? 1);
   }
 
-  // Game loop
-  const prompt = (): void => {
-    rl.question('  > ', async (input) => {
-      if (!input.trim()) {
-        prompt();
-        return;
-      }
-
-      const trimmed = input.trim().toLowerCase();
-
-      // Save command
-      if (trimmed === 'save') {
-        try {
-          const saveName = session.profile
-            ? `${session.profile.build.name}-${Date.now()}`
-            : `save-${Date.now()}`;
-          const savePath = getSavePath(saveName);
-          await saveSession(
-            session.engine,
-            session.history,
-            session.tone,
-            savePath,
-            session.worldPrompt,
-            session.profile,
-            packId,
-            session.playerRumors,
-            session.activePressures,
-            session.genre,
-            session.resolvedPressures,
-            session.journal,
-            session.lastNpcProfiles,
-            session.lastNpcActions,
-            session.npcObligations,
-            session.activeConsequenceChains,
-            session.partyState,
-            session.districtEconomies,
-            session.activeOpportunities,
-            session.resolvedOpportunities,
-            session.arcSnapshot,
-            session.endgameTriggers,
-            session.finaleOutline,
-            session.campaignStatus,
-          );
-          console.log(`\n  Saved to ${savePath}`);
-
-          // Show unified session recap
-          const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,
-          );
-          if (recapText) console.log(recapText);
-          else console.log('');
-        } catch (err) {
-          presentError(err, 'save', debugMode);
-        }
-        prompt();
-        return;
-      }
-
-      // Character sheet command
-      if (trimmed === '/sheet' || trimmed === '/character') {
-        if (session.profile && session.itemCatalog) {
-          console.log(renderCharacterSheet(session.profile, session.itemCatalog));
-        } else {
-          console.log('\n  No character profile available.\n');
-        }
-        prompt();
-        return;
-      }
-
-      try {
-        process.stdout.write(session.getThinking());
-        const output = await session.processInput(input);
-
-        if (output === '__QUIT__') {
-          // Show unified session recap
-          const recapText = buildUnifiedRecap(
-            session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,
-          );
-          if (recapText) console.log(recapText);
-          console.log('\n  Farewell.\n');
-          rl.close();
-          process.exit(0);
-        }
-
-        console.log(output);
-      } catch (err) {
-        presentError(err, 'turn', debugMode);
-      }
-
-      prompt();
+  // Promisified readline question helper (avoids recursive callbacks growing the stack)
+  function question(rlInst: ReturnType<typeof createInterface>, promptText: string): Promise<string> {
+    return new Promise((resolve) => {
+      rlInst.question(promptText, resolve);
     });
-  };
+  }
 
-  prompt();
+  // Game loop — iterative to avoid unbounded stack growth
+  while (true) {
+    const input = await question(rl, '  > ');
+
+    if (!input.trim()) continue;
+
+    const trimmed = input.trim().toLowerCase();
+
+    // Save command
+    if (trimmed === 'save') {
+      try {
+        const saveName = session.profile
+          ? `${session.profile.build.name}-${Date.now()}`
+          : `save-${Date.now()}`;
+        const savePath = getSavePath(saveName);
+        // Guard against directory traversal in character names
+        const expectedDir = resolve(getDefaultSaveDir());
+        if (!resolve(savePath).startsWith(expectedDir)) {
+          console.error('  Save path escapes save directory — aborting.');
+          continue;
+        }
+        await saveSession(
+          session.engine,
+          session.history,
+          session.tone,
+          savePath,
+          session.worldPrompt,
+          session.profile,
+          packId,
+          session.playerRumors,
+          session.activePressures,
+          session.genre,
+          session.resolvedPressures,
+          session.journal,
+          session.lastNpcProfiles,
+          session.lastNpcActions,
+          session.npcObligations,
+          session.activeConsequenceChains,
+          session.partyState,
+          session.districtEconomies,
+          session.activeOpportunities,
+          session.resolvedOpportunities,
+          session.arcSnapshot,
+          session.endgameTriggers,
+          session.finaleOutline,
+          session.campaignStatus,
+        );
+        console.log(`\n  Saved to ${savePath}`);
+
+        // Show unified session recap
+        const recapText = buildUnifiedRecap(
+          session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,
+        );
+        if (recapText) console.log(recapText);
+        else console.log('');
+      } catch (err) {
+        presentError(err, 'save', debugMode);
+      }
+      continue;
+    }
+
+    // Character sheet command
+    if (trimmed === '/sheet' || trimmed === '/character') {
+      if (session.profile && session.itemCatalog) {
+        console.log(renderCharacterSheet(session.profile, session.itemCatalog));
+      } else {
+        console.log('\n  No character profile available.\n');
+      }
+      continue;
+    }
+
+    try {
+      process.stdout.write(session.getThinking());
+      const output = await session.processInput(input);
+
+      if (output === '__QUIT__') {
+        // Show unified session recap
+        const recapText = buildUnifiedRecap(
+          session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,
+        );
+        if (recapText) console.log(recapText);
+        console.log('\n  Farewell.\n');
+        rl.close();
+        process.exit(0);
+      }
+
+      console.log(output);
+    } catch (err) {
+      presentError(err, 'turn', debugMode);
+    }
+  }
 }
 
 /** Build unified session recap from session state. */

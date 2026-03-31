@@ -44,7 +44,7 @@
 
 - [x] `[all]` `verify` script exists (test + build + smoke in one command) (2026-03-08)
 - [x] `[all]` Version in manifest matches git tag (2026-03-08)
-- [x] `[all]` Dependency scanning runs in CI (npm audit in verify) (2026-03-08)
+- [ ] `[all]` Dependency scanning runs in CI (npm audit in verify) SKIP: verify script runs typecheck + test:coverage only; no CI workflow configured yet
 - [ ] `[all]` Automated dependency update mechanism exists SKIP: monthly manual review per org rules (no dependabot)
 - [x] `[npm]` `npm pack --dry-run` includes: dist/, README.md, CHANGELOG.md, LICENSE (2026-03-08)
 - [x] `[npm]` `engines.node` set (>=20) (2026-03-08)

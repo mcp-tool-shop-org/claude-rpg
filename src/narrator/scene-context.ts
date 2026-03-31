@@ -39,8 +39,9 @@ export function buildSceneContext(
     (e) => e.zoneId === world.locationId && e.id !== world.playerId,
   );
 
+  const perceptions = getPerceptionLog(world, world.playerId);
+
   const visibleEntities = zoneEntities.map((entity) => {
-    const perceptions = getPerceptionLog(world, world.playerId);
     const entityPerceptions = perceptions.filter(
       (p) => p.entityId === entity.id,
     );

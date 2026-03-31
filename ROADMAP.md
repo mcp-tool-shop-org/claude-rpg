@@ -17,6 +17,9 @@ Archive browser, chronicle export (md/json/finale), pack-aware finale voices, fa
 ### v1.4.0 — Runtime Proofing (2026-03-19)
 Streaming narration, save migration pipeline, Claude adapter with typed errors, central error presenter + `--debug`, typed `ExecuteTurnOpts`/`NarrateSceneOpts`, coverage floors. 195 tests.
 
+### v1.4.1 — Test Expansion (2026-03-31)
+Expanded test suite from 195 to 302 tests across 24 files. New coverage for game state, NPC agency, narrator, action interpreter, prompt contracts, chronicle unit tests, and Claude adapter structured generation/streaming paths.
+
 ## Next
 
 ### Arc H — Campaign Packs / Authored Adventure Spine

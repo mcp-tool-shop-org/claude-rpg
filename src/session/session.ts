@@ -5,8 +5,9 @@
 // v0.5: resolved pressure / fallout persistence
 // v0.7: leverage snapshot + enhanced save summaries
 
-import { readFile, writeFile, mkdir, readdir, rename, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, rename, unlink, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { CURRENT_SCHEMA_VERSION, migrateSave } from './migrate.js';
 import type { Engine } from '@ai-rpg-engine/core';
@@ -202,7 +203,18 @@ export type LoadResult = {
   stepsApplied: number;
 };
 
+/** Maximum allowed save file size: 10 MB */
+const MAX_SAVE_FILE_BYTES = 10 * 1024 * 1024;
+
 export async function loadSession(savePath: string): Promise<LoadResult> {
+  // B-006: Reject oversized files before parsing to prevent DoS via huge JSON
+  const fileStat = await stat(savePath);
+  if (fileStat.size > MAX_SAVE_FILE_BYTES) {
+    throw new SaveValidationError(
+      `Save file is too large (${(fileStat.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed size is 10 MB.`,
+    );
+  }
+
   const raw = await readFile(savePath, 'utf-8');
 
   let parsed: unknown;
@@ -563,7 +575,7 @@ export async function listSaves(): Promise<SaveSlotSummary[]> {
 }
 
 export function getDefaultSaveDir(): string {
-  return join(process.cwd(), '.claude-rpg', 'saves');
+  return join(homedir(), '.claude-rpg', 'saves');
 }
 
 export function getSavePath(name: string): string {

@@ -208,7 +208,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
 }
 
 /** Extract profile update hints from resolved events. */
-function extractProfileHints(
+export function extractProfileHints(
   events: ResolvedEvent[],
   verb: string,
   world: WorldState,
@@ -225,8 +225,15 @@ function extractProfileHints(
         const defeatedId = event.payload.entityId as string | undefined;
         if (defeatedId) {
           const factionId = getEntityFaction(world, defeatedId);
-          if (factionId && !hints.reputationDelta) {
-            hints.reputationDelta = { factionId, delta: -15 };
+          if (factionId) {
+            // Accumulate reputation: each kill in a multi-kill turn stacks
+            if (hints.reputationDelta && hints.reputationDelta.factionId === factionId) {
+              hints.reputationDelta.delta += -15;
+            } else if (!hints.reputationDelta) {
+              hints.reputationDelta = { factionId, delta: -15 };
+            }
+            // Note: if kills span multiple factions, only the first faction's delta is tracked
+            // (single-delta-per-turn limitation of ProfileUpdateHints shape)
           }
 
           // Milestone: defeating a boss

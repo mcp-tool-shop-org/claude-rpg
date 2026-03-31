@@ -52,16 +52,56 @@ describe('HookManager', () => {
 });
 
 describe('Built-in hooks', () => {
-  it('should register all built-in hooks without error', () => {
+  it('should register all built-in hooks without error and return expected results (T-012)', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
-    // Should have hooks for enter-room, combat-start, combat-end, npc-speaking, death
-    // Fire them all to confirm no crashes
-    manager.fire(makeContext({ hookPoint: 'enter-room' }));
-    manager.fire(makeContext({ hookPoint: 'combat-start' }));
-    manager.fire(makeContext({ hookPoint: 'combat-end' }));
-    manager.fire(makeContext({ hookPoint: 'npc-speaking' }));
-    manager.fire(makeContext({ hookPoint: 'death' }));
+
+    // enter-room: no zone change events → should return empty results (hook returns null)
+    const enterRoomResults = manager.fire(makeContext({ hookPoint: 'enter-room' }));
+    expect(enterRoomResults).toHaveLength(0);
+
+    // combat-start: presentationState is 'exploration' (default) → hook returns null
+    const combatStartDefault = manager.fire(makeContext({ hookPoint: 'combat-start' }));
+    expect(combatStartDefault).toHaveLength(0);
+
+    // combat-start: presentationState is 'combat' → hook returns SFX
+    const combatStartCombat = manager.fire(makeContext({
+      hookPoint: 'combat-start',
+      presentationState: 'combat',
+    }));
+    expect(combatStartCombat).toHaveLength(1);
+    expect(combatStartCombat[0].sfxCues).toBeDefined();
+    expect(combatStartCombat[0].sfxCues![0].effectId).toBe('alert_warning');
+
+    // combat-end: no defeat events → empty
+    const combatEndNoDefeat = manager.fire(makeContext({ hookPoint: 'combat-end' }));
+    expect(combatEndNoDefeat).toHaveLength(0);
+
+    // combat-end: with defeat event → returns SFX
+    const combatEndWithDefeat = manager.fire(makeContext({
+      hookPoint: 'combat-end',
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: {} }] as any,
+    }));
+    expect(combatEndWithDefeat).toHaveLength(1);
+    expect(combatEndWithDefeat[0].sfxCues![0].effectId).toBe('ui_success');
+
+    // npc-speaking: not in dialogue → null
+    const npcResults = manager.fire(makeContext({ hookPoint: 'npc-speaking' }));
+    expect(npcResults).toHaveLength(0);
+
+    // death: no hp-zero event → null
+    const deathNoEvent = manager.fire(makeContext({ hookPoint: 'death' }));
+    expect(deathNoEvent).toHaveLength(0);
+
+    // death: with hp-zero event → returns SFX + ambient + UI effects
+    const deathWithEvent = manager.fire(makeContext({
+      hookPoint: 'death',
+      events: [{ type: 'resource.changed', tick: 1, payload: { resourceId: 'hp', newValue: 0 } }] as any,
+    }));
+    expect(deathWithEvent).toHaveLength(1);
+    expect(deathWithEvent[0].sfxCues![0].effectId).toBe('alert_critical');
+    expect(deathWithEvent[0].ambientCues!.length).toBe(2);
+    expect(deathWithEvent[0].uiEffects!.length).toBe(1);
   });
 
   it('should emit ambient cues on enter-room with zone change', () => {

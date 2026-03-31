@@ -457,11 +457,13 @@ export function buildPressureInputs(
   const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
   for (const factionId of factionIds) {
     const fcog = getFactionCognition(world, factionId);
-    if (fcog) {
+    if (fcog && typeof fcog === 'object') {
       const state = fcog as Record<string, unknown>;
+      const rawAlert = state.alertLevel;
+      const rawCohesion = state.cohesion;
       factionStates[factionId] = {
-        alertLevel: (state.alertLevel as number) ?? 0,
-        cohesion: (state.cohesion as number) ?? 1,
+        alertLevel: typeof rawAlert === 'number' ? rawAlert : 0,
+        cohesion: typeof rawCohesion === 'number' ? rawCohesion : 1,
       };
     } else {
       factionStates[factionId] = { alertLevel: 0, cohesion: 1 };
@@ -634,6 +636,15 @@ export function tickDistrictEconomies(
   }
 }
 
+const VALID_SUPPLY_CATEGORIES: ReadonlySet<string> = new Set([
+  'medicine', 'weapons', 'ammunition', 'food', 'fuel', 'luxuries', 'components', 'contraband',
+]);
+
+/** Validate that a string is a valid SupplyCategory. */
+export function isValidSupplyCategory(value: string): value is SupplyCategory {
+  return VALID_SUPPLY_CATEGORIES.has(value);
+}
+
 /** Apply an economy-shift effect to a district's economy map. */
 export function applyEconomyShiftToMap(
   districtEconomies: Map<string, DistrictEconomy>,
@@ -644,9 +655,10 @@ export function applyEconomyShiftToMap(
 ): void {
   const economy = districtEconomies.get(districtId);
   if (!economy) return;
+  if (!isValidSupplyCategory(category)) return; // Silently skip invalid categories
   const updated = applyEconomyShift(economy, {
     districtId,
-    category: category as SupplyCategory,
+    category,
     delta,
     cause,
   });
@@ -862,7 +874,7 @@ export function getPlayerFactionAccess(
   if (!profile) return undefined;
   const factionIds = Object.keys(world.factions);
   let best: string | undefined;
-  let bestRep = 0;
+  let bestRep = -Infinity;
   for (const fid of factionIds) {
     const rep = getReputation(profile, fid);
     if (rep > bestRep) {

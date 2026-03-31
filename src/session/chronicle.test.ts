@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   computeSignificance,
   deriveChronicleEvents,
@@ -8,6 +8,10 @@ import {
 import type { ChronicleEventSource } from './chronicle.js';
 import type { ProfileUpdateHints } from '../turn-loop.js';
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
+import { getDefaultSaveDir, loadSession } from './session.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { writeFile, mkdir, unlink, rmdir } from 'node:fs/promises';
 
 // --- Helpers ---
 
@@ -351,5 +355,41 @@ describe('buildChronicleContext', () => {
     // Count distinct events by matching pattern
     const mentions = records.filter((r) => ctx.includes(r.description));
     expect(mentions.length).toBeLessThanOrEqual(5);
+  });
+});
+
+// B-004: getDefaultSaveDir uses homedir instead of cwd
+describe('getDefaultSaveDir', () => {
+  it('uses homedir not cwd', () => {
+    const dir = getDefaultSaveDir();
+    const expected = join(homedir(), '.claude-rpg', 'saves');
+    expect(dir).toBe(expected);
+  });
+
+  it('does not contain process.cwd()', () => {
+    const dir = getDefaultSaveDir();
+    // Unless homedir happens to equal cwd, the path should be home-based
+    expect(dir.startsWith(homedir())).toBe(true);
+  });
+});
+
+// B-006: loadSession rejects oversized files
+describe('loadSession — file size limit', () => {
+  const tmpDir = join(homedir(), '.claude-rpg-test-tmp');
+  const bigFilePath = join(tmpDir, 'too-big.json');
+
+  it('rejects files larger than 10MB', async () => {
+    // Create a tmp dir and write a >10MB file
+    await mkdir(tmpDir, { recursive: true });
+    // 11MB of JSON-like data
+    const bigContent = '{"data":"' + 'x'.repeat(11 * 1024 * 1024) + '"}';
+    await writeFile(bigFilePath, bigContent);
+
+    try {
+      await expect(loadSession(bigFilePath)).rejects.toThrow(/too large/);
+    } finally {
+      await unlink(bigFilePath).catch(() => {});
+      await rmdir(tmpDir).catch(() => {});
+    }
   });
 });

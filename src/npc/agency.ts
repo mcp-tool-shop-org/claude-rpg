@@ -104,24 +104,28 @@ export function applyNpcEffects(
     switch (effect.type) {
       case 'belief': {
         const cognition = getCognition(engine.world, effect.entityId);
+        if (!cognition) break;
         setBelief(cognition, effect.subject, effect.key, effect.value, effect.confidence, 'npc-agency', tick);
         break;
       }
 
       case 'memory': {
         const cognition = getCognition(engine.world, effect.entityId);
+        if (!cognition) break;
         addMemory(cognition, effect.memType, tick, effect.data);
         break;
       }
 
       case 'morale': {
         const cognition = getCognition(engine.world, effect.entityId);
+        if (!cognition) break;
         cognition.morale = Math.max(0, Math.min(100, cognition.morale + effect.delta));
         break;
       }
 
       case 'suspicion': {
         const cognition = getCognition(engine.world, effect.entityId);
+        if (!cognition) break;
         cognition.suspicion = Math.max(0, Math.min(100, cognition.suspicion + effect.delta));
         break;
       }

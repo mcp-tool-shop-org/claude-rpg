@@ -1030,10 +1030,10 @@ export class GameSession {
       case 'accept': {
         const available = getAvailableOpportunities(this.activeOpportunities);
         if (available.length === 0) break;
-        // Accept the first available (most recent)
-        const target = available[available.length - 1];
-        target.status = 'accepted';
-        target.acceptedAtTick = this.engine.tick;
+        // Accept the first available (most recent) — immutable replacement
+        const original = available[available.length - 1];
+        const target: OpportunityState = { ...original, status: 'accepted', acceptedAtTick: this.engine.tick };
+        this.activeOpportunities = this.activeOpportunities.map((o) => o.id === target.id ? target : o);
         // Chronicle
         const source: ChronicleEventSource = { kind: 'opportunity-accepted', opportunity: target, tick: this.engine.tick };
         for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
@@ -1080,18 +1080,18 @@ export class GameSession {
     // Remove from active list
     this.activeOpportunities = this.activeOpportunities.filter((o) => o.id !== opp.id);
 
-    // Update status
-    opp.status = resolutionType === 'completed' ? 'completed'
+    // Build resolved copy — immutable, never mutate the original
+    const resolvedStatus = resolutionType === 'completed' ? 'completed'
       : resolutionType === 'failed' ? 'failed'
       : resolutionType === 'expired' ? 'expired'
       : resolutionType === 'declined' ? 'declined'
       : resolutionType === 'abandoned' ? 'abandoned'
       : resolutionType === 'betrayed' ? 'betrayed'
       : 'failed';
-    opp.resolvedAtTick = this.engine.tick;
+    const resolvedOpp: OpportunityState = { ...opp, status: resolvedStatus, resolvedAtTick: this.engine.tick };
 
     // Compute fallout
-    const fallout = computeOpportunityFallout(opp, resolutionType, {
+    const fallout = computeOpportunityFallout(resolvedOpp, resolutionType, {
       currentTick: this.engine.tick,
       playerDistrictId: this.getPlayerDistrictId(),
       genre: this.genre,
@@ -1104,7 +1104,7 @@ export class GameSession {
       : resolutionType === 'betrayed' ? 'opportunity-betrayed' as const
       : resolutionType === 'expired' ? 'opportunity-expired' as const
       : 'opportunity-failed' as const;
-    const source: ChronicleEventSource = { kind: chronicleKind, opportunity: opp, tick: this.engine.tick };
+    const source: ChronicleEventSource = { kind: chronicleKind, opportunity: resolvedOpp, tick: this.engine.tick };
     for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
       this.journal.record(entry);
     }

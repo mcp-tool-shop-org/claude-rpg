@@ -67,8 +67,48 @@ describe('GameSession', () => {
     // Switch to director mode
     await session.processInput('/director');
 
-    // Inspect pilgrim
+    // Inspect pilgrim — a real entity in the starter-fantasy world
     const output = await session.processInput('/inspect pilgrim');
     expect(output).toBeTruthy();
+    // T-001: Verify the output is meaningful entity data, not an error
+    expect(output).not.toContain('Unknown command');
+    expect(output).not.toContain('not found');
+    // formatEntityInspection renders the entity ID as a heading
+    expect(output).toContain('pilgrim');
+  });
+
+  it('should produce save/export snapshot data via /export', async () => {
+    // T-019: Coverage for save/load flow.
+    // GameSession.buildSavedSessionSnapshot() is private, but /export json
+    // exercises it and writes a file. We use the game harness with a fake
+    // client so no real API calls are made.
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    // Record a turn so the snapshot has data
+    await h.play('/director');
+    const inspectOut = await h.play('/inspect pilgrim');
+    expect(inspectOut).toContain('pilgrim');
+
+    // Switch back to play mode — /export is a play-mode command
+    await h.play('/back');
+
+    // Export json exercises buildSavedSessionSnapshot → writeExport
+    const exportResult = await h.session.processInput('/export json');
+    // The export writes a file and returns the path
+    expect(exportResult).toContain('Chronicle exported to');
+  });
+
+  it('should return usage when /export has no valid format', async () => {
+    // T-019 supplemental: verify the export command exists and responds
+    const engine = createGame();
+    const session = new GameSession({
+      engine,
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+    });
+
+    const output = await session.processInput('/export badformat');
+    expect(output).toContain('Usage');
   });
 });

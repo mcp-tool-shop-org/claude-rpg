@@ -117,6 +117,15 @@ let debugMode = false;
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   debugMode = args.includes('--debug');
+
+  // Catch unhandled rejections from fire-and-forget callback chains (e.g. rl.question)
+  // that escape the main() promise chain. Routes through presentError so users never
+  // see raw stack traces.
+  process.on('unhandledRejection', (reason: unknown) => {
+    presentError(reason, 'startup', debugMode);
+    process.exit(1);
+  });
+
   const filteredArgs = args.filter((a) => a !== '--debug');
 
   if (filteredArgs.includes('--version') || filteredArgs.includes('-v')) {

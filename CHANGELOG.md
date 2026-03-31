@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-03-31
+
+### Added
+- **API retry with exponential backoff**: transient Claude API failures retry automatically with jitter
+- **Periodic autosave**: game state saves automatically at configurable intervals — no more lost progress
+- **Fast-path inventory verbs**: common inventory commands (use, equip, drop, examine) resolve instantly without LLM round-trip
+- **Terminal colors**: ANSI color support for richer CLI output (damage in red, healing in green, NPC names highlighted)
+- **Animated spinner**: visual feedback during LLM calls so players know the narrator is thinking
+- **Token/cost tracking**: per-turn and cumulative token usage and estimated cost displayed on demand
+- **MaxHP status bar**: visual health bar in the HUD showing current vs maximum HP
+- **Turn history compaction**: older turns are summarized to keep context windows efficient
+- **Opportunity disambiguation**: when multiple opportunities match, the player is prompted to choose
+- **Conditional dialogue prompts**: NPC dialogue adapts based on quest state, reputation, and prior conversations
+- **NPC conversation memory**: NPCs remember what you told them and reference past exchanges
+- **NPC voice archetypes**: distinct speech patterns per NPC type (scholarly, gruff, merchant, noble, etc.)
+- **Tab completion**: readline tab completion for commands, NPC names, item names, and locations
+- **Turn separators**: visual dividers between turns for readability
+- **Structured announcements**: system messages (level up, quest complete, faction change) rendered as distinct UI blocks
+- **Quest wiring**: quest objectives tracked and surfaced in narration context
+- **Ambient NPC dialogue**: background NPCs chatter contextually based on district mood and events
+- **Save listing enrichment**: save browser shows world name, playtime, and last location
+
+### Changed
+- Test suite expanded from 209 to 625 tests across 53 files
+- Removed unused dependency
+
+### Fixed
+- 67 bug/security/quality findings from dogfood swarm Stage A
+- 22 proactive findings hardened: error containment, graceful degradation, observability improvements
+
 ## [1.4.1] - 2026-03-25
 
 ### Added

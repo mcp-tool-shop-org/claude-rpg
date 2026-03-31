@@ -86,7 +86,7 @@ Changed-file regression detection surfaces coverage drops on pull requests that 
 
 ## Test inventory
 
-302 tests across 24 test files:
+625 tests across 53 test files (expanded from 302/24 via dogfood swarm):
 
 | Category | Tests | What they prove |
 |----------|-------|-----------------|
@@ -103,4 +103,15 @@ Changed-file regression detection surfaces coverage drops on pull requests that 
 | NPC agency | 10 | Goal evaluation, loyalty, retaliation |
 | Action interpreter | 12 | Keyword matching, verb resolution |
 | Prompts | 10 | Dialogue NPC, world gen, interpret action |
+| API retry + backoff | 18 | Exponential backoff, jitter, max retries, transient vs permanent failures |
+| Autosave | 14 | Periodic save triggers, interval config, crash recovery |
+| Inventory fast-path | 12 | Direct verb resolution without LLM, edge cases |
+| Token tracking | 16 | Per-turn counting, cumulative totals, cost estimation |
+| NPC memory + voices | 22 | Conversation recall, voice archetype assignment, dialogue adaptation |
+| Tab completion | 15 | Command completion, entity names, location names |
+| Turn compaction | 11 | History summarization, context window budget |
+| Quest wiring | 14 | Objective tracking, narration injection, completion detection |
+| Ambient + announcements | 12 | Background NPC chatter, structured UI blocks |
+| Error containment | 18 | Graceful degradation, observability, swarm-found edge cases |
+| Bug/security fixes | 67 | Swarm Stage A findings — security, quality, correctness |
 | Other | 38 | Scene context, hooks, audio, voice, history, presentation, play renderer, unhandled rejection |

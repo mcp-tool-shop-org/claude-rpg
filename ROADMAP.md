@@ -17,8 +17,11 @@ Archive browser, chronicle export (md/json/finale), pack-aware finale voices, fa
 ### v1.4.0 — Runtime Proofing (2026-03-19)
 Streaming narration, save migration pipeline, Claude adapter with typed errors, central error presenter + `--debug`, typed `ExecuteTurnOpts`/`NarrateSceneOpts`, coverage floors. 195 tests.
 
-### v1.4.1 — Test Expansion (2026-03-31)
+### v1.4.1 — Test Expansion (2026-03-25)
 Expanded test suite from 195 to 302 tests across 24 files. New coverage for game state, NPC agency, narrator, action interpreter, prompt contracts, chronicle unit tests, and Claude adapter structured generation/streaming paths.
+
+### v1.5.0 — Swarm Hardening (2026-03-31)
+Dogfood swarm: 67 bug/security fixes (Stage A), 22 proactive hardening passes (Stage B+C), three feature waves. API retry with backoff, periodic autosave, fast-path inventory verbs, terminal colors + spinner, tab completion, NPC voice archetypes + conversation memory, token/cost tracking, turn history compaction, quest wiring, ambient NPC dialogue, structured announcements, save listing enrichment. 625 tests across 53 files.
 
 ## Next
 

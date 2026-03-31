@@ -63,8 +63,20 @@ export const config: SiteConfig = {
           desc: 'Text arrives incrementally at the terminal. The engine resolves first — streaming is presentation only. Interrupted streams cannot corrupt game state.',
         },
         {
-          title: 'Runtime-proofed',
-          desc: '302 tests across 24 test files covering turn-loop integration, save migration, streaming, chronicle continuity, NPC agency, narration, and coverage floors. Typed contracts eliminate field miswires at compile time.',
+          title: 'API retry + autosave',
+          desc: 'Transient API failures retry with exponential backoff. Game state autosaves periodically. No more lost progress from crashes or disconnects.',
+        },
+        {
+          title: 'NPC conversation memory',
+          desc: 'NPCs remember what you told them and reference past exchanges. Voice archetypes give each NPC a distinct speech pattern — scholarly, gruff, merchant, noble.',
+        },
+        {
+          title: 'Terminal polish',
+          desc: 'ANSI colors, animated spinner during LLM calls, tab completion for commands/names/items, turn separators, and structured announcement blocks.',
+        },
+        {
+          title: 'Swarm-hardened',
+          desc: '625 tests across 53 test files. 67 bug fixes + 22 proactive hardening passes covering error containment, graceful degradation, and observability.',
         },
       ],
     },

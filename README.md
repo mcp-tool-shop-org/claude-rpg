@@ -77,17 +77,23 @@ Set your Anthropic API key (only needed for Claude narration):
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## What's New in v1.4.1
+## What's New in v1.5.0
 
-v1.4 is a foundation release — seven runtime-proofing sprints that harden everything between the engine and the player.
+v1.5 is a swarm-hardened release — 67 bug fixes, 22 proactive hardening passes, and three feature waves that make the game feel alive.
 
 | Feature | What it means |
 |---------|--------------|
-| **Streaming narration** | Text arrives incrementally at the terminal. The engine resolves first — streaming is presentation only. Interrupted streams cannot corrupt state. |
-| **Save migration pipeline** | Versioned schema with ordered migration steps. Old saves upgrade automatically. Future-version saves are rejected cleanly. |
-| **Structured error handling** | Claude adapter translates SDK failures (timeout, rate-limit, auth, overloaded) into player-safe messages. `--debug` flag shows full diagnostics. |
-| **Typed runtime contracts** | `ExecuteTurnOpts` and `NarrateSceneOpts` replace 21-param and 16-param positional signatures. Field miswires are compile-time errors. |
-| **209 tests** | Turn-loop integration harness, save round-trip and corruption guards, chronicle continuity, streaming proof, coverage floors on critical paths. |
+| **API retry with backoff** | Transient Claude API failures retry automatically with exponential backoff and jitter. |
+| **Periodic autosave** | Game state saves at configurable intervals. No more lost progress from crashes or disconnects. |
+| **Fast-path inventory** | Common verbs (use, equip, drop, examine) resolve instantly without an LLM round-trip. |
+| **Terminal colors + spinner** | ANSI colors for damage, healing, and NPC names. Animated spinner during LLM calls. |
+| **Tab completion** | Readline completion for commands, NPC names, items, and locations. |
+| **NPC voice archetypes** | Distinct speech patterns per NPC type — scholarly, gruff, merchant, noble, and more. |
+| **NPC conversation memory** | NPCs remember what you said and reference past exchanges in future dialogue. |
+| **Token/cost tracking** | Per-turn and cumulative token usage with estimated cost, displayed on demand. |
+| **Turn history compaction** | Older turns are summarized to keep context windows efficient without losing narrative thread. |
+| **Quest wiring + ambient NPCs** | Quest objectives tracked in narration context. Background NPCs chatter based on district mood. |
+| **625 tests** | Expanded from 209 to 625 across 53 test files. Bug fixes, error containment, graceful degradation, and observability hardened by dogfood swarm. |
 
 ## Why It's Different
 
@@ -198,7 +204,7 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Jade Veil starter world |
 | [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Crimson Court starter world |
 
-## Runtime Guarantees (v1.4.1)
+## Runtime Guarantees (v1.5.0)
 
 | Guarantee | Enforcement |
 |-----------|------------|

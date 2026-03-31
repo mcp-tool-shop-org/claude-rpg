@@ -68,7 +68,11 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
 
   const prompt = buildNarratePrompt(enrichedInput);
 
-  // Use streaming if callback provided and client supports it
+  // Use streaming if callback provided and client supports it.
+  // NOTE: When streaming is active, onChunk receives raw JSON fragments (partial
+  // NarrationPlan tokens). Callers should NOT display streamed chunks directly as
+  // narrative text — instead, wait for the full response and use the parsed plan's
+  // sceneText field. Displaying raw chunks will show JSON syntax to the player.
   const streamFn = onChunk ? client.generateStream : undefined;
   const result = streamFn && onChunk
     ? await streamFn.call(client, { system: NARRATE_SYSTEM, prompt, maxTokens: 500, onChunk })

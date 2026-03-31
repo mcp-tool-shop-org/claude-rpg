@@ -43,9 +43,10 @@ export class TurnHistory {
     return [...this.turns];
   }
 
-  static fromJSON(data: TurnRecord[]): TurnHistory {
-    const history = new TurnHistory();
-    history.turns = data;
+  static fromJSON(data: TurnRecord[], maxTurns = 50): TurnHistory {
+    const history = new TurnHistory(maxTurns);
+    // Respect maxTurns during deserialization: keep the most recent turns
+    history.turns = data.length > maxTurns ? data.slice(-maxTurns) : data;
     return history;
   }
 }

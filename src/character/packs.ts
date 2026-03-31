@@ -88,6 +88,15 @@ export function resolveWorldFlag(worldName: string): string | undefined {
   const map: Record<string, string> = {
     fantasy: 'chapel-threshold',
     cyberpunk: 'neon-lockbox',
+    detective: 'gaslight-detective',
+    pirate: 'black-flag-requiem',
+    'weird-west': 'dust-devils-bargain',
+    zombie: 'ashfall-dead',
+    colony: 'signal-loss',
   };
-  return map[worldName];
+  const result = map[worldName];
+  if (!result) {
+    console.warn(`resolveWorldFlag: unknown world name "${worldName}"`);
+  }
+  return result;
 }

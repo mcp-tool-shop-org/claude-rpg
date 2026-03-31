@@ -92,7 +92,9 @@ export function buildSceneContext(
     recentEvents: eventDescriptions,
     playerState: {
       hp: player?.resources?.hp ?? 0,
-      maxHp: undefined,
+      maxHp: (player?.resources as Record<string, unknown>)?.maxHp as number | undefined
+        ?? (player?.custom?.maxHp as number | undefined)
+        ?? undefined,
       statuses: (player?.statuses ?? []).map((s) => s.statusId),
     },
     exits: (zone?.neighbors ?? [])

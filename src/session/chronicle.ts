@@ -860,7 +860,8 @@ function deriveOpportunityBetrayed(
   const opp = source.opportunity;
   return [{
     tick: source.tick,
-    category: 'opportunity-abandoned' as RecordCategory,
+    // Use 'betrayal' category to distinguish from simple abandonment — higher significance
+    category: 'betrayal' as RecordCategory,
     actorId: playerId,
     description: `Betrayed ${opp.kind}: "${opp.title}"`,
     significance: 0.7,

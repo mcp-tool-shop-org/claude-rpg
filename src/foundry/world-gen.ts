@@ -130,10 +130,17 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
   return errors;
 }
 
-/** Generate a world from a creative prompt. */
+/**
+ * Generate a world from a creative prompt.
+ * @param client - LLM client for structured generation
+ * @param worldPrompt - Creative world description
+ * @param seed - Optional deterministic seed for reproducible world generation.
+ *               When omitted, a random seed is used.
+ */
 export async function generateWorld(
   client: ClaudeClient,
   worldPrompt: string,
+  seed?: number,
 ): Promise<WorldGenResult> {
   const prompt = buildWorldGenPrompt(worldPrompt);
 
@@ -204,7 +211,7 @@ export async function generateWorld(
       modules: [],
       contentPacks: [],
     },
-    seed: Math.floor(Math.random() * 100000),
+    seed: seed ?? Math.floor(Math.random() * 100000),
     ruleset,
     modules: [
       traversalCore,

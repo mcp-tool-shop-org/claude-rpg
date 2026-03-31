@@ -91,6 +91,11 @@ export function buildNpcProfilesForDirector(
  * Apply effects from an NPC action to session state.
  * Mirrors applyFactionEffects() pattern in game.ts.
  * Returns the updated profile (reputation changes produce a new profile instance).
+ *
+ * NOTE: The NpcEffect union type relies on discriminated union narrowing via the
+ * 'type' field in the switch statement below. Each case branch accesses properties
+ * specific to that variant (e.g., effect.subject for 'belief', effect.delta for
+ * 'morale'). TypeScript narrows the type within each case block automatically.
  */
 export function applyNpcEffects(
   result: NpcActionResult,

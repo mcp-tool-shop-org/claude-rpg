@@ -857,95 +857,24 @@ export class GameSession {
     }
   }
 
-  /** Apply structured fallout effects to session state. */
+  /** Apply structured fallout effects to session state. Delegates to pure function in game-state.ts. */
   private applyFalloutEffects(fallout: PressureFallout): void {
-    for (const effect of fallout.effects) {
-      switch (effect.type) {
-        case 'reputation':
-          if (this.profile) {
-            this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
-          }
-          break;
-
-        case 'district':
-          modifyDistrictMetric(
-            this.engine.world,
-            effect.districtId,
-            effect.metric as 'alertPressure' | 'rumorDensity' | 'intruderLikelihood' | 'surveillance' | 'stability',
-            effect.delta,
-          );
-          break;
-
-        case 'rumor':
-          if (this.profile) {
-            this.addRumor(
-              spawnPlayerRumor(
-                { label: effect.claim, description: effect.claim, tags: [effect.valence] },
-                this.profile,
-                effect.spreadTo[0],
-                this.getPlayerDistrictId(),
-                this.engine.tick,
-              ),
-            );
-          }
-          break;
-
-        case 'spawn-pressure': {
-          const MAX_ACTIVE = 3;
-          if (this.activePressures.length < MAX_ACTIVE) {
-            const chainPressure = makePressure({
-              kind: effect.kind,
-              sourceFactionId: effect.sourceFactionId,
-              description: effect.description,
-              triggeredBy: `chain:${fallout.resolution.pressureKind}`,
-              urgency: effect.urgency,
-              visibility: fallout.resolution.resolutionVisibility,
-              turnsRemaining: 10,
-              potentialOutcomes: [],
-              tags: effect.tags,
-              currentTick: this.engine.tick,
-            });
-            (chainPressure as WorldPressure & { chainedFrom?: string }).chainedFrom =
-              fallout.resolution.pressureId;
-            this.activePressures.push(chainPressure);
-          }
-          break;
-        }
-
-        case 'alert':
-          // Alert changes applied through faction cognition if available
-          break;
-
-        case 'milestone-tag':
-          // Tags recorded for title evolution consideration
-          break;
-
-        case 'title-trigger':
-          // Trigger title evolution check with this tag
-          if (this.profile) {
-            const allTags = [
-              ...this.profile.milestones.flatMap((m) => m.tags),
-              effect.tag,
-            ];
-            const newTitle = evolveTitle(
-              this.profile.custom.title as string | undefined,
-              allTags,
-              this.getTitleEvolutions(),
-            );
-            if (newTitle && newTitle !== this.profile.custom.title) {
-              this.profile = {
-                ...this.profile,
-                custom: { ...this.profile.custom, title: newTitle },
-              };
-              console.log(`\n  Title evolved: "${newTitle}"\n`);
-            }
-          }
-          break;
-
-        case 'economy-shift':
-          this.applyEconomyShiftEffect(effect.districtId, effect.category, effect.delta, effect.cause);
-          break;
-      }
+    const result = _applyFalloutEffects(
+      fallout,
+      this.profile,
+      this.engine.world,
+      this.playerRumors,
+      this.activePressures,
+      this.partyState,
+      this.districtEconomies,
+      this.genre,
+      this.engine.tick,
+    );
+    this.profile = result.profile;
+    this.playerRumors = result.playerRumors;
+    this.activePressures = result.activePressures;
+    if (result.titleChanged) {
+      console.log(`\n  Title evolved: "${result.titleChanged.newTitle}"\n`);
     }
   }
 

@@ -85,7 +85,11 @@ export function recruitCompanion(
     active: true,
   };
 
-  // Tag entity as companion
+  // Tag entity as companion.
+  // NOTE: Direct entity mutation is intentional here. The Engine does not expose
+  // entity update methods for tags or custom fields, so we mutate the entity
+  // reference in-place. This is safe because we hold a reference from world.entities
+  // and the engine reads it back on the next tick.
   if (!entity.tags.includes('companion')) {
     entity.tags.push('companion');
   }

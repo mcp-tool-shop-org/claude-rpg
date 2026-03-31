@@ -178,7 +178,7 @@ export async function saveSession(
 
   // Keep one-deep backup of the previous save
   try {
-    await readFile(savePath, 'utf-8'); // check if previous exists
+    await stat(savePath); // check if previous exists (cheaper than readFile)
     const bakPath = savePath + '.bak';
     try { await unlink(bakPath); } catch { /* no previous backup */ }
     await rename(savePath, bakPath);

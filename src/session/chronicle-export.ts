@@ -15,7 +15,7 @@ export function exportChronicleMarkdown(session: SavedSession): string {
   const outline = parseFinaleOutline(session);
   const arcSnapshot = parseArcSnapshot(session);
   const chronicle = parseChronicle(session);
-  const party = parseParty(session);
+  // parseParty intentionally not called here — companion data is covered by outline.companionFates
 
   const lines: string[] = [];
 

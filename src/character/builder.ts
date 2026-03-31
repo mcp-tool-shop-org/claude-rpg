@@ -29,8 +29,10 @@ export type BuildResult = {
   pack: PackInfo;
 };
 
-/** Run the full interactive character creation flow. */
+/** Run the full interactive character creation flow. Uses a loop instead of recursion for retry. */
 export async function buildCharacter(rl: ReadlineInterface): Promise<BuildResult> {
+  // Loop instead of recursion to avoid unbounded stack growth on repeated rejections
+  while (true) {
   // Step 1: Select pack
   const packIndex = await promptMenu(rl, 'Choose your world:', allPacks.map((p) => ({
     label: p.meta.name,
@@ -148,7 +150,7 @@ export async function buildCharacter(rl: ReadlineInterface): Promise<BuildResult
   const confirmed = await promptConfirm(rl, 'Accept this character?');
   if (!confirmed) {
     console.log('  Starting over...\n');
-    return buildCharacter(rl);
+    continue; // loop back instead of recursive call
   }
 
   // Create profile
@@ -177,4 +179,5 @@ export async function buildCharacter(rl: ReadlineInterface): Promise<BuildResult
   };
 
   return { build, profile: profileWithLoadout, playerEntity, pack };
+  } // end while
 }

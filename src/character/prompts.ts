@@ -60,6 +60,9 @@ export async function promptMultiSelect(
   }
   console.log('');
 
+  // Zero selections is a valid outcome: the loop exits when maxSelections is reached
+  // or the user types "done" (only after at least 1 selection). If maxSelections is 0,
+  // the loop body never executes and an empty array is returned intentionally.
   const selected: number[] = [];
   while (selected.length < maxSelections) {
     const remaining = maxSelections - selected.length;

@@ -62,7 +62,11 @@ export function buildNPCDialogueContext(
     const factionState = world.factions[factionId];
     faction = {
       name: factionState?.name ?? factionId,
-      alertLevel: fcog ? (fcog as Record<string, unknown>).alertLevel as number ?? 0 : 0,
+      alertLevel: fcog
+        ? (typeof (fcog as Record<string, unknown>).alertLevel === 'number'
+          ? (fcog as Record<string, unknown>).alertLevel as number
+          : 0)
+        : 0,
     };
   }
 

@@ -436,4 +436,80 @@ describe('withRetry', () => {
     expect(result.text).toBe('retried ok');
     expect(callCount).toBe(2);
   });
+
+  // F-7fcdf2db: withRetry took no callback and emitted no event, so no caller
+  // (e.g. bin.ts's per-turn spinner) could ever tell a retry was in flight
+  // during DEFAULT_RETRY's worst-case ~93s of silent attempts. onRetry fires
+  // once per retry, immediately before that retry's backoff delay -- never
+  // for the initial attempt, and never for the final, non-retried failure
+  // (fatal errors, or the last exhausted attempt), since neither of those is
+  // followed by a delayFn(delay) call.
+  describe('withRetry onRetry hook (F-7fcdf2db)', () => {
+    it('invokes onRetry once per retry, immediately before its backoff delay, with 1-indexed attempt/maxAttempts', async () => {
+      const onRetry = vi.fn();
+      let callCount = 0;
+      const result = await withRetry(async () => {
+        callCount++;
+        if (callCount <= 2) {
+          throw new NarrationError({ kind: 'timeout', message: 'timed out' });
+        }
+        return 'recovered';
+      }, { maxRetries: 2, initialDelayMs: 1000, onRetry }, noDelay);
+
+      expect(result).toBe('recovered');
+      expect(callCount).toBe(3);
+      expect(onRetry).toHaveBeenCalledTimes(2);
+      // attempt: the 1-indexed attempt that just failed. maxAttempts: total
+      // attempts this call's budget allows (1 initial + maxRetries).
+      expect(onRetry).toHaveBeenNthCalledWith(1, { attempt: 1, maxAttempts: 3, kind: 'timeout', delayMs: 1000 });
+      expect(onRetry).toHaveBeenNthCalledWith(2, { attempt: 2, maxAttempts: 3, kind: 'timeout', delayMs: 2000 });
+    });
+
+    it('does not invoke onRetry for a fatal (non-retryable) error', async () => {
+      const onRetry = vi.fn();
+      await expect(withRetry(async () => {
+        throw new NarrationError({ kind: 'auth', message: 'bad key' });
+      }, { maxRetries: 2, initialDelayMs: 100, onRetry }, noDelay)).rejects.toThrow(NarrationError);
+      expect(onRetry).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke onRetry for the final, exhausted attempt', async () => {
+      const onRetry = vi.fn();
+      await expect(withRetry(async () => {
+        throw new NarrationError({ kind: 'timeout', message: 'timed out' });
+      }, { maxRetries: 1, initialDelayMs: 100, onRetry }, noDelay)).rejects.toThrow(NarrationError);
+      // 1 initial + 1 retry = 2 attempts total; onRetry fires once (before
+      // the one retry), not again when that retry also fails and exhausts
+      // the budget.
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    });
+
+    it('threads retryConfig.onRetry through createAdaptedClient into a real retried generate() call', async () => {
+      let callCount = 0;
+      vi.spyOn(Anthropic.Messages.prototype, 'create').mockImplementation((async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'retry' } }, 'retry', {});
+        }
+        return {
+          id: 'msg_test',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-sonnet-4-20250514',
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: { input_tokens: 5, output_tokens: 10 },
+          content: [fakeTextBlock('retried ok')],
+        } as Anthropic.Message;
+      }) as unknown as typeof Anthropic.Messages.prototype.create);
+
+      const onRetry = vi.fn();
+      const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1, onRetry });
+      const result = await client.generate({ system: 's', prompt: 'p' });
+
+      expect(result.text).toBe('retried ok');
+      expect(onRetry).toHaveBeenCalledTimes(1);
+      expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({ kind: 'rate-limit', attempt: 1, maxAttempts: 2 }));
+    });
+  });
 });

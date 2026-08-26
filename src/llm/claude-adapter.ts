@@ -16,7 +16,7 @@ import Anthropic from '@anthropic-ai/sdk';
  */
 import { DEFAULT_MODEL, DEFAULT_TIMEOUT_MS } from '../claude-client.js';
 import type { ClaudeClient, ClaudeClientConfig, GenerateResult, StreamCallback, StructuredResult } from '../claude-client.js';
-import { NarrationError } from './claude-errors.js';
+import { NarrationError, type NarrationErrorKind } from './claude-errors.js';
 
 /** Default retry configuration for retryable errors. */
 export type RetryConfig = {
@@ -24,6 +24,28 @@ export type RetryConfig = {
   maxRetries: number;
   /** Initial backoff delay in milliseconds (default: 1000). */
   initialDelayMs: number;
+  /**
+   * F-7fcdf2db: optional progress hook. Invoked once per retry, in
+   * withRetry's catch branch immediately before that retry's backoff delay —
+   * never for the initial attempt, and never for the final non-retried
+   * failure (a fatal error, or the last attempt once maxRetries is
+   * exhausted), since neither of those is followed by a delay.
+   *
+   * `attempt` is 1-indexed: the attempt number that just failed (so the
+   * first retry reports `attempt: 1`). `maxAttempts` is the total attempts
+   * this call's budget allows (1 initial + maxRetries), constant across every
+   * call. Together with `kind`/`delayMs` this is enough for a caller (e.g.
+   * bin.ts's per-turn "thinking" spinner) to render "retrying (2/3)..."
+   * instead of a static label for DEFAULT_RETRY's worst-case ~93s where the
+   * player currently sees no indication whether the app is retrying, hung,
+   * or about to fail outright.
+   *
+   * Cross-domain remainder (cli-display, not fixed in this pass): actually
+   * wiring this into a visible spinner update also needs Spinner
+   * (src/cli/spinner.ts) to grow an updateLabel()-style method — its
+   * interface today only exposes start()/stop().
+   */
+  onRetry?: (info: { attempt: number; maxAttempts: number; kind: NarrationErrorKind; delayMs: number }) => void;
 };
 
 const DEFAULT_RETRY: RetryConfig = { maxRetries: 2, initialDelayMs: 1000 };
@@ -49,6 +71,12 @@ export async function withRetry<T>(
       }
       lastError = narrationErr;
       const delay = config.initialDelayMs * Math.pow(2, attempt);
+      config.onRetry?.({
+        attempt: attempt + 1,
+        maxAttempts: config.maxRetries + 1,
+        kind: narrationErr.kind,
+        delayMs: delay,
+      });
       await delayFn(delay);
     }
   }

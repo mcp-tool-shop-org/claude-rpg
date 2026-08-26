@@ -3,7 +3,9 @@ import {
   narrateScene,
   narrateSceneLegacy,
   FALLBACK_NARRATION,
+  FALLBACK_NARRATION_REPEATED,
   FATAL_NARRATION_FALLBACK,
+  KNOWN_FALLBACK_NARRATION_SENTINELS,
   type NarrateSceneOpts,
 } from './narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
@@ -11,6 +13,7 @@ import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { NARRATE_SYSTEM_LEGACY } from '../prompts/narrate-scene.js';
 import { createTestLogger } from '../game/debug-logger.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
 
 function makeGenerateResult(text: string): GenerateResult {
   return { ok: true, text, inputTokens: 10, outputTokens: 20 };
@@ -358,6 +361,167 @@ describe('narrateSceneLegacy F-304fc328: LLM failure fallback', () => {
     expect(result.isFallback).toBe(true);
     expect(result.narration).toBe(FALLBACK_NARRATION);
     expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+// F-681d3382: FALLBACK_NARRATION is one hardcoded sentence returned verbatim,
+// unconditionally, on every non-fatal LLM failure -- during a real multi-turn
+// outage the player reads the identical sentence every turn with no growing
+// acknowledgment it's a pattern. consecutiveFallbacks (opts.consecutiveFallbacks
+// for narrateScene, a trailing positional param for narrateSceneLegacy) lets a
+// caller that's tracking the run of prior fallback turns switch to a second,
+// distinctly-worded, repeat-aware sentinel from the 2nd consecutive fallback
+// onward, while keeping the original isolated-hiccup text for the first one.
+describe('narrateScene/narrateSceneLegacy F-681d3382: repeat-aware fallback sentinel', () => {
+  it('narrateScene should use the isolated-hiccup FALLBACK_NARRATION when consecutiveFallbacks is omitted', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await narrateScene(makeOpts({ client }));
+
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    expect(result.isFallback).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('narrateScene should still use FALLBACK_NARRATION when consecutiveFallbacks is 0', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await narrateScene(makeOpts({ client, consecutiveFallbacks: 0 }));
+
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    warnSpy.mockRestore();
+  });
+
+  it('narrateScene should switch to FALLBACK_NARRATION_REPEATED once consecutiveFallbacks is 1 or more', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await narrateScene(makeOpts({ client, consecutiveFallbacks: 1 }));
+
+    expect(result.narration).toBe(FALLBACK_NARRATION_REPEATED);
+    expect(result.narration).not.toBe(FALLBACK_NARRATION);
+    expect(result.isFallback).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('narrateScene should keep using FALLBACK_NARRATION_REPEATED for a higher consecutiveFallbacks count', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await narrateScene(makeOpts({ client, consecutiveFallbacks: 5 }));
+
+    expect(result.narration).toBe(FALLBACK_NARRATION_REPEATED);
+    warnSpy.mockRestore();
+  });
+
+  it('narrateSceneLegacy should use the isolated-hiccup FALLBACK_NARRATION when consecutiveFallbacks is omitted', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API down')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const engine = createGame();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateSceneLegacy(client, engine.world, [], 'dark fantasy', []);
+
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    warnSpy.mockRestore();
+  });
+
+  it('narrateSceneLegacy should switch to FALLBACK_NARRATION_REPEATED once consecutiveFallbacks is 1 or more', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API down')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const engine = createGame();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateSceneLegacy(client, engine.world, [], 'dark fantasy', [], undefined, undefined, 2);
+
+    expect(result.narration).toBe(FALLBACK_NARRATION_REPEATED);
+    expect(result.isFallback).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('registers FALLBACK_NARRATION_REPEATED in KNOWN_FALLBACK_NARRATION_SENTINELS so it is never echoed back into a later prompt or quoted as real narrative (mirrors F-e8630a73)', async () => {
+    expect(KNOWN_FALLBACK_NARRATION_SENTINELS).toContain(FALLBACK_NARRATION_REPEATED);
+
+    const opts = makeOpts({
+      client: makeClient('A cool breeze greets you.'),
+      recentNarration: ['A real narrated turn.', FALLBACK_NARRATION_REPEATED],
+    });
+    await narrateScene(opts);
+
+    const call = (opts.client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain(FALLBACK_NARRATION_REPEATED);
+  });
+});
+
+// F-afb978de (family-of-call-sites sibling): the finding named
+// dialogue-mind.ts's generateDialogue and finale-narrator.ts's narrateFinale
+// as "the two places that actually catch NarrationError" bypassing
+// userMessage() -- but narrateScene/narrateSceneLegacy's catch blocks have
+// the exact same shape (catch NarrationError, rethrow if fatal, else
+// console.warn + return a fallback) and userMessage() was equally dead code
+// here. Wired in for consistency with the other two call sites fixed this
+// wave, via the same fallbackMessage-field-alongside-the-warning shape as
+// DialogueResult (F-afb978de/F-8b6a50b5) -- `narration` itself stays
+// FALLBACK_NARRATION/FALLBACK_NARRATION_REPEATED, not userMessage()'s text.
+describe('narrateScene/narrateSceneLegacy F-afb978de: userMessage() wired into the non-fatal fallback (sibling of dialogue-mind/finale-narrator)', () => {
+  it('narrateScene should surface userMessage() via fallbackMessage and the console.warn without changing the narration text', async () => {
+    const rateLimitErr = new NarrationError({ kind: 'rate-limit', message: 'rate limited' });
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(rateLimitErr),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateScene(makeOpts({ client }));
+
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    expect(result.fallbackMessage).toBe(userMessage(rateLimitErr));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(userMessage(rateLimitErr)));
+    warnSpy.mockRestore();
+  });
+
+  it('narrateScene should leave fallbackMessage unset on a normal successful call', async () => {
+    const result = await narrateScene(makeOpts({ client: makeClient('A cool breeze greets you.') }));
+    expect(result.fallbackMessage).toBeUndefined();
+  });
+
+  it('narrateSceneLegacy should surface userMessage() via fallbackMessage and the console.warn without changing the narration text', async () => {
+    const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(timeoutErr),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const engine = createGame();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateSceneLegacy(client, engine.world, [], 'dark fantasy', []);
+
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    expect(result.fallbackMessage).toBe(userMessage(timeoutErr));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(userMessage(timeoutErr)));
     warnSpy.mockRestore();
   });
 });

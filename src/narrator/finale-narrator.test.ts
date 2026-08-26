@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { narrateFinale } from './finale-narrator.js';
+import { narrateFinale, FALLBACK_EPILOGUE } from './finale-narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
-import { NarrationError } from '../llm/claude-errors.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
 
 function makeOutline(overrides: Partial<FinaleOutline> = {}): FinaleOutline {
   return {
@@ -99,6 +99,9 @@ describe('narrateFinale F-6480985e: fatal errors rethrow instead of swallowing i
     await expect(
       narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael'),
     ).rejects.toThrow(authErr);
+    // F-0f76ecc2: fatal errors must not burn the new same-turn retry --
+    // retrying auth/bad-request can never succeed.
+    expect(client.generate).toHaveBeenCalledTimes(1);
   });
 
   it('should rethrow a fatal bad-request NarrationError the same way', async () => {
@@ -108,19 +111,73 @@ describe('narrateFinale F-6480985e: fatal errors rethrow instead of swallowing i
     await expect(
       narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael'),
     ).rejects.toThrow(badRequestErr);
+    expect(client.generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// F-0f76ecc2: narrateFinale previously set epilogue = '' on a non-fatal
+// failure and returned normally -- renderConcludeOutput (game-presenter.ts)
+// gates the whole epilogue section on `if (result.epilogue)`, so an empty
+// string rendered nothing at all: the campaign's one narratively climactic
+// LLM call got exactly one silent attempt, with campaignStatus already
+// stamped 'completed' by the caller before it even ran. narrateFinale now
+// retries once on a non-fatal failure, and only falls back to a non-empty,
+// clearly-labeled sentinel (FALLBACK_EPILOGUE) -- plus isFallback: true --
+// if the retry also fails non-fatally, so the truthiness gate downstream
+// renders an explicit note instead of silence.
+describe('narrateFinale F-0f76ecc2: retry-once, then a labeled (non-empty) fallback', () => {
+  it('should report isFallback: false and the real epilogue on a normal first-try success', async () => {
+    const client = makeClient('And so the city remembered.');
+
+    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
+
+    expect(result.epilogue).toBe('And so the city remembered.');
+    expect(result.isFallback).toBe(false);
+    expect(client.generate).toHaveBeenCalledTimes(1);
   });
 
-  it('should keep the blank-epilogue fallback (deterministic-summary-only) for non-fatal errors, but still log', async () => {
+  it('should retry once after a non-fatal failure and use the real epilogue if the retry succeeds', async () => {
+    const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
+    const generate = vi.fn()
+      .mockRejectedValueOnce(timeoutErr)
+      .mockResolvedValueOnce({ ok: true, text: 'The city rebuilt, slowly.', inputTokens: 10, outputTokens: 20 } satisfies GenerateResult);
+    const client: ClaudeClient = {
+      generate,
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
+
+    expect(result.epilogue).toBe('The city rebuilt, slowly.');
+    expect(result.isFallback).toBe(false);
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('attempt 1/2'));
+    warnSpy.mockRestore();
+  });
+
+  it('should fall back to the non-empty, labeled FALLBACK_EPILOGUE (not blank) when both the first attempt and the retry fail non-fatally', async () => {
     const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
     const client = makeFailingClient(timeoutErr);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
 
-    expect(result.epilogue).toBe('');
+    expect(result.epilogue).toBe(FALLBACK_EPILOGUE);
+    expect(result.epilogue.length).toBeGreaterThan(0);
+    expect(result.epilogue).not.toBe('');
+    expect(result.isFallback).toBe(true);
+    // Player-facing: still says the campaign concluded, not just that
+    // something broke -- deterministicSummary/worldAfter already render
+    // unconditionally above/below it in renderConcludeOutput either way.
+    expect(result.epilogue.toLowerCase()).toContain('conclude');
     expect(result.deterministicSummary).toEqual(expect.any(String));
     expect(result.worldAfter).toContain('WORLD AFTER');
-    expect(warnSpy).toHaveBeenCalled();
+    expect(client.generate).toHaveBeenCalledTimes(2);
+    // F-afb978de: userMessage()'s actionable per-kind text is wired into the
+    // final-failure log, not left dead.
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(userMessage(timeoutErr)));
     warnSpy.mockRestore();
   });
 });

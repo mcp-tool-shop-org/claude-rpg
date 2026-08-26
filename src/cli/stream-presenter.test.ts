@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { createStreamPresenter, renderStreamInterruption } from './stream-presenter.js';
 
 // ─── PFE-004: Stream interruption wiring ───────────────────
 
 describe('stream-presenter: markInterrupted', () => {
-  let writeSpy: ReturnType<typeof vi.spyOn>;
+  let writeSpy: MockInstance<typeof process.stdout.write>;
 
   beforeEach(() => {
     writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);

@@ -21,20 +21,17 @@ describe('bin defenses: engine state validation (PFE-007)', () => {
 
   it('rejects non-JSON', () => {
     const result = validateEngineState('not json at all');
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('JSON');
+    expect(result).toMatchObject({ valid: false, error: expect.stringContaining('JSON') });
   });
 
   it('rejects missing world key', () => {
     const result = validateEngineState(JSON.stringify({ foo: 'bar' }));
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('world.state');
+    expect(result).toMatchObject({ valid: false, error: expect.stringContaining('world.state') });
   });
 
   it('rejects missing state key inside world', () => {
     const result = validateEngineState(JSON.stringify({ world: {} }));
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('world.state');
+    expect(result).toMatchObject({ valid: false, error: expect.stringContaining('world.state') });
   });
 
   it('rejects null', () => {

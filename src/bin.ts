@@ -47,6 +47,7 @@ import { validateEngineState } from './cli/engine-state-validator.js';
 import { parseSaveSelection } from './cli/save-selection.js';
 import { formatSaveDetails } from './cli/save-listing.js';
 import { isPathInside } from './cli/path-guard.js';
+import { attemptExitAutosave } from './cli/exit-autosave.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
@@ -547,18 +548,17 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       process.exit(1);
     }
     console.log('\n  Interrupted. Saving your progress...');
-    try {
-      const saveName = session.profile
-        ? `${session.profile.build.name}-autosave-${Date.now()}`
-        : `autosave-${Date.now()}`;
-      const savePath = getSavePath(saveName);
-      const expectedDir = resolve(getDefaultSaveDir());
-      if (isPathInside(savePath, expectedDir)) {
-        await saveSession(buildSaveInput(session, savePath, packId));
-        console.log(`  Auto-saved to ${savePath}`);
-      }
-    } catch {
+    const saveName = session.profile
+      ? `${session.profile.build.name}-autosave-${Date.now()}`
+      : `autosave-${Date.now()}`;
+    const savePath = getSavePath(saveName);
+    const outcome = await attemptExitAutosave(savePath, getDefaultSaveDir(), (p) =>
+      saveSession(buildSaveInput(session, p, packId)),
+    );
+    if (outcome.status === 'failed') {
       console.log('  Auto-save failed. Your in-game progress was not saved.');
+    } else {
+      console.log(outcome.message);
     }
     console.log('  Farewell.\n');
     rl.close();
@@ -574,18 +574,17 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       // PFE-001: stdin closed (Ctrl+D or pipe EOF) — auto-save and exit cleanly.
       if (err instanceof Error && err.message === '__STDIN_CLOSED__') {
         console.log('\n  Input stream closed.');
-        try {
-          const saveName = session.profile
-            ? `${session.profile.build.name}-autosave-${Date.now()}`
-            : `autosave-${Date.now()}`;
-          const savePath = getSavePath(saveName);
-          const expectedDir = resolve(getDefaultSaveDir());
-          if (isPathInside(savePath, expectedDir)) {
-            await saveSession(buildSaveInput(session, savePath, packId));
-            console.log(`  Auto-saved to ${savePath}`);
-          }
-        } catch {
+        const saveName = session.profile
+          ? `${session.profile.build.name}-autosave-${Date.now()}`
+          : `autosave-${Date.now()}`;
+        const savePath = getSavePath(saveName);
+        const outcome = await attemptExitAutosave(savePath, getDefaultSaveDir(), (p) =>
+          saveSession(buildSaveInput(session, p, packId)),
+        );
+        if (outcome.status === 'failed') {
           console.log('  Auto-save failed.');
+        } else {
+          console.log(outcome.message);
         }
         console.log('  Farewell.\n');
         rl.close();

@@ -76,6 +76,31 @@ export function isPlayerAtZeroHp(world: WorldState, playerId: string): boolean {
   return hp !== undefined && hp <= 0;
 }
 
+/**
+ * Whether any hostile-tagged entity in the player's current zone still has hp above
+ * zero. Used to gate the encounter's TRUE end (combatEndHook's victory chime + music
+ * soften, and its dispatch in immersion-runtime.ts's fireEventHooks) on "no hostiles
+ * remain" rather than "a combat.entity.defeated event exists" (F-d9fc231c) -- this
+ * game supports multi-combatant fights as a first-class concept (companion/party
+ * interception is this domain's own companion-bridge.ts; world-gen.ts's faction
+ * generation routinely places multiple hostile-tagged NPCs together), and that event
+ * fires once per kill, well before the last enemy falls. Uses the same
+ * `tags.includes('hostile') || tags.includes('enemy')` convention already
+ * established for hostility elsewhere in this codebase (runtime/voice-caster.ts).
+ * Scoped to entities whose zoneId matches world.locationId (the player's current
+ * zone) rather than the whole world, so a hostile NPC elsewhere on the map (an
+ * unrelated, not-yet-encountered faction) can't permanently suppress this hook for
+ * the rest of the session.
+ */
+export function hasLivingHostiles(world: WorldState): boolean {
+  return Object.values(world.entities).some(
+    (e) =>
+      e.zoneId === world.locationId &&
+      (e.tags?.includes('hostile') || e.tags?.includes('enemy')) &&
+      (e.resources?.hp ?? 0) > 0,
+  );
+}
+
 /** Manages hook registration and firing. */
 export class HookManager {
   private hooks = new Map<HookPoint, Hook[]>();
@@ -171,6 +196,12 @@ export const combatEndHook: Hook = (ctx) => {
   // cue immediately alongside deathHook's alarm — the exact composition F-91f803b2
   // closed, reopened through this one path.
   if (isPlayerAtZeroHp(ctx.world, ctx.world.playerId)) return null;
+  // F-d9fc231c: the entity named in THIS event is already confirmed dead (that's why
+  // hasDefeat is true above) -- but a multi-hostile fight fires combat.entity.defeated
+  // once per kill, not once per encounter. If another hostile in the same zone is
+  // still standing, the fight itself isn't over yet, so suppress the victory chime +
+  // music soften until the actual last kill.
+  if (hasLivingHostiles(ctx.world)) return null;
   return {
     sfxCues: [{ effectId: 'ui_success', timing: 'immediate', intensity: 0.7 }],
     musicCue: { action: 'soften', fadeMs: 1000 },

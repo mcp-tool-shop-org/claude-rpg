@@ -1,7 +1,7 @@
 // Immersion Runtime — wires presentation state, hooks, audio director, and voice caster
 
 import type { Engine, ResolvedEvent } from '@ai-rpg-engine/core';
-import type { NarrationPlan } from '@ai-rpg-engine/presentation';
+import type { NarrationPlan, AmbientCue, MusicCue } from '@ai-rpg-engine/presentation';
 import { AudioDirector } from '@ai-rpg-engine/audio-director';
 import { SoundRegistry, CORE_SOUND_PACK } from '@ai-rpg-engine/soundpack-core';
 import {
@@ -13,6 +13,7 @@ import {
   registerBuiltinHooks,
   isPlayerDefeatEvent,
   isPlayerAtZeroHp,
+  hasLivingHostiles,
   type HookContext,
   type HookResult,
 } from './hooks.js';
@@ -78,6 +79,55 @@ export class ImmersionRuntime {
   /** Whether debug logging is enabled. Set externally if needed. */
   debugMode = false;
 
+  /**
+   * F-d8d1f51d: ImmersionRuntime's own ambient/music de-dup, independent of
+   * AudioDirector.schedule()'s cooldown map. That cooldown (verified against the
+   * installed @ai-rpg-engine/audio-director package, dist/director.js's schedule())
+   * only ever gates commands whose action is literally 'play' -- ambient cues always
+   * carry crossfade/start/stop (never 'play') and music cues carry
+   * intensify/soften/crossfade/play, so ambient cues and non-play music cues bypass
+   * it entirely, every time. Hook-sourced cues (executeMergedHookResult below) also
+   * bypass AudioDirector entirely and call the bridge directly, so they need the same
+   * protection. Tracked per-instance (across calls to processPresentation, not per
+   * call) and shared by BOTH dispatch paths, so a sustained scene mood -- the LLM
+   * narrator re-proposing the identical ambient/music cue turn after turn per
+   * prompts/narrate-scene.ts's "use sfx/ambient based on scene mood" guidance, or a
+   * hook cue followed by the narrator independently proposing the same cue -- stops
+   * repeating the moment the layer/channel is already in that state, rather than
+   * printing the same dim cue line every turn for as long as the mood persists.
+   */
+  private lastAmbientAction = new Map<string, AmbientCue['action']>();
+  private lastMusicState: { action: MusicCue['action']; trackId?: string } | undefined;
+
+  /** Drop ambient cues that just repeat a layer's already-active action (F-d8d1f51d). */
+  private dedupeAmbientCues(cues: AmbientCue[]): AmbientCue[] {
+    const kept: AmbientCue[] = [];
+    for (const cue of cues) {
+      if (this.lastAmbientAction.get(cue.layerId) === cue.action) continue;
+      this.lastAmbientAction.set(cue.layerId, cue.action);
+      kept.push(cue);
+    }
+    return kept;
+  }
+
+  /**
+   * Drop a music cue that just repeats the channel's already-active action/track
+   * (F-d8d1f51d). Returns undefined when the cue is a redundant repeat, so callers
+   * can treat "nothing to do" the same way they already treat an absent musicCue.
+   */
+  private dedupeMusicCue(cue: MusicCue | undefined): MusicCue | undefined {
+    if (!cue) return undefined;
+    if (
+      this.lastMusicState &&
+      this.lastMusicState.action === cue.action &&
+      this.lastMusicState.trackId === cue.trackId
+    ) {
+      return undefined;
+    }
+    this.lastMusicState = { action: cue.action, trackId: cue.trackId };
+    return cue;
+  }
+
   /** Process events through the presentation pipeline, returning MCP tool calls. */
   async processPresentation(
     engine: Engine,
@@ -117,6 +167,12 @@ export class ImmersionRuntime {
     let preResults: HookResult[] = [];
     let specificCalls: McpToolCall[] = [];
     let audioCalls: McpToolCall[] = [];
+    // F-3fce4373: a dedicated, append-only channel for "this stage of the pipeline
+    // threw and degraded to silence" markers, separate from specificCalls/audioCalls
+    // -- both of those get REASSIGNED (not appended to) by later stages, so pushing a
+    // marker into either one risks a subsequent stage silently discarding it before
+    // the function returns.
+    const degradedStages: McpToolCall[] = [];
 
     // 2. Fire pre-narration hooks (guarded — F-e2f0cd27: this was previously unwrapped,
     // so a throwing pre-narration hook rejected the whole call instead of degrading
@@ -133,6 +189,17 @@ export class ImmersionRuntime {
       if (this.debugMode) {
         console.error('[immersion] Pre-narration hook error (degrading to silence):', err);
       }
+      // F-3fce4373: a non-debug player previously saw nothing distinguishing "no cue
+      // this turn" from "a cue was computed and then silently dropped" -- push a
+      // low-key marker through the same McpToolCall channel game.ts's onPresentation
+      // sink already carries end-to-end to cli-display's presentation renderer
+      // (mirrors the __music_intent__/__ui_effect_intent__ convention audio-bridge.ts
+      // already uses for other renderer-owned intents). An unrecognized tool name is
+      // a no-op in today's renderer, so this degrades harmlessly until a future
+      // cli-display change adds a case for it -- matching the same subsystem-hiccup
+      // tone game.ts's post-turn tick block and its own emitPresentation wrapper
+      // already give the player for their adjacent failure modes.
+      degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'pre-narration' } });
     }
 
     try {
@@ -142,6 +209,7 @@ export class ImmersionRuntime {
       if (this.debugMode) {
         console.error('[immersion] Hook error (degrading to silence):', err);
       }
+      degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'event-hooks' } });
     }
 
     try {
@@ -181,6 +249,7 @@ export class ImmersionRuntime {
       if (this.debugMode) {
         console.error('[immersion] Audio pipeline error (degrading to silence):', err);
       }
+      degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'audio' } });
     }
 
     // 5. Fire post-narration hooks (also guarded)
@@ -209,9 +278,10 @@ export class ImmersionRuntime {
       if (this.debugMode) {
         console.error('[immersion] Post-narration hook error:', err);
       }
+      degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'post-narration' } });
     }
 
-    return [...specificCalls, ...audioCalls];
+    return [...specificCalls, ...audioCalls, ...degradedStages];
   }
 
   /**
@@ -258,8 +328,15 @@ export class ImmersionRuntime {
       calls.push(...(await this.executeMergedHookResult(merged)));
     }
 
-    // Combat end
-    if (events.some((e) => e.type === 'combat.entity.defeated')) {
+    // Combat end — gated on the encounter actually being over (F-d9fc231c), not just
+    // on "a combat.entity.defeated event exists": a multi-hostile fight fires that
+    // event once per kill, well before the last enemy falls. Mirrors the gate now
+    // inside combatEndHook itself (hooks.ts) so no OTHER hook that might ever get
+    // registered at 'combat-end' has to remember this check independently.
+    if (
+      events.some((e) => e.type === 'combat.entity.defeated') &&
+      !hasLivingHostiles(engine.world)
+    ) {
       const endCtx: HookContext = {
         hookPoint: 'combat-end',
         world: engine.world,
@@ -314,12 +391,21 @@ export class ImmersionRuntime {
       }
     }
     if (merged.ambientCues) {
-      for (const ambient of merged.ambientCues) {
+      // F-d8d1f51d: hook-sourced ambient cues bypass AudioDirector entirely, so they
+      // need this domain's own de-dup applied here directly (mergeHookResults below
+      // applies the same de-dup to the narrator-plan path).
+      for (const ambient of this.dedupeAmbientCues(merged.ambientCues)) {
         await this.bridge.setAmbient(ambient);
       }
     }
     if (merged.musicCue) {
-      await this.bridge.setMusic(merged.musicCue);
+      // F-d8d1f51d: same de-dup, shared state -- a hook-sourced music cue (e.g.
+      // combatStartHook's one-time 'intensify') and a later narrator-authored cue
+      // proposing the identical action recognize each other as redundant.
+      const musicCue = this.dedupeMusicCue(merged.musicCue);
+      if (musicCue) {
+        await this.bridge.setMusic(musicCue);
+      }
     }
     // F-6ef6e5a0: uiEffects (e.g. deathHook's fade-to-black) were accumulated by
     // HookManager.mergeResults but never dispatched here, so the only built-in hook
@@ -349,12 +435,21 @@ export class ImmersionRuntime {
     // audioDirector.schedule()/bridge.executeCommands().
     const MAX_SFX_PER_PLAN = 5;
     const MAX_AMBIENT_PER_PLAN = 3;
+    // F-d8d1f51d: de-dup AFTER capping, same order the cap itself already ran in --
+    // this only ever REMOVES entries relative to the uncapped behavior, so it can't
+    // let more cues through than MAX_AMBIENT_PER_PLAN allowed before. Independent of
+    // AudioDirector.schedule()'s cooldown (see the field doc comment above), which
+    // never covered ambient/music cross-turn spacing in the first place.
+    const ambientLayers = this.dedupeAmbientCues(
+      [...plan.ambientLayers, ...(merged.ambientCues ?? [])].slice(0, MAX_AMBIENT_PER_PLAN),
+    );
+    const musicCue = this.dedupeMusicCue(merged.musicCue ?? plan.musicCue);
     return {
       ...plan,
       sfx: [...plan.sfx, ...(merged.sfxCues ?? [])].slice(0, MAX_SFX_PER_PLAN),
-      ambientLayers: [...plan.ambientLayers, ...(merged.ambientCues ?? [])].slice(0, MAX_AMBIENT_PER_PLAN),
+      ambientLayers,
       uiEffects: [...plan.uiEffects, ...(merged.uiEffects ?? [])],
-      musicCue: merged.musicCue ?? plan.musicCue,
+      musicCue,
     };
   }
 }

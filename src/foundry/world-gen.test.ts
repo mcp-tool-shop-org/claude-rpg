@@ -446,6 +446,85 @@ describe('generateWorld: malformed proposal degrades gracefully (F-d68e103d/F-dd
   });
 });
 
+describe('generateWorld F-cbc186cb: retries + errorKind discriminant', () => {
+  it('retries generateStructured after a transient failure and succeeds on a later attempt', async () => {
+    const proposal = makeValidProposal();
+    const generateStructured = vi.fn()
+      .mockResolvedValueOnce({ ok: false, data: null, raw: '', error: 'No JSON found in response' })
+      .mockResolvedValueOnce({ ok: true, data: proposal, raw: '' });
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured,
+    };
+
+    const result = await generateWorld(client, 'A test world', 1);
+
+    expect(result.ok).toBe(true);
+    expect(result.engine).not.toBeNull();
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a content-validation failure and succeeds once a later attempt passes validation', async () => {
+    const badProposal = makeValidProposal();
+    (badProposal.factions[0] as any).memberIds = undefined;
+    const goodProposal = makeValidProposal();
+    const generateStructured = vi.fn()
+      .mockResolvedValueOnce({ ok: true, data: badProposal, raw: '' })
+      .mockResolvedValueOnce({ ok: true, data: goodProposal, raw: '' });
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured,
+    };
+
+    const result = await generateWorld(client, 'A test world', 1);
+
+    expect(result.ok).toBe(true);
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after 3 attempts and reports errorKind "transient" when generateStructured never succeeds', async () => {
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured: vi.fn().mockResolvedValue({
+        ok: false, data: null, raw: '', error: 'LLM unavailable',
+      }),
+    };
+
+    const result = await generateWorld(client, 'A test world');
+
+    expect(result.ok).toBe(false);
+    expect(result.errorKind).toBe('transient');
+    expect(result.errors).toContain('LLM unavailable');
+    expect(client.generateStructured).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives up after 3 attempts and reports errorKind "validation" when the proposal never passes shape validation', async () => {
+    const proposal = makeValidProposal();
+    (proposal.factions[0] as any).memberIds = undefined;
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'A test world', 1);
+
+    expect(result.ok).toBe(false);
+    expect(result.errorKind).toBe('validation');
+    expect(result.errors.some((e) => e.includes('memberIds'))).toBe(true);
+    expect(client.generateStructured).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not set errorKind on a successful result', async () => {
+    const proposal = makeValidProposal();
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'A test world', 1);
+
+    expect(result.ok).toBe(true);
+    expect(result.errorKind).toBeUndefined();
+  });
+});
+
 describe('generateWorld PBR-001: defensive NPC coercion', () => {
   it('should default missing stats to empty object', async () => {
     const proposal = makeValidProposal();

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TurnHistory } from './history.js';
+import { FALLBACK_NARRATION } from '../narrator/narrator.js';
+import { FATAL_NARRATION_FALLBACK } from '../turn-loop.js';
 
 describe('TurnHistory', () => {
   it('should record and retrieve turns', () => {
@@ -261,5 +263,78 @@ describe('TurnHistory compaction (FT-B-006)', () => {
     expect(restored.compactedSummary).toBe(
       restored.compactedChunks.map((c) => c.summary).join(' '),
     );
+  });
+
+  // F-5f703a0b: fromJSON()'s `else if (data.compactedSummary)` branch (no
+  // compactedChunks breakdown — an old/opaque-format save, or the exact
+  // shape toJSON() still emits whenever _compactedChunks is empty but
+  // _compactedSummary isn't) assigned _compactedSummary directly and left
+  // _compactedChunks empty, so it never went through trimCompactedChunks()
+  // on load. Worse: the *next* eviction's compactEvictedTurn() pushes one
+  // chunk onto that still-empty array, then trimCompactedChunks() rebuilds
+  // _compactedSummary ENTIRELY from _compactedChunks — silently discarding
+  // the whole legacy summary down to one new sentence.
+  it('should bound a compactedSummary-only fromJSON restore too, and survive the next eviction', () => {
+    const legacySummary = 'Fought in combat.';
+    const data = {
+      turns: [{ tick: 501, playerInput: 'look', verb: 'look', narration: 'Calm.' }],
+      compactedSummary: legacySummary,
+    };
+
+    const restored = TurnHistory.fromJSON(data, 1);
+
+    // Bounded (seeded into a real chunk) immediately on load, same as the
+    // compactedChunks-present branch above — not left as an untracked string.
+    expect(restored.compactedChunks).toHaveLength(1);
+    expect(restored.compactedSummary).toBe(legacySummary);
+
+    // Trigger the next eviction: compactEvictedTurn() pushes one more chunk,
+    // then trimCompactedChunks() rebuilds compactedSummary entirely from
+    // compactedChunks. Before this fix, compactedChunks started empty here,
+    // so that rebuild silently discarded the whole legacy summary. With the
+    // seed in place, the legacy content survives alongside the new chunk.
+    restored.record({ tick: 502, playerInput: 'x', verb: 'attack', narration: 'Fight!' });
+    expect(restored.compactedSummary).toContain(legacySummary);
+  });
+});
+
+// F-8da2e6f7: turn-loop.ts defines its own fallback sentinel
+// (FATAL_NARRATION_FALLBACK) distinct from narrator.ts's FALLBACK_NARRATION.
+// getRecentNarration() previously returned placeholder narration
+// indistinguishable from real authored text, feeding it unfiltered into the
+// next narration prompt (prompts/narrate-scene.ts) and into recap.ts's
+// "LAST TIME ON..." display.
+describe('TurnHistory.getRecentNarration fallback filtering (F-8da2e6f7)', () => {
+  it('excludes isFallback-flagged turns', () => {
+    const history = new TurnHistory();
+    history.record({ tick: 1, playerInput: 'a', verb: 'look', narration: 'real one' });
+    history.record({ tick: 2, playerInput: 'b', verb: 'look', narration: 'placeholder text', isFallback: true });
+    history.record({ tick: 3, playerInput: 'c', verb: 'look', narration: 'real two' });
+
+    expect(history.getRecentNarration(3)).toEqual(['real one', 'real two']);
+  });
+
+  it('includes turns explicitly flagged isFallback: false', () => {
+    const history = new TurnHistory();
+    history.record({ tick: 1, playerInput: 'a', verb: 'look', narration: 'real one', isFallback: false });
+
+    expect(history.getRecentNarration(1)).toEqual(['real one']);
+  });
+
+  it('falls back to comparing known sentinel strings for turns restored without the isFallback flag (legacy saves)', () => {
+    // A save written before this field existed has no isFallback key at all
+    // on its turn records — fromJSON restores those turns with isFallback
+    // left undefined, so the exclusion must still catch known placeholder
+    // text by value in that case.
+    const restored = TurnHistory.fromJSON({
+      turns: [
+        { tick: 1, playerInput: 'a', verb: 'look', narration: 'real one' },
+        { tick: 2, playerInput: 'b', verb: 'look', narration: FALLBACK_NARRATION },
+        { tick: 3, playerInput: 'c', verb: 'attack', narration: FATAL_NARRATION_FALLBACK },
+        { tick: 4, playerInput: 'd', verb: 'look', narration: 'real two' },
+      ],
+    });
+
+    expect(restored.getRecentNarration(4)).toEqual(['real one', 'real two']);
   });
 });

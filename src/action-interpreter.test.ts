@@ -144,7 +144,13 @@ describe('action-interpreter', () => {
 
       // Ambiguous input that won't match any fast-path regex
       const result = await interpretAction(
-        mockClient,
+        // F-39b958e7: unlike this file's other mocks, this one's
+        // generateStructured resolves a concrete non-null `data` object, so
+        // the generic ClaudeClient.generateStructured<T>() can't infer T
+        // without contextual typing. Cast at the call site, matching this
+        // file's own established pattern for its other non-null-data mocks
+        // (see the F-4d102b74 sweep tests below).
+        mockClient as any,
         engine.world,
         'ponder the meaning of existence',
         engine.getAvailableActions(),

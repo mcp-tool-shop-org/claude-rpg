@@ -554,9 +554,9 @@ describe('GameSession', () => {
 
       // (b) history has the turn recorded, with fallback narration text —
       // not the real narrator output, since narrateScene never returned.
-      expect(h.session.history.turns).toHaveLength(1);
-      expect(h.session.history.turns[0].verb).toBe('move');
-      expect(h.session.history.turns[0].narration).toBeTruthy();
+      expect(h.session.history.getAll()).toHaveLength(1);
+      expect(h.session.history.getAll()[0].verb).toBe('move');
+      expect(h.session.history.getAll()[0].narration).toBeTruthy();
 
       // (c) profile hints / chronicle bookkeeping still ran for the recorded
       // turn, even though executeTurn() never returned a TurnResult.

@@ -7,7 +7,7 @@ function makeSession(overrides: Partial<SavedSession> = {}): SavedSession {
     schemaVersion: 14,
     version: '1.4.0',
     engineState: '{}',
-    turnHistory: [],
+    turnHistory: { turns: [] },
     tone: 'dramatic',
     savedAt: new Date().toISOString(),
     ...overrides,

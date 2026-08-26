@@ -1,12 +1,24 @@
 // Turn history: rolling context window for narration continuity
 // FT-B-006: Turn history compaction — evicted turns generate compressed summaries
 
+import { FALLBACK_NARRATION } from '../narrator/narrator.js';
+import { FATAL_NARRATION_FALLBACK } from '../turn-loop.js';
+
 export type TurnRecord = {
   tick: number;
   playerInput: string;
   verb: string;
   narration: string;
   dialogue?: { speaker: string; text: string };
+  /**
+   * F-8da2e6f7: true when `narration` is placeholder/fallback text — either
+   * narrator.ts's non-fatal FALLBACK_NARRATION or turn-loop.ts's
+   * FATAL_NARRATION_FALLBACK — rather than real authored narrative. Optional
+   * so turns from a save written before this field existed still satisfy
+   * this type; getRecentNarration() falls back to comparing sentinel string
+   * values for those.
+   */
+  isFallback?: boolean;
 };
 
 /** Compressed summary of evicted turns for long-term memory. */
@@ -155,7 +167,23 @@ export class TurnHistory {
   }
 
   getRecentNarration(count = 3): string[] {
-    return this.turns.slice(-count).map((t) => t.narration);
+    return this.turns
+      .filter((t) => !this.isFallbackTurn(t))
+      .slice(-count)
+      .map((t) => t.narration);
+  }
+
+  /**
+   * F-8da2e6f7: true if a turn's narration is placeholder/fallback text that
+   * should never be fed into the next narration prompt (or quoted back to
+   * the player, e.g. recap.ts) as if it were real story content. Prefers the
+   * isFallback flag set at record() time; falls back to comparing against
+   * the known sentinel strings for turns restored from a save written
+   * before that flag existed.
+   */
+  private isFallbackTurn(t: TurnRecord): boolean {
+    if (t.isFallback !== undefined) return t.isFallback;
+    return t.narration === FALLBACK_NARRATION || t.narration === FATAL_NARRATION_FALLBACK;
   }
 
   getAll(): readonly TurnRecord[] {
@@ -194,9 +222,18 @@ export class TurnHistory {
         // it's the same join this class already used to build it.
         history.trimCompactedChunks();
       } else if (data.compactedSummary) {
-        // No chunk breakdown to trim against (older/opaque format) —
-        // preserve as-is; future compaction bounds growth from here on.
-        history._compactedSummary = data.compactedSummary;
+        // F-5f703a0b: previously assigned _compactedSummary directly here,
+        // leaving _compactedChunks empty — this branch never ran through
+        // trimCompactedChunks(), so an old/opaque-format save's summary
+        // loaded untrimmed. Worse, the *next* eviction's
+        // compactEvictedTurn() would push one chunk onto that still-empty
+        // array, then trimCompactedChunks() rebuilds _compactedSummary
+        // ENTIRELY from _compactedChunks — silently discarding the whole
+        // legacy summary down to one new sentence. Seed a single synthetic
+        // chunk wrapping the legacy string instead, so the cap applies
+        // immediately and the content survives the next eviction's rebuild.
+        history._compactedChunks = [{ fromTick: 0, toTick: 0, summary: data.compactedSummary }];
+        history.trimCompactedChunks();
       }
     }
 

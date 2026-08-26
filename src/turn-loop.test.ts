@@ -167,6 +167,10 @@ describe('executeTurn (opts object)', () => {
       expect(turns).toHaveLength(1);
       expect(turns[0].verb).toBe('attack');
       expect(turns[0].narration).toBeTruthy();
+      // F-8da2e6f7: the fatal-bookkeeping path must flag this turn as
+      // fallback so getRecentNarration() (and recap.ts) exclude the
+      // placeholder text from later narration prompts / recap display.
+      expect(turns[0].isFallback).toBe(true);
     });
 
     it('attaches turn bookkeeping to the rethrown error for the caller to recover', async () => {
@@ -218,6 +222,11 @@ describe('executeTurn (opts object)', () => {
 
       expect(result.narration).toBeTruthy();
       expect(history.getAll()).toHaveLength(1);
+      // F-8da2e6f7: narrator.ts's own F-304fc328 catch already absorbed this
+      // into a fallback NarrationResult (isFallback: true) rather than
+      // throwing — executeTurn()'s success path must carry that flag
+      // through to the recorded turn.
+      expect(history.getAll()[0].isFallback).toBe(true);
     });
   });
 });

@@ -121,7 +121,7 @@ describe('applyFalloutEffects', () => {
   it('applies reputation effect to profile', () => {
     const profile = makeMinimalProfile({ reputation: [{ factionId: 'guild', value: 50 }] });
     const fallout = {
-      resolution: { pressureId: 'p1', pressureKind: 'test', resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const },
+      resolution: { pressureId: 'p1', pressureKind: 'test' as any, resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const, resolvedAtTick: 1 },
       summary: 'Test fallout',
       effects: [{ type: 'reputation' as const, factionId: 'guild', delta: 10 }],
     };
@@ -136,7 +136,7 @@ describe('applyFalloutEffects', () => {
   it('spawns a chained pressure when under max', () => {
     const profile = makeMinimalProfile();
     const fallout = {
-      resolution: { pressureId: 'p1', pressureKind: 'test', resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const },
+      resolution: { pressureId: 'p1', pressureKind: 'test' as any, resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const, resolvedAtTick: 1 },
       summary: 'Chain test',
       effects: [{
         type: 'spawn-pressure' as const,
@@ -158,7 +158,7 @@ describe('applyFalloutEffects', () => {
     const profile = makeMinimalProfile();
     const existing = Array.from({ length: 3 }, (_, i) => ({ id: `p${i}` })) as any[];
     const fallout = {
-      resolution: { pressureId: 'p-src', pressureKind: 'test', resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const },
+      resolution: { pressureId: 'p-src', pressureKind: 'test' as any, resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const, resolvedAtTick: 1 },
       summary: 'Capped',
       effects: [{
         type: 'spawn-pressure' as const,
@@ -178,7 +178,7 @@ describe('applyFalloutEffects', () => {
 
   it('returns null profile when input profile is null', () => {
     const fallout = {
-      resolution: { pressureId: 'p1', pressureKind: 'test', resolutionType: 'failed' as const, resolvedBy: 'world', resolutionVisibility: 'known' as const },
+      resolution: { pressureId: 'p1', pressureKind: 'test' as any, resolutionType: 'failed' as const, resolvedBy: 'world', resolutionVisibility: 'known' as const, resolvedAtTick: 1 },
       summary: 'Null profile',
       effects: [{ type: 'reputation' as const, factionId: 'guild', delta: 5 }],
     };

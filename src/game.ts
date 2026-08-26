@@ -481,6 +481,11 @@ export class GameSession {
       playerInput: '',
       verb: 'look',
       narration: result.narration,
+      // F-8da2e6f7: sibling call site to turn-loop.ts's history.record()
+      // calls — carry the same isFallback flag so a non-fatal LLM failure on
+      // the opening narration doesn't get quoted back as real narrative
+      // either (getRecentNarration() / recap.ts).
+      isFallback: result.isFallback,
     });
     return renderOpeningOutput(
       result.narration,

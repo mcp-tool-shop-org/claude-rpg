@@ -10,7 +10,11 @@ import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, type NarrationResult } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
-import { TurnHistory } from './session/history.js';
+// F-8da2e6f7: history.js imports FATAL_NARRATION_FALLBACK back from this
+// file (see below); TurnHistory is used only as a type here (ExecuteTurnOpts
+// below), so making that explicit keeps the two modules' mutual reference
+// from becoming a real runtime import cycle.
+import type { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 
@@ -41,7 +45,12 @@ export type TurnResult = {
 // for the real narration that couldn't be generated — it is honest about
 // the gap rather than in-fiction flavor text, since it also becomes part of
 // the persisted turn history other narration prompts read as context.
-const FATAL_NARRATION_FALLBACK = '(The narrator could not describe what happened — your action was still resolved.)';
+// F-8da2e6f7: exported (a distinct sentinel from narrator.ts's
+// FALLBACK_NARRATION) so every consumer that filters recorded narration by
+// sentinel value — session/history.ts's getRecentNarration(), recap.ts's
+// renderRecap — can recognize this one too, instead of only knowing about
+// narrator.ts's.
+export const FATAL_NARRATION_FALLBACK = '(The narrator could not describe what happened — your action was still resolved.)';
 
 /**
  * F-c4332895: turn-bookkeeping data attached to an error rethrown by
@@ -211,6 +220,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       playerInput,
       verb: interpreted.verb,
       narration: FATAL_NARRATION_FALLBACK,
+      isFallback: true,
     });
     if (err instanceof Error) {
       (err as ErrorWithFatalTurnBookkeeping)[FATAL_TURN_BOOKKEEPING] = {
@@ -277,6 +287,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     dialogue: dialogue
       ? { speaker: dialogue.speakerName, text: dialogue.text }
       : undefined,
+    isFallback: narrationResult.isFallback,
   });
 
   return {

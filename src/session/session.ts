@@ -399,11 +399,30 @@ export function loadConsequenceChainsFromSession(
   }
 }
 
+/**
+ * F-1357a6e0: shape guard for PartyState. JSON.parse can succeed
+ * *syntactically* on a value that is the wrong shape entirely (e.g. the bare
+ * number 42) — that only throws if the string isn't valid JSON at all, so a
+ * bare `JSON.parse(x) as PartyState` cast trusts it unexamined. Mirrors the
+ * isValidPlayerRumor/isValidWorldPressure shape-guard pattern in migrate.ts
+ * for this exact class of problem.
+ */
+function isValidPartyState(value: unknown): value is PartyState {
+  if (value == null || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  return (
+    Array.isArray(p.companions) &&
+    typeof p.maxSize === 'number' &&
+    typeof p.cohesion === 'number'
+  );
+}
+
 /** Load party state from a saved session. */
 export function loadPartyFromSession(session: SavedSession): PartyState {
   if (!session.partyState) return createPartyState();
   try {
-    return JSON.parse(session.partyState) as PartyState;
+    const parsed: unknown = JSON.parse(session.partyState);
+    return isValidPartyState(parsed) ? parsed : createPartyState();
   } catch {
     return createPartyState();
   }

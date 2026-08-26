@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { renderConcludeHelp, renderArcHelp, renderPlayHelp, getPackOnboarding, renderFirstTurnOrientation, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK } from './help-system.js';
+import { renderConcludeHelp, renderArcHelp, renderPlayHelp, getPackOnboarding, getOnboardingByGenre, getOnboardingForSession, renderFirstTurnOrientation, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK, wrapWords, renderNameDescriptionRow } from './help-system.js';
 import { RESOLUTION_CLASS_LABELS } from './archive-browser.js';
+import { PLAY_COMMANDS } from '../cli/slash-completer.js';
 import { allPacks } from '../character/packs.js';
 
 /**
@@ -157,5 +158,143 @@ describe('help-system divider width (F-38eb3dec)', () => {
     const output = renderFirstTurnOrientation(onboarding!);
     expect(output).toContain('·'.repeat(40));
     expect(output).not.toContain('·'.repeat(60));
+  });
+});
+
+/**
+ * F-1036ff43: renderPlayHelp()'s COMMANDS section hand-listed only 5 of 12+
+ * real play-mode slash commands, omitting /map, /leverage, /jobs, /export,
+ * /archive, /character (plus /recruit/​/dismiss, filed separately as
+ * F-ffc12b36). Fixed by deriving the COMMANDS list from PLAY_COMMANDS
+ * (slash-completer.ts) — the same table SLASH_COMMANDS itself derives from
+ * — so the two surfaces can't drift again. '/help' itself is documented
+ * separately via its four hand-typed subcommand rows just above.
+ */
+describe('renderPlayHelp COMMANDS section (F-1036ff43)', () => {
+  it('documents every PLAY_COMMANDS entry', () => {
+    const help = renderPlayHelp();
+    for (const { cmd } of PLAY_COMMANDS) {
+      expect(help, `expected renderPlayHelp() to mention ${cmd}`).toContain(cmd);
+    }
+  });
+
+  it('still documents the four /help subcommand forms', () => {
+    const help = renderPlayHelp();
+    expect(help).toContain('/help leverage');
+    expect(help).toContain('/help arcs');
+    expect(help).toContain('/help conclude');
+    expect(help).toContain('/help <pack-id>');
+  });
+});
+
+/**
+ * F-d66603e9: renderArcHelp()/renderConcludeHelp() built their two-column
+ * tables with a fixed name.padEnd(N) plus an unbounded description on the
+ * same line. The surrounding dividers already adapt to getTerminalWidth()
+ * (clamped 40-120, F-38eb3dec), but the rows between them didn't — at a
+ * narrow terminal, a long description wrapped wherever the terminal broke
+ * it, flush against the left margin, indistinguishable from the next
+ * entry's name.
+ */
+describe('wrapWords / renderNameDescriptionRow (F-d66603e9)', () => {
+  it('wrapWords keeps text that already fits on one line', () => {
+    expect(wrapWords('short text', 40)).toEqual(['short text']);
+  });
+
+  it('wrapWords breaks a long sentence into width-bounded lines without splitting words or losing text', () => {
+    const sentence = 'Mounting obligations and converging pressures forcing a confrontation';
+    const lines = wrapWords(sentence, 16);
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(16);
+    }
+    expect(lines.join(' ')).toBe(sentence);
+  });
+
+  it('renderNameDescriptionRow hanging-indents a wrapped continuation under the name column instead of flush left', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const row = renderNameDescriptionRow(
+      'reckoning',
+      'Mounting obligations and converging pressures forcing a confrontation',
+      20,
+    );
+    const lines = row.split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines[0].startsWith('    reckoning')).toBe(true);
+    for (let i = 1; i < lines.length; i++) {
+      // 4-space indent + 20-wide name column = 24 spaces of hanging indent.
+      expect(lines[i].startsWith(' '.repeat(24))).toBe(true);
+      expect(lines[i].trim().length).toBeGreaterThan(0);
+    }
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+});
+
+describe('renderArcHelp / renderConcludeHelp description wrapping (F-d66603e9)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('renderArcHelp wraps the reckoning row with a hanging indent at a narrow terminal instead of running past the edge', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const lines = renderArcHelp().split('\n');
+    const startIdx = lines.findIndex((l) => l.includes('reckoning'));
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(lines[startIdx].length).toBeLessThanOrEqual(40);
+    expect(lines[startIdx + 1].startsWith(' '.repeat(24))).toBe(true);
+    expect(lines[startIdx + 1].length).toBeLessThanOrEqual(40);
+  });
+
+  it('renderConcludeHelp wraps a long resolution-class row instead of running past the edge at a narrow terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const lines = renderConcludeHelp().split('\n');
+    const startIdx = lines.findIndex((l) => l.includes('tragic-stabilization'));
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(lines[startIdx].length).toBeLessThanOrEqual(40);
+  });
+
+  it('renderArcHelp still fits a short-enough description on one line at a wide terminal (no unnecessary wrapping)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const text = renderArcHelp();
+    expect(text).toContain(
+      'reckoning'.padEnd(20) + 'Mounting obligations and converging pressures forcing a confrontation',
+    );
+  });
+});
+
+/**
+ * F-ed5f7d25: getOnboardingByGenre() looked up GENRE_TO_PACK by
+ * pack.meta.genres[0], a lossy independent taxonomy — only 3 of 10
+ * registered packs had a genres[0] matching their GENRE_TO_PACK key, and two
+ * pairs collide on the same genres[0] string, so genre alone can never
+ * disambiguate every pack. getOnboardingForSession fixes this by preferring
+ * the real pack id (PACK_ONBOARDING is keyed directly by packId, so this
+ * path is correct for all 10 packs by construction) and only falling back to
+ * the lossy genre lookup when no packId is available (e.g. a custom
+ * `claude-rpg new "<prompt>"` world).
+ *
+ * NOTE: the only production call site (src/game/game-presenter.ts's
+ * renderOpeningOutput) is outside cli-display's owned globs and still calls
+ * getOnboardingByGenre(genre) directly — wiring the real call site to this
+ * function is a cross-domain remainder for game-core (see wave-14 output).
+ */
+describe('getOnboardingForSession (F-ed5f7d25)', () => {
+  it('resolves an onboarding card by real pack id for every registered pack, even where genres[0] collides or mismatches GENRE_TO_PACK', () => {
+    for (const pack of allPacks) {
+      const onboarding = getOnboardingForSession(pack.meta.id, pack.meta.genres[0] ?? 'fantasy');
+      expect(onboarding, `expected an onboarding card for pack "${pack.meta.id}"`).toBeDefined();
+    }
+  });
+
+  it('falls back to the genre-based lookup when no packId is available (e.g. a custom-generated world)', () => {
+    expect(getOnboardingForSession(undefined, 'fantasy')).toBe(getOnboardingByGenre('fantasy'));
+    expect(getOnboardingForSession('not-a-real-pack-id', 'cyberpunk')).toBe(getOnboardingByGenre('cyberpunk'));
+  });
+
+  it('prefers packId over genre even when genre would resolve to a different pack', () => {
+    // gaslight-detective's genres[0] is 'mystery' (not in GENRE_TO_PACK at
+    // all), so the pre-fix lookup produced undefined for this pack.
+    const onboarding = getOnboardingForSession('gaslight-detective', 'mystery');
+    expect(onboarding).toBe(getPackOnboarding('gaslight-detective'));
   });
 });

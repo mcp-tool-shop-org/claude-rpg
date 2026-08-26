@@ -3,6 +3,7 @@
 
 import type { ResolutionClass, ArcKind, ArcMomentum } from '@ai-rpg-engine/modules';
 import { getTerminalWidth } from './play-renderer.js';
+import { PLAY_COMMANDS } from '../cli/slash-completer.js';
 
 // F-38eb3dec: both were a fixed 60-char divider regardless of terminal
 // size, unlike play-renderer.ts's own dividers (PFE-005). Computed per
@@ -15,6 +16,54 @@ function divider(): string {
 function thinDivider(): string {
   return '\u00b7'.repeat(getTerminalWidth());
 }
+
+/**
+ * Word-wrap `text` to `width` columns, never splitting a word. Always
+ * returns at least one line, even when a single word exceeds `width` (left
+ * unsplit rather than corrupted mid-word).
+ */
+function wrapWords(text: string, width: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && candidate.length > width) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current || lines.length === 0) lines.push(current);
+  return lines;
+}
+
+/**
+ * F-d66603e9: renderArcHelp() and renderConcludeHelp() built their
+ * two-column reference tables with a fixed name.padEnd(N) plus an unbounded
+ * description on the same line. The surrounding dividers already adapt to
+ * getTerminalWidth() (clamped 40-120, F-38eb3dec), but the table rows
+ * between them didn't -- at a narrow terminal, a long description wrapped
+ * wherever the terminal happened to break it, with no hanging indent, flush
+ * against the left margin and visually indistinguishable from the next
+ * entry's name. Shared helper: renders one "name, padded, then
+ * word-wrapped description" row with a hanging indent under the name
+ * column on every continuation line.
+ */
+function renderNameDescriptionRow(name: string, desc: string, nameWidth: number): string {
+  const indent = '    ';
+  const available = Math.max(10, getTerminalWidth() - indent.length - nameWidth);
+  const wrapped = wrapWords(desc, available);
+  const rows = [`${indent}${name.padEnd(nameWidth)}${wrapped[0]}`];
+  for (let i = 1; i < wrapped.length; i++) {
+    rows.push(`${indent}${' '.repeat(nameWidth)}${wrapped[i]}`);
+  }
+  return rows.join('\n');
+}
+
+// Exported for testing (matches play-renderer.ts's getTerminalWidth precedent).
+export { wrapWords, renderNameDescriptionRow };
 
 // --- Pack Onboarding Data ---
 
@@ -209,6 +258,43 @@ export function getOnboardingByGenre(genre: string): PackOnboarding | undefined 
   return packId ? PACK_ONBOARDING[packId] : undefined;
 }
 
+/**
+ * F-ed5f7d25: getOnboardingByGenre() looks up GENRE_TO_PACK by the runtime
+ * `genre` value (pack.meta.genres[0]) -- but GENRE_TO_PACK's keys are the 10
+ * pack-family names, a different, independent taxonomy than
+ * PackMetadata.genres. Live-verified: only 3 of 10 registered packs have a
+ * genres[0] matching their GENRE_TO_PACK key; the other 7 silently render no
+ * onboarding card, and two pairs (iron-colosseum/jade-veil, both
+ * 'historical'; ashfall-dead/crimson-court, both 'horror') even collide on
+ * the same genres[0] string, so genre alone can never disambiguate every
+ * pack -- a fix that only patched GENRE_TO_PACK's keys would still drop one
+ * pack per collision.
+ *
+ * This is the correct replacement lookup: prefer the real pack id (
+ * PACK_ONBOARDING is keyed directly by packId, so this path resolves all 10
+ * packs by construction -- no taxonomy mismatch possible) and fall back to
+ * the lossy genre lookup only when no packId is available at all (e.g. a
+ * custom `claude-rpg new "<prompt>"` world, which has no registered pack).
+ *
+ * CROSS-DOMAIN REMAINDER: the only production call site
+ * (src/game/game-presenter.ts's renderOpeningOutput, game-core's owned
+ * glob) still calls getOnboardingByGenre(genre) directly and has no packId
+ * parameter to receive -- GameConfig (src/game.ts, also game-core) has no
+ * packId field yet either. Wiring the real call site to this function
+ * requires a game-core change outside cli-display's edit scope this wave
+ * (see wave-14 output notes). bin.ts already has the real packId at both of
+ * its call sites (result.pack.meta.id for new games, savedSession.packId
+ * for loaded games), ready to thread through the moment GameConfig accepts
+ * it.
+ */
+export function getOnboardingForSession(packId: string | undefined, genre: string): PackOnboarding | undefined {
+  if (packId) {
+    const byId = getPackOnboarding(packId);
+    if (byId) return byId;
+  }
+  return getOnboardingByGenre(genre);
+}
+
 /** Render compact first-turn orientation from pack onboarding data. */
 export function renderFirstTurnOrientation(data: PackOnboarding): string {
   const lines: string[] = [];
@@ -231,6 +317,16 @@ export function renderFirstTurnOrientation(data: PackOnboarding): string {
 // --- Play Mode Help ---
 
 export function renderPlayHelp(): string {
+  // F-1036ff43: derived from PLAY_COMMANDS (slash-completer.ts) instead of
+  // hand-listed, so this screen can't drift back down to a fraction of the
+  // real command set the way it did before (5 of 12+ commands documented).
+  // '/help' is excluded here -- it's documented just above via its four
+  // subcommand rows instead of a single generic line.
+  const commandRows = PLAY_COMMANDS
+    .filter((c) => c.cmd !== '/help')
+    .map((c) => `    ${c.cmd.padEnd(30)}${c.description}`)
+    .join('\n');
+
   return `
 ${divider()}
   QUICK REFERENCE
@@ -259,11 +355,7 @@ ${divider()}
     /help arcs                    Campaign arc kinds and momentum
     /help conclude                Endgame triggers and epilogue
     /help <pack-id>               Pack-specific quickstart guide
-    /status                       Strategic snapshot
-    /arcs                         View arc trajectory
-    /conclude                     Render campaign epilogue
-    /sheet                        Character sheet
-    /director                     Enter director mode
+${commandRows}
 
 ${divider()}
 `;
@@ -413,7 +505,7 @@ function joinWithOr(items: string[]): string {
 
 export function renderArcHelp(): string {
   const kindLines = Object.entries(ARC_KIND_HELP)
-    .map(([kind, desc]) => `    ${kind.padEnd(20)}${desc}`)
+    .map(([kind, desc]) => renderNameDescriptionRow(kind, desc, 20))
     .join('\n');
   const momentumList = joinWithOr(Object.keys(ARC_MOMENTUM_HELP));
 
@@ -460,7 +552,7 @@ const RESOLUTION_CLASS_HELP: Record<ResolutionClass, string> = {
 
 export function renderConcludeHelp(): string {
   const classLines = Object.entries(RESOLUTION_CLASS_HELP)
-    .map(([cls, desc]) => `    ${cls.padEnd(23)}${desc}`)
+    .map(([cls, desc]) => renderNameDescriptionRow(cls, desc, 23))
     .join('\n');
 
   return `

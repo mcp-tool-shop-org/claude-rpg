@@ -15,7 +15,7 @@ const { version: pkgVersion } = require('../package.json') as { version: string 
 import { GameSession, type GameConfig } from './game.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
-import { generateWorld } from './foundry/world-gen.js';
+import { generateWorld, type WorldGenResult } from './foundry/world-gen.js';
 import {
   saveSession,
   type SaveSessionInput,
@@ -47,7 +47,7 @@ import { createSpinner } from './cli/spinner.js';
 import { createStreamPresenter } from './cli/stream-presenter.js';
 import { renderPresentationCues } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
-import { parseSaveSelection } from './cli/save-selection.js';
+import { parseSaveSelection, formatSaveSelectionPrompt, formatInvalidSelectionMessage } from './cli/save-selection.js';
 import { formatSaveDetails } from './cli/save-listing.js';
 import { isPathInside } from './cli/path-guard.js';
 import { attemptExitAutosave } from './cli/exit-autosave.js';
@@ -125,8 +125,8 @@ const USAGE = `
 claude-rpg — simulation-grounded narrative RPG
 
 Usage:
-  claude-rpg play [--world fantasy|cyberpunk]   Play a starter world
-                  [--fast]                      Accelerated campaign pacing
+  claude-rpg play [--fast]                      Play a starter world (choose
+                                                 from 10 worlds interactively)
                   [--debug]                     Show structured error details
   claude-rpg load                               Load a saved game
   claude-rpg new "<prompt>"                     Generate a world from a prompt
@@ -143,9 +143,12 @@ Commands in-game:
   /jobs          View available opportunities
   /arcs          View campaign arc trajectory
   /conclude      Trigger campaign finale
+  /recruit       Recruit an NPC into your party (ids via /status or /map)
+  /dismiss       Remove a companion from your party
   /archive       Browse completed campaigns
   /export        Export chronicle (md/json/finale)
   /director      Inspect hidden truth
+  /cost          View this session's estimated API cost
   /help          In-game help system
   quit           Exit the game
 
@@ -180,9 +183,16 @@ async function main(): Promise<void> {
   }
 
   // Check for API key
+  // F-34e44560: the old two-line message ('Set it with: export
+  // ANTHROPIC_API_KEY=...') gave a shell-specific, non-persistent command
+  // with no link to get a key and no one-time-vs-per-play distinction -- a
+  // player following it literally hits the same error again in a fresh
+  // terminal window.
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable is required.');
-    console.error('Set it with: export ANTHROPIC_API_KEY=your-key-here');
+    console.error('Error: ANTHROPIC_API_KEY environment variable is required to narrate gameplay.');
+    console.error('Get your API key at https://console.anthropic.com, then add it permanently to');
+    console.error('your shell config: echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc');
+    console.error('(or ~/.zshrc on macOS). Restart your terminal, then run claude-rpg again.');
     process.exit(1);
   }
 
@@ -266,7 +276,11 @@ async function runPlay(args: string[]): Promise<void> {
 async function runLoad(): Promise<void> {
   const saves = await listSaves();
   if (saves.length === 0) {
-    console.log('\n  No saved games found.\n');
+    // F-46026cfc: matches archive-browser.ts's renderArchiveBrowser() empty
+    // state, which orients the player with a concrete next step instead of
+    // just naming what's missing.
+    console.log('\n  No saved games found.');
+    console.log('  Run `claude-rpg play` to start a new game, or `claude-rpg new "<prompt>"` to generate one.\n');
     process.exit(0);
   }
 
@@ -293,20 +307,29 @@ async function runLoad(): Promise<void> {
   }
   console.log('');
 
-  const answer = await new Promise<string>((resolve) => {
-    rl.question('  Choose a save (or "cancel"): ', resolve);
-  });
+  // F-d01d16f6: a typo'd/out-of-range number, an empty Enter-press, or stray
+  // text used to hard-exit the whole process (process.exit(1)) instead of
+  // re-prompting -- the one interactive moment in the CLI that terminated
+  // the session on ordinary human fumbling. Now re-asks with a live range
+  // hint, matching every other invalid-input moment in the CLI (an
+  // unrecognized in-game verb, an unknown /help topic) that responds and
+  // keeps the session alive.
+  let idx: number | null = null;
+  while (idx === null) {
+    const answer = await new Promise<string>((resolve) => {
+      rl.question(formatSaveSelectionPrompt(saves.length), resolve);
+    });
 
-  if (answer.toLowerCase() === 'cancel') {
-    rl.close();
-    process.exit(0);
-  }
+    if (answer.toLowerCase() === 'cancel') {
+      console.log('  Cancelled.');
+      rl.close();
+      process.exit(0);
+    }
 
-  const idx = parseSaveSelection(answer, saves.length);
-  if (idx === null) {
-    console.error('  Invalid selection.');
-    rl.close();
-    process.exit(1);
+    idx = parseSaveSelection(answer, saves.length);
+    if (idx === null) {
+      console.log(formatInvalidSelectionMessage(saves.length));
+    }
   }
 
   const savePath = join(getDefaultSaveDir(), saves[idx].filename);
@@ -444,7 +467,21 @@ async function runNew(worldPrompt: string): Promise<void> {
   console.log('\n  Generating world...\n');
 
   const client = createAdaptedClient();
-  const result = await generateWorld(client, worldPrompt);
+  // F-b1c363e3: generateWorld's single generateStructured call carries the
+  // largest LLM token budget anywhere in this app (title, theme, tone
+  // guide, ruleset, zones, factions, npcs, player, and quests all at once)
+  // -- yet it was the one major LLM call with no spinner, unlike the
+  // per-turn narration call in runGameLoop. A brand-new player's very first
+  // command sat at a motionless terminal with no indication the process
+  // hadn't hung.
+  const spinner = createSpinner('thinking');
+  spinner.start();
+  let result: WorldGenResult;
+  try {
+    result = await generateWorld(client, worldPrompt);
+  } finally {
+    spinner.stop();
+  }
 
   if (!result.ok || !result.engine) {
     console.error('Failed to generate world:');
@@ -639,7 +676,13 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       saveSession(buildSaveInput(session, p, packId)),
     );
     if (outcome.status === 'failed') {
-      console.log('  Auto-save failed. Your in-game progress was not saved.');
+      // F-b832167c: routes through the same presentError()/
+      // classifyForPresentation() pipeline every other error path in this
+      // file uses, instead of a flat, detail-free string -- under --debug
+      // this now surfaces the real error type/message/cause for the exact
+      // moment (Ctrl+C mid-session) a player most needs to trust the save
+      // worked or understand why not.
+      presentError(outcome.error, 'save', debugMode);
     } else {
       console.log(outcome.message);
     }
@@ -665,7 +708,12 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
           saveSession(buildSaveInput(session, p, packId)),
         );
         if (outcome.status === 'failed') {
-          console.log('  Auto-save failed.');
+          // F-b832167c: same pipeline as the SIGINT handler's autosave
+          // failure above -- previously worded differently ("Auto-save
+          // failed." vs "Auto-save failed. Your in-game progress was not
+          // saved.") for the identical status, and neither ever showed
+          // real error detail even under --debug.
+          presentError(outcome.error, 'save', debugMode);
         } else {
           console.log(outcome.message);
         }
@@ -715,6 +763,21 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       } else {
         console.log('\n  No character profile available.\n');
       }
+      continue;
+    }
+
+    // Cost summary command — COST COMMAND cross-domain contract (wave-14,
+    // F-b4b16d0a): game-core wires a SessionTokenTracker into GameSession
+    // and exposes it as GameSession.getCostSummary(): string, built on
+    // token-tracker.ts's existing formatCostSummary(). cli-display's half
+    // is this dispatch branch plus the completer/help entries (see
+    // slash-completer.ts's PLAY_COMMANDS and bin.ts's USAGE text above).
+    // GameConfig's public type may not declare the method yet in this
+    // worktree if game-core's half hasn't landed in the same tree -- this
+    // local cast documents the contract instead of widening `session` to
+    // `any`; drop it once GameSession's real type covers it natively.
+    if (trimmed === '/cost') {
+      console.log(`\n${(session as GameSession & { getCostSummary(): string }).getCostSummary()}\n`);
       continue;
     }
 

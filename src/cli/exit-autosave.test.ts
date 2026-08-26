@@ -47,12 +47,24 @@ describe('attemptExitAutosave (F-66ec19e3)', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it('reports failed (and does not throw) when save rejects', async () => {
-    const save = vi.fn().mockRejectedValue(new Error('disk full'));
+  it('reports failed with the underlying error (and does not throw) when save rejects (F-b832167c)', async () => {
+    // F-b832167c: the catch block used to discard the thrown error entirely
+    // (`catch { return { status: 'failed' }; }`, not even bound to a
+    // variable) so neither bin.ts caller could report why an exit-time
+    // autosave failed -- a disk-full/permission-denied failure produced
+    // zero diagnosable detail, even under --debug. The error must now
+    // survive on the outcome so callers can route it through the same
+    // presentError()/classifyForPresentation() pipeline every other error
+    // path in bin.ts already uses.
+    const thrown = new Error('disk full');
+    const save = vi.fn().mockRejectedValue(thrown);
     const savePath = resolve('/base/saves/hero-autosave-2.json');
 
     const outcome = await attemptExitAutosave(savePath, saveDir, save);
 
-    expect(outcome).toEqual({ status: 'failed' });
+    expect(outcome.status).toBe('failed');
+    if (outcome.status === 'failed') {
+      expect(outcome.error).toBe(thrown);
+    }
   });
 });

@@ -13,6 +13,7 @@
 // v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
 import type { Engine } from '@ai-rpg-engine/core';
+import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog, ItemDefinition } from '@ai-rpg-engine/equipment';
 import { EQUIPMENT_SLOTS, recordItemEvent } from '@ai-rpg-engine/equipment';
@@ -226,6 +227,7 @@ import { renderArchiveBrowser } from './display/archive-browser.js';
 import { listArchivedCampaigns, saveSession, type SaveSessionInput, getSavePath as getDefaultSavePath } from './session/session.js';
 import { exportChronicleMarkdown, exportChronicleJSON, exportFinaleMarkdown, writeExport } from './session/chronicle-export.js';
 import { createDebugLogger, type DebugLogger } from './game/debug-logger.js';
+import { SessionTokenTracker, withTokenTracking } from './game/token-tracker.js';
 
 export type GameMode = 'play' | 'director';
 
@@ -325,6 +327,21 @@ export type GameConfig = {
    * turning chunks into incremental terminal output.
    */
   onNarrationChunk?: StreamCallback;
+  /**
+   * F-8c3e32b7: presentation state (combat/dialogue/aftermath/menu/
+   * exploration) to seed the freshly-constructed ImmersionRuntime with,
+   * read from a save via session.ts's loadPresentationStateFromSession().
+   * Applied via stateMachine.transition() AFTER ImmersionRuntime.initialize()
+   * runs (see the constructor) — so a reload resumes the same presentation
+   * context it was saved in instead of always starting at 'exploration',
+   * and (deliberately) takes priority over initialize()'s own narrower
+   * combat-core-derived 'combat' restore (F-f13b58f3) when both apply: this
+   * field is the more complete, explicit record of what was actually saved,
+   * where that heuristic only ever reconstructs 'combat' from a different
+   * data source (the engine's own serialized module state). Omitted (or the
+   * save predates this field) leaves the existing behavior unchanged.
+   */
+  restoredPresentationState?: PresentationState;
 };
 
 export class GameSession {
@@ -388,6 +405,14 @@ export class GameSession {
    */
   private subsystemFailureCount = 0;
   private readonly subsystemFailures: { tick: number; error: string }[] = [];
+  /**
+   * F-b4b16d0a: COST COMMAND — per-call-type token/cost tracker for this
+   * session. Fed by executeTurn()'s per-call-type client wrapping
+   * (turn-loop.ts) for narration/dialogue, and by getOpeningNarration()/
+   * handleConclude() below for the opening scene and finale epilogue.
+   * Surfaced via getCostSummary().
+   */
+  private readonly tokenTracker = new SessionTokenTracker();
   /** Structured announcements from subsystem processing (level-ups, title changes, etc.). */
   pendingAnnouncements: string[] = [];
   /** Structured debug logger — gated behind --debug flag. */
@@ -406,6 +431,14 @@ export class GameSession {
     this.worldPrompt = config.worldPrompt;
     this.immersion = new ImmersionRuntime(config.immersion);
     this.immersion.initialize(this.engine);
+    // F-8c3e32b7: apply AFTER initialize() so an explicit restored value
+    // (the more complete record of what was actually saved) takes priority
+    // over initialize()'s own narrower combat-core-derived 'combat' restore
+    // when both apply — see GameConfig.restoredPresentationState's doc
+    // comment.
+    if (config.restoredPresentationState) {
+      this.immersion.stateMachine.transition(config.restoredPresentationState, 'session-restore');
+    }
     this.profile = config.profile ?? null;
     this.itemCatalog = config.itemCatalog ?? null;
     this.journal = config.journal ?? new CampaignJournal();
@@ -464,6 +497,38 @@ export class GameSession {
    */
   getRecentSubsystemFailures(): readonly { tick: number; error: string }[] {
     return this.subsystemFailures;
+  }
+
+  /**
+   * F-9319b8d8: player-visible summary of post-turn subsystem-tick failures
+   * this session, for /status. Previously getSubsystemFailureCount()/
+   * getRecentSubsystemFailures() were tracked but never surfaced anywhere a
+   * player could query them — only a single transient, non-cumulative line
+   * the first time a failure happened that turn ('[A subsystem hiccupped —
+   * your turn was processed safely]'), with no way to later ask "did that
+   * happen more than once?" Returns undefined when there have been no
+   * failures this session, so /status's output is unchanged for the
+   * overwhelming common case. renderCompactStatus (display/status-compact.ts,
+   * cli-display domain) has no field for this, so the line is appended
+   * after its rendered box rather than requiring a cross-domain opts change.
+   */
+  private buildSubsystemHealthIndicator(): string | undefined {
+    if (this.subsystemFailureCount === 0) return undefined;
+    const mostRecent = this.subsystemFailures[this.subsystemFailures.length - 1];
+    const plural = this.subsystemFailureCount === 1 ? 'hiccup' : 'hiccups';
+    return `${this.subsystemFailureCount} subsystem ${plural} this session, most recent: tick ${mostRecent?.tick ?? '?'}`;
+  }
+
+  /**
+   * F-b4b16d0a: COST COMMAND cross-domain contract (game-core half) —
+   * cli-display's /cost dispatch branch (bin.ts) calls this and prints the
+   * result. Built on token-tracker.ts's existing formatCostSummary().
+   * Narration and dialogue calls are fully counted; interpretation-call cost
+   * is not yet counted — see token-tracker.ts's withTokenTracking() doc
+   * comment for why (StructuredResult carries no token counts to record).
+   */
+  getCostSummary(): string {
+    return this.tokenTracker.formatCostSummary();
   }
 
   /** Apply profile update hints from a turn result. */
@@ -628,7 +693,9 @@ export class GameSession {
   async getOpeningNarration(): Promise<string> {
     const presence = this.getPresence();
     const result = await generateOpeningNarration({
-      client: this.client,
+      // F-b4b16d0a: counted as 'narration' toward getCostSummary(), same as
+      // every other narrateScene-family call this session makes.
+      client: withTokenTracking(this.client, this.tokenTracker, 'narration'),
       world: this.engine.world,
       tone: this.tone,
       immersionState: this.immersion.stateMachine.current,
@@ -770,7 +837,7 @@ export class GameSession {
         const endgameInd = unacknowledged.length > 0
           ? unacknowledged.map((t) => `${t.resolutionClass} (turn ${t.detectedAtTick})`).join(', ')
           : undefined;
-        return renderCompactStatus({
+        const statusOutput = renderCompactStatus({
           statusData: this.getStatusData()!,
           leverageState,
           topThreat,
@@ -781,6 +848,12 @@ export class GameSession {
           endgameIndicator: endgameInd,
           fastMode: this.fastMode,
         });
+        // F-9319b8d8: appended after the rendered box (see
+        // buildSubsystemHealthIndicator()'s doc comment for why it isn't a
+        // renderCompactStatus opts field instead); omitted entirely when
+        // there have been no subsystem failures this session.
+        const subsystemInd = this.buildSubsystemHealthIndicator();
+        return subsystemInd ? `${statusOutput}  Subsystems: ${subsystemInd}\n` : statusOutput;
       }
       if (playCmd === '/map') {
         if (!this.profile) return '  No profile loaded.';
@@ -851,6 +924,7 @@ export class GameSession {
         arcContext: this.getArcContext(),
         endgameContext: this.getEndgameContext(),
         chronicleContext: this.getChronicleContext(),
+        tokenTracker: this.tokenTracker,
         // Streaming seam contract (game-core half): only pass a defined
         // callback when a real sink is registered — narrateScene's
         // `onChunk && client.generateStream` gate (narrator.ts) must see
@@ -1148,6 +1222,9 @@ export class GameSession {
         endgameTriggers: this.endgameTriggers,
         finaleOutline: this.finaleOutline,
         campaignStatus: this.campaignStatus,
+        // F-8c3e32b7: see SavedSession.presentationState — restored via
+        // GameConfig.restoredPresentationState on the session's next load.
+        presentationState: this.immersion.stateMachine.current,
       };
       await saveSession(input);
       this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
@@ -1784,7 +1861,8 @@ export class GameSession {
 
     // Generate LLM epilogue
     const result = await generateFinaleNarration({
-      client: this.client,
+      // F-b4b16d0a: counted as 'narration' toward getCostSummary().
+      client: withTokenTracking(this.client, this.tokenTracker, 'narration'),
       outline,
       genre: this.genre,
       characterName: this.profile?.build.name,

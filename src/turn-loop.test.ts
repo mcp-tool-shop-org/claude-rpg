@@ -305,4 +305,178 @@ describe('executeTurn (opts object)', () => {
       expect(bookkeeping!.tick).toBe(engine.tick);
     });
   });
+
+  describe('low-confidence clarification path (F-d026f78d / F-e8262ed1 / F-fb9e78af)', () => {
+    /** Client whose slow-path interpretation always throws a (retryable-kind) NarrationError. */
+    function createInterpretFailureClient(): ClaudeClient {
+      return {
+        model: 'mock',
+        async generate() {
+          return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+        },
+        async generateStructured() {
+          throw new NarrationError({ kind: 'timeout', message: 'took too long' });
+        },
+      };
+    }
+
+    it('resolves to the clarification fallback instead of throwing when interpretAction hits a transient API failure (F-d026f78d)', async () => {
+      const engine = createGame();
+      const client = createInterpretFailureClient();
+      const history = new TurnHistory();
+      const tickBefore = engine.tick;
+
+      // "xyzzy" matches no fast-path pattern, forcing interpretAction's slow
+      // (LLM) path, which this client fails every time.
+      const result = await executeTurn({ engine, client, history, playerInput: 'xyzzy', tone: 'dark fantasy' });
+
+      expect(result.interpreted.confidence).toBe('low');
+      expect(result.narration).toBeTruthy();
+      expect(result.events).toEqual([]);
+      // Consumes no turn: Step 2 (engine.submitAction) never ran.
+      expect(engine.tick).toBe(tickBefore);
+
+      // Session continues: a follow-up turn (fast-path, no LLM interpretation
+      // call) still works normally afterward.
+      const next = await executeTurn({ engine, client, history, playerInput: 'look', tone: 'dark fantasy' });
+      expect(next.narration).toBeTruthy();
+    });
+
+    it('surfaces a transient-retry framing rather than the generic "something else" text (F-e8262ed1)', async () => {
+      const engine = createGame();
+      const client = createInterpretFailureClient();
+      const history = new TurnHistory();
+
+      const result = await executeTurn({ engine, client, history, playerInput: 'xyzzy', tone: 'dark fantasy' });
+
+      expect(result.narration).not.toContain('something else');
+      expect(result.narration.toLowerCase()).toContain('try again');
+    });
+
+    it('still surfaces the PB-007 transient-retry message for a non-throwing ok:false response (unchanged mapping)', async () => {
+      // action-interpreter.ts's pre-existing isApiFailure = !result.ok maps
+      // every non-throwing `ok:false` (unparseable JSON, validator
+      // rejection) to the same "hazy...try again" reasoning as a thrown
+      // error — this test pins that this rewrite doesn't disturb it.
+      const engine = createGame();
+      const history = new TurnHistory();
+      const client: ClaudeClient = {
+        model: 'mock',
+        async generate() {
+          return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+        },
+        async generateStructured() {
+          return { ok: false, data: null, raw: '', error: 'no json found' };
+        },
+      };
+
+      const result = await executeTurn({ engine, client, history, playerInput: 'xyzzy', tone: 'dark fantasy' });
+      expect(result.narration.toLowerCase()).toContain('try again');
+    });
+
+    it('surfaces the "Could not interpret input" reasoning for an ok:true/data:null response', async () => {
+      // The only way action-interpreter.ts's isApiFailure branch resolves to
+      // "Could not interpret input" rather than the transient-retry message.
+      const engine = createGame();
+      const history = new TurnHistory();
+      const client: ClaudeClient = {
+        model: 'mock',
+        async generate() {
+          return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+        },
+        async generateStructured() {
+          return { ok: true, data: null, raw: '' };
+        },
+      };
+
+      const result = await executeTurn({ engine, client, history, playerInput: 'xyzzy', tone: 'dark fantasy' });
+      expect(result.narration).toContain('Could not interpret input');
+    });
+
+    it('builds the clarification from full alternatives — verb plus resolved target name (F-fb9e78af)', async () => {
+      const engine = createGame();
+      const history = new TurnHistory();
+      const client: ClaudeClient = {
+        model: 'mock',
+        async generate() {
+          return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+        },
+        async generateStructured<T>() {
+          const data = {
+            verb: 'attack', targetIds: null, toolId: null, parameters: null,
+            confidence: 'low', reasoning: 'ambiguous',
+            alternatives: [{ verb: 'attack', targetIds: ['pilgrim'] }, { verb: 'examine', targetIds: [] }],
+          };
+          // F-39b958e7 pattern: a concrete non-null `data` shape can't
+          // satisfy the generic ClaudeClient.generateStructured<T>() without
+          // this cast (see action-interpreter.test.ts's established fix for
+          // the same friction).
+          return { ok: true, data: data as unknown as T, raw: '' };
+        },
+      };
+
+      // "get it" matches no fast-path pattern.
+      const result = await executeTurn({ engine, client, history, playerInput: 'get it', tone: 'dark fantasy' });
+
+      // 'pilgrim' resolves to a real starter-fantasy entity ("Suspicious
+      // Pilgrim") — the alternative with a target id should name it, the one
+      // with an empty targetIds array should fall back to the bare verb.
+      expect(result.narration).toContain('attack Suspicious Pilgrim');
+      expect(result.narration).toContain('examine');
+    });
+
+    it('records the clarification turn to history, marked as fallback, excluded from getRecentNarration (F-fb9e78af)', async () => {
+      const engine = createGame();
+      const client = createInterpretFailureClient();
+      const history = new TurnHistory();
+
+      const result = await executeTurn({ engine, client, history, playerInput: 'xyzzy', tone: 'dark fantasy' });
+
+      const turns = history.getAll();
+      expect(turns).toHaveLength(1);
+      expect(turns[0].narration).toBe(result.narration);
+      expect(turns[0].isFallback).toBe(true);
+      expect(history.getRecentNarration(3)).not.toContain(result.narration);
+    });
+
+    it('threads the previous clarification into the next interpretAction call as recentContext (F-fb9e78af)', async () => {
+      const engine = createGame();
+      const history = new TurnHistory();
+      const prompts: string[] = [];
+      let call = 0;
+      const client: ClaudeClient = {
+        model: 'mock',
+        async generate() {
+          return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+        },
+        async generateStructured<T>(opts: { prompt: string }) {
+          call += 1;
+          prompts.push(opts.prompt);
+          // F-39b958e7 pattern: see the cast note in the previous test.
+          if (call === 1) {
+            const data = {
+              verb: 'attack', targetIds: null, toolId: null, parameters: null,
+              confidence: 'low', reasoning: 'ambiguous',
+              alternatives: [{ verb: 'attack', targetIds: ['pilgrim'] }, { verb: 'flee', targetIds: [] }],
+            };
+            return { ok: true, data: data as unknown as T, raw: '' };
+          }
+          const data = {
+            verb: 'attack', targetIds: ['pilgrim'], toolId: null, parameters: null,
+            confidence: 'high', reasoning: 'resolved from context', alternatives: null,
+          };
+          return { ok: true, data: data as unknown as T, raw: '' };
+        },
+      };
+
+      // "get it" and a bare "attack" (no trailing target) both miss every
+      // fast-path pattern, forcing the slow path both turns.
+      await executeTurn({ engine, client, history, playerInput: 'get it', tone: 'dark fantasy' });
+      await executeTurn({ engine, client, history, playerInput: 'attack', tone: 'dark fantasy' });
+
+      expect(call).toBe(2);
+      expect(prompts[1]).toContain('Recent context');
+      expect(prompts[1]).toContain('get it');
+    });
+  });
 });

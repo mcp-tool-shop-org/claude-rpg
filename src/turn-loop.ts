@@ -17,6 +17,7 @@ import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.
 import type { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
+import { withTokenTracking, type SessionTokenTracker } from './game/token-tracker.js';
 
 export type ProfileUpdateHints = {
   xpGained: number;
@@ -116,6 +117,15 @@ export type ExecuteTurnOpts = {
    */
   chronicleContext?: string;
   onNarrationChunk?: StreamCallback;
+  /**
+   * F-b4b16d0a: when provided, every generate()/generateStream() call this
+   * turn makes (via narrateScene/generateDialogue — see the withTokenTracking
+   * doc comment for why interpretAction's generateStructured() calls aren't
+   * counted) is recorded into it under the appropriate CallType, powering
+   * GameSession.getCostSummary(). Optional so existing callers/tests that
+   * don't pass one see `client` passed through completely unwrapped.
+   */
+  tokenTracker?: SessionTokenTracker;
 };
 
 /** Execute one full turn of the game loop. */
@@ -126,26 +136,73 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     pressureContext, worldPressures, lastNpcActions, districtDescriptor,
     partyPresence, economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
+    tokenTracker,
   } = opts;
   const previousLocationId = engine.world.locationId;
 
+  // F-b4b16d0a: per-call-type client wraps so GameSession.getCostSummary()
+  // can report narration/dialogue cost separately. Only constructed when the
+  // caller actually wants tracking — everything below uses `client`
+  // unwrapped otherwise, unchanged from before this wave.
+  const narrationClient = tokenTracker ? withTokenTracking(client, tokenTracker, 'narration') : client;
+  const dialogueClient = tokenTracker ? withTokenTracking(client, tokenTracker, 'dialogue') : client;
+
   // Step 1: Interpret player input into an action
   const availableVerbs = engine.getAvailableActions();
+  // F-fb9e78af: if the turn immediately before this one was itself a
+  // clarification request, hand the interpreter that context so a short
+  // follow-up reply (e.g. just "attack") isn't interpreted from scratch
+  // with no memory the clarification ever happened.
+  const lastTurn = history.getRecent(1)[0];
+  const recentContext = lastTurn?.isClarification
+    ? `Player said "${lastTurn.playerInput}" and was asked to clarify: "${lastTurn.narration}"`
+    : undefined;
   const interpreted = await interpretAction(
     client,
     engine.world,
     playerInput,
     availableVerbs,
+    recentContext,
   );
 
   // If low confidence, return clarification without resolving
   if (interpreted.confidence === 'low') {
-    const alts = interpreted.alternatives?.map((a) => a.verb).join(' or ') ?? 'something else';
+    // F-fb9e78af: prefer the full alternative (verb plus resolved target
+    // name, when the interpreter supplied one) over a bare verb list, so
+    // "attack or flee" can become e.g. "attack the Suspicious Pilgrim or
+    // flee" instead of losing which entity each alternative meant.
+    const alts = interpreted.alternatives?.length
+      ? interpreted.alternatives.map((a) => describeAlternative(a, engine.world)).join(' or ')
+      : undefined;
+    // F-e8262ed1: interpreted.reasoning already distinguishes a transient
+    // API failure (PB-007's "...interpretation service unavailable — try
+    // again") from genuinely ambiguous input ("Could not interpret input")
+    // — surface it instead of a generic "something else" that reads
+    // identically for both and contradicted PB-007's stated intent.
+    const clarification = alts
+      ? `I'm not sure what you mean. Did you want to ${alts}?`
+      : interpreted.reasoning
+        ? `I'm not sure what you mean. ${interpreted.reasoning}`
+        : `I'm not sure what you mean. Did you want to do something else?`;
+    // F-fb9e78af: record the clarification turn (mirroring the isFallback
+    // pattern narrateScene/dialogue fallbacks already use for non-authored
+    // text) so a short follow-up reply can be given the recentContext built
+    // from it above, and so getRecentNarration() excludes it from future
+    // narration prompts the same way it already excludes other fallback
+    // text.
+    history.record({
+      tick: engine.tick,
+      playerInput,
+      verb: interpreted.verb,
+      narration: clarification,
+      isFallback: true,
+      isClarification: true,
+    });
     return {
       playerInput,
       interpreted,
       events: [],
-      narration: `I'm not sure what you mean. Did you want to ${alts}?`,
+      narration: clarification,
       narrationPlan: null,
       dialogue: null,
       audioCalls: [],
@@ -182,7 +239,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   let narrationResult: NarrationResult;
   try {
     narrationResult = await narrateScene({
-      client,
+      client: narrationClient,
       world: engine.world,
       recentEvents: events,
       tone,
@@ -249,7 +306,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   if (interpreted.verb === 'speak' && interpreted.targetIds?.[0]) {
     try {
       dialogue = await generateDialogue(
-        client,
+        dialogueClient,
         engine.world,
         interpreted.targetIds[0],
         playerInput,
@@ -335,6 +392,21 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     tick: engine.tick,
     profileHints,
   };
+}
+
+/**
+ * F-fb9e78af: render one interpreted alternative as "verb" or, when a
+ * target id is present and resolves to a real entity, "verb Name" — so the
+ * low-confidence clarification can say e.g. "attack the Suspicious Pilgrim
+ * or flee" instead of losing which entity each alternative meant.
+ */
+function describeAlternative(
+  alt: { verb: string; targetIds: string[] },
+  world: WorldState,
+): string {
+  const targetId = alt.targetIds?.[0];
+  const targetName = targetId ? world.entities[targetId]?.name : undefined;
+  return targetName ? `${alt.verb} ${targetName}` : alt.verb;
 }
 
 /** Extract profile update hints from resolved events. */

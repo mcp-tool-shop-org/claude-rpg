@@ -300,6 +300,86 @@ describe('GameSession', () => {
     expect(h.session.getRecentSubsystemFailures()).toHaveLength(0);
   });
 
+  describe('/status subsystem health indicator (F-9319b8d8)', () => {
+    function makeStatusProfile() {
+      return createProfile(
+        {
+          name: 'Aldric',
+          archetypeId: 'penitent-knight',
+          backgroundId: 'oath-breaker',
+          traitIds: ['iron-frame'],
+          disciplineId: 'occultist',
+          portraitRef: 'abc123',
+        },
+        { vigor: 7, instinct: 4, will: 1 },
+        { hp: 25, stamina: 8 },
+        ['martial'],
+        'fantasy',
+      );
+    }
+
+    // renderCompactStatus (display/status-compact.ts) needs a non-null
+    // StatusData, which getStatusDataFromProfile only builds when BOTH a
+    // profile and an itemCatalog are present (game/game-state.ts) — an
+    // empty catalog is sufficient shape for these tests.
+    function makeStatusGameOpts() {
+      return { profile: makeStatusProfile(), itemCatalog: { items: [] } };
+    }
+
+    it('does not add a Subsystems line when no subsystem failure has occurred this session', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({ gameOpts: makeStatusGameOpts() });
+
+      await h.play('look around');
+      const status = await h.play('/status');
+
+      expect(status).not.toContain('Subsystems:');
+    });
+
+    it('surfaces the subsystem failure count and most recent tick through /status', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({ gameOpts: makeStatusGameOpts() });
+
+      // F-f13ca236's own test induces a subsystem failure via a throwing
+      // world.factions getter, but that field is also read by
+      // buildMoveRecommendation() (game.ts's post-turn suggestion line,
+      // gated on a profile being present, unlike F-f13ca236's own
+      // no-profile harness) OUTSIDE the PB-001 try/catch this finding
+      // covers — so it would crash the turn instead of being counted here.
+      // Spying on the private tickFactionAgency() method (one of the ~17
+      // calls actually inside that try/catch, game.ts:967) targets only
+      // this finding's failure path.
+      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+        throw new Error('boom');
+      });
+
+      await h.play('look around');
+
+      expect(h.session.getSubsystemFailureCount()).toBe(1);
+
+      const status = await h.play('/status');
+
+      expect(status).toContain('Subsystems:');
+      expect(status).toContain('1 subsystem hiccup');
+      expect(status).toContain(`tick ${h.session.engine.tick}`);
+    });
+
+    it('pluralizes "hiccups" for more than one failure this session', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({ gameOpts: makeStatusGameOpts() });
+
+      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+        throw new Error('boom');
+      });
+
+      await h.play('look around');
+      await h.play('look around');
+
+      const status = await h.play('/status');
+      expect(status).toContain('2 subsystem hiccups');
+    });
+  });
+
   describe('autosave (FT-B-002)', () => {
     it('should trigger autosave after configured number of turns', async () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
@@ -1083,6 +1163,114 @@ describe('GameSession', () => {
       });
 
       expect(session.immersion.debugMode).toBe(false);
+    });
+  });
+
+  describe('presentation state restore (F-8c3e32b7)', () => {
+    it('seeds ImmersionRuntime.stateMachine from GameConfig.restoredPresentationState at construction', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        restoredPresentationState: 'combat',
+      });
+
+      expect(session.immersion.stateMachine.current).toBe('combat');
+    });
+
+    it('leaves the presentation state at its default when restoredPresentationState is not provided', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+      });
+
+      expect(session.immersion.stateMachine.current).toBe('exploration');
+    });
+
+    it('checkAutosave() persists the current presentation state', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const capturedInputs: Array<{ presentationState?: string }> = [];
+      vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockImplementation(async (input) => {
+          capturedInputs.push(input);
+        });
+
+      const h = createHarness({
+        gameOpts: { autosave: { enabled: true, intervalTurns: 1 } },
+      });
+
+      // ImmersionRuntime.processPresentation() re-infers presentation state
+      // from each turn's own events every turn (turn-loop.ts Step 4.5), so a
+      // manually pre-set state would just be overwritten — "speak to
+      // pilgrim" is a real turn whose own verb drives the state machine to
+      // 'dialogue' (presentation-state.ts's inferFromEvents), which
+      // checkAutosave() then reads afterward.
+      await h.play('speak to pilgrim');
+
+      expect(h.session.immersion.stateMachine.current).toBe('dialogue');
+      expect(capturedInputs).toHaveLength(1);
+      expect(capturedInputs[0].presentationState).toBe('dialogue');
+    });
+  });
+
+  describe('getCostSummary (F-b4b16d0a — COST COMMAND, game-core half)', () => {
+    it('starts with a zero-usage summary before any LLM calls', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+      });
+
+      const summary = session.getCostSummary();
+      expect(summary).toContain('Session Token Usage');
+      expect(summary).toContain('Total: 0 calls');
+    });
+
+    it('records narration cost after a normal turn', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('look around');
+
+      const summary = h.session.getCostSummary();
+      expect(summary).toContain('narration: 1 calls');
+      expect(summary).toContain('Estimated cost:');
+    });
+
+    it('records dialogue cost separately from narration when speaking to an NPC', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('speak to pilgrim');
+
+      const summary = h.session.getCostSummary();
+      expect(summary).toContain('narration: 1 calls');
+      expect(summary).toContain('dialogue: 1 calls');
+    });
+
+    it('accumulates narration cost across multiple turns', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('look around');
+      await h.play('look around');
+
+      const summary = h.session.getCostSummary();
+      expect(summary).toContain('narration: 2 calls');
+    });
+
+    it('records narration cost for the opening narration', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.session.getOpeningNarration();
+
+      const summary = h.session.getCostSummary();
+      expect(summary).toContain('narration: 1 calls');
     });
   });
 });

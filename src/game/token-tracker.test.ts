@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SessionTokenTracker } from './token-tracker.js';
+import { SessionTokenTracker, withTokenTracking } from './token-tracker.js';
+import type { ClaudeClient } from '../claude-client.js';
 
 describe('SessionTokenTracker (FT-B-004)', () => {
   it('should record and retrieve tokens by call type', () => {
@@ -79,5 +80,98 @@ describe('SessionTokenTracker (FT-B-004)', () => {
     const totals = tracker.getTotals();
     expect(totals.inputTokens).toBe(0);
     expect(totals.callCount).toBe(0);
+  });
+});
+
+describe('withTokenTracking (F-b4b16d0a)', () => {
+  function makeClient(overrides: Partial<ClaudeClient> = {}): ClaudeClient {
+    return {
+      model: 'mock',
+      async generate() {
+        return { ok: true, text: 'narrated', inputTokens: 120, outputTokens: 60 };
+      },
+      // F-39b958e7 pattern: a concrete non-null `data` shape can't satisfy
+      // the generic ClaudeClient.generateStructured<T>() without this cast.
+      async generateStructured<T>() {
+        return { ok: true, data: { verb: 'look' } as unknown as T, raw: '' };
+      },
+      ...overrides,
+    };
+  }
+
+  it('records generate() calls under the given call type and returns the real result unchanged', async () => {
+    const tracker = new SessionTokenTracker();
+    const client = makeClient();
+    const wrapped = withTokenTracking(client, tracker, 'narration');
+
+    const result = await wrapped.generate({ system: 's', prompt: 'p' });
+
+    expect(result).toEqual({ ok: true, text: 'narrated', inputTokens: 120, outputTokens: 60 });
+    const record = tracker.getRecord('narration');
+    expect(record.inputTokens).toBe(120);
+    expect(record.outputTokens).toBe(60);
+    expect(record.callCount).toBe(1);
+  });
+
+  it('tags separately-wrapped call types independently on a shared tracker', async () => {
+    const tracker = new SessionTokenTracker();
+    const client = makeClient();
+    const narrationClient = withTokenTracking(client, tracker, 'narration');
+    const dialogueClient = withTokenTracking(client, tracker, 'dialogue');
+
+    await narrationClient.generate({ system: 's', prompt: 'p' });
+    await dialogueClient.generate({ system: 's', prompt: 'p' });
+
+    expect(tracker.getRecord('narration').callCount).toBe(1);
+    expect(tracker.getRecord('dialogue').callCount).toBe(1);
+    expect(tracker.getTotals().callCount).toBe(2);
+  });
+
+  it('does not record generateStructured() calls (StructuredResult carries no token counts) but still delegates the call', async () => {
+    const tracker = new SessionTokenTracker();
+    let called = false;
+    const client = makeClient({
+      async generateStructured<T>() {
+        called = true;
+        return { ok: true, data: { verb: 'look' } as unknown as T, raw: '' };
+      },
+    });
+    const wrapped = withTokenTracking(client, tracker, 'interpretation');
+
+    const result = await wrapped.generateStructured({ system: 's', prompt: 'p' });
+
+    expect(called).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(tracker.getRecord('interpretation').callCount).toBe(0);
+  });
+
+  it('omits generateStream on the wrapper when the underlying client has none', () => {
+    const tracker = new SessionTokenTracker();
+    const client = makeClient();
+    expect(client.generateStream).toBeUndefined();
+
+    const wrapped = withTokenTracking(client, tracker, 'narration');
+
+    expect(wrapped.generateStream).toBeUndefined();
+  });
+
+  it('records generateStream() calls under the given call type when the underlying client supports streaming', async () => {
+    const tracker = new SessionTokenTracker();
+    const client = makeClient({
+      generateStream: async (opts) => {
+        opts.onChunk('chunk');
+        return { ok: true, text: 'chunk', inputTokens: 40, outputTokens: 20 };
+      },
+    });
+    const wrapped = withTokenTracking(client, tracker, 'narration');
+
+    expect(wrapped.generateStream).toBeDefined();
+    const chunks: string[] = [];
+    const result = await wrapped.generateStream!({ system: 's', prompt: 'p', onChunk: (c) => chunks.push(c) });
+
+    expect(result.text).toBe('chunk');
+    expect(chunks).toEqual(['chunk']);
+    expect(tracker.getRecord('narration').inputTokens).toBe(40);
+    expect(tracker.getRecord('narration').callCount).toBe(1);
   });
 });

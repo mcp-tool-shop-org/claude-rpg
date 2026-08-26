@@ -61,6 +61,16 @@ export type SavedSession = {
   endgameTriggers?: string;
   finaleOutline?: string;
   campaignStatus?: 'active' | 'completed';
+  /**
+   * F-8c3e32b7: the presentation state (combat/dialogue/aftermath/menu/
+   * exploration — @ai-rpg-engine/presentation's PresentationState) the
+   * session was in when saved, so a reload can restore the same
+   * presentation context instead of always resuming narrateScene's
+   * presentationState hint at 'exploration'. Persisted as a plain string
+   * (not JSON) since it's already a small label, not a serialized blob —
+   * see loadPresentationStateFromSession() for the read side.
+   */
+  presentationState?: string;
 };
 
 export type SaveSlotSummary = {
@@ -105,6 +115,8 @@ export type SaveSessionInput = {
   endgameTriggers?: EndgameTrigger[];
   finaleOutline?: FinaleOutline | null;
   campaignStatus?: 'active' | 'completed';
+  /** F-8c3e32b7: see SavedSession.presentationState. */
+  presentationState?: string;
 };
 
 export async function saveSession(input: SaveSessionInput): Promise<void> {
@@ -114,6 +126,7 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     npcProfiles, npcActions, npcObligations, consequenceChains,
     partyState, districtEconomies, activeOpportunities, resolvedOpportunities,
     arcSnapshot, endgameTriggers, finaleOutline, campaignStatus,
+    presentationState,
   } = input;
 
   // Compute leverage snapshot for save summary
@@ -179,6 +192,7 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
       ? JSON.stringify(finaleOutline)
       : undefined,
     campaignStatus: campaignStatus ?? 'active',
+    presentationState,
   };
 
   const dir = dirname(savePath);
@@ -319,6 +333,20 @@ export function loadProfileFromSession(session: SavedSession): CharacterProfile 
   if (!session.profile) return null;
   const result = deserializeProfile(session.profile);
   return result.profile;
+}
+
+/**
+ * F-8c3e32b7: load the persisted presentation-state label from a saved
+ * session (undefined for a save predating this field). Returned as a plain
+ * string rather than the narrower PresentationState type — this module
+ * doesn't depend on @ai-rpg-engine/presentation, and an untrusted/hand-edited
+ * save could carry an arbitrary string here regardless of the field's
+ * declared type. The caller (GameConfig.restoredPresentationState, game.ts)
+ * is responsible for validating/casting before handing it to
+ * ImmersionRuntime's PresentationStateMachine.
+ */
+export function loadPresentationStateFromSession(session: SavedSession): string | undefined {
+  return session.presentationState;
 }
 
 /** Load player rumors from a saved session. */

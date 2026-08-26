@@ -166,29 +166,30 @@ describe('turn pipeline — narration failure', () => {
       clientOpts: { generateFailure: 'rate-limit' },
     });
 
+    // Unconditional assertion first: forces a real failure if the code ever
+    // stops throwing for rate-limit errors (mirrors the auth-failure test above).
+    await expect(h.play('look around')).rejects.toThrow(NarrationError);
     try {
-      await h.play('look around');
+      await h.play('look');
     } catch (e) {
       expect(e).toBeInstanceOf(NarrationError);
       expect((e as NarrationError).retryable).toBe(true);
     }
   });
 
-  it('interpretation failure (structured) falls back to look verb', async () => {
-    // When generateStructured fails, interpretAction should fall back to fast path.
-    // For "xyzzy" (no fast-path match), it calls the slow path which fails,
-    // and falls back to { verb: 'look', confidence: 'low' }.
-    // Low confidence returns clarification without engine resolution.
+  it('interpretation failure (structured) currently propagates NarrationError (fallback to look verb not yet implemented)', async () => {
+    // "xyzzy" won't match any fast-path pattern, so interpretAction calls the
+    // slow path (generateStructured), which fails here.
+    // A graceful fallback would catch that failure and resolve to
+    // { verb: 'look', confidence: 'low' }, short-circuiting the turn with a
+    // clarification instead of an error. That fallback is NOT implemented yet:
+    // interpretAction's slow path lets the NarrationError propagate uncaught.
+    // This test documents the current (propagating) behavior so a future fix
+    // that adds the fallback will be forced to update this test deliberately.
     const h = createHarness({
       clientOpts: { structuredFailure: 'timeout' },
     });
 
-    // "xyzzy" won't match any fast-path pattern, so it goes to slow path
-    // which throws, so interpretAction catches and returns look/low-confidence.
-    // But low-confidence short-circuits the turn without engine resolution.
-    // However, the current code does NOT catch errors in interpretAction's
-    // slow path — it lets the NarrationError propagate.
-    // This test documents that behavior.
     await expect(h.play('xyzzy')).rejects.toThrow(NarrationError);
   });
 

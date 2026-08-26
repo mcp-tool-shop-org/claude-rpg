@@ -2,6 +2,7 @@
 // not narration text. Delta computation must be minimal, correct, and stable.
 
 import { describe, it, expect } from 'vitest';
+import type { PlayerRumor } from '@ai-rpg-engine/modules';
 import {
   captureSnapshot,
   computeSessionDelta,
@@ -24,6 +25,24 @@ function makeSnapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot
     milestoneCount: 0,
     injuryCount: 0,
     totalTurns: 0,
+    ...overrides,
+  };
+}
+
+// ─── Rumor helpers ────────────────────────────────────────────
+
+function makeRumor(overrides: Partial<PlayerRumor> = {}): PlayerRumor {
+  return {
+    id: 'rumor-1',
+    claim: 'a',
+    subjectDescriptor: 'the wanderer',
+    sourceEvent: 'milestone',
+    confidence: 1,
+    distortion: 0,
+    mutationCount: 0,
+    valence: 'mysterious',
+    spreadTo: [],
+    originTick: 0,
     ...overrides,
   };
 }
@@ -146,8 +165,8 @@ describe('computeFactionDeltas', () => {
 describe('computeRumorDelta', () => {
   it('detects new rumors', () => {
     const rumors = [
-      { claim: 'The wanderer is dangerous', spreadTo: ['guardians'], mutationCount: 0, originTick: 1 } as any,
-      { claim: 'The wanderer stole from the altar', spreadTo: ['guardians', 'thieves'], mutationCount: 1, originTick: 2 } as any,
+      makeRumor({ id: 'r1', claim: 'The wanderer is dangerous', spreadTo: ['guardians'], mutationCount: 0, originTick: 1 }),
+      makeRumor({ id: 'r2', claim: 'The wanderer stole from the altar', spreadTo: ['guardians', 'thieves'], mutationCount: 1, originTick: 2 }),
     ];
     const delta = computeRumorDelta(0, rumors);
     expect(delta.spawned).toBe(2);
@@ -157,10 +176,10 @@ describe('computeRumorDelta', () => {
 
   it('no new rumors yields zero delta', () => {
     const rumors = [
-      { claim: 'a', spreadTo: [], mutationCount: 0, originTick: 1 },
-      { claim: 'b', spreadTo: [], mutationCount: 0, originTick: 2 },
-      { claim: 'c', spreadTo: [], mutationCount: 0, originTick: 3 },
-    ] as any;
+      makeRumor({ id: 'r1', claim: 'a', spreadTo: [], mutationCount: 0, originTick: 1 }),
+      makeRumor({ id: 'r2', claim: 'b', spreadTo: [], mutationCount: 0, originTick: 2 }),
+      makeRumor({ id: 'r3', claim: 'c', spreadTo: [], mutationCount: 0, originTick: 3 }),
+    ];
     const delta = computeRumorDelta(3, rumors);
     expect(delta.spawned).toBe(0);
   });

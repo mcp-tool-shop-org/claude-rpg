@@ -65,9 +65,10 @@ describe('chronicle append order', () => {
 
   it('look-only turns may not produce chronicle entries (low significance)', () => {
     const records = deriveChronicleEvents(lookTurnSource(1), PLAYER);
-    // Look with no events of note may yield 0 records — that is correct behavior
-    // The chronicle is selective, not exhaustive
-    expect(records.length).toBeGreaterThanOrEqual(0);
+    // A look-only turn has no kill, no landmark discovery, no milestone, and no
+    // significant reputation delta — deriveTurnEvents has nothing to record.
+    // The chronicle is selective, not exhaustive: this must yield exactly 0 records.
+    expect(records.length).toBe(0);
   });
 
   it('each event source produces independent records', () => {
@@ -193,13 +194,14 @@ describe('chronicle persistence stability', () => {
 
     // Simulate saving: embed serialized chronicle in a minimal save
     const save: SavedSession = {
+      schemaVersion: 2,
       version: '1.4.0',
       engineState: '{}',
-      turnHistory: [],
+      turnHistory: { turns: [] },
       tone: 'dark',
       savedAt: new Date().toISOString(),
       chronicleRecords: JSON.stringify(originalRecords),
-    } as any;
+    };
 
     const path = join(tmpDir, 'test.json');
     await writeFile(path, JSON.stringify(save), 'utf-8');

@@ -17,3 +17,21 @@ export function parseSaveSelection(answer: string, savesLength: number): number 
   }
   return idx;
 }
+
+/**
+ * F-d01d16f6: runLoad()'s "Choose a save" prompt used to be a fixed string
+ * with no range hint. Extracted (same reason as parseSaveSelection above --
+ * bin.ts has no exports to unit-test against) so the caller can re-print it
+ * on every retry loop iteration instead of exiting the process on the first
+ * bad answer.
+ */
+export function formatSaveSelectionPrompt(savesLength: number): string {
+  return `  Choose a save (1-${savesLength}, or "cancel"): `;
+}
+
+/** Re-prompt message for an invalid (out-of-range/non-numeric/empty) save
+ *  selection answer -- paired with formatSaveSelectionPrompt above so a
+ *  mistyped digit re-asks with a concrete range instead of hard-exiting. */
+export function formatInvalidSelectionMessage(savesLength: number): string {
+  return `  Invalid selection. Enter 1-${savesLength}, or "cancel".`;
+}

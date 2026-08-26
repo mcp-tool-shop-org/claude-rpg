@@ -21,7 +21,7 @@ import { isPathInside } from './path-guard.js';
 export type ExitAutosaveOutcome =
   | { status: 'saved'; message: string }
   | { status: 'rejected'; message: string }
-  | { status: 'failed' };
+  | { status: 'failed'; error: unknown };
 
 /**
  * Guard `savePath` against `saveDir`, then invoke `save(savePath)` if it
@@ -32,10 +32,13 @@ export type ExitAutosaveOutcome =
  *   called. The message names the rejected path and states explicitly that
  *   progress was NOT auto-saved, mirroring the in-game "save" command's
  *   rejection message.
- * - Inside the directory but `save` throws: `{ status: 'failed' }`, with no
- *   message — callers already have call-site-specific wording for this
- *   case (bin.ts's SIGINT and stdin-closed handlers word it slightly
- *   differently), so this function doesn't prescribe it.
+ * - Inside the directory but `save` throws: `{ status: 'failed', error }`,
+ *   with the thrown error attached (F-b832167c: previously discarded
+ *   entirely, so callers had zero diagnosable detail even under --debug).
+ *   No message string — callers route `error` through the same
+ *   presentError()/classifyForPresentation() pipeline the rest of bin.ts
+ *   uses for every other error path, rather than this module prescribing
+ *   its own wording.
  */
 export async function attemptExitAutosave(
   savePath: string,
@@ -52,7 +55,7 @@ export async function attemptExitAutosave(
   try {
     await save(savePath);
     return { status: 'saved', message: `  Auto-saved to ${savePath}` };
-  } catch {
-    return { status: 'failed' };
+  } catch (error) {
+    return { status: 'failed', error };
   }
 }

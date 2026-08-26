@@ -43,6 +43,26 @@ describe('SLASH_COMMANDS (FT-FE-003)', () => {
       expect(SLASH_COMMANDS).toContain(cmd);
     }
   });
+
+  // F-ffc12b36: /recruit and /dismiss are real, fully-working play-mode
+  // commands (game.ts dispatches them to handleRecruit/handleDismiss) with
+  // zero discoverability anywhere in the CLI -- absent from tab completion,
+  // --help, and the in-game /help screen. The only place either was even
+  // named was an empty-state hint buried in director mode.
+  it('contains /recruit and /dismiss (F-ffc12b36)', () => {
+    expect(SLASH_COMMANDS).toContain('/recruit');
+    expect(SLASH_COMMANDS).toContain('/dismiss');
+  });
+
+  // Cross-domain COST COMMAND contract (wave-14): game-core wires a
+  // SessionTokenTracker into GameSession and exposes
+  // GameSession.getCostSummary(): string; cli-display's half is this
+  // completer entry plus bin.ts's /cost dispatch branch and help text. This
+  // supersedes the "does not offer /cost" test that lived in the
+  // reconciliation describe block below -- /cost is real now, not stale.
+  it('contains /cost (COST COMMAND contract)', () => {
+    expect(SLASH_COMMANDS).toContain('/cost');
+  });
 });
 
 describe('SLASH_COMMANDS documentation reconciliation (F-f1eb58cb)', () => {
@@ -80,13 +100,25 @@ describe('SLASH_COMMANDS documentation reconciliation (F-f1eb58cb)', () => {
     }
   });
 
-  it('does not offer /save or /cost — neither is documented or handled anywhere in the CLI', () => {
-    // /save is stale: the real save command is the bare word "save", not a
-    // slash command. /cost is stale: no command dispatcher (bin.ts's game
-    // loop, GameSession.processInput, or executeDirectorCommand) recognizes
-    // it, even though token-tracker.ts has a formatCostSummary() that is
-    // never wired to any input handler.
+  // F-5cc4d0d9: the test above only ever checked one direction -- every
+  // SLASH_COMMANDS entry is documented -- never the reverse. A future edit
+  // that added a new command to bin.ts's USAGE text without also adding it
+  // to SLASH_COMMANDS (documented in --help but never tab-completable
+  // in-game) would have passed this suite silently. The regex already
+  // excludes mid-word slashes (e.g. "md/json/finale"), so plain-word entries
+  // like "save"/"quit" can't false-positive here.
+  it('every documented slash command is also offered by SLASH_COMMANDS (F-5cc4d0d9)', () => {
+    const documented = readDocumentedCommands();
+    for (const cmd of documented) {
+      expect(SLASH_COMMANDS).toContain(cmd);
+    }
+  });
+
+  it('does not offer /save — the real save command is the bare word "save", not a slash command', () => {
+    // /cost used to be excluded here too (stale: no dispatcher recognized
+    // it despite token-tracker.ts's formatCostSummary() existing). It's
+    // real now -- see the COST COMMAND contract test above and bin.ts's
+    // /cost dispatch branch.
     expect(SLASH_COMMANDS).not.toContain('/save');
-    expect(SLASH_COMMANDS).not.toContain('/cost');
   });
 });

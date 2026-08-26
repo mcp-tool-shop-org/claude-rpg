@@ -162,6 +162,11 @@ export function renderWelcome(title: string, tone?: string): string {
   parts.push('');
   parts.push(hint('  Type actions in plain English. Type "quit" to exit, "save" to save.'));
   parts.push(hint('  Type "/director" to inspect hidden truth, "/sheet" to view character.'));
+  // F-55401320: this was the only hint line on the very first screen a
+  // player sees, and it pointed at a niche diagnostic mode plus the
+  // character sheet -- never at the one command that surfaces everything
+  // else the game supports.
+  parts.push(hint('  Type "/help" for the full command reference.'));
   parts.push('');
   return parts.join('\n');
 }

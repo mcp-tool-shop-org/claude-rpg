@@ -55,4 +55,15 @@ describe('play-renderer', () => {
     expect(output).toContain('dark fantasy');
     expect(output).toContain('/director');
   });
+
+  // F-55401320: the welcome screen (first thing printed after character
+  // creation or a save load, before the opening narration) taught /director
+  // and /sheet but never mentioned /help -- the one command that unlocks the
+  // full reference. A new player's first-ever CLI hint set pointed at a
+  // niche diagnostic mode and the character sheet, not at "how do I see
+  // everything this game supports."
+  it('should hint at /help alongside /director and /sheet', () => {
+    const output = renderWelcome('The Chapel Threshold', 'dark fantasy');
+    expect(output).toContain('/help');
+  });
 });

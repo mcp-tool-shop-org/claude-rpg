@@ -1,5 +1,8 @@
 # npm force-includes all README* files regardless of .npmignore rules.
-# To exclude README translations (~140KB), move them to a translations/ directory.
+# The README.*.md rule below is ineffective; translations are included in the tarball.
+# This adds ~140KB to every `npx claude-rpg` cold-start install for English-only users.
+# To exclude README translations, they must be moved to a separate `translations/` directory
+# (requires: moving files, updating package.json files field, linking from main README).
 README.*.md
 
 # Exclude non-package files

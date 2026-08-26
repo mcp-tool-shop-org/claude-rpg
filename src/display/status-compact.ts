@@ -5,8 +5,8 @@
 import type { LeverageState, ScoredMove } from '@ai-rpg-engine/modules';
 import { formatLeverageStatus } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
-import { bold, dim, red, yellow, green, cyan, danger } from '../cli/colors.js';
-import { getTerminalWidth } from './play-renderer.js';
+import { bold, dim, red, yellow, cyan, danger, critical } from '../cli/colors.js';
+import { getTerminalWidth, isCriticalHp } from './play-renderer.js';
 
 // F-38eb3dec: was a fixed 60-char divider regardless of terminal size,
 // unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
@@ -41,7 +41,11 @@ export function renderCompactStatus(opts: {
   // Character line
   const titlePart = s.title ? ` "${s.title}"` : '';
   const discipline = s.disciplineName ? ` ${s.disciplineName}` : '';
-  const hpPart = s.maxHp ? `HP: ${s.hp}/${s.maxHp}` : `HP: ${s.hp}`;
+  // F-ce17a470: colored critical (bold red) at/below the shared threshold
+  // (play-renderer.ts's isCriticalHp) so this snapshot and the full play
+  // screen can't disagree about what counts as dangerously low HP.
+  const rawHpPart = s.maxHp ? `HP: ${s.hp}/${s.maxHp}` : `HP: ${s.hp}`;
+  const hpPart = isCriticalHp(s.hp, s.maxHp) ? critical(rawHpPart) : rawHpPart;
   const weaponPart = s.weaponName ? ` | ${s.weaponName}` : '';
   const armorPart = s.armorName ? ` | ${s.armorName}` : '';
   lines.push(`  ${bold(s.name)}${titlePart} (Lv${s.level} ${s.archetypeName}${discipline}) | ${hpPart}${weaponPart}${armorPart}`);

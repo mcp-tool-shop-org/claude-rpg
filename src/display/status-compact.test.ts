@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderCompactStatus } from './status-compact.js';
 import type { StatusData } from '../character/presence.js';
 import type { LeverageState, ScoredMove } from '@ai-rpg-engine/modules';
@@ -159,5 +159,51 @@ describe('renderCompactStatus divider width (F-38eb3dec)', () => {
     const result = renderCompactStatus(baseOpts());
     expect(result).toContain('─'.repeat(120));
     expect(result).not.toContain('─'.repeat(121));
+  });
+});
+
+/**
+ * F-ce17a470: status-compact.ts imported `green` (unused) but HP -- the
+ * single most important number in the game -- rendered as plain uncolored
+ * text at every severity here too, the same gap play-renderer.ts's full
+ * play screen had. Both screens now share play-renderer.ts's isCriticalHp
+ * threshold so they can't disagree about what counts as "critical."
+ */
+describe('renderCompactStatus HP coloring (F-ce17a470)', () => {
+  afterEach(() => {
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = undefined;
+    delete process.env.NO_COLOR;
+  });
+
+  it('colors HP critical (bold red) when at or below the threshold, with colors enabled', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./status-compact.js');
+    const result = mod.renderCompactStatus(baseOpts({
+      statusData: { ...DEFAULT_STATUS_DATA, hp: 5, maxHp: 100 },
+    }));
+    expect(result).toContain('\x1b[31m'); // red
+    expect(result).toContain('\x1b[1m'); // bold
+    expect(result).toContain('HP: 5/100');
+  });
+
+  it('does not color HP when healthy, even with colors enabled', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./status-compact.js');
+    const result = mod.renderCompactStatus(baseOpts({
+      statusData: { ...DEFAULT_STATUS_DATA, hp: 90, maxHp: 100 },
+    }));
+    expect(result).not.toContain('\x1b[31m');
+  });
+
+  it('HP text is always present in plain form regardless of color support (never color-only signaling)', () => {
+    const result = renderCompactStatus(baseOpts({
+      statusData: { ...DEFAULT_STATUS_DATA, hp: 2, maxHp: 100 },
+    }));
+    expect(result).toContain('HP: 2/100');
+    expect(result).not.toContain('\x1b[');
   });
 });

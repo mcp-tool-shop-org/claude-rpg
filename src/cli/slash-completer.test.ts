@@ -74,19 +74,22 @@ describe('SLASH_COMMANDS documentation reconciliation (F-f1eb58cb)', () => {
   // SLASH_COMMANDS and this list would have passed silently, reintroducing
   // exactly the drift F-f1eb58cb fixed.
   //
-  // Parsing bin.ts's actual source text instead (not importing it — bin.ts
-  // is a bare CLI entry point that calls main() as a module-level side
-  // effect, so importing it would run the CLI) means an edit to the real
-  // documented command surface fails this test automatically. Mirrors the
-  // "read a sibling source file as text" pattern already used in
+  // F-d36903d0: the USAGE text this reads moved from bin.ts's inline
+  // template literal to its own module (usage.ts, renderUsage()) — bin.ts
+  // is still a bare CLI entry point that calls main() as a module-level
+  // side effect, so importing either file would run the CLI, but usage.ts
+  // now houses the "Commands in-game:" block on its own. Parsing its actual
+  // source text (not importing it) means an edit to the real documented
+  // command surface still fails this test automatically. Mirrors the "read
+  // a sibling source file as text" pattern already used in
   // claude-client-deprecated.test.ts.
   function readDocumentedCommands(): string[] {
-    const binSrc = readFileSync(resolve(import.meta.dirname, '..', 'bin.ts'), 'utf-8');
-    const start = binSrc.indexOf('Commands in-game:');
-    const end = binSrc.indexOf('Environment:', start);
+    const usageSrc = readFileSync(resolve(import.meta.dirname, 'usage.ts'), 'utf-8');
+    const start = usageSrc.indexOf('Commands in-game:');
+    const end = usageSrc.indexOf('Environment:', start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    const block = binSrc.slice(start, end);
+    const block = usageSrc.slice(start, end);
     // Slash-command tokens, including inline mentions like "(/character is
     // an alias)" — excludes mid-word slashes like the "md/json/finale" in
     // the /export line via the negative lookbehind.

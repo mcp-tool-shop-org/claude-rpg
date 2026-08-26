@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderPresentationCues } from './presentation-renderer.js';
+import { renderPresentationCues, insertCuesBeforePrompt } from './presentation-renderer.js';
 import type { McpToolCall } from '../runtime/audio-bridge.js';
 
 // F-08f594de: terminal-renderer half of the presentation seam contract
@@ -64,13 +64,20 @@ describe('renderPresentationCues', () => {
     expect(text).toContain('soften');
   });
 
-  it('maps the __ui_effect_intent__ fade-out (deathHook fade-to-black) to a blank-screen sequence: newlines + a dim rule, not ANSI art', () => {
+  it('maps the __ui_effect_intent__ fade-out (deathHook fade-to-black) to a blank-screen sequence: newlines + a rule distinct from the routine divider, not ANSI art', () => {
     const calls: McpToolCall[] = [
       { tool: '__ui_effect_intent__', params: { type: 'fade-out', durationMs: 2000, color: '#000' } },
     ];
     const text = renderPresentationCues(calls);
     expect(text).toContain('\n\n');
-    expect(text).toMatch(/[─-]{5,}/);
+    // F-cbd65014: renderScreenPause() used to render character-for-character
+    // the same '─' rule as play-renderer.ts's makeDivider() -- the routine
+    // divider printed on every ordinary turn -- so the one moment built to
+    // look different (player death) had no visual signature of its own. It
+    // must use a different rule character (matching makeTurnDivider()'s '═'
+    // treatment) so it reads as distinct from an everyday divider.
+    expect(text).toMatch(/═{5,}/);
+    expect(text).not.toMatch(/─{5,}/);
     // Honest terminal equivalent, not simulated ANSI color art: no color
     // literal from the intent (e.g. its '#000') should leak into the output.
     expect(text).not.toContain('#000');
@@ -124,5 +131,125 @@ describe('renderPresentationCues with color enabled', () => {
       { tool: 'sound_effect', params: { effect: 'alert', intensity: 0.8 } },
     ]);
     expect(text).toContain('\x1b[');
+  });
+
+  // F-06e3bd9e: renderSfxLine used to be the only one of the four cue-line
+  // renderers (sfx/ambient/music/ui-effect-fallback) wrapped in italic() on
+  // top of dim() -- a player would see '· gunshot sounds' in a different
+  // font style than the otherwise-identical-looking '· ambient: wind' or
+  // '· music starts' lines around it, with nothing pinning that as
+  // intentional. Fixed by dropping italic so all four share the same plain
+  // dim() treatment; this test locks that convention in.
+  it('does not wrap the sfx cue line in italic, matching the plain dim() treatment ambient/music/ui-effect cues use (F-06e3bd9e)', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./presentation-renderer.js');
+    const sfx = mod.renderPresentationCues([
+      { tool: 'sound_effect', params: { effect: 'gunshot', intensity: 0.9 } },
+    ]);
+    const ambient = mod.renderPresentationCues([
+      { tool: 'sound_effect', params: { effect: 'wind', volume: 0.3 } },
+    ]);
+    const music = mod.renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'play' } },
+    ]);
+    // ANSI italic is SGR code 3 -- '\x1b[3m'.
+    expect(sfx).not.toContain('\x1b[3m');
+    expect(ambient).not.toContain('\x1b[3m');
+    expect(music).not.toContain('\x1b[3m');
+    // Still colored (dim, SGR code 2) -- proves this is a same-treatment
+    // fix, not an accidental "colors disabled" false pass.
+    expect(sfx).toContain('\x1b[2m');
+  });
+
+  // F-cbd65014: the fade-out pause must render in a visually distinct color
+  // (critical/bold red, matching colors.ts's own "Critical danger / death"
+  // doc for this composite) from the plain dim rules used elsewhere, not
+  // just a different character -- so a colorblind-safe textual/character
+  // signature (the '═' character itself, asserted above under default
+  // colors-disabled) is reinforced, not replaced, by color for players who
+  // do have it.
+  it('renders the fade-out pause in critical (bold red), not the plain dim styling of an ordinary divider', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./presentation-renderer.js');
+    const text = mod.renderPresentationCues([
+      { tool: '__ui_effect_intent__', params: { type: 'fade-out', durationMs: 2000 } },
+    ]);
+    expect(text).toContain('\x1b[31m'); // red
+    expect(text).toContain('\x1b[1m'); // bold
+  });
+});
+
+// F-135b1970 / F-e78d68c1: bin.ts's per-turn loop used to console.log() the
+// turn's presentation cues in a call AFTER the full rendered screen, which
+// already ends with play-renderer.ts's renderPlayScreen "What do you do?"
+// prompt and its trailing blank line -- so cues describing what just
+// happened landed BELOW the question asking what the player wants to do
+// next, sandwiched between the prompt and the actual '  > ' input marker.
+//
+// The real per-turn call chain is bin.ts -> GameSession.processInput()
+// (game.ts, game-core) -> renderPlayOutput() (game/game-presenter.ts,
+// game-core) -> renderPlayScreen() (play-renderer.ts, owned here) --
+// game-presenter.ts sits outside cli-display's edit scope this wave, so
+// there is no seam to thread cues into renderPlayScreen's own composition
+// from bin.ts. This function instead operates on the already-rendered
+// screen string bin.ts receives back, anchored on renderPlayScreen's own
+// "What do you do?" prompt line -- both the anchor and this function are
+// this domain's code, so the anchor is a stable in-domain contract rather
+// than a guess at game-core's internals.
+describe('insertCuesBeforePrompt (F-135b1970 / F-e78d68c1)', () => {
+  const screen = [
+    'Narration text about the scene.',
+    '',
+    '·············',
+    '  Hero (Lv1) | HP: 10',
+    '  Location: Town',
+    '──────────',
+    '',
+    '  What do you do?',
+    '',
+  ].join('\n');
+
+  it('places the cues before the "What do you do?" prompt line', () => {
+    const cues = '  · rain sounds';
+    const result = insertCuesBeforePrompt(screen, cues);
+    const cuesIdx = result.indexOf(cues);
+    const promptIdx = result.indexOf('What do you do?');
+    expect(cuesIdx).toBeGreaterThan(-1);
+    expect(promptIdx).toBeGreaterThan(-1);
+    expect(cuesIdx).toBeLessThan(promptIdx);
+  });
+
+  it('keeps the cues after the narration and status content (not just anywhere before the prompt)', () => {
+    const cues = '  · rain sounds';
+    const result = insertCuesBeforePrompt(screen, cues);
+    const narrationIdx = result.indexOf('Narration text');
+    const locationIdx = result.indexOf('Location: Town');
+    const cuesIdx = result.indexOf(cues);
+    expect(cuesIdx).toBeGreaterThan(narrationIdx);
+    expect(cuesIdx).toBeGreaterThan(locationIdx);
+  });
+
+  it('preserves the screen unchanged when there are no cues to insert', () => {
+    expect(insertCuesBeforePrompt(screen, '')).toBe(screen);
+  });
+
+  it('preserves all original screen content verbatim (no truncation) when cues are inserted', () => {
+    const cues = '  · music intensifies';
+    const result = insertCuesBeforePrompt(screen, cues);
+    for (const line of screen.split('\n')) {
+      expect(result).toContain(line);
+    }
+    expect(result).toContain(cues);
+  });
+
+  it('falls back to appending at the end when the prompt marker is not found (e.g. a non-play screen)', () => {
+    const noPrompt = 'Some other screen with no prompt marker.';
+    const cues = '  · alert sounds';
+    const result = insertCuesBeforePrompt(noPrompt, cues);
+    expect(result).toBe(`${noPrompt}\n${cues}`);
   });
 });

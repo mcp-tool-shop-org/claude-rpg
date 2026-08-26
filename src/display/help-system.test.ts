@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { renderConcludeHelp, renderArcHelp, renderPlayHelp, getPackOnboarding, getOnboardingByGenre, getOnboardingForSession, renderFirstTurnOrientation, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK, wrapWords, renderNameDescriptionRow } from './help-system.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { renderConcludeHelp, renderArcHelp, renderPlayHelp, renderLeverageHelp, renderPackQuickstart, getPackOnboarding, getOnboardingByGenre, getOnboardingForSession, renderFirstTurnOrientation, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK, wrapWords, renderNameDescriptionRow } from './help-system.js';
 import { RESOLUTION_CLASS_LABELS } from './archive-browser.js';
 import { PLAY_COMMANDS } from '../cli/slash-completer.js';
 import { allPacks } from '../character/packs.js';
@@ -296,5 +296,195 @@ describe('getOnboardingForSession (F-ed5f7d25)', () => {
     // all), so the pre-fix lookup produced undefined for this pack.
     const onboarding = getOnboardingForSession('gaslight-detective', 'mystery');
     expect(onboarding).toBe(getPackOnboarding('gaslight-detective'));
+  });
+});
+
+/**
+ * F-a17315ac: renderLeverageHelp()'s Cost/CD three-column tables
+ * (SOCIAL/RUMOR/DIPLOMACY/SABOTAGE VERBS) hand-typed their column spacing,
+ * so every row whose Cost named two currencies (e.g. "Debt: 20, Favor: 10")
+ * landed its CD digit one column left of the column every single-currency
+ * row and the header used. Rebuilt via padEnd-computed column starts
+ * (routed through the same renderNameDescriptionRow wrapper
+ * renderArcHelp/renderConcludeHelp already use) so every row in every
+ * table lands on the same column regardless of how many currencies its
+ * Cost names.
+ */
+describe('renderLeverageHelp verb table columns (F-a17315ac)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('aligns the CD column for a two-currency-cost row with a single-currency-cost row in the same table', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const lines = renderLeverageHelp().split('\n');
+    // "call in favor" has a two-currency cost ("Debt: 20, Favor: 10");
+    // "bribe <target>" has a single-currency cost ("Favor: 15") in the same
+    // SOCIAL VERBS table.
+    const twoCurrencyLine = lines.find((l) => l.includes('call in favor'));
+    const oneCurrencyLine = lines.find((l) => l.includes('bribe <target>'));
+    expect(twoCurrencyLine).toBeDefined();
+    expect(oneCurrencyLine).toBeDefined();
+    // Trailing token on each row is the CD number -- compare its column.
+    const twoCurrencyCd = twoCurrencyLine!.match(/(\d+)\s*$/);
+    const oneCurrencyCd = oneCurrencyLine!.match(/(\d+)\s*$/);
+    expect(twoCurrencyCd).not.toBeNull();
+    expect(oneCurrencyCd).not.toBeNull();
+    const twoCurrencyCol = twoCurrencyLine!.length - twoCurrencyCd![0].length;
+    const oneCurrencyCol = oneCurrencyLine!.length - oneCurrencyCd![0].length;
+    expect(twoCurrencyCol).toBe(oneCurrencyCol);
+  });
+
+  it('aligns the CD column across all four verb tables (SOCIAL/RUMOR/DIPLOMACY/SABOTAGE), not just within one', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const lines = renderLeverageHelp().split('\n');
+    const socialLine = lines.find((l) => l.includes('bribe <target>'));
+    const sabotageLine = lines.find((l) => l.includes('blackmail <target>'));
+    expect(socialLine).toBeDefined();
+    expect(sabotageLine).toBeDefined();
+    const socialCd = socialLine!.match(/(\d+)\s*$/);
+    const sabotageCd = sabotageLine!.match(/(\d+)\s*$/);
+    const socialCol = socialLine!.length - socialCd![0].length;
+    const sabotageCol = sabotageLine!.length - sabotageCd![0].length;
+    expect(socialCol).toBe(sabotageCol);
+  });
+
+  it('still documents every verb row (no content lost in the rebuild)', () => {
+    const text = renderLeverageHelp();
+    for (const verb of [
+      'bribe <target>', 'intimidate <target>', 'call in favor', 'recruit <target>',
+      'petition authority', 'disguise', 'stake claim',
+      'spread rumor / seed', 'deny rumor', 'frame <target>', 'claim false credit',
+      'bury scandal', 'leak truth', 'spread counter-rumor',
+      'request meeting <faction>', 'improve standing <faction>', 'cash milestone',
+      'negotiate access <faction>', 'trade secret', 'temporary alliance <faction>',
+      'broker truce',
+      'sabotage <target>', 'plant evidence <target>', 'blackmail <target>',
+    ]) {
+      expect(text, `expected renderLeverageHelp() to still mention "${verb}"`).toContain(verb);
+    }
+  });
+});
+
+/**
+ * F-a17315ac: renderPlayHelp()'s COMMANDS section built rows via a fixed
+ * `cmd.padEnd(30)` plus an unbounded description with no width limit --
+ * PLAY_COMMANDS' /recruit entry rendered as a 90-visible-character line, 10
+ * over an 80-column terminal, with no wrap or hanging indent, unlike this
+ * same file's renderArcHelp()/renderConcludeHelp(), which already solve
+ * this exact problem via renderNameDescriptionRow.
+ */
+describe('renderPlayHelp COMMANDS wrapping (F-a17315ac)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('wraps the /recruit row with a hanging indent instead of overflowing an 80-column terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
+    const lines = renderPlayHelp().split('\n');
+    const startIdx = lines.findIndex((l) => l.includes('/recruit'));
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(lines[startIdx].length).toBeLessThanOrEqual(80);
+    // The full description used to fit on one 90-char line; confirm it now
+    // continues on a hanging-indented next line instead.
+    expect(lines[startIdx]).not.toContain('or /map)');
+    expect(lines[startIdx + 1].trim().length).toBeGreaterThan(0);
+    expect(lines[startIdx + 1].length).toBeLessThanOrEqual(80);
+  });
+
+  it('does not wrap a short command row unnecessarily at a wide terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const text = renderPlayHelp();
+    expect(text).toContain(`    ${'/status'.padEnd(30)}Compact strategic snapshot`);
+  });
+});
+
+/**
+ * F-bd0203e7: help-system.ts -- source of /help, /help leverage, /help
+ * arcs, /help conclude, every /help <pack-id> quickstart card, and
+ * renderFirstTurnOrientation (the first orientation card a new player sees
+ * after character creation) -- imported nothing from colors.ts. Every
+ * section header rendered in plain default-color text, and the WARNING
+ * danger callouts (renderPackQuickstart, renderFirstTurnOrientation) had no
+ * color or bold weight, unlike error-presenter.ts's/status-compact.ts's
+ * equivalent warnings and this domain's other reference screens
+ * (renderWelcome, renderCompactStatus, renderDirectorHelp), which all bold
+ * their section headers.
+ */
+describe('help-system section headers and WARNING lines use colors.ts (F-bd0203e7)', () => {
+  let originalIsTTY: boolean | undefined;
+
+  afterEach(() => {
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    delete process.env.NO_COLOR;
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  async function withColor<T>(fn: () => Promise<T> | T): Promise<T> {
+    originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    return fn();
+  }
+
+  it('bolds the QUICK REFERENCE header', async () => {
+    const text = await withColor(async () => (await import('./help-system.js')).renderPlayHelp());
+    expect(text).toContain('\x1b[1m'); // bold
+    expect(text).toContain('QUICK REFERENCE');
+  });
+
+  it('bolds the LEVERAGE REFERENCE header', async () => {
+    const text = await withColor(async () => (await import('./help-system.js')).renderLeverageHelp());
+    expect(text).toContain('\x1b[1m');
+    expect(text).toContain('LEVERAGE REFERENCE');
+  });
+
+  it('bolds the CAMPAIGN ARCS header', async () => {
+    const text = await withColor(async () => (await import('./help-system.js')).renderArcHelp());
+    expect(text).toContain('\x1b[1m');
+    expect(text).toContain('CAMPAIGN ARCS');
+  });
+
+  it('bolds the CAMPAIGN CONCLUSIONS header', async () => {
+    const text = await withColor(async () => (await import('./help-system.js')).renderConcludeHelp());
+    expect(text).toContain('\x1b[1m');
+    expect(text).toContain('CAMPAIGN CONCLUSIONS');
+  });
+
+  it('bolds a pack quickstart title', async () => {
+    const text = await withColor(async () => (await import('./help-system.js')).renderPackQuickstart('chapel-threshold'));
+    expect(text).toContain('\x1b[1m');
+    expect(text).toContain('CHAPEL THRESHOLD QUICKSTART');
+  });
+
+  it('colors a pack quickstart WARNING line with danger (bold yellow)', async () => {
+    const text = await withColor(async () => (await import('./help-system.js')).renderPackQuickstart('chapel-threshold'));
+    const warningLine = text.split('\n').find((l) => l.includes('WARNING:'));
+    expect(warningLine).toBeDefined();
+    expect(warningLine).toContain('\x1b[33m'); // yellow (danger = bold yellow)
+    expect(warningLine).toContain('\x1b[1m');
+  });
+
+  it('colors the first-turn orientation WARNING line with danger (bold yellow)', async () => {
+    const onboarding = getPackOnboarding('chapel-threshold')!;
+    const text = await withColor(async () =>
+      (await import('./help-system.js')).renderFirstTurnOrientation(onboarding),
+    );
+    const warningLine = text.split('\n').find((l) => l.includes('WARNING:'));
+    expect(warningLine).toBeDefined();
+    expect(warningLine).toContain('\x1b[33m');
+    expect(warningLine).toContain('\x1b[1m');
+  });
+
+  it('still renders plain readable text for every header/warning when colors are disabled (default test env)', () => {
+    expect(renderPlayHelp()).toContain('QUICK REFERENCE');
+    expect(renderLeverageHelp()).toContain('LEVERAGE REFERENCE');
+    expect(renderArcHelp()).toContain('CAMPAIGN ARCS');
+    expect(renderConcludeHelp()).toContain('CAMPAIGN CONCLUSIONS');
+    const quickstart = renderPackQuickstart('chapel-threshold');
+    expect(quickstart).toContain('CHAPEL THRESHOLD QUICKSTART');
+    expect(quickstart).toContain('WARNING:');
+    expect(quickstart).not.toContain('\x1b[');
   });
 });

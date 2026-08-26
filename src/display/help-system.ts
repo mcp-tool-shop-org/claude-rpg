@@ -4,6 +4,7 @@
 import type { ResolutionClass, ArcKind, ArcMomentum } from '@ai-rpg-engine/modules';
 import { getTerminalWidth } from './play-renderer.js';
 import { PLAY_COMMANDS } from '../cli/slash-completer.js';
+import { bold, danger } from '../cli/colors.js';
 
 // F-38eb3dec: both were a fixed 60-char divider regardless of terminal
 // size, unlike play-renderer.ts's own dividers (PFE-005). Computed per
@@ -307,7 +308,7 @@ export function renderFirstTurnOrientation(data: PackOnboarding): string {
     lines.push(`    > ${move}`);
   }
   if (data.dangerWarning) {
-    lines.push(`  WARNING: ${data.dangerWarning}`);
+    lines.push(danger(`  WARNING: ${data.dangerWarning}`));
   }
   lines.push(`  Type /help for commands, /help leverage for social verbs.`);
   lines.push('');
@@ -322,14 +323,22 @@ export function renderPlayHelp(): string {
   // real command set the way it did before (5 of 12+ commands documented).
   // '/help' is excluded here -- it's documented just above via its four
   // subcommand rows instead of a single generic line.
+  //
+  // F-a17315ac: `cmd.padEnd(30)}${description}` had no width limit --
+  // PLAY_COMMANDS' /recruit entry rendered as a 90-visible-character line,
+  // 10 over an 80-column terminal, with no wrap or hanging indent. Routed
+  // through renderNameDescriptionRow (same nameWidth of 30 the old padEnd
+  // used) so long descriptions wrap with a hanging indent instead, matching
+  // renderArcHelp/renderConcludeHelp's already-solved version of this
+  // exact problem.
   const commandRows = PLAY_COMMANDS
     .filter((c) => c.cmd !== '/help')
-    .map((c) => `    ${c.cmd.padEnd(30)}${c.description}`)
+    .map((c) => renderNameDescriptionRow(c.cmd, c.description, 30))
     .join('\n');
 
   return `
 ${divider()}
-  QUICK REFERENCE
+  ${bold('QUICK REFERENCE')}
 ${divider()}
 
   BASIC ACTIONS
@@ -363,10 +372,77 @@ ${divider()}
 
 // --- Leverage Help ---
 
+type VerbRow = { name: string; cost: string; cd: string };
+
+const SOCIAL_VERBS: VerbRow[] = [
+  { name: 'bribe <target>', cost: 'Favor: 15', cd: '3' },
+  { name: 'intimidate <target>', cost: 'Heat: 10', cd: '3' },
+  { name: 'call in favor', cost: 'Debt: 20, Favor: 10', cd: '5' },
+  { name: 'recruit <target>', cost: 'Favor: 25, Infl: 15', cd: '5' },
+  { name: 'petition authority', cost: 'Legit: 20', cd: '4' },
+  { name: 'disguise', cost: 'Infl: 5', cd: '5' },
+  { name: 'stake claim', cost: 'Infl: 30, Legit: 20', cd: '8' },
+];
+
+const RUMOR_VERBS: VerbRow[] = [
+  { name: 'spread rumor / seed', cost: 'Infl: 10', cd: '3' },
+  { name: 'deny rumor', cost: 'Legit: 10', cd: '2' },
+  { name: 'frame <target>', cost: 'Blkml: 20, Heat: 15', cd: '5' },
+  { name: 'claim false credit', cost: 'Infl: 15', cd: '4' },
+  { name: 'bury scandal', cost: 'Favor: 15, Infl: 10', cd: '4' },
+  { name: 'leak truth', cost: 'Blkml: 15', cd: '3' },
+  { name: 'spread counter-rumor', cost: 'Infl: 10, Heat: 5', cd: '3' },
+];
+
+const DIPLOMACY_VERBS: VerbRow[] = [
+  { name: 'request meeting <faction>', cost: 'Favor: 5', cd: '2' },
+  { name: 'improve standing <faction>', cost: 'Favor: 20', cd: '4' },
+  { name: 'cash milestone', cost: '(free)', cd: '5' },
+  { name: 'negotiate access <faction>', cost: 'Favor: 15, Legit: 10', cd: '5' },
+  { name: 'trade secret', cost: 'Blkml: 15', cd: '4' },
+  { name: 'temporary alliance <faction>', cost: 'Favor: 25, Infl: 20', cd: '8' },
+  { name: 'broker truce', cost: 'Infl: 30, Legit: 15', cd: '5' },
+];
+
+const SABOTAGE_VERBS: VerbRow[] = [
+  { name: 'sabotage <target>', cost: 'Blkml: 10, Heat: 20', cd: '5' },
+  { name: 'plant evidence <target>', cost: 'Blkml: 20, Heat: 15', cd: '5' },
+  { name: 'blackmail <target>', cost: 'Blkml: 25', cd: '5' },
+];
+
+// Longest verb name ('temporary alliance <faction>') is 28 chars; longest
+// cost ('Favor: 15, Legit: 10') is 20 chars. +3/+4 keep a minimum gap on
+// every row.
+const VERB_NAME_WIDTH = 31;
+const VERB_COST_WIDTH = 24;
+
+/**
+ * F-a17315ac: these four tables' Cost/CD columns were hand-typed, so every
+ * row whose Cost named two currencies (e.g. "Debt: 20, Favor: 10") landed
+ * its CD digit one column left of the column every single-currency row and
+ * the header used. Rebuilt via padEnd-computed column starts, routed
+ * through renderNameDescriptionRow the same way renderArcHelp/
+ * renderConcludeHelp already do -- the "description" here is just the
+ * cost-then-CD text pre-padded to one shared column, so this reuses that
+ * helper's wrapping/hanging-indent behavior instead of a second, parallel
+ * column engine.
+ */
+function renderVerbHeader(title: string): string {
+  return `  ${title.padEnd(2 + VERB_NAME_WIDTH)}${'Cost'.padEnd(VERB_COST_WIDTH)}CD`;
+}
+
+function renderVerbRow(row: VerbRow): string {
+  return renderNameDescriptionRow(row.name, `${row.cost.padEnd(VERB_COST_WIDTH)}${row.cd}`, VERB_NAME_WIDTH);
+}
+
+function renderVerbTable(title: string, rows: VerbRow[]): string {
+  return [renderVerbHeader(title), ...rows.map(renderVerbRow)].join('\n');
+}
+
 export function renderLeverageHelp(): string {
   return `
 ${divider()}
-  LEVERAGE REFERENCE
+  ${bold('LEVERAGE REFERENCE')}
 ${divider()}
 
   CURRENCIES (0-100)
@@ -377,37 +453,13 @@ ${divider()}
     Heat         From hostile actions. Decays 3/turn. High Heat triggers hunts
     Legitimacy   From milestones, title evolution, resolving official pressures
 
-  SOCIAL VERBS                         Cost                    CD
-    bribe <target>                     Favor: 15               3
-    intimidate <target>                Heat: 10                3
-    call in favor                      Debt: 20, Favor: 10    5
-    recruit <target>                   Favor: 25, Infl: 15    5
-    petition authority                 Legit: 20               4
-    disguise                           Infl: 5                 5
-    stake claim                        Infl: 30, Legit: 20    8
+${renderVerbTable('SOCIAL VERBS', SOCIAL_VERBS)}
 
-  RUMOR VERBS                          Cost                    CD
-    spread rumor / seed                Infl: 10                3
-    deny rumor                         Legit: 10               2
-    frame <target>                     Blkml: 20, Heat: 15    5
-    claim false credit                 Infl: 15                4
-    bury scandal                       Favor: 15, Infl: 10    4
-    leak truth                         Blkml: 15               3
-    spread counter-rumor               Infl: 10, Heat: 5      3
+${renderVerbTable('RUMOR VERBS', RUMOR_VERBS)}
 
-  DIPLOMACY VERBS                      Cost                    CD
-    request meeting <faction>          Favor: 5                2
-    improve standing <faction>         Favor: 20               4
-    cash milestone                     (free)                  5
-    negotiate access <faction>         Favor: 15, Legit: 10   5
-    trade secret                       Blkml: 15               4
-    temporary alliance <faction>       Favor: 25, Infl: 20    8
-    broker truce                       Infl: 30, Legit: 15    5
+${renderVerbTable('DIPLOMACY VERBS', DIPLOMACY_VERBS)}
 
-  SABOTAGE VERBS                       Cost                    CD
-    sabotage <target>                  Blkml: 10, Heat: 20    5
-    plant evidence <target>            Blkml: 20, Heat: 15    5
-    blackmail <target>                 Blkml: 25               5
+${renderVerbTable('SABOTAGE VERBS', SABOTAGE_VERBS)}
 
   SCARCITY RULES
     Max 1 leverage action per turn
@@ -431,7 +483,7 @@ export function renderPackQuickstart(packId: string): string {
   const lines: string[] = [];
   lines.push('');
   lines.push(divider());
-  lines.push(`  ${data.quickstartTitle.toUpperCase()}`);
+  lines.push(`  ${bold(data.quickstartTitle.toUpperCase())}`);
   lines.push(divider());
   lines.push('');
   lines.push(`  ${data.flavorIntro}`);
@@ -447,7 +499,7 @@ export function renderPackQuickstart(packId: string): string {
   }
   if (data.dangerWarning) {
     lines.push('');
-    lines.push(`  WARNING: ${data.dangerWarning}`);
+    lines.push(danger(`  WARNING: ${data.dangerWarning}`));
   }
   lines.push('');
   lines.push(divider());
@@ -511,7 +563,7 @@ export function renderArcHelp(): string {
 
   return `
 ${divider()}
-  CAMPAIGN ARCS
+  ${bold('CAMPAIGN ARCS')}
 ${divider()}
 
   The engine tracks 10 narrative arc kinds based on your actions:
@@ -557,7 +609,7 @@ export function renderConcludeHelp(): string {
 
   return `
 ${divider()}
-  CAMPAIGN CONCLUSIONS
+  ${bold('CAMPAIGN CONCLUSIONS')}
 ${divider()}
 
   When your story reaches critical mass, endgame triggers fire.

@@ -7,7 +7,7 @@ import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
 import type { StatusData } from '../character/presence.js';
 import type { ContextualSuggestion } from './contextual-suggestions.js';
-import { bold, dim, secondary, speaker, danger, positive, hint, cyan, yellow, red } from '../cli/colors.js';
+import { bold, dim, secondary, speaker, hint, cyan, yellow, red, critical } from '../cli/colors.js';
 
 // PFE-005: Adapt divider width to terminal, clamped to 40-120, fallback 60.
 function getTerminalWidth(): number {
@@ -19,18 +19,45 @@ function makeDivider(): string {
   return dim('─'.repeat(getTerminalWidth()));
 }
 
-/** Build a turn-numbered divider using double-line box characters. */
+/**
+ * Build a turn-numbered divider using double-line box characters.
+ *
+ * F-a2a609b6: used to open with its own hardcoded '\n' on top of the blank
+ * line renderPlayScreen's own `parts.push('')` already supplies right
+ * before calling this -- giving every numbered turn one more blank line
+ * above its rule than the non-numbered makeDivider() fallback gets. The
+ * caller already supplies that blank line, so this must not add a second
+ * one.
+ */
 export function makeTurnDivider(turnNumber: number): string {
   const label = ` Turn ${turnNumber} `;
   const width = getTerminalWidth();
   const remaining = Math.max(0, width - label.length);
   const left = Math.floor(remaining / 2);
   const right = remaining - left;
-  return '\n' + dim('═'.repeat(left)) + cyan(bold(label)) + dim('═'.repeat(right));
+  return dim('═'.repeat(left)) + cyan(bold(label)) + dim('═'.repeat(right));
 }
 
 function makeThinDivider(): string {
   return dim('·'.repeat(getTerminalWidth()));
+}
+
+/**
+ * F-ce17a470: colors.ts's `critical` composite (bold red, doc'd "Critical
+ * danger / death") had zero production call sites -- HP, the single most
+ * important number in the game, rendered as plain uncolored text at every
+ * severity in both this file's full status bar and status-compact.ts's
+ * snapshot. Shared here (and imported by status-compact.ts) so both screens
+ * agree on one threshold instead of two independently-tuned ones. 25% of
+ * max is a conventional "low health" cutoff, wide enough to warn a player
+ * before HP hits 0. Only applies when maxHp is known -- without it there's
+ * no scale to measure "low" against, so callers leave the number plain
+ * rather than guessing an absolute, scale-inappropriate cutoff.
+ */
+const CRITICAL_HP_RATIO = 0.25;
+
+export function isCriticalHp(hp: number, maxHp?: number): boolean {
+  return maxHp !== undefined && maxHp > 0 && hp / maxHp <= CRITICAL_HP_RATIO;
 }
 
 // Exported for testing
@@ -84,7 +111,8 @@ export function renderPlayScreen(opts: {
     const nameLine = `${ps.name}${titlePart} (Lv${ps.level} ${ps.archetypeName})`;
 
     const statParts: string[] = [];
-    statParts.push(`HP: ${ps.hp}`);
+    const hpText = `HP: ${ps.hp}`;
+    statParts.push(isCriticalHp(ps.hp, ps.maxHp) ? critical(hpText) : hpText);
     if (ps.weaponName) statParts.push(ps.weaponName);
     if (ps.armorName) statParts.push(ps.armorName);
     if (ps.injuryTags.length > 0) {

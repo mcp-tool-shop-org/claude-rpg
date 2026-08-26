@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SaveSlotSummary } from '../session/session.js';
-import { formatSaveDetails } from './save-listing.js';
+import { formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent } from './save-listing.js';
 
 /**
  * FT-FE-007: Enriched save listing tests.
@@ -74,5 +74,41 @@ describe('enriched save listing', () => {
 
     const details = formatSaveDetails(summary);
     expect(details).toEqual(['pack: starter-cyberpunk', 'zone: Neon Alley']);
+  });
+});
+
+/**
+ * F-01e3acfc: bin.ts's runLoad() printed the identity line as
+ * `    ${i + 1}. ${identity} — ${date}` (identity starts at column
+ * 4 + len(String(i + 1)) + 2 -- column 7 for slots 1-9, column 8 once a
+ * 10th save exists) but the detail line directly under it used a hardcoded
+ * 7-space indent, which only matches the 1-digit case. formatSaveSlotIndent
+ * is now derived from formatSaveSlotPrefix's own length (single source of
+ * truth), so the two can never drift apart the way the hand-typed literal
+ * did.
+ */
+describe('formatSaveSlotPrefix / formatSaveSlotIndent (F-01e3acfc)', () => {
+  it('formatSaveSlotPrefix renders "n. " with the established 4-space left margin', () => {
+    expect(formatSaveSlotPrefix(0)).toBe('    1. ');
+    expect(formatSaveSlotPrefix(8)).toBe('    9. ');
+  });
+
+  it('formatSaveSlotPrefix widens for double-digit slot numbers', () => {
+    expect(formatSaveSlotPrefix(9)).toBe('    10. ');
+    expect(formatSaveSlotPrefix(98)).toBe('    99. ');
+  });
+
+  it('formatSaveSlotIndent is blank padding the same width as formatSaveSlotPrefix, for slots 1-9', () => {
+    for (const i of [0, 3, 8]) {
+      const indent = formatSaveSlotIndent(i);
+      expect(indent).toBe(' '.repeat(formatSaveSlotPrefix(i).length));
+      expect(indent.length).toBe(7);
+    }
+  });
+
+  it('formatSaveSlotIndent tracks the wider prefix once a 10th+ save exists (the actual bug)', () => {
+    const indent = formatSaveSlotIndent(9); // the 10th save, i = 9
+    expect(indent.length).toBe(formatSaveSlotPrefix(9).length);
+    expect(indent.length).toBe(8); // one column more than the 1-9 case
   });
 });

@@ -30,6 +30,11 @@ import {
   coverageReportLine,
 } from './check-coverage-utils.mjs';
 
+// Respect NO_COLOR environment variable and terminal capability
+// See https://no-color.org/
+const useColor = !process.env.NO_COLOR && process.stdout.isTTY;
+const bold = (s) => (useColor ? `\x1b[1m${s}\x1b[0m` : s);
+
 // Single source of the per-path floors, shared with the test suite.
 const THRESHOLDS = getPerPathThresholds();
 
@@ -69,7 +74,7 @@ if (!existsSync(coveragePath)) {
 const coverage = JSON.parse(readFileSync(coveragePath, 'utf8'));
 let failures = 0;
 
-console.log('\x1b[1m── Runtime-Critical Changed Files ──\x1b[0m\n');
+console.log(`${bold('── Runtime-Critical Changed Files ──')}\n`);
 
 // Global branch coverage floor — extracted to check-coverage-utils.mjs to ensure
 // scripts and vitest.config.ts stay in sync. See getGlobalBranchThreshold().

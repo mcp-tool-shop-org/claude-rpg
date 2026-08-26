@@ -20,18 +20,17 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import {
+  statementsPercent,
+  getPerPathThresholds,
+  getApplicableThreshold,
+  normalizePath,
+} from './check-coverage-utils.mjs';
 
 const CRITICAL_PATHS = ['src/llm/', 'src/session/', 'src/game/'];
 
-/**
- * Per-path coverage thresholds.
- * These must match thresholds in vitest.config.ts coverage.thresholds.
- */
-const THRESHOLDS = {
-  'src/llm/': 70,
-  'src/session/': 40,
-  'src/game/': 25,
-};
+// Single source of the per-path floors, shared with the test suite.
+const THRESHOLDS = getPerPathThresholds();
 
 const baseRef = process.argv[2] || 'HEAD~1';
 
@@ -66,46 +65,11 @@ if (!existsSync(coveragePath)) {
 const coverage = JSON.parse(readFileSync(coveragePath, 'utf8'));
 let failures = 0;
 
-/**
- * Compute statement coverage % from istanbul file entry.
- * Returns undefined if no statements are instrumented (indicates coverage miss).
- */
-function statementsPercent(fileData) {
-  const s = fileData.s;
-  if (!s) return undefined;
-  const keys = Object.keys(s);
-  if (keys.length === 0) return undefined; // Empty file — warn about instrumentation
-  const covered = keys.filter((k) => s[k] > 0).length;
-  return (covered / keys.length) * 100;
-}
-
-/**
- * Get the applicable threshold for a file path.
- * Returns the threshold for the most specific (longest) matching prefix.
- */
-function getApplicableThreshold(filePath) {
-  // Sort by length descending to match most-specific prefix first
-  for (const prefix of Object.keys(THRESHOLDS).sort((a, b) => b.length - a.length)) {
-    if (filePath.includes(prefix)) {
-      return THRESHOLDS[prefix];
-    }
-  }
-  return 25; // Default floor (should not happen for critical paths)
-}
-
-/**
- * Normalize path for coverage lookup.
- * coverage-final.json uses absolute paths with forward slashes (vitest v8 behavior).
- */
-function normalizeCoveragePath(path) {
-  return path.replace(/\\/g, '/');
-}
-
 console.log('── Runtime-Critical Changed Files ──\n');
 
 for (const file of criticalChanged) {
   const absPath = resolve(file);
-  const normalizedPath = normalizeCoveragePath(absPath);
+  const normalizedPath = normalizePath(absPath);
 
   // Lookup in coverage data using normalized path
   const entry = coverage[normalizedPath];
@@ -115,7 +79,7 @@ for (const file of criticalChanged) {
   }
 
   const stmtsPct = statementsPercent(entry);
-  const threshold = getApplicableThreshold(file);
+  const threshold = getApplicableThreshold(file, THRESHOLDS);
 
   let passStmts = false;
   if (stmtsPct === undefined) {

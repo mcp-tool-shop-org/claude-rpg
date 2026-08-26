@@ -17,6 +17,10 @@ import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-p
 import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState, type DistrictEconomy, type OpportunityState, type OpportunityFallout, type ArcSnapshot, type EndgameTrigger } from '@ai-rpg-engine/modules';
 import { CampaignJournal, type CampaignRecord, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import { TurnHistory } from './history.js';
+// F-462792bb (SLATE-2, persisted per Director ruling R2): ConversationExchange
+// is prompts/dialogue-npc.ts's own type (narrative-llm-owned, already landed
+// for real — only its consumer wiring is this wave's gap).
+import type { ConversationExchange } from '../prompts/dialogue-npc.js';
 
 export type SavedSession = {
   schemaVersion: number;
@@ -72,6 +76,14 @@ export type SavedSession = {
    * see loadPresentationStateFromSession() for the read side.
    */
   presentationState?: string;
+  /**
+   * F-462792bb (SLATE-2, persisted per Director ruling R2): per-NPC recent
+   * conversation history (GameSession.npcConversations), keyed by NPC id.
+   * Serialized the same way as npcObligations above — JSON.stringify of
+   * Object.fromEntries(map), omitted entirely when empty. See
+   * loadNpcConversationsFromSession() for the read side.
+   */
+  npcConversations?: string;
 };
 
 export type SaveSlotSummary = {
@@ -118,6 +130,8 @@ export type SaveSessionInput = {
   campaignStatus?: 'active' | 'completed';
   /** F-8c3e32b7: see SavedSession.presentationState. */
   presentationState?: string;
+  /** F-462792bb (SLATE-2, persisted per Director ruling R2): see SavedSession.npcConversations. */
+  npcConversations?: Map<string, ConversationExchange[]>;
 };
 
 export async function saveSession(input: SaveSessionInput): Promise<void> {
@@ -127,7 +141,7 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     npcProfiles, npcActions, npcObligations, consequenceChains,
     partyState, districtEconomies, activeOpportunities, resolvedOpportunities,
     arcSnapshot, endgameTriggers, finaleOutline, campaignStatus,
-    presentationState,
+    presentationState, npcConversations,
   } = input;
 
   // Compute leverage snapshot for save summary
@@ -194,6 +208,11 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
       : undefined,
     campaignStatus: campaignStatus ?? 'active',
     presentationState,
+    // F-462792bb (SLATE-2, persisted per Director ruling R2): identical
+    // shape to npcObligations above.
+    npcConversations: npcConversations && npcConversations.size > 0
+      ? JSON.stringify(Object.fromEntries(npcConversations))
+      : undefined,
   };
 
   const dir = dirname(savePath);
@@ -852,6 +871,53 @@ export function loadFinaleFromSession(session: SavedSession): FinaleOutline | nu
     return JSON.parse(session.finaleOutline) as FinaleOutline;
   } catch {
     return null;
+  }
+}
+
+/**
+ * F-462792bb (SLATE-2, persisted per Director ruling R2): shape guard for a
+ * single ConversationExchange entry within a parsed npcConversations Map
+ * value's array. Mirrors isValidNpcObligation's per-entry validation depth
+ * for the same class of problem — JSON.parse succeeds *syntactically* on a
+ * wrong-shape value, so a bare cast trusts it unexamined.
+ */
+function isValidConversationExchange(value: unknown): value is ConversationExchange {
+  if (value == null || typeof value !== 'object') return false;
+  const e = value as Record<string, unknown>;
+  return typeof e.speaker === 'string' && typeof e.text === 'string';
+}
+
+/**
+ * Load NPC conversation history from a saved session.
+ *
+ * F-462792bb (SLATE-2, persisted per Director ruling R2): mirrors
+ * loadObligationsFromSession's per-entry try/validate/drop-with-warning
+ * discipline exactly — a syntactically valid but wrong-shape entry (e.g. a
+ * hand-edited or schema-drifted save) is dropped individually instead of
+ * poisoning the whole Map or the whole load.
+ */
+export function loadNpcConversationsFromSession(
+  session: SavedSession,
+): Map<string, ConversationExchange[]> {
+  if (!session.npcConversations) return new Map();
+  try {
+    const parsed: unknown = JSON.parse(session.npcConversations);
+    if (parsed == null || typeof parsed !== 'object') return new Map();
+    const result = new Map<string, ConversationExchange[]>();
+    for (const [npcId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(value) && value.every(isValidConversationExchange)) {
+        result.set(npcId, value);
+      } else {
+        // F-34078c07: gated behind --debug/CLAUDE_RPG_DEBUG — see
+        // loadObligationsFromSession's identical gate above.
+        if (isDebugEnabled()) {
+          console.warn(`[session] Dropping malformed npcConversations entry for "${npcId}" on load — shape mismatch.`);
+        }
+      }
+    }
+    return result;
+  } catch {
+    return new Map();
   }
 }
 

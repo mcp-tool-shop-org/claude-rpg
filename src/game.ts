@@ -16,6 +16,7 @@ import type { Engine } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog, ItemDefinition } from '@ai-rpg-engine/equipment';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 import { EQUIPMENT_SLOTS, recordItemEvent } from '@ai-rpg-engine/equipment';
 import {
   evaluateItemRecognition,
@@ -187,11 +188,16 @@ import {
   sanitizeFilename,
 } from './game/game-state.js';
 import { generateOpeningNarration, generateFinaleNarration } from './game/game-narration.js';
-import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, renderConcludeOutput, renderPlayOutput, buildPartyStatusLine } from './game/game-presenter.js';
+import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, renderConcludeOutput, renderPlayOutput, renderDeathOutput, buildPartyStatusLine } from './game/game-presenter.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig, StreamCallback } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
 import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
+// F-462792bb (SLATE-2, persisted per Director ruling R2): NPC conversation
+// memory. ConversationExchange is prompts/dialogue-npc.ts's own type
+// (narrative-llm-owned) -- generateDialogue/dialogue-mind.ts already imports
+// and re-exports through that same path.
+import type { ConversationExchange } from './prompts/dialogue-npc.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { hasLivingHostiles } from './runtime/hooks.js';
@@ -292,6 +298,15 @@ export type GameConfig = {
   immersion?: ImmersionConfig;
   profile?: CharacterProfile;
   itemCatalog?: ItemCatalog;
+  /**
+   * F-97ffd8cd: BuildCatalog for resolving archetypeId/disciplineId to their
+   * display name (character/catalog-names.ts's resolveArchetypeName/
+   * resolveDisciplineName) in the player's own status bar / narrator
+   * presence strings — mirrors character/packs.ts's WorldPack.buildCatalog
+   * field. Omitted (e.g. a custom, non-pack world) degrades to the existing
+   * raw-id fallback, never a hard failure.
+   */
+  buildCatalog?: BuildCatalog;
   genre?: string;
   journal?: CampaignJournal;
   /**
@@ -353,6 +368,15 @@ export type GameConfig = {
    * save predates this field) leaves the existing behavior unchanged.
    */
   restoredPresentationState?: PresentationState;
+  /**
+   * F-462792bb (SLATE-2 exposure, brief ruled 2026-08-26): restored per-NPC
+   * conversation history for resumed sessions, read from a save via
+   * session.ts's loadNpcConversationsFromSession(). cli-display threads this
+   * at the load path (bin.ts); GameSession exposes the live map back out
+   * (see the `npcConversations` field below) so cli-display can also thread
+   * it into every saveSession call site on the save path.
+   */
+  npcConversations?: Map<string, ConversationExchange[]>;
 };
 
 export class GameSession {
@@ -366,6 +390,8 @@ export class GameSession {
   readonly worldPrompt?: string;
   readonly immersion: ImmersionRuntime;
   readonly itemCatalog: ItemCatalog | null;
+  /** F-97ffd8cd: see GameConfig.buildCatalog. */
+  readonly buildCatalog: BuildCatalog | null;
   profile: CharacterProfile | null;
   playerRumors: PlayerRumor[] = [];
   activePressures: WorldPressure[] = [];
@@ -382,6 +408,17 @@ export class GameSession {
   lastNpcActions: NpcActionResult[] = [];
   lastNpcProfiles: NpcProfile[] = [];
   npcObligations: Map<string, NpcObligationLedger> = new Map();
+  /**
+   * F-462792bb (SLATE-2, persisted per Director ruling R2): per-NPC recent
+   * conversation history, keyed by NPC id (never name/genre — the same key
+   * turn-loop.ts's Step 5 looks up interpreted.targetIds[0] by). Public and
+   * readonly per the brief's SLATE-2 exposure contract, so cli-display
+   * (bin.ts) can thread it into every saveSession call site on the save
+   * path — readonly only forbids reassigning the property itself; the Map's
+   * contents are still mutated in place via recordConversationExchange()
+   * below and tickObligations-style Map.set() calls.
+   */
+  readonly npcConversations: Map<string, ConversationExchange[]>;
   previousBreakpoints: Map<string, LoyaltyBreakpoint> = new Map();
   activeConsequenceChains: Map<string, ConsequenceChain> = new Map();
   lastLeverageResolution: LeverageResolution | null = null;
@@ -419,6 +456,18 @@ export class GameSession {
   private subsystemFailureCount = 0;
   private readonly subsystemFailures: { tick: number; error: string }[] = [];
   /**
+   * F-940cd4d0: count of consecutive non-fatal narrateScene fallbacks up to
+   * and including the most recent turn, forwarded into ExecuteTurnOpts so
+   * narrator.ts can switch to FALLBACK_NARRATION_REPEATED once an outage
+   * proves itself ongoing rather than a one-off hiccup. Session-local,
+   * deliberately NOT persisted — same shape as turnsSinceLastAutosave/
+   * subsystemFailureCount above: a resumed session is itself evidence the
+   * app just started working again, so carrying a stale count forward would
+   * show "this has been happening for a while" copy on a fresh session's
+   * first turn even though zero fallbacks occurred in the new process.
+   */
+  private consecutiveFallbacks = 0;
+  /**
    * F-b4b16d0a: COST COMMAND — per-call-type token/cost tracker for this
    * session. Fed by executeTurn()'s per-call-type client wrapping
    * (turn-loop.ts) for narration/dialogue, and by getOpeningNarration()/
@@ -451,11 +500,21 @@ export class GameSession {
     // over initialize()'s own narrower combat-core-derived 'combat' restore
     // when both apply — see GameConfig.restoredPresentationState's doc
     // comment.
+    // F-6bc0721e (SLATE-6, brief ruled 2026-08-26): this ALSO already "arms"
+    // the downed gate at construction when restoredPresentationState is
+    // 'menu' -- a save made while downed resumes downed, since
+    // processInput()'s gate reads stateMachine.current directly (set here,
+    // before any turn is ever played) rather than depending on a per-turn
+    // transition edge that a resumed session has no way to fire.
     if (config.restoredPresentationState) {
       this.immersion.stateMachine.transition(config.restoredPresentationState, 'session-restore');
     }
     this.profile = config.profile ?? null;
     this.itemCatalog = config.itemCatalog ?? null;
+    this.buildCatalog = config.buildCatalog ?? null;
+    // F-462792bb (SLATE-2, persisted per Director ruling R2): see
+    // GameConfig.npcConversations's doc comment.
+    this.npcConversations = config.npcConversations ?? new Map();
     this.journal = config.journal ?? new CampaignJournal();
     this.genre = config.genre ?? 'fantasy';
     this.fastMode = config.fastMode ?? false;
@@ -488,12 +547,12 @@ export class GameSession {
 
   /** Get presence strings from current profile state. */
   getPresence(): { narrator?: string; npc?: string } {
-    return getPresenceData(this.profile, this.itemCatalog);
+    return getPresenceData(this.profile, this.itemCatalog, this.buildCatalog ?? undefined);
   }
 
   /** Get status data for enhanced status bar. */
   getStatusData(): StatusData | null {
-    return getStatusDataFromProfile(this.profile, this.itemCatalog);
+    return getStatusDataFromProfile(this.profile, this.itemCatalog, this.buildCatalog ?? undefined);
   }
 
   /**
@@ -909,6 +968,20 @@ export class GameSession {
       }
     }
 
+    // F-6bc0721e (SLATE-6, death-as-setback per Director ruling R1): gate
+    // ordinary turns while the player is down -- placed AFTER every play-mode
+    // slash command above (and /director / quit, both handled earlier in
+    // this method) has already had its chance to return, so /status,
+    // /sheet, /chronicle, /help, /export, quit all keep working while
+    // downed, the same way they already work in director mode. Reads
+    // stateMachine.current directly (not TurnResult.justDied, which is a
+    // same-turn edge flag) so this also correctly gates the very first input
+    // after a save made while downed resumes downed (see the constructor's
+    // restoredPresentationState handling above).
+    if (this.mode === 'play' && this.immersion.stateMachine.current === 'menu') {
+      return this.renderDownedGate(trimmed);
+    }
+
     // Play mode: execute a turn with immersion + character presence
     const presence = this.getPresence();
     const pressureCtx = this.getVisiblePressureContext();
@@ -947,6 +1020,20 @@ export class GameSession {
         endgameContext: this.getEndgameContext(),
         chronicleContext: this.getChronicleContext(),
         tokenTracker: this.tokenTracker,
+        // F-462792bb (SLATE-2, persisted per Director ruling R2): the WHOLE
+        // map -- turn-loop.ts's Step 5 resolves the per-NPC slice itself
+        // once it knows which NPC is being spoken to (see
+        // ExecuteTurnOpts.conversationHistory's doc comment).
+        conversationHistory: this.npcConversations,
+        // F-940cd4d0: session-local counter, reset/incremented below once
+        // this turn's own narrationResult.isFallback is known.
+        consecutiveFallbacks: this.consecutiveFallbacks,
+        // F-9976a6d6 (SLATE-5e option (a) only per Director ruling R3): a
+        // true no-op via NoopLogger for every non-debug session (default).
+        debugLog: this.debugLog,
+        // F-6e75fa93 (SLATE-1 packId, brief ruled 2026-08-26): forwarded to
+        // generateAmbientLine/generateZoneAmbience's 3rd positional arg.
+        packId: this.packId,
         // Streaming seam contract (game-core half): only pass a defined
         // callback when a real sink is registered — narrateScene's
         // `onChunk && client.generateStream` gate (narrator.ts) must see
@@ -1009,6 +1096,13 @@ export class GameSession {
     // point must not swallow presentation for a turn that already completed.
     this.emitPresentation(turnResult.audioCalls);
 
+    // F-940cd4d0: what counts is exactly and only narrationResult.isFallback
+    // -- surfaced on TurnResult scoped precisely to "the narrator itself
+    // degraded" (see TurnResult.isFallback's doc comment, turn-loop.ts) --
+    // so a low-confidence clarification turn (a distinct UX path) correctly
+    // resets this to 0 rather than counting toward an "outage" streak.
+    this.consecutiveFallbacks = turnResult.isFallback ? this.consecutiveFallbacks + 1 : 0;
+
     // PB-001: Post-turn subsystem ticks wrapped in error containment.
     // The critical path (executeTurn) already completed — subsystem failures
     // should degrade gracefully, not crash the session.
@@ -1021,6 +1115,10 @@ export class GameSession {
 
       // Process crafting actions (craft/salvage/repair/modify) (v1.8)
       this.processCraftAction(turnResult);
+
+      // F-462792bb (SLATE-2, persisted per Director ruling R2): capture this
+      // turn's player<->NPC exchange, if any.
+      this.recordConversationExchange(turnResult);
 
       // Apply profile hints from this turn (may spawn rumors)
       this.applyProfileHints(turnResult.profileHints);
@@ -1163,26 +1261,40 @@ export class GameSession {
     const autosaveOutcome = await this.checkAutosave();
     const autosaveMsg = this.formatAutosaveNotice(autosaveOutcome);
 
-    const output = renderPlayOutput({
-      narration: turnResult.narration,
-      dialogue: turnResult.dialogue,
-      world: this.engine.world,
-      availableActions: this.engine.getAvailableActions(),
-      profileStatus: this.getStatusData() ?? undefined,
-      leverageStatus,
-      partyStatusLine: buildPartyStatusLine(this.partyState, this.engine.world),
-      suggestions,
-      hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
-      // Contract A (turn divider): cli-display's play-renderer consumes this
-      // via makeTurnDivider when present. history.getAll().length is this
-      // codebase's own established "how many turns has the player
-      // experienced" counter (matches the test harness's turnCount() and
-      // the sibling turn-count assertions in test/integration/
-      // game-turn-loop.test.ts) — executeTurn() has already recorded this
-      // turn in history by this point, so it already reflects the turn just
-      // completed.
-      turnNumber: this.history.getAll().length,
-    });
+    // F-6bc0721e (SLATE-6, death-as-setback per Director ruling R1): the
+    // turn whose own transition just crossed into 'menu' gets the dedicated
+    // death screen (mirroring renderConcludeOutput's dedicated framing for
+    // campaign endings) instead of the ordinary play screen -- using this
+    // turn's REAL narration (how the player actually died), not the
+    // downed-gate's generic placeholder text. Every SUBSEQUENT turn while
+    // still down is caught earlier by the gate above processInput(), before
+    // executeTurn() ever runs, so this branch only ever fires once per
+    // death.
+    const output = turnResult.justDied
+      ? renderDeathOutput(turnResult.narration, this.profile?.build.name)
+      : renderPlayOutput({
+          narration: turnResult.narration,
+          dialogue: turnResult.dialogue,
+          world: this.engine.world,
+          availableActions: this.engine.getAvailableActions(),
+          profileStatus: this.getStatusData() ?? undefined,
+          leverageStatus,
+          partyStatusLine: buildPartyStatusLine(this.partyState, this.engine.world),
+          suggestions,
+          hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
+          // Contract A (turn divider): cli-display's play-renderer consumes this
+          // via makeTurnDivider when present. history.getAll().length is this
+          // codebase's own established "how many turns has the player
+          // experienced" counter (matches the test harness's turnCount() and
+          // the sibling turn-count assertions in test/integration/
+          // game-turn-loop.test.ts) — executeTurn() has already recorded this
+          // turn in history by this point, so it already reflects the turn just
+          // completed.
+          turnNumber: this.history.getAll().length,
+          // F-6e75fa93 (SLATE-1, brief ruled 2026-08-26): zero-LLM-cost
+          // ambient NPC chatter generated this turn, if any.
+          ambientLines: turnResult.ambientLines,
+        });
     let finalOutput = output;
     // F-cfc5ff37: collect the post-turn "trailer notices" (structured
     // announcements, subsystem warning, autosave notice) and join them with
@@ -1210,6 +1322,35 @@ export class GameSession {
     if (autosaveMsg) trailerNotices.push(autosaveMsg);
     finalOutput += trailerNotices.join('\n');
     return finalOutput;
+  }
+
+  /**
+   * F-6bc0721e (SLATE-6, death-as-setback per Director ruling R1): render
+   * the downed-gate response for an ordinary turn attempted while
+   * stateMachine.current === 'menu'. A small explicit allow-list of
+   * continuation phrases transitions back to 'exploration' and returns a
+   * short beat -- deliberately WITHOUT calling executeTurn/
+   * engine.submitAction, so no world-state mutation happens on the
+   * transition turn itself; the player's next real input is an ordinary
+   * turn. Any other input returns a distinct frame (renderDeathOutput,
+   * mirroring renderConcludeOutput's dedicated framing for campaign
+   * endings) rather than the ordinary play screen.
+   *
+   * DRAFT copy (both the continuation beat and the downed-frame narration
+   * below) — coordinator/Director copy review, per the brief's "every
+   * player-facing string you introduce is a DRAFT" instruction.
+   */
+  private renderDownedGate(input: string): string {
+    const normalized = input.trim().toLowerCase();
+    const isContinuation = normalized === 'continue' || normalized === 'get up' || normalized === 'rise';
+    if (isContinuation) {
+      this.immersion.stateMachine.transition('exploration', 'player-continue');
+      return '\n  You steady yourself and rise, the ground steady beneath you once more.\n';
+    }
+    return renderDeathOutput(
+      'You are down. The world holds its breath.\n\nType "continue" when you are ready to get back up.',
+      this.profile?.build.name,
+    );
   }
 
   /**
@@ -1278,6 +1419,11 @@ export class GameSession {
         // F-8c3e32b7: see SavedSession.presentationState — restored via
         // GameConfig.restoredPresentationState on the session's next load.
         presentationState: this.immersion.stateMachine.current,
+        // F-462792bb (SLATE-2, persisted per Director ruling R2): see
+        // GameConfig.npcConversations's doc comment. cli-display (bin.ts)
+        // threads this same field into every OTHER saveSession call site —
+        // this is the one this domain owns directly (autosave).
+        npcConversations: this.npcConversations,
       };
       await saveSession(input);
       this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
@@ -3152,6 +3298,38 @@ export class GameSession {
         this.handleModify(recipeOrItem);
         break;
     }
+  }
+
+  /**
+   * F-462792bb (SLATE-2, persisted per Director ruling R2): capture this
+   * turn's player<->NPC exchange into this.npcConversations, keyed by the
+   * NPC's real id (never name/genre, per the brief's explicit requirement --
+   * matches the same key turn-loop.ts's Step 5 looks the map up by).
+   *
+   * Reads turnResult.dialogue; skipped entirely when absent OR when
+   * isFallback is true -- the hardcoded 'NPC pauses, gathering their
+   * thoughts...' stall text (dialogue-mind.ts's own isFallback contract) is
+   * a non-event, and remembering it forever as if it were a real exchange
+   * would be worse than not remembering. Trims to the last 20 entries per
+   * NPC, mirroring this exact codebase's own MAX_COMPACTED_CHUNKS=50
+   * discipline (session/history.ts) for any structure that grows once per
+   * campaign-length session.
+   *
+   * Player-line speaker is the fixed literal 'Player' (contract amendment
+   * #1, brief ruled 2026-08-26) -- narrative-llm's prompt convention and
+   * their formatConversationHistory render these labels; 'Player' matches
+   * the prompt's existing "Player says:" framing (prompts/dialogue-npc.ts).
+   * NPC lines keep turnResult.dialogue.speakerName.
+   */
+  private recordConversationExchange(turnResult: TurnResult): void {
+    const dialogue = turnResult.dialogue;
+    if (!dialogue || dialogue.isFallback) return;
+
+    const npcId = dialogue.speakerId;
+    const exchanges = this.npcConversations.get(npcId) ?? [];
+    exchanges.push({ speaker: 'Player', text: turnResult.playerInput });
+    exchanges.push({ speaker: dialogue.speakerName, text: dialogue.text });
+    this.npcConversations.set(npcId, exchanges.slice(-20));
   }
 
   /** Handle salvage: break an item down into materials. */

@@ -2,22 +2,36 @@
 // v0.2: integrated with ImmersionRuntime for multi-modal output
 // v0.7: pressure resolution detection heuristic
 
-import type { Engine, ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
+import type { Engine, ResolvedEvent, WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { NarrationPlan, PresentationState } from '@ai-rpg-engine/presentation';
-import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
+import type { NarrationPlan } from '@ai-rpg-engine/presentation';
+import { getEntityFaction, getCognition, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, FATAL_NARRATION_FALLBACK, type NarrationResult } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
+import type { ConversationExchange } from './prompts/dialogue-npc.js';
+// F-6e75fa93 (SLATE-1, ruled 2026-08-26): narrative-llm extracts NPC
+// personality derivation into a shared, exported helper this same wave
+// (aligned to the re-keyed merchant|guard|scholar|rogue|noble|default
+// template vocabulary) so this domain doesn't duplicate its ternary chain.
+// Not yet exported in THIS isolated worktree -- see the wave brief's
+// isolation-discipline note; turn-loop.test.ts vi.mocks this module.
+import { deriveNpcPersonality } from './dialogue/npc-context.js';
+// F-6e75fa93: fully-built, zero-LLM-cost ambient dialogue generators — see
+// this finding's routed Fix text. SLATE-1 (brief, ruled 2026-08-26): both
+// generators gain `packId` as a 3rd param this same wave.
+import { generateAmbientLine, generateZoneAmbience, type AmbientNpcInfo } from './npc/ambient-dialogue.js';
 // F-8da2e6f7: history.js imports FATAL_NARRATION_FALLBACK back from this
 // file (see below); TurnHistory is used only as a type here (ExecuteTurnOpts
 // below), so making that explicit keeps the two modules' mutual reference
 // from becoming a real runtime import cycle.
 import type { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
+import type { StateTransition } from './runtime/presentation-state.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { withTokenTracking, type SessionTokenTracker } from './game/token-tracker.js';
+import type { DebugLogger } from './game/debug-logger.js';
 
 /**
  * F-4ec3609b (ORDERING contract, game-core half): runtime-foundry added a
@@ -46,9 +60,17 @@ import { withTokenTracking, type SessionTokenTracker } from './game/token-tracke
  * needs it (below) without editing immersion-runtime.ts; once
  * runtime-foundry's half lands, the real class structurally satisfies this
  * type with no further change required here.
+ *
+ * F-6bc0721e (SLATE-6 mechanism, brief ruled 2026-08-26): runtime-foundry
+ * broadens this method's return type from a bare PresentationState to the
+ * full StateTransition ({from, to, trigger} — already exported from
+ * src/runtime/presentation-state.ts) this same wave, so executeTurn() can
+ * detect the from!='menu' -> to=='menu' edge (a fresh player defeat) instead
+ * of only the resulting label. `.to` replaces the old return value
+ * everywhere it was consumed as presentationState below.
  */
 type ImmersionRuntimeWithInference = ImmersionRuntime & {
-  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): PresentationState;
+  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): StateTransition;
 };
 
 export type ProfileUpdateHints = {
@@ -69,6 +91,35 @@ export type TurnResult = {
   audioCalls: McpToolCall[];
   tick: number;
   profileHints: ProfileUpdateHints;
+  /**
+   * F-940cd4d0: true when `narration` is a fallback sentinel (narrator.ts's
+   * FALLBACK_NARRATION/FALLBACK_NARRATION_REPEATED) rather than real authored
+   * prose -- i.e. narrationResult.isFallback on the normal-path return.
+   * Precisely scoped to "the narrator itself degraded": explicitly `false`
+   * on the low-confidence clarification and engine.submitAction-catch early
+   * returns below, since narrateScene never runs in either branch and a
+   * clarification request is a distinct UX path, not a narrator outage.
+   * game.ts threads this into a consecutiveFallbacks counter so a sustained
+   * outage can switch to FALLBACK_NARRATION_REPEATED instead of repeating
+   * the isolated-hiccup sentence forever.
+   */
+  isFallback: boolean;
+  /**
+   * F-6e75fa93: zero-LLM-cost ambient NPC chatter lines generated this turn
+   * (Step 4.6), when the cadence gate fired and the current zone had NPCs to
+   * draw from. Undefined (not an empty array) on every suppressed turn.
+   */
+  ambientLines?: string[];
+  /**
+   * F-6bc0721e (SLATE-6, brief ruled 2026-08-26): true exactly on the turn
+   * whose own presentation-state transition crosses from a non-'menu' state
+   * into 'menu' (a fresh player defeat this turn) -- `false` for every other
+   * turn, including one that merely continues an already-downed session
+   * (restored from a save, or a subsequent turn while still down). Computed
+   * from inferAndTransition()'s StateTransition ({from, to}); `false` when
+   * no immersion runtime is present at all (nothing to infer from).
+   */
+  justDied: boolean;
 };
 
 // F-c4332895: fallback narration recorded when narrateScene rethrows a fatal
@@ -158,6 +209,38 @@ export type ExecuteTurnOpts = {
    * don't pass one see `client` passed through completely unwrapped.
    */
   tokenTracker?: SessionTokenTracker;
+  /**
+   * F-462792bb (SLATE-2, persisted per Director ruling R2): the WHOLE
+   * per-NPC conversation-history map, not a pre-resolved slice -- game.ts
+   * calls executeTurn() before Step 1 (inside executeTurn) resolves which
+   * NPC is being spoken to, so the caller structurally cannot pre-filter by
+   * npcId before this call. Step 5 below does the per-NPC lookup itself once
+   * `interpreted.targetIds[0]` is known.
+   */
+  conversationHistory?: Map<string, ConversationExchange[]>;
+  /**
+   * F-940cd4d0: count of consecutive non-fatal narrateScene fallbacks
+   * immediately preceding this turn, forwarded straight into narrateScene's
+   * own opts (narrator.ts's NarrateSceneOpts.consecutiveFallbacks) so a
+   * sustained outage can switch to FALLBACK_NARRATION_REPEATED. game.ts
+   * tracks this as a session-local (non-persisted) counter.
+   */
+  consecutiveFallbacks?: number;
+  /**
+   * F-9976a6d6 (SLATE-5e, option (a) only per Director ruling R3): optional
+   * structured logger. When provided, the interpreter's already-computed
+   * reasoning (InterpretedAction.reasoning) is logged for every confidence
+   * tier, not just the low-confidence clarification path that already reads
+   * it below -- a true no-op via NoopLogger for every non-debug session.
+   */
+  debugLog?: DebugLogger;
+  /**
+   * F-6e75fa93 (SLATE-1 packId, brief ruled 2026-08-26): forwarded as the
+   * 3rd positional arg to generateAmbientLine/generateZoneAmbience. Mirrors
+   * GameSession's existing packId field (game.ts) — undefined for
+   * custom/non-pack worlds, same as every other optional context field.
+   */
+  packId?: string;
 };
 
 /** Execute one full turn of the game loop. */
@@ -168,7 +251,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     pressureContext, worldPressures, lastNpcActions, districtDescriptor,
     partyPresence, economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
-    tokenTracker,
+    tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
   } = opts;
   const previousLocationId = engine.world.locationId;
 
@@ -196,6 +279,17 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     availableVerbs,
     recentContext,
   );
+
+  // F-9976a6d6 (SLATE-5e, option (a) only per Director ruling R3): surface
+  // the interpreter's already-computed reasoning to --debug diagnostics for
+  // every confidence tier, not just the low-confidence branch below (which
+  // already reads it for a different reason -- clarification copy). True
+  // no-op via NoopLogger when --debug/CLAUDE_RPG_DEBUG is not set.
+  debugLog?.debug('interpret', 'action-reasoning', {
+    verb: interpreted.verb,
+    confidence: interpreted.confidence,
+    reasoning: interpreted.reasoning,
+  });
 
   // If low confidence, return clarification without resolving
   if (interpreted.confidence === 'low') {
@@ -240,6 +334,12 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       audioCalls: [],
       tick: engine.tick,
       profileHints: { xpGained: 0 },
+      // F-940cd4d0: narrateScene never ran in this branch -- this is a
+      // distinct UX path (clarification request), not a narrator outage.
+      isFallback: false,
+      // F-6bc0721e: no engine action resolved, so no presentation-state
+      // transition happened this turn either.
+      justDied: false,
     };
   }
 
@@ -262,6 +362,10 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       audioCalls: [],
       tick: engine.tick,
       profileHints: { xpGained: 0 },
+      // F-940cd4d0: narrateScene never ran -- the action didn't even resolve.
+      isFallback: false,
+      // F-6bc0721e: no events resolved, so no transition happened.
+      justDied: false,
     };
   }
 
@@ -277,9 +381,15 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // narrator's prose is generated from this turn's own state label instead
   // of lagging one turn behind (see the type doc comment above for the
   // cross-domain contract this leans on).
-  const presentationState = immersion
+  // F-6bc0721e (SLATE-6 mechanism, brief ruled 2026-08-26): inferAndTransition
+  // now returns the full StateTransition ({from, to, trigger}), not just the
+  // resulting label -- `.to` replaces the old bare return value below, and
+  // the from/to pair also lets this turn detect a fresh player-defeat edge
+  // (see `justDied` on the final return).
+  const transition = immersion
     ? (immersion as ImmersionRuntimeWithInference).inferAndTransition(engine, events, interpreted.verb)
     : undefined;
+  const presentationState = transition?.to;
   let narrationResult: NarrationResult;
   try {
     narrationResult = await narrateScene({
@@ -301,6 +411,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       endgameContext,
       onChunk: onNarrationChunk,
       chronicleContext,
+      consecutiveFallbacks,
     });
   } catch (err) {
     // F-c4332895: engine.submitAction() above has already mutated world
@@ -351,6 +462,46 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     );
   }
 
+  // Step 4.6 (F-6e75fa93): zero-LLM-cost ambient NPC chatter. Fires only
+  // during ordinary exploration (the only presentationState this turn
+  // realistically observes for this purpose -- F-5a0021c9 confirmed
+  // 'tension'/'dream' are structurally unreachable and 'director' never
+  // reaches executeTurn), on a zone entry (high value, first impression) or
+  // a periodic stateless quiet-turn heuristic (deliberately not tracking
+  // "turns since last fired" as new mutable state -- tick%5 is already
+  // deterministic and already persists via engineState across save/load).
+  let ambientLines: string[] | undefined;
+  if (presentationState === 'exploration') {
+    const zoneEntered = engine.world.locationId !== previousLocationId;
+    const periodicQuiet = engine.tick % 5 === 0 && events.length === 0;
+    if (zoneEntered || periodicQuiet) {
+      // Same zone-NPC enumeration pattern already used by
+      // detectPressureResolution below (Object.values + zoneId/playerId
+      // filter).
+      const zoneNpcs = Object.values(engine.world.entities).filter(
+        (e) => e.zoneId === engine.world.locationId && e.id !== engine.world.playerId,
+      );
+      if (zoneNpcs.length === 1) {
+        // Exactly 1 NPC: generateZoneAmbience requires >=2 and silently
+        // returns [] otherwise -- using only the zone function would
+        // permanently lose ambient color for the common single-NPC-zone
+        // case (e.g. a lone shopkeeper).
+        const seed = engine.store.rng.int(0, 1_000_000);
+        ambientLines = [generateAmbientLine(buildAmbientNpcInfo(engine.world, zoneNpcs[0]), seed, packId)];
+      } else if (zoneNpcs.length >= 2) {
+        // One rng draw per triggering turn (not per NPC) -- the shared RNG
+        // stream is already save/load-continuous, and generateZoneAmbience
+        // fans the single seed out per-NPC internally (effectiveSeed + i).
+        const seed = engine.store.rng.int(0, 1_000_000);
+        ambientLines = generateZoneAmbience(
+          zoneNpcs.map((npc) => buildAmbientNpcInfo(engine.world, npc)),
+          seed,
+          packId,
+        );
+      }
+    }
+  }
+
   // Step 5: Generate NPC dialogue if speaking
   let dialogue: DialogueResult | null = null;
   if (interpreted.verb === 'speak' && interpreted.targetIds?.[0]) {
@@ -368,7 +519,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
         lastNpcActions,
         economyContext,
         craftingContext,
+        // F-462792bb (SLATE-2, persisted per Director ruling R2): Step 5 is
+        // the first point in this turn that knows WHICH npcId is being
+        // spoken to (interpreted.targetIds[0]) -- the caller passes the
+        // whole map because it can't pre-filter before that's resolved (see
+        // ExecuteTurnOpts.conversationHistory's doc comment).
         opportunityContext,
+        conversationHistory?.get(interpreted.targetIds[0]),
       );
 
       // Add voice cast to dialogue if immersion is active
@@ -441,6 +598,37 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     audioCalls,
     tick: engine.tick,
     profileHints,
+    isFallback: narrationResult.isFallback,
+    ambientLines,
+    // F-6bc0721e: true exactly on the edge into 'menu' from a non-'menu'
+    // state this turn -- a resumed already-downed session (restored state
+    // already 'menu' at construction) has no in-turn transition to compare
+    // against, so it correctly reports false; the downed *gate* itself
+    // (game.ts) reads stateMachine.current directly and doesn't depend on
+    // this edge flag.
+    justDied: transition ? transition.to === 'menu' && transition.from !== 'menu' : false,
+  };
+}
+
+/**
+ * F-6e75fa93: build the minimal NPC info ambient-dialogue.ts's generators
+ * need from a world entity — personality via narrative-llm's shared
+ * deriveNpcPersonality() (SLATE-1), beliefs flattened from cognition state
+ * into the `${subject}.${key}: value` shape ambient-dialogue.ts's
+ * BELIEF_OVERLAYS pattern-match against (mirrors npc-context.ts's own belief
+ * handling, cross-domain).
+ */
+function buildAmbientNpcInfo(world: WorldState, npc: EntityState): AmbientNpcInfo {
+  const cognition = getCognition(world, npc.id);
+  const beliefs: Record<string, string | number | boolean> = {};
+  for (const b of cognition?.beliefs ?? []) {
+    beliefs[`${b.subject}.${b.key}`] = b.value;
+  }
+  return {
+    name: npc.name,
+    personality: deriveNpcPersonality(npc),
+    beliefs,
+    tags: npc.tags,
   };
 }
 

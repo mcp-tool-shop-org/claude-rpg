@@ -5,7 +5,7 @@ import { writeFile, readFile, stat, mkdir, rm, readdir } from 'node:fs/promises'
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { saveSession, loadSession, type SaveSessionInput } from './session.js';
+import { saveSession, loadSession, loadNpcConversationsFromSession, type SaveSessionInput } from './session.js';
 import { TurnHistory } from './history.js';
 
 // Minimal engine mock for save/load round-trip
@@ -99,6 +99,48 @@ describe('saveSession with SaveSessionInput (PB-005)', () => {
     const raw = await readFile(savePath, 'utf-8');
     const data = JSON.parse(raw);
     expect(data.presentationState).toBeUndefined();
+  });
+
+  // F-462792bb (SLATE-2, persisted per Director ruling R2): true disk-based
+  // save -> load round trip for NPC conversation history, mirroring the
+  // presentationState tests immediately above (F-8c3e32b7) exactly.
+  it('round-trips npcConversations through a real save -> load cycle (F-462792bb)', async () => {
+    const savePath = join(testDir, 'save5.json');
+    const conversations = new Map([
+      ['pilgrim', [
+        { speaker: 'Player', text: 'What are you doing here?' },
+        { speaker: 'Suspicious Pilgrim', text: 'Nothing. Move along.' },
+      ]],
+    ]);
+    const input: SaveSessionInput = {
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      npcConversations: conversations,
+    };
+    await saveSession(input);
+
+    const loaded = await loadSession(savePath);
+    const result = loadNpcConversationsFromSession(loaded.session);
+
+    expect(result).toEqual(conversations);
+  });
+
+  it('omits npcConversations when the map is empty or not provided', async () => {
+    const savePath = join(testDir, 'save6.json');
+    const input: SaveSessionInput = {
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      npcConversations: new Map(),
+    };
+    await saveSession(input);
+
+    const raw = await readFile(savePath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.npcConversations).toBeUndefined();
   });
 });
 

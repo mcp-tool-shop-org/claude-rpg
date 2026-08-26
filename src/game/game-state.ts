@@ -4,6 +4,7 @@
 
 import type { Engine, WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 import type { ItemCatalog, ItemDefinition } from '@ai-rpg-engine/equipment';
 import { EQUIPMENT_SLOTS, recordItemEvent } from '@ai-rpg-engine/equipment';
 import {
@@ -288,23 +289,42 @@ export function getPlayerZoneFaction(world: WorldState): string | undefined {
   return undefined;
 }
 
-/** Get presence data from current profile state. */
+/**
+ * Get presence data from current profile state.
+ *
+ * @param catalog F-97ffd8cd: optional BuildCatalog, forwarded verbatim to
+ *   buildPresence() so archetypeId/disciplineId resolve to their display
+ *   name (character/catalog-names.ts) instead of the raw kebab-case catalog
+ *   id — buildPresence already accepts this trailing param; this function
+ *   was simply dropping it before this fix. Omitted callers keep getting
+ *   the raw id back, same as before.
+ */
 export function getPresenceData(
   profile: CharacterProfile | null,
   itemCatalog: ItemCatalog | null,
+  catalog?: BuildCatalog,
 ): { narrator?: string; npc?: string } {
   if (!profile || !itemCatalog) return {};
-  const presence = buildPresence(profile, itemCatalog);
+  const presence = buildPresence(profile, itemCatalog, undefined, catalog);
   return { narrator: presence.narratorSummary, npc: presence.npcPerception };
 }
 
-/** Get status data for enhanced status bar. */
+/**
+ * Get status data for enhanced status bar.
+ *
+ * @param catalog F-97ffd8cd: same optional BuildCatalog contract as
+ *   getPresenceData above, forwarded to buildStatusData's own trailing
+ *   `catalog` param (its 3rd param, `statuses`, is skipped via `undefined`
+ *   so it keeps its own `= []` default — this function has no statuses
+ *   input to give it).
+ */
 export function getStatusDataFromProfile(
   profile: CharacterProfile | null,
   itemCatalog: ItemCatalog | null,
+  catalog?: BuildCatalog,
 ): StatusData | null {
   if (!profile || !itemCatalog) return null;
-  return buildStatusData(profile, itemCatalog);
+  return buildStatusData(profile, itemCatalog, undefined, catalog);
 }
 
 /** Get compact opportunity context string for narrator. */

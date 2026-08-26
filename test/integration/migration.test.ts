@@ -164,16 +164,12 @@ describe('fixture round-trips via loadSession', () => {
     // Optional systems survived migration
     const rumors = loadRumorsFromSession(session);
     expect(rumors).toHaveLength(1);
-    // F-02ca0dbd: v1-rich.json's rumor predates the current PlayerRumor shape
-    // (no `claim`, `subjectDescriptor`, `confidence`, etc. — see
-    // node_modules/@ai-rpg-engine/modules/dist/player-rumor.d.ts). migrateV1toV2
-    // does not yet transform playerRumors, so loadRumorsFromSession's
-    // `as PlayerRumor[]` cast is a lie for this fixture: the parsed object is
-    // really the legacy { id, text, source, tick } shape. Assert through
-    // `unknown` rather than pretending it already conforms to PlayerRumor —
-    // renaming this to `.claim` would silently assert `undefined` and mask the
-    // still-missing rumor-shape migration step.
-    expect((rumors[0] as unknown as { text: string }).text).toContain('sealed crypt');
+    // F-c5ff2a5c (supersedes the F-02ca0dbd cast-through-unknown workaround):
+    // migrateV1toV2 now normalizes legacy-shaped rumors to the real PlayerRumor
+    // shape (text→claim, tick→originTick — see migrate.ts's mapLegacyRumor), so
+    // the migrated fixture genuinely conforms and the assertion reads the real
+    // field. If this reads undefined again, the normalization step regressed.
+    expect(rumors[0].claim).toContain('sealed crypt');
 
     const pressures = loadPressuresFromSession(session);
     expect(pressures).toHaveLength(1);

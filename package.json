@@ -25,7 +25,8 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run test:coverage"
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "verify": "npm run typecheck && npm run typecheck:test && npm run test:coverage"
   },
   "dependencies": {
     "@ai-rpg-engine/audio-director": "^2.0.0",

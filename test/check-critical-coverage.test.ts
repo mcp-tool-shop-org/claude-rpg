@@ -149,6 +149,20 @@ describe('branchesPercent', () => {
   });
 });
 
+describe('getApplicableThreshold with path-prefix matching', () => {
+  it('anchors prefixes at the path start (startsWith), not anywhere in the string', () => {
+    const thresholds = getPerPathThresholds();
+    // Discriminating case: 'src/llm/' appears at a NON-ZERO offset. Substring
+    // matching (the old includes()) would return 70 here; anchored prefix
+    // matching returns the 25 default. This test fails if includes() returns.
+    expect(getApplicableThreshold('vendor/src/llm/x.ts', thresholds)).toBe(25);
+    // Positive control: a real prefix match still resolves its floor.
+    expect(getApplicableThreshold('src/llm/adapter.ts', thresholds)).toBe(70);
+    // Sibling-directory name sharing the prefix as a string is not a match.
+    expect(getApplicableThreshold('src/gameplay/file.ts', thresholds)).toBe(25);
+  });
+});
+
 describe('coverageReportLine', () => {
   it('formats a passing file report', () => {
     const line = coverageReportLine('src/llm/test.ts', 75, 60, 70);

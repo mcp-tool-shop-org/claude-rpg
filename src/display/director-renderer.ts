@@ -137,38 +137,56 @@ ${DIVIDER}
 `;
 }
 
+/**
+ * Options for {@link executeDirectorCommand}. Collapsed from a 29-parameter
+ * positional signature (F-783f1de1) — many fields share a type (e.g. the
+ * adjacent characterName/characterTitle strings, several Map<string, X>
+ * params), so TypeScript's structural typing could not catch two same-typed
+ * arguments transposed at a call site. Passing every field by name makes
+ * that class of bug a compile error instead of a silent mislabeling.
+ */
+export type ExecuteDirectorCommandOptions = {
+  command: string;
+  world: WorldState;
+  playerRumors?: PlayerRumor[];
+  activePressures?: WorldPressure[];
+  resolvedPressures?: PressureFallout[];
+  journal?: CampaignJournal;
+  currentTick?: number;
+  characterName?: string;
+  characterTitle?: string;
+  factionProfiles?: FactionProfile[];
+  lastFactionActions?: FactionActionResult[];
+  leverageState?: LeverageState;
+  strategicMap?: StrategicMap;
+  statusData?: StatusData;
+  suggestedMove?: ScoredMove | null;
+  situationTag?: string;
+  profileCustom?: Record<string, string | number | boolean>;
+  npcProfiles?: NpcProfile[];
+  lastNpcActions?: NpcActionResult[];
+  npcObligations?: Map<string, NpcObligationLedger>;
+  partyState?: PartyState;
+  profile?: CharacterProfile | null;
+  itemCatalog?: ItemCatalog | null;
+  districtEconomies?: Map<string, DistrictEconomy>;
+  genre?: string;
+  activeOpportunities?: OpportunityState[];
+  arcSnapshot?: ArcSnapshot | null;
+  endgameTriggers?: EndgameTrigger[];
+  finaleOutline?: FinaleOutline | null;
+};
+
 /** Execute a director command and return the rendered output. */
-export function executeDirectorCommand(
-  command: string,
-  world: WorldState,
-  playerRumors?: PlayerRumor[],
-  activePressures?: WorldPressure[],
-  resolvedPressures?: PressureFallout[],
-  journal?: CampaignJournal,
-  currentTick?: number,
-  characterName?: string,
-  characterTitle?: string,
-  factionProfiles?: FactionProfile[],
-  lastFactionActions?: FactionActionResult[],
-  leverageState?: LeverageState,
-  strategicMap?: StrategicMap,
-  statusData?: StatusData,
-  suggestedMove?: ScoredMove | null,
-  situationTag?: string,
-  profileCustom?: Record<string, string | number | boolean>,
-  npcProfiles?: NpcProfile[],
-  lastNpcActions?: NpcActionResult[],
-  npcObligations?: Map<string, NpcObligationLedger>,
-  partyState?: PartyState,
-  profile?: CharacterProfile | null,
-  itemCatalog?: ItemCatalog | null,
-  districtEconomies?: Map<string, DistrictEconomy>,
-  genre?: string,
-  activeOpportunities?: OpportunityState[],
-  arcSnapshot?: ArcSnapshot | null,
-  endgameTriggers?: EndgameTrigger[],
-  finaleOutline?: FinaleOutline | null,
-): string {
+export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): string {
+  const {
+    command, world, playerRumors, activePressures, resolvedPressures, journal,
+    currentTick, characterName, characterTitle, factionProfiles, lastFactionActions,
+    leverageState, strategicMap, statusData, suggestedMove, situationTag, profileCustom,
+    npcProfiles, lastNpcActions, npcObligations, partyState, profile, itemCatalog,
+    districtEconomies, genre, activeOpportunities, arcSnapshot, endgameTriggers, finaleOutline,
+  } = opts;
+
   const parts = command.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
 

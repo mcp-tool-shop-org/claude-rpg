@@ -1,7 +1,9 @@
 // colors.ts — Semantic terminal coloring with raw ANSI escape codes.
-// Respects NO_COLOR env var (https://no-color.org/).
+// Respects NO_COLOR env var (https://no-color.org/) and only colors real
+// terminals — output redirected to a file or piped to a non-TTY consumer
+// gets plain text, matching spinner.ts's stream.isTTY branch (F-622bfe0a).
 
-const enabled = !process.env.NO_COLOR;
+const enabled = (process.stdout.isTTY ?? false) && !process.env.NO_COLOR;
 
 const ESC = '\x1b[';
 const RESET = `${ESC}0m`;

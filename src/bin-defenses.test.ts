@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { validateEngineState } from './cli/engine-state-validator.js';
 
 // ─── PFE-001: stdin close detection ────────────────────────
 // ─── PFE-002: SIGINT handling contract ─────────────────────
@@ -7,27 +8,12 @@ import { describe, it, expect } from 'vitest';
 
 // bin.ts is a CLI entry point — we test its extractable logic patterns here.
 // The actual readline/process handlers are integration-level (process-spawning tests).
+//
+// F-6506450c: validateEngineState is imported from the real production module
+// (cli/engine-state-validator.ts) that bin.ts's runLoad() calls directly, rather
+// than a hand-copied fork of the logic that could silently drift from it.
 
 describe('bin defenses: engine state validation (PFE-007)', () => {
-  // Simulate the validation logic extracted from bin.ts ~line 284
-  function validateEngineState(raw: string): { valid: boolean; error?: string } {
-    let saved: unknown;
-    try {
-      saved = JSON.parse(raw);
-    } catch {
-      return { valid: false, error: 'not valid JSON' };
-    }
-    if (
-      !saved ||
-      typeof saved !== 'object' ||
-      !('world' in (saved as Record<string, unknown>)) ||
-      typeof (saved as any).world?.state !== 'object'
-    ) {
-      return { valid: false, error: 'missing world.state' };
-    }
-    return { valid: true };
-  }
-
   it('accepts valid engine state with world.state', () => {
     const result = validateEngineState(JSON.stringify({ world: { state: { hp: 10 } } }));
     expect(result.valid).toBe(true);
@@ -53,6 +39,11 @@ describe('bin defenses: engine state validation (PFE-007)', () => {
 
   it('rejects null', () => {
     const result = validateEngineState('null');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects world.state === null (F-1b8be73f regression: typeof null === "object")', () => {
+    const result = validateEngineState(JSON.stringify({ world: { state: null } }));
     expect(result.valid).toBe(false);
   });
 

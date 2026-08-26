@@ -2,10 +2,17 @@
 
 import type { CompleterResult } from 'node:readline';
 
-/** Slash commands available in-game for tab completion. */
+/**
+ * Slash commands available in-game for tab completion.
+ * F-f1eb58cb: every entry here must be documented (bin.ts's USAGE text or
+ * help-system.ts) and handled (bin.ts's game loop, GameSession.processInput,
+ * or executeDirectorCommand) somewhere in the CLI — see the reconciliation
+ * test in slash-completer.test.ts. /save and /cost were removed as stale:
+ * neither was ever wired to a real command.
+ */
 export const SLASH_COMMANDS = [
-  '/status', '/sheet', '/character', '/help', '/save', '/director',
-  '/cost', '/export', '/map', '/leverage', '/jobs', '/arcs',
+  '/status', '/sheet', '/character', '/help', '/director',
+  '/export', '/map', '/leverage', '/jobs', '/arcs',
   '/conclude', '/archive',
 ];
 

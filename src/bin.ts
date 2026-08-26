@@ -43,6 +43,9 @@ import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError } from './cli/error-presenter.js';
 import { slashCompleter } from './cli/slash-completer.js';
 import { createSpinner } from './cli/spinner.js';
+import { validateEngineState } from './cli/engine-state-validator.js';
+import { parseSaveSelection } from './cli/save-selection.js';
+import { isPathInside } from './cli/path-guard.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
@@ -128,7 +131,7 @@ Usage:
 
 Commands in-game:
   save           Save the current game
-  /sheet         View character sheet
+  /sheet         View character sheet (/character is an alias)
   /status        Compact strategic snapshot
   /map           Strategic map overview
   /leverage      View political capital
@@ -307,8 +310,8 @@ async function runLoad(): Promise<void> {
     process.exit(0);
   }
 
-  const idx = parseInt(answer, 10) - 1;
-  if (idx < 0 || idx >= saves.length) {
+  const idx = parseSaveSelection(answer, saves.length);
+  if (idx === null) {
     console.error('  Invalid selection.');
     rl.close();
     process.exit(1);
@@ -330,23 +333,27 @@ async function runLoad(): Promise<void> {
       engine = pack.createGame();
       itemCatalog = pack.itemCatalog;
       try {
-        const saved = JSON.parse(savedSession.engineState);
         // PFE-007: Validate structure before assigning — corrupted saves shouldn't silently break.
-        if (!saved || typeof saved !== 'object' || !saved.world || typeof saved.world.state !== 'object') {
-          console.error('  Save file has invalid engine state structure (missing world.state).');
+        // Explicitly rejects world.state === null (F-1b8be73f); see cli/engine-state-validator.ts.
+        const validation = validateEngineState(savedSession.engineState);
+        if (!validation.valid) {
+          if (validation.error === 'not valid JSON') {
+            console.error('  Save file engine state is not valid JSON.');
+          } else {
+            console.error('  Save file has invalid engine state structure (missing world.state).');
+          }
           console.error('  Your save may be corrupted. Check for a .bak backup.');
           rl.close();
           process.exit(1);
         }
-        Object.assign(engine.store.state, structuredClone(saved.world.state));
+        Object.assign(engine.store.state, structuredClone(validation.state));
       } catch (err) {
-        if (err instanceof SyntaxError) {
-          console.error('  Save file engine state is not valid JSON.');
-          console.error('  Your save may be corrupted. Check for a .bak backup.');
-          rl.close();
-          process.exit(1);
-        }
+        // F-c7e13af2: every exception here is fatal (not just JSON parse errors,
+        // which validateEngineState now handles internally) — falling through with
+        // a partially-restored engine would start the game loop on inconsistent state.
         presentError(err, 'load', debugMode);
+        rl.close();
+        process.exit(1);
       }
     }
   }
@@ -560,7 +567,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
         : `autosave-${Date.now()}`;
       const savePath = getSavePath(saveName);
       const expectedDir = resolve(getDefaultSaveDir());
-      if (resolve(savePath).startsWith(expectedDir)) {
+      if (isPathInside(savePath, expectedDir)) {
         await saveSession(buildSaveInput(session, savePath, packId));
         console.log(`  Auto-saved to ${savePath}`);
       }
@@ -587,7 +594,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
             : `autosave-${Date.now()}`;
           const savePath = getSavePath(saveName);
           const expectedDir = resolve(getDefaultSaveDir());
-          if (resolve(savePath).startsWith(expectedDir)) {
+          if (isPathInside(savePath, expectedDir)) {
             await saveSession(buildSaveInput(session, savePath, packId));
             console.log(`  Auto-saved to ${savePath}`);
           }
@@ -614,7 +621,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
         const savePath = getSavePath(saveName);
         // Guard against directory traversal in character names
         const expectedDir = resolve(getDefaultSaveDir());
-        if (!resolve(savePath).startsWith(expectedDir)) {
+        if (!isPathInside(savePath, expectedDir)) {
           console.error('  Save path escapes save directory — aborting.');
           continue;
         }

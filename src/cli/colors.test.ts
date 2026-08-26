@@ -6,16 +6,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 describe('colors', () => {
   const ESC = '\x1b[';
 
-  // Default: NO_COLOR is not set in test env (colors enabled)
+  // Default: NO_COLOR is unset AND stdout is a TTY (colors enabled).
+  // F-622bfe0a: enabled now also gates on process.stdout.isTTY, so these
+  // tests must stub a TTY — vitest's own stdout is not one.
   describe('with color enabled', () => {
     let colors: typeof import('./colors.js');
+    let originalIsTTY: boolean | undefined;
 
     beforeEach(async () => {
-      // Ensure NO_COLOR is unset and re-import
+      // Ensure NO_COLOR is unset, simulate a TTY, and re-import fresh.
       delete process.env.NO_COLOR;
-      // Bust module cache for fresh import
+      originalIsTTY = process.stdout.isTTY;
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+      vi.resetModules();
       const mod = await import('./colors.js');
       colors = mod;
+    });
+
+    afterEach(() => {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
     });
 
     it('bold wraps text with ANSI bold code', () => {
@@ -92,11 +101,36 @@ describe('colors', () => {
     });
   });
 
+  describe('with a non-TTY stdout and NO_COLOR unset', () => {
+    let originalIsTTY: boolean | undefined;
+
+    beforeEach(() => {
+      originalIsTTY = process.stdout.isTTY;
+    });
+
+    afterEach(() => {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    });
+
+    it('disables color when stdout is not a TTY, even without NO_COLOR (F-622bfe0a)', async () => {
+      delete process.env.NO_COLOR;
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = false;
+      vi.resetModules();
+      const colors = await import('./colors.js');
+      const result = colors.bold('test');
+      expect(result).not.toContain('\x1b[');
+      expect(result).toBe('test');
+      expect(colors.isColorEnabled()).toBe(false);
+    });
+  });
+
   describe('with NO_COLOR set', () => {
     let originalNoColor: string | undefined;
+    let originalIsTTY: boolean | undefined;
 
     beforeEach(() => {
       originalNoColor = process.env.NO_COLOR;
+      originalIsTTY = process.stdout.isTTY;
     });
 
     afterEach(() => {
@@ -105,14 +139,20 @@ describe('colors', () => {
       } else {
         process.env.NO_COLOR = originalNoColor;
       }
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
     });
 
-    it('bold returns plain text when NO_COLOR is set (verified via module contract)', () => {
-      // The module reads NO_COLOR at load time, so we verify the contract:
-      // when enabled is false, wrap() returns the text unchanged.
-      // We can't easily reload the module in vitest, but we test the structural contract.
-      // The integration test is that NO_COLOR=1 claude-rpg produces clean output.
-      expect(true).toBe(true);
+    it('bold returns plain text when NO_COLOR is set, even on a TTY', async () => {
+      // Simulate a real terminal so this test isolates the NO_COLOR gate
+      // specifically, rather than piggybacking on the non-TTY default.
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+      process.env.NO_COLOR = '1';
+      vi.resetModules();
+      const colors = await import('./colors.js');
+      const result = colors.bold('test');
+      expect(result).not.toContain('\x1b[');
+      expect(result).toBe('test');
+      expect(colors.isColorEnabled()).toBe(false);
     });
   });
 });

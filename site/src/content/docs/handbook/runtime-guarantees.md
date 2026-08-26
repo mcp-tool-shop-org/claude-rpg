@@ -86,7 +86,7 @@ Changed-file regression detection surfaces coverage drops on pull requests that 
 
 ## Test inventory
 
-625 tests across 53 test files (expanded from 302/24 via dogfood swarm):
+1,542 tests across 95 test files (grown from 625/53 in v1.5). The headline categories:
 
 | Category | Tests | What they prove |
 |----------|-------|-----------------|

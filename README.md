@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
+  <a href="README.md">English</a> | <a href="README.ja.md">日本語</a> | <a href="README.zh.md">中文</a> | <a href="README.es.md">Español</a> | <a href="README.fr.md">Français</a> | <a href="README.hi.md">हिन्दी</a> | <a href="README.it.md">Italiano</a> | <a href="README.pt-BR.md">Português (BR)</a>
 </p>
 
 <p align="center">
@@ -17,6 +17,12 @@
 # Claude RPG
 
 A simulation-grounded campaign RPG where Claude stages the story, the engine preserves truth, and worlds evolve through rumor, pressure, faction, relationship, economy, and arc systems toward meaningful conclusions. Play it or build on it.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
+</p>
+
+<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
 
 ## What Is Claude RPG?
 
@@ -58,8 +64,11 @@ npx claude-rpg play
 ## Quick Start
 
 ```bash
-# Play — interactive world and character selection
+# Play — interactive world and character selection (ten worlds, grouped by difficulty)
 npx claude-rpg play
+
+# Jump straight into a named world
+npx claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
 npx claude-rpg play --fast
@@ -77,23 +86,22 @@ Set your Anthropic API key (only needed for Claude narration):
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## What's New in v1.5.0
+## What's New in v1.6.0
 
-v1.5 is a swarm-hardened release — 67 bug fixes, 22 proactive hardening passes, and three feature waves that make the game feel alive.
+v1.6 makes the ten-world roster real, gives defeat real weight, and makes the narrator resilient when the network isn't.
 
 | Feature | What it means |
 |---------|--------------|
-| **API retry with backoff** | Transient Claude API failures retry automatically with exponential backoff and jitter. |
-| **Periodic autosave** | Game state saves at configurable intervals. No more lost progress from crashes or disconnects. |
-| **Fast-path inventory** | Common verbs (use, equip, drop, examine) resolve instantly without an LLM round-trip. |
-| **Terminal colors + spinner** | ANSI colors for damage, healing, and NPC names. Animated spinner during LLM calls. |
-| **Tab completion** | Readline completion for commands, NPC names, items, and locations. |
-| **NPC voice archetypes** | Distinct speech patterns per NPC type — scholarly, gruff, merchant, noble, and more. |
-| **NPC conversation memory** | NPCs remember what you said and reference past exchanges in future dialogue. |
-| **Token/cost tracking** | Per-turn and cumulative token usage with estimated cost, displayed on demand. |
-| **Turn history compaction** | Older turns are summarized to keep context windows efficient without losing narrative thread. |
-| **Quest wiring + ambient NPCs** | Quest objectives tracked in narration context. Background NPCs chatter based on district mood. |
-| **625 tests** | Expanded from 209 to 625 across 53 test files. Bug fixes, error containment, graceful degradation, and observability hardened by dogfood swarm. |
+| **Ten playable worlds** | Iron Colosseum (gladiator), Jade Veil (ronin), and Crimson Court (vampire) join the roster — ten worlds, grouped by difficulty in the chooser. |
+| **`--world` flag** | `npx claude-rpg play --world gladiator` skips the menu straight into a named world. Ten aliases, all listed in `--help`. |
+| **Death is a setback** | Falling in combat fades to a distinct death screen and gates your actions until you rise — campaigns end deliberately through `/conclude`, never by one bad fight. |
+| **Streaming narration** | Prose renders as the narrator writes it, not after. |
+| **`/cost` on demand** | Session token usage and estimated spend, without spending anything to ask. |
+| **A spinner that tells the truth** | During API retries the thinking spinner reports the attempt and cause — "still thinking (retry 1/2 — rate limit reached)". Sustained outages switch the fallback prose to an honest "this is still happening". |
+| **Ambient world chatter** | Background NPCs go about their lives — a merchant checking prices, a guard scanning the crowd — flavored per world, at zero API cost. |
+| **NPCs remember, even across saves** | Conversation memory now persists through save/load: what you told the guard two sessions ago still shapes what they say. |
+| **Names, not slugs** | Status bar, recaps, and save listings show "Penitent Knight", never `penitent-knight`. Sound cues read as words, never `white_noise`. |
+| **1,542 tests** | Grown from 625 across 95 files, with per-path coverage floors enforced in CI. |
 
 ## Why It's Different
 
@@ -204,7 +212,7 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | Jade Veil starter world |
 | [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | Crimson Court starter world |
 
-## Runtime Guarantees (v1.5.0)
+## Runtime Guarantees (v1.6.0)
 
 | Guarantee | Enforcement |
 |-----------|------------|

@@ -57,17 +57,28 @@ claude-rpg play --fast
 
 ## Available starter worlds
 
-The interactive world selector offers these 7 worlds:
+The interactive world selector offers ten worlds, grouped by difficulty:
 
-| World | Genre |
-|-------|-------|
-| Chapel Threshold | Mountain monastery under siege (fantasy) |
-| Neon Lockbox | Corporate arcology where data is currency (cyberpunk) |
-| Gaslight Detective | Victorian conspiracy reaching the crown (detective) |
-| Black Flag Requiem | Dying pirate republic (pirate) |
-| Ashfall Dead | Post-outbreak survival colony (zombie) |
-| Dust Devil's Bargain | Supernatural frontier town (weird-west) |
-| Signal Loss | Deep space colony that lost Earth contact (colony) |
+| World | Genre | `--world` alias |
+|-------|-------|-----------------|
+| Chapel Threshold | Mountain monastery under siege (fantasy) | `fantasy` |
+| Neon Lockbox | Corporate arcology where data is currency (cyberpunk) | `cyberpunk` |
+| Iron Colosseum | Blood, sand, and freedom bought bout by bout (gladiator) | `gladiator` |
+| Crimson Court | Candlelit vampire politics (vampire) | `vampire` |
+| Gaslight Detective | Victorian conspiracy reaching the crown (detective) | `detective` |
+| Black Flag Requiem | Dying pirate republic (pirate) | `pirate` |
+| Ashfall Dead | Post-outbreak survival colony (zombie) | `zombie` |
+| Dust Devil's Bargain | Supernatural frontier town (weird-west) | `weird-west` |
+| Jade Veil | A masterless blade in a crumbling shogunate (ronin) | `ronin` |
+| Signal Loss | Deep space colony that lost Earth contact (colony) | `colony` |
+
+Already know where you're headed? Skip the menu:
+
+```bash
+claude-rpg play --world gladiator
+```
+
+An unknown world name exits with the valid list — nothing interactive starts.
 
 ## Generate a custom world
 

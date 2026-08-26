@@ -56,8 +56,11 @@ NPCs speak from their cognitive state — beliefs, memories, morale, suspicion l
 
 - The same NPC gives different answers depending on what they know and how they feel about you
 - NPCs can lie, and they lie for traceable reasons
+- NPCs remember your recent exchanges — within a session and across save/load — and reference them in later conversations
 - Pushing an NPC past loyalty breakpoints triggers consequence chains
 - Companion NPCs have departure risk tied to morale and loyalty
+
+Between conversations, background NPCs keep living: a merchant rearranges wares, a guard scans the crowd, a courtier lingers at the edge of the candlelight. These ambient lines are generated deterministically per world — they cost no API tokens.
 
 ## Combat
 
@@ -69,6 +72,10 @@ Combat is resolved deterministically by the engine. Factors include:
 - Faction relationships (allies may intervene)
 
 Claude narrates the engine's resolution — dramatic flourishes are narration, but the outcomes are mechanical.
+
+### When you fall
+
+Defeat is a setback, not the end of your campaign. When your character drops, the screen fades to a distinct death frame and ordinary actions are gated — type `continue` when you're ready to rise. Introspection commands (`/status`, `/sheet`, `/help`) still work while you're down, and `quit` will save and exit. Campaigns end deliberately through `/conclude`, never by one bad fight.
 
 ## Saving
 

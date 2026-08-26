@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-08-26
+
+A dogfood-swarm release: four health passes (correctness, proactive hardening,
+behavioral humanization, terminal-visual polish) followed by a Director-ruled
+feature pass — 18 waves, 263 findings filed, 252 fixed, and the test suite
+grown from 625 to 1,542.
+
+### Added
+- **Three new starter worlds reachable**: Iron Colosseum (gladiator), Jade
+  Veil (ronin), and Crimson Court (vampire) are now registered and selectable
+  — ten worlds total. The engine dependency family moved from 2.1.x to 2.9.x
+  to unblock them.
+- **`--world <name>` flag**: `claude-rpg play --world gladiator` skips the
+  menu straight into a named world (ten aliases, listed in `--help`); an
+  unknown name exits with a structured error before anything interactive.
+- **Grouped world menu**: the ten-world chooser is grouped by difficulty
+  (beginner-friendly / standard / advanced) with continuous numbering.
+- **Death is a setback**: player defeat now fades to a distinct death screen,
+  gates ordinary actions while you are down, and resumes on `continue` —
+  campaigns end deliberately through `/conclude`, never by an accidental
+  combat loss. The death presentation fires exactly once per fall.
+- **Streaming narration**: narration renders as it generates.
+- **`/cost` command**: session token usage and estimated spend on demand,
+  without burning a billed call.
+- **Retry-visible spinner**: during API retries the thinking spinner reports
+  the attempt count and cause ("still thinking (retry 1/2 — rate limit
+  reached)") instead of spinning silently for up to a minute and a half.
+- **Outage-aware fallback prose**: consecutive narration failures switch to
+  an honest "this is still happening" message instead of repeating the same
+  first-hiccup line verbatim.
+- **Display names everywhere**: status bar, recaps, save listings, and
+  session summaries resolve archetype/discipline/pack/faction ids to their
+  real display names ("Penitent Knight", never "penitent-knight").
+- **Humanized presentation cues**: sound and ambient cue lines render as
+  natural language ("a warning tone sounds", "ambient: white noise") with a
+  vocabulary-drift tripwire so new cue ids can never print raw.
+- **`--debug` interpretation trace**: successful interpretations log the
+  interpreter's reasoning through the debug channel.
+
+### Fixed
+- **Ambient NPC dialogue is now actually wired.** v1.5.0 advertised it, but
+  the generator had zero production call sites — no player ever saw a line.
+  It now fires on zone entry and quiet turns during exploration, with
+  pack-flavored line pools for the worlds that need them, at zero API cost.
+- **NPC conversation memory is now actually wired — and persisted.** v1.5.0
+  advertised it, but no caller ever passed conversation history into
+  dialogue generation. NPCs now remember recent exchanges within a session
+  AND across save/load, behind a shape-guarded loader.
+- **The death hook no longer re-fires every turn** the player's HP stays at
+  zero — death presentation is edge-triggered per fall.
+- **Narration receives the current turn's presentation state** (it lagged
+  one turn behind, so death-turn prose could describe the previous state).
+- 252 findings fixed across the run in total: save/load integrity (turn
+  history, campaign status, and RNG stream all restore on resume), the
+  immersion pipeline activated end-to-end, fatal-error turn bookkeeping,
+  autosave path guards, loader shape guards, and four stages of behavioral
+  and visual polish.
+
+### Changed
+- Engine family upgraded 2.1.0 → 2.9.x (five API shifts absorbed).
+- Test suite: 625 → 1,542 tests across 95 files, with ratcheted per-path
+  coverage floors enforced in CI.
+- Campaign conclusion, finale rules, HP severity colors, dividers, and the
+  first-run welcome all follow a unified width-adaptive, NO_COLOR-safe
+  terminal visual language.
+
 ## [1.5.1] - 2026-03-31
 
 ### Changed

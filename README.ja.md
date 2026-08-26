@@ -14,34 +14,40 @@
   <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
 </p>
 
-# Claude RPG
+# クロードRPG
 
-Claude RPGは、Claudeが物語を演出し、エンジンが真実を維持し、噂、圧力、派閥、関係性、経済、そしてアーキタイプシステムを通じて世界が進化していく、シミュレーションに基づいたキャンペーン形式のRPGです。プレイすることも、開発に貢献することもできます。
+シミュレーションに基づいたキャンペーンRPG。ストーリーはクロードが展開し、エンジンが真実を維持し、噂、圧力、派閥、関係性、経済、およびアークシステムを通じて世界が進化し、意味のある結末へと向かう。プレイすることも、それを拡張して独自のゲームを作成することもできる。
 
-## Claude RPGとは？
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
+</p>
 
-Claude RPGは、[AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine)という、戦闘、認知、知覚、派閥、噂、信念の根拠、NPCの行動、仲間、プレイヤーの行動力、戦略マップ、アイテム認識、装備の根拠、予期せぬ機会、キャンペーンの展開、そしてゲーム終盤のトリガーなど、29のモジュールを網羅した、決定論的なシミュレーション実行環境の上に構築されています。Claudeの役割は、解釈、語り、そして発言することです。エンジンの役割は、真実を維持することです。
+<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
 
-黄金のルール：**Claudeが提案し、エンジンが実行する。**
+## クロードRPGとは？
 
-プレイヤーは自由にテキストを入力します。Claudeは意図を解釈し、エンジンは決定論的にアクションを実行し、知覚フィルターがプレイヤーが実際に見たものを決定し、そしてClaudeはキャラクターが認識したことのみを語ります。その際には、ボイス、効果音、そして没入感を高めるための環境音などが使用されます。
+クロードRPGは、[AI RPGエンジン](https://github.com/mcp-tool-shop-org/ai-rpg-engine)の上に構築されている。これは、戦闘、認知、知覚、派閥、噂、信念の起源、NPCの行動、仲間、プレイヤーの優位性、戦略マップ、アイテム認識、装備の起源、新たな機会、キャンペーンアークの検出、およびゲーム終盤のトリガーを網羅する29個のモジュールを備えた、決定論的なシミュレーション実行環境である。クロードの役割は、解釈し、物語を語り、セリフを言うことだ。エンジンの役割は、真実を保持することだ。
 
-NPCはスクリプトを読み上げることはありません。彼らは信念、記憶、派閥への忠誠心、そして噂に基づいて発言します。彼らは理由があって嘘をつきます。彼らは理由があって確信を持てないのです。彼らは理由があって拒否します。ディレクターモードでは、その理由を詳しく調べることができます。
+基本的なルール：**クロードが提案し、エンジンが決定する。**
 
-## あなた自身のものを作り上げよう
+プレイヤーは自由形式のテキストを入力する。クロードは意図を解釈し、エンジンはアクションを決定論的に解決し、知覚フィルターはプレイヤーが見たものを決定し、その後クロードはキャラクターが知覚したことだけを語る。没入型実行環境によって、音声、効果音、および周囲のオーディオが演出される。
 
-Claude RPGは、単なるゲームではありません。AI RPG Engineのエコシステムのための参考実装です。あなた自身のシミュレーションに基づいた物語体験のための出発点として活用してください。
+NPCはスクリプトを暗唱しない。彼らは信念、記憶、派閥への忠誠心、そして噂に基づいて話す。彼らは理由があって嘘をつき、理由があって不確かな態度を取り、理由があって拒否する。ディレクターモードを使用すると、その理由を正確に確認できる。
 
-| 以下のようなことをしたい場合： | 使用する |
+## 独自のゲームを作成しよう
+
+クロードRPGは単なるゲームではなく、AI RPGエンジンエコシステムのためのリファレンス実装である。これを出発点として、独自のシミュレーションに基づいたナラティブ体験を構築することができる。
+
+| 次のようなことをしたいですか？ | 使用する： |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play` (インタラクティブな世界とキャラクター選択) |
+| **Play right now** | `npx claude-rpg play`（インタラクティブな世界とキャラクターの選択） |
 | **Create a new world** | `npx claude-rpg new "your world concept"` |
-| **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — マップエディター、NPC作成ツール、そして検証機能を持つ2D制作環境 |
-| **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — スキーマ検証、ストーリーボードテスト、そしてパイプラインのエクスポート機能 |
-| **Build a custom runtime** | [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine)のパッケージを直接インポートする — Claudeを他のLLMに置き換えたり、独自のUIを追加したりできます。 |
-| **Add new game modules** | エンジンをフォークして、解決パイプラインにモジュールを追加し、登録することができます。 |
+| **Author worlds visually** | [ワールドフォージ](https://github.com/mcp-tool-shop-org/world-forge) — マップエディター、NPCビルダー、および検証機能を備えた2Dオーサリングスタジオ。 |
+| **Validate world data** | [キャノンアーカイブ](https://github.com/mcp-tool-shop-org/cannon-archive) — スキーマ検証、ストーリーボードテスト、およびエクスポートパイプライン。 |
+| **Build a custom runtime** | [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine)パッケージを直接インポートする—クロードを任意のLLMに置き換えたり、独自のUIを追加したりできる。 |
+| **Add new game modules** | エンジンをフォークし、解決パイプラインにモジュールを追加して登録する。 |
 
-このエンジンは、特定のLLMに依存していません。Claude RPGはAnthropicのモデルを使用していますが、コアエンジンはLLMに依存していません。そのため、他のモデルに接続したり、ナレーションなしで完全に決定論的に動作させたりすることも可能です。
+エンジンはLLMに依存しない。クロードRPGはAnthropicのモデルを使用しているが、コアエンジンにはLLMへの依存関係はないため、任意のモデルに接続したり、ナレーションなしで完全に決定論的に実行したりできる。
 
 ## インストール
 
@@ -58,8 +64,11 @@ npx claude-rpg play
 ## クイックスタート
 
 ```bash
-# Play — interactive world and character selection
+# Play — interactive world and character selection (ten worlds, grouped by difficulty)
 npx claude-rpg play
+
+# Jump straight into a named world
+npx claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
 npx claude-rpg play --fast
@@ -71,46 +80,45 @@ npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
 npm install @ai-rpg-engine/core @ai-rpg-engine/modules
 ```
 
-AnthropicのAPIキーを設定します（Claudeによるナレーションに必要な場合のみ）：
+Anthropic APIキーを設定する（クロードによるナレーションにのみ必要）：
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## v1.5.0 の新機能
+## v1.6.0の新機能
 
-v1.5 は、セキュリティ強化されたリリースです。67件のバグ修正、22回の積極的なセキュリティ強化、そしてゲームをより生き生きとさせる3つの新機能が含まれています。
+v1.6では、10個の世界が実際に利用可能になり、敗北に真の重みが与えられ、ネットワークが不安定な場合でもナレーターが安定して動作するようになる。
 
-| 機能 | 意味 |
+| 機能 | その意味 |
 |---------|--------------|
-| **API retry with backoff** | 一時的な Claude API のエラーは、指数関数的なバックオフとジッタを伴って自動的に再試行されます。 |
-| **Periodic autosave** | ゲームの状態は、設定可能な間隔で保存されます。クラッシュや接続の切断による進行の喪失はもうありません。 |
-| **Fast-path inventory** | 一般的な動詞（使用、装備、ドロップ、調べる）は、LLM を介する必要なく、瞬時に解決されます。 |
-| **Terminal colors + spinner** | ダメージ、回復、NPC の名前に対して ANSI カラーを使用します。LLM への呼び出し中にアニメーション表示のインジケーターを表示します。 |
-| **Tab completion** | コマンド、NPC の名前、アイテム、場所に対して、Readline による補完機能を提供します。 |
-| **NPC voice archetypes** | NPC の種類ごとに異なる話し方をします。例えば、学者、乱暴者、商人、貴族などです。 |
-| **NPC conversation memory** | NPC は、あなたが言ったことを記憶し、将来の会話で過去のやり取りを参照します。 |
-| **Token/cost tracking** | 各ターンごと、および累積的なトークン使用量と、推定コストが表示されます。必要に応じて表示できます。 |
-| **Turn history compaction** | 過去のターンは要約され、コンテキストウィンドウを効率的に保ちながら、物語の流れを維持します。 |
-| **クエストの仕組み + 環境 NPC** | クエストの目標は、ナレーションのコンテキストで追跡されます。背景の NPC は、地区の雰囲気に合わせて会話します。 |
-| **625 件のテスト** | 53 個のテストファイルで、209 件から 625 件に拡張されました。バグ修正、エラーの封じ込め、正常な劣化、および監視機能が、内部テストによって強化されています。 |
+| **Ten playable worlds** | グラディエーターの「アイアンコロシアム」、浪人の「ジェイドベール」、ヴァンパイアの「クリムゾンコート」がロースターに参加。10個の世界を、選択画面で難易度別にグループ化。 |
+| **`--world`フラグ** | `npx claude-rpg play --world gladiator`を指定すると、メニューをスキップして指定された世界に直接移動する。10個のエイリアスがあり、すべては`--help`にリストされている。 |
+| **Death is a setback** | 戦闘で敗北すると、明確なゲームオーバー画面が表示され、勝利するまでアクションが制限される。キャンペーンは、悪い戦いによって終わるのではなく、意図的に`/conclude`によって終了する。 |
+| **Streaming narration** | 文章はナレーターが書いている間にレンダリングされ、後でレンダリングされることはない。 |
+| **オンデマンドの`/cost`** | セッショントークンの使用量と推定費用を、実際に消費することなく確認できる。 |
+| **真実を伝えるスピナー** | API再試行中に、思考中のスピナーは試行と原因を表示する。「まだ考えています（2回目の再試行/2回 — レート制限に達しました）」など。持続的な障害が発生した場合、代替の文章が正直な「これはまだ発生しています」に切り替わる。 |
+| **Ambient world chatter** | 背景のNPCはそれぞれの生活を送る—価格をチェックする商人、群衆をスキャンする警備員—世界ごとに異なる演出が施され、APIコストはゼロ。 |
+| **NPCは記憶を持ち、セーブデータの間でも保持される** | 会話の記憶は、セーブ/ロード時にも保持されるようになった。2つのセッション前に警備員に話したことは、彼らの発言に影響を与える。 |
+| **Names, not slugs** | ステータスバー、要約、およびセーブリストには、「悔悛の騎士」と表示され、`penitent-knight`は表示されない。効果音は単語として読み上げられ、`white_noise`としては読み上げられない。 |
+| **1,542個のテスト** | 95個のファイルにまたがる625個から増加し、CIでパスごとのカバレッジの下限が強制される。 |
 
-## それが他のものと違う理由
+## 異なる点
 
-| 何が | どのように |
+| 何が違うのか？ | どのように違うのか？ |
 |------|-----|
-| **シミュレーションの真実とナレーションの分離** | エンジンは戦闘、移動、会話を処理し、Claudeは結果のみを語ります。想像上の結果は表示されません。 |
-| **認知に基づいたNPCの会話** | NPCの発言はすべて、彼らの信念、記憶、士気、疑念、派閥、そして噂に基づいて構築されています。 |
-| **知覚を考慮した表現** | Claudeは、プレイヤーキャラクターが認識した情報のみを受け取ります。不明瞭な存在は、名前のついたターゲットではなく、影のような姿として表示されます。 |
-| **没入感の高いオーディオ/ボイスランタイム** | 構造化されたナレーションプランが、ボイス合成、効果音、環境音、そして音楽を、ボイス・サウンドボードを通じて制御します。 |
-| **隠された真実を可視化するディレクター機能** | `/inspect pilgrim`は信念を表示します。`/trace`は根拠を表示します。`/divergences`は、あなたが考えたことと実際に起こったことの違いを表示します。 |
-| **NPCの行動と結果の連鎖** | NPCは目標に基づいて行動し、義務を追跡し、忠誠心が低下すると報復します。`/npc`と`/people`は、重要なポイント、利用可能な要素、そして現在進行中の結果の連鎖を表示します。 |
-| **Living districts** | 地区には、プレイヤーの行動、派閥の動き、NPCの行動の結果によって変化する、商業、士気、安全といった要素があります。感情が物語に反映され、ゲームプレイに影響を与えます。`/districts` および `/district` コマンドで、地域の状況を確認できます。 |
-| **離脱のリスクがある仲間** | パーティーメンバーには、士気、忠誠心、そして離脱のトリガーが存在します。彼らを過度に追い詰めると、理由をシステムが記録し、彼らは去ってしまいます。 |
-| **プレイヤーの行動力と政治的行動** | 影響力、好意、情報などを消費して、社交、噂、外交、そして妨害などの行動を実行します。`/leverage` コマンドで、あなたの政治的な影響力を確認できます。 |
-| **装備の由来と遺物** | アイテムには、その歴史が刻まれています。十分な敵を倒した剣は、ある称号を持つ遺物へと変わります。NPCは装備されているアイテムを認識し、それに応じて反応します。`/item` コマンドで、アイテムの由来や記録を確認できます。 |
-| **Emergent opportunities** | 契約、賞金、好意、物資調達、そして調査は、世界の状況（プレッシャー、資源の不足、NPCの目標、義務など）から発生します。それを受け入れる、拒否する、放棄する、あるいは裏切ることができます。`/jobs` および `/accepted` コマンドで、利用可能な仕事と実行中の仕事を確認できます。 |
-| **キャンペーンの展開とエンディング** | システムは、蓄積された状況から、10種類の物語の展開（勢力拡大、追跡、王権掌握、抵抗など）と、8種類のエンディング（勝利、追放、打倒、殉教など）を検出します。`/arcs` コマンドで、物語の展開を確認できます。`/conclude` コマンドで、構造化されたエピローグを生成し、オプションでLLMによるナレーションを追加できます。 |
+| **シミュレーションの真実とナレーションを分離** | エンジンは戦闘、移動、対話を解決し、クロードはその結果だけを語る。捏造された結果はない。 |
+| **認知に基づいたNPCの対話** | NPCの発言のすべての行は、彼らの信念、記憶、士気、疑念、派閥、および噂に基づいて構築される。 |
+| **知覚を考慮した表現** | クロードが受け取るのは、プレイヤーキャラクターが知覚したものだけである。不明瞭なエンティティは、名前の付いたターゲットとしてではなく、影のような姿として表示される。 |
+| **オーディオ/ボイスによる没入型実行環境** | 構造化されたナレーションプランが、ボイスサウンドボードを通じて音声合成、効果音、周囲のレイヤー、および音楽を制御する。 |
+| **隠された真実に対するディレクターの可視性** | `/inspect pilgrim`は信念を表示する。`/trace`は起源を表示する。`/divergences`は、実際に何が起こったのかと、あなたが思ったことがどうだったかを表示する。 |
+| **結果チェーンを持つNPCの行動力** | NPCは目標に基づいて行動し、義務を追跡し、忠誠心の閾値が変わると報復する。`/npc`と`/people`は、閾値、影響を与える可能性のある要素、およびアクティブな結果チェーンを表示する。 |
+| **Living districts** | 地区には、プレイヤーの行動、派閥の動き、NPCの因果関係によって変化する商業、士気、安全があります。ムードはナレーションに流れ込み、ゲームプレイを調整します。`/districts`と`/district`が地域の状況を調べます。 |
+| **離脱のリスクがある仲間たち** | パーティーメンバーには、士気、忠誠心、離脱のトリガーがあります。彼らを限界まで追い詰めると、エンジンが追跡する理由で去ります。 |
+| **プレイヤーの交渉力と政治的行動** | 影響力、好意、情報を社会的、噂、外交、妨害などの行動に費やします。`/leverage`はあなたの政治的資本を示します。 |
+| **装備の来歴と遺物** | アイテムには歴史が刻まれています。十分な敵を倒した剣は、エピタフを持つ遺物になります。NPCは装備されたアイテムを認識し、反応します。`/item`が来歴と年代記を調べます。 |
+| **Emergent opportunities** | 契約、賞金、好意、補給ミッション、調査は、世界の状況（圧力、不足、NPCの目標、義務）から発生します。受け入れるか、拒否するか、放棄するか、裏切るかを選択できます。`/jobs`と`/accepted`が利用可能でアクティブなタスクを追跡します。 |
+| **キャンペーンのアークとエンディング** | エンジンは、蓄積された状態から10種類の物語アーク（勢力拡大、狩られる側、王の操り人形、抵抗など）と8つのエンディング解決クラス（勝利、追放、打倒、殉教など）を検出します。`/arcs`が軌跡を示し、`/conclude`がオプションのLLMナレーションによる構造化されたエピローグをレンダリングします。 |
 
 ## アーキテクチャ
 
@@ -146,37 +154,37 @@ Player types freeform text
     Voice-cast per NPC
 ```
 
-## Immersion Runtime (v0.2)
+## 没入型ランタイム（v0.2）
 
-ナレーターは、生の文章を出力するのではなく、**NarrationPlan（ナレーション計画）** を生成します。これは、テキスト、効果音、環境音、音楽、そして音声パラメータを記述した構造化されたレシピです。
+ナレーターは生の文章を出力するのではなく、テキスト、効果音、環境レイヤー、音楽キュー、音声パラメーターを記述した構造化されたレシピである「ナレーションプラン」を生成します。
 
 | モジュール | 目的 |
 |--------|---------|
-| **プレゼンテーションの状態マシン** | 探索/会話/戦闘/結果を追跡し、オーディオレイヤーの選択を制御します。 |
-| **Hook Lifecycle** | `enter-room`（部屋への進入）、`combat-start`（戦闘開始）、`combat-end`（戦闘終了）、`death`（死亡）、`npc-speaking`（NPCの会話）など、コンテキストに応じたオーディオを挿入します。 |
-| **Voice Caster** | NPCを、タイプ、性別、派閥に基づいて、[voice-soundboard（音声サウンドボード）](https://github.com/mcp-tool-shop-org/original_voice-soundboard) の音声に自動的に割り当てます。 |
-| **Audio Director** | 優先度、ミュート、クールダウン、スパム対策などを設定して、オーディオをスケジュールします。 |
-| **Sound Registry** | タグ、感情、強度などで検索できる、コンテンツ指向のオーディオエントリー。 |
-| **MCP Bridge** | AudioCommands（オーディオコマンド）を、voice-soundboardツールの呼び出しに変換します。 |
+| **プレゼンテーション状態機械** | 探索/対話/戦闘/余波を追跡し、オーディオレイヤーの選択を制御します。 |
+| **Hook Lifecycle** | `enter-room`、`combat-start`、`combat-end`、`death`、`npc-speaking` — コンテキストを認識したオーディオを注入します。 |
+| **Voice Caster** | NPCをタイプ、性別、派閥によって[ボイスサウンドボード](https://github.com/mcp-tool-shop-org/original_voice-soundboard)の音声に自動的にマッピングします。 |
+| **Audio Director** | 優先度、音量調整、クールダウン、アンチスパムを使用してキューをスケジュールします。 |
+| **Sound Registry** | コンテンツアドレス指定可能なオーディオエントリ — タグ、ムード、強度でクエリを実行します。 |
+| **MCP Bridge** | AudioCommandsをボイスサウンドボードのツール呼び出しに変換します。 |
 
 ## 3つのモード
 
-| モード | 機能 |
+| モード | その機能 |
 |------|-------------|
-| **Play** | 没入感のあるナレーションRPG。Claudeがナレーションを行い、NPCは自身の信念に基づいて発言し、行動はシステムによって解決されます。 |
-| **Director** | 隠された真実を調査：`/inspect <npc>`、`/faction <id>`、`/trace <belief>`、`/divergences`、`/npc <name>`、`/people`、`/districts`、`/district <id>`、`/item <name>`、`/leverage`、`/moves`、`/jobs`、`/accepted` |
-| **Replay** | イベントのタイムラインを歩き、客観的な真実とプレイヤーの認識を並べて表示します。 |
+| **Play** | 没入感のあるナレーションRPG。クロードがナレーションを行い、NPCは信念に基づいて話し、行動はエンジンを通じて解決されます。 |
+| **Director** | 隠された真実を調べます：`/inspect <npc>`、`/faction <id>`、`/trace <belief>`、`/divergences`、`/npc <name>`、`/people`、`/districts`、`/district <id>`、`/item <name>`、`/leverage`、`/moves`、`/jobs`、`/accepted` |
+| **Replay** | 客観的な真実とプレイヤーの認識を並べて表示するイベントタイムラインを表示します。 |
 
 ## エコシステム
 
-Claude RPGは、シミュレーションに基づいた物語ゲームを構築するための、より大きなツールチェーンの一部です。
+Claude RPGは、シミュレーションに基づいたナラティブゲームを構築するためのより大規模なツールチェーンの一部です。
 
-| プロジェクト | 機能 |
+| プロジェクト | その機能 |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | 決定論的なシミュレーション実行環境。29のモジュール、LLMへの依存はありません。 |
-| [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | 2Dの世界構築スタジオ。マップエディター、NPC作成ツール、レンダラー、エクスポート機能。 |
-| [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | スキーマ検証、ストーリーボードテスト、AI RPGのエクスポートパイプライン。 |
-| **Claude RPG** (this repo) | リファレンス実行環境。Claudeによるナレーション、没入感のあるオーディオ、ディレクターツール。 |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | 決定論的なシミュレーションランタイム — 29のモジュール、LLM依存関係なし |
+| [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | 2Dワールド作成スタジオ — マップエディター、NPCビルダー、レンダラー、エクスポート |
+| [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | スキーマ検証、ストーリーボードテスト、AI RPGのエクスポートパイプライン |
+| **Claude RPG** (this repo) | リファレンスランタイム — クロードナレーション、没入型オーディオ、ディレクターツール |
 
 ## エンジンパッケージ
 
@@ -184,57 +192,57 @@ Claude RPGは、これらの[@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 
 | パッケージ | 目的 |
 |---------|---------|
-| [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | 状態、エンティティ、アクション、イベント、ルール、乱数生成。 |
-| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29のモジュール：戦闘、認知、知覚、派閥、噂、NPCの自律性、仲間、影響力、戦略マップ、アイテム認識、予期せぬ機会。 |
+| [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | 状態、エンティティ、アクション、イベント、ルール、RNG |
+| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29のモジュール — 戦闘、認知、知覚、派閥、噂、NPCの主体性、仲間、交渉力、戦略マップ、アイテム認識、偶発的な機会 |
 | [`@ai-rpg-engine/character-profile`](https://www.npmjs.com/package/@ai-rpg-engine/character-profile) | キャラクターの成長、負傷、評判 |
-| [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | 装備、アイテムの由来、遺物の成長、記録 |
-| [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | セッション間の記憶、関係性の効果 |
-| [`@ai-rpg-engine/presentation`](https://www.npmjs.com/package/@ai-rpg-engine/presentation) | ナレーションプランのスキーマ、レンダリング契約 |
-| [`@ai-rpg-engine/audio-director`](https://www.npmjs.com/package/@ai-rpg-engine/audio-director) | オーディオキューのスケジュール、優先度、ミュート |
-| [`@ai-rpg-engine/soundpack-core`](https://www.npmjs.com/package/@ai-rpg-engine/soundpack-core) | サウンドパック登録 + コアパック |
+| [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | 装備、アイテムの来歴、遺物の成長、年代記 |
+| [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | クロスセッションメモリ、関係性の影響 |
+| [`@ai-rpg-engine/presentation`](https://www.npmjs.com/package/@ai-rpg-engine/presentation) | ナレーションプランスキーマ、レンダリング契約 |
+| [`@ai-rpg-engine/audio-director`](https://www.npmjs.com/package/@ai-rpg-engine/audio-director) | オーディオキューのスケジュール、優先度、音量調整 |
+| [`@ai-rpg-engine/soundpack-core`](https://www.npmjs.com/package/@ai-rpg-engine/soundpack-core) | サウンドパックレジストリ + コアパック |
 | [`@ai-rpg-engine/content-schema`](https://www.npmjs.com/package/@ai-rpg-engine/content-schema) | ワールドコンテンツの検証 |
-| [`@ai-rpg-engine/starter-fantasy`](https://www.npmjs.com/package/@ai-rpg-engine/starter-fantasy) | Chapel Threshold スタートワールド |
-| [`@ai-rpg-engine/starter-cyberpunk`](https://www.npmjs.com/package/@ai-rpg-engine/starter-cyberpunk) | Neon Lockbox スタートワールド |
-| [`@ai-rpg-engine/starter-detective`](https://www.npmjs.com/package/@ai-rpg-engine/starter-detective) | Gaslight Detective スタートワールド |
-| [`@ai-rpg-engine/starter-pirate`](https://www.npmjs.com/package/@ai-rpg-engine/starter-pirate) | Black Flag Requiem スタートワールド |
-| [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | Ashfall Dead スタートワールド |
-| [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | Dust Devil's Bargain スタートワールド |
-| [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | Signal Loss スタートワールド |
-| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | アイアンコロシアム：初心者向けワールド |
-| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | ジェイドヴェイル：初心者向けワールド |
-| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | クリムゾンコート：初心者向けワールド |
+| [`@ai-rpg-engine/starter-fantasy`](https://www.npmjs.com/package/@ai-rpg-engine/starter-fantasy) | チャペル・スレッショルドスターターワールド |
+| [`@ai-rpg-engine/starter-cyberpunk`](https://www.npmjs.com/package/@ai-rpg-engine/starter-cyberpunk) | ネオンロックボックススターターワールド |
+| [`@ai-rpg-engine/starter-detective`](https://www.npmjs.com/package/@ai-rpg-engine/starter-detective) | ガスライト・ディテクティブスターターワールド |
+| [`@ai-rpg-engine/starter-pirate`](https://www.npmjs.com/package/@ai-rpg-engine/starter-pirate) | ブラックフラッグレクイエムスターターワールド |
+| [`@ai-rpg-engine/starter-zombie`](https://www.npmjs.com/package/@ai-rpg-engine/starter-zombie) | アッシュフォールデッドスターターワールド |
+| [`@ai-rpg-engine/starter-weird-west`](https://www.npmjs.com/package/@ai-rpg-engine/starter-weird-west) | ダストデビルズバーゲンスターターワールド |
+| [`@ai-rpg-engine/starter-colony`](https://www.npmjs.com/package/@ai-rpg-engine/starter-colony) | シグナルロススターターワールド |
+| [`@ai-rpg-engine/starter-gladiator`](https://www.npmjs.com/package/@ai-rpg-engine/starter-gladiator) | アイアンコロシアムスターターワールド |
+| [`@ai-rpg-engine/starter-ronin`](https://www.npmjs.com/package/@ai-rpg-engine/starter-ronin) | ジェイドベールスターターワールド |
+| [`@ai-rpg-engine/starter-vampire`](https://www.npmjs.com/package/@ai-rpg-engine/starter-vampire) | クリムゾンコートスターターワールド |
 
-## 実行時の保証 (v1.5.0)
+## ランタイム保証（v1.6.0）
 
-| 保証 | 実施方法 |
+| 保証 | 実施 |
 |-----------|------------|
-| **エンジンがナレーションの前に処理を完了する** | 15 件の決定的なテストを含む、ターンループ統合のテスト環境 |
-| **セーブファイルはバージョンアップの影響を受けない** | 順序付けられた移行パイプライン、過去のテスト、アトミック書き込みと .bak による復旧 |
-| **Claude のエラーは、プレイヤーにとって安全なメッセージとして表示される** | `NarrationError` アダプター（9 件のエラーパスのテスト付き）、診断のための `--debug` フラグ |
-| **ストリーミングによって状態が破損することはない** | ストリーミングされたテキストが重要になる前に、正規の状態が確定されます。ストリーミングに特化した 6 件のテストがあります。 |
-| **重要なパスにおけるテストの網羅性** | CI は、セッション、ナレーター、ターンループ、および LLM アダプターの各モジュールに対して、最小限のテスト数（カバレッジ）を強制します。 |
+| **エンジンはナレーションの前に解決します** | 15の決定論的テストを備えたターンループ統合ハーネス |
+| **セーブファイルはバージョン移行後も残ります** | 順序付けられた移行パイプライン、履歴フィクスチャテスト、.bak回復によるアトミック書き込み |
+| **クロードの失敗はプレイヤーにとって安全なメッセージになります** | 9つのエラーパステストと診断用の`--debug`フラグを備えた型付き`NarrationError`アダプター |
+| **ストリーミングによって状態が破損することはありません** | カノニカルな状態は、ストリームされたテキストが重要になる前に最終決定されます。6つのストリーミング固有のテストがあります。 |
+| **重要なパスでのカバレッジの下限** | CIは、セッション、ナレーター、ターンループ、LLMアダプターごとにモジュールごとのしきい値を強制します。 |
 
 ## トークン予算
 
 | ステップ | 入力 | 出力 |
 |------|-------|--------|
-| アクションの解釈 | 約800トークン | 約100トークン |
-| シーンナレーション（ナレーションプラン） | 約1400トークン | 約300トークン |
-| NPCの会話 | 約1400トークン | 約100トークン |
-| **Total per turn** | **約3600トークン** | **約500トークン** |
+| アクションの解釈 | 〜800トークン | 〜100トークン |
+| シーンナレーション（ナレーションプラン） | 〜1400トークン | 〜300トークン |
+| NPCの対話 | 〜1400トークン | 〜100トークン |
+| **Total per turn** | **〜3600トークン** | **〜500トークン** |
 
-デフォルトモデル: `claude-sonnet-4-20250514`. ワールド生成には、品質向上のためにOpusを使用します。
+デフォルトモデル：`claude-sonnet-4-20250514`。ワールド生成には、品質のためにOpusを使用します。
 
 ## セキュリティ
 
-Claude RPGは、AnthropicのAPIを外部から呼び出すローカルCLIアプリケーションです。
+Claude RPGは、Anthropicに対して外部API呼び出しを行うローカルのCLIアプリケーションです。
 
-- **アクセスするデータ:** プレイヤーのセーブファイル（`~/.claude-rpg/saves/`）、Anthropic API（HTTPSのみ、外部からのアクセス）
-- **アクセスしないデータ:** テレメトリー、分析、セーブディレクトリ以外のファイルシステム
-- **APIキー:** 環境変数`ANTHROPIC_API_KEY`から読み込みます。保存、ログ、Anthropic API以外への送信は行われません。
-- **ソースコードに機密情報なし:** 埋め込まれたトークン、認証情報、APIキーは含まれていません。
+- **アクセスされるデータ:** `~/.claude-rpg/saves/`内のプレイヤーのセーブファイル、Anthropic API（送信のみHTTPS）
+- **アクセスされないデータ:** テレメトリー、分析、セーブディレクトリ外のファイルシステムは一切使用しません
+- **APIキー:** `ANTHROPIC_API_KEY`環境変数から読み取ります。APIキーは保存、記録、またはAnthropic API以外への送信は行いません
+- **ソースコードに機密情報は含まれません:** 埋め込まれたトークン、認証情報、またはAPIキーはありません
 
-詳細なセキュリティポリシーおよび脆弱性報告については、[SECURITY.md](SECURITY.md) を参照してください。
+完全なセキュリティポリシーと脆弱性報告については、[SECURITY.md](SECURITY.md)を参照してください。
 
 ## ライセンス
 
@@ -242,4 +250,4 @@ MIT
 
 ---
 
-[MCP Tool Shop](https://mcp-tool-shop.github.io/) によって作成されました。
+[MCP Tool Shop](https://mcp-tool-shop.github.io/)によって作成されました

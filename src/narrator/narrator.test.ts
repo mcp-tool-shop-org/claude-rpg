@@ -3,7 +3,7 @@ import {
   narrateScene,
   narrateSceneLegacy,
   FALLBACK_NARRATION,
-  FATAL_NARRATION_FALLBACK_MIRROR,
+  FATAL_NARRATION_FALLBACK,
   type NarrateSceneOpts,
 } from './narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
@@ -450,13 +450,13 @@ describe('narrateScene F-e8630a73: fallback sentinels are filtered from the prom
     const client = makeClient('A cool breeze greets you.');
     const opts = makeOpts({
       client,
-      recentNarration: ['A real narrated turn.', FATAL_NARRATION_FALLBACK_MIRROR],
+      recentNarration: ['A real narrated turn.', FATAL_NARRATION_FALLBACK],
     });
 
     await narrateScene(opts);
 
     const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.prompt).not.toContain(FATAL_NARRATION_FALLBACK_MIRROR);
+    expect(call.prompt).not.toContain(FATAL_NARRATION_FALLBACK);
     expect(call.prompt).toContain('A real narrated turn.');
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest';
 import Anthropic from '@anthropic-ai/sdk';
 import { createAdaptedClient, classifyError, withRetry } from './claude-adapter.js';
 import { NarrationError } from './claude-errors.js';
@@ -29,8 +29,11 @@ function fakeMessage(overrides: Partial<Anthropic.Message> = {}): Anthropic.Mess
 }
 
 describe('createAdaptedClient', () => {
-  let createSpy: ReturnType<typeof vi.spyOn>;
-  let streamSpy: ReturnType<typeof vi.spyOn>;
+  // Explicit MockInstance types: bare ReturnType<typeof vi.spyOn> resolves to
+  // the generic (this: unknown, ...args: unknown[]) => unknown overload, which
+  // the concrete vi.spyOn(prototype, 'create'/'stream') instances don't satisfy.
+  let createSpy: MockInstance<typeof Anthropic.Messages.prototype.create>;
+  let streamSpy: MockInstance<typeof Anthropic.Messages.prototype.stream>;
 
   beforeEach(() => {
     createSpy = vi
@@ -348,7 +351,10 @@ describe('withRetry', () => {
   it('retries generate call on retryable error then succeeds', async () => {
     // Integration test: create an adapted client and verify retry behavior end-to-end
     let callCount = 0;
-    vi.spyOn(Anthropic.Messages.prototype, 'create').mockImplementation(async () => {
+    // The SDK's create() returns an APIPromise; a plain async fn is
+    // runtime-compatible (the adapter only awaits it) but not structurally
+    // assignable, so the stand-in is asserted to the method's own type.
+    vi.spyOn(Anthropic.Messages.prototype, 'create').mockImplementation((async () => {
       callCount++;
       if (callCount === 1) {
         throw new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'retry' } }, 'retry', {});
@@ -363,7 +369,7 @@ describe('withRetry', () => {
         usage: { input_tokens: 5, output_tokens: 10 },
         content: [fakeTextBlock('retried ok')],
       } as Anthropic.Message;
-    });
+    }) as unknown as typeof Anthropic.Messages.prototype.create);
 
     const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1 });
     const result = await client.generate({ system: 's', prompt: 'p' });

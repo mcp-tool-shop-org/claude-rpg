@@ -8,7 +8,7 @@ import type { NarrationPlan } from '@ai-rpg-engine/presentation';
 import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
-import { narrateScene, type NarrationResult } from './narrator/narrator.js';
+import { narrateScene, FATAL_NARRATION_FALLBACK, type NarrationResult } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
 // F-8da2e6f7: history.js imports FATAL_NARRATION_FALLBACK back from this
 // file (see below); TurnHistory is used only as a type here (ExecuteTurnOpts
@@ -45,12 +45,11 @@ export type TurnResult = {
 // for the real narration that couldn't be generated — it is honest about
 // the gap rather than in-fiction flavor text, since it also becomes part of
 // the persisted turn history other narration prompts read as context.
-// F-8da2e6f7: exported (a distinct sentinel from narrator.ts's
-// FALLBACK_NARRATION) so every consumer that filters recorded narration by
-// sentinel value — session/history.ts's getRecentNarration(), recap.ts's
-// renderRecap — can recognize this one too, instead of only knowing about
-// narrator.ts's.
-export const FATAL_NARRATION_FALLBACK = '(The narrator could not describe what happened — your action was still resolved.)';
+// F-8da2e6f7: the single definition lives in narrator.ts beside its sibling
+// FALLBACK_NARRATION and the KNOWN_FALLBACK_NARRATION_SENTINELS list; this
+// re-export keeps the existing import path for session/history.ts stable
+// without creating a cycle (history → turn-loop → narrator stays one-way).
+export { FATAL_NARRATION_FALLBACK } from './narrator/narrator.js';
 
 /**
  * F-c4332895: turn-bookkeeping data attached to an error rethrown by

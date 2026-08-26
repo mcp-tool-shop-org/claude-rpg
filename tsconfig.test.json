@@ -8,6 +8,6 @@
     "sourceMap": false,
     "allowJs": true
   },
-  "include": ["test/**/*.ts"],
+  "include": ["test/**/*.ts", "src/**/*.test.ts"],
   "exclude": ["node_modules", "dist"]
 }

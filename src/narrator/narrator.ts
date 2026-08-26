@@ -29,20 +29,12 @@ export type NarrationResult = {
 // (e.g. TurnRecord in session/history.ts, which only stores narration text).
 export const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
 
-// F-e8630a73 / F-18f4dd88 (seam contract, wave 6): a second, differently-worded
-// fallback sentinel already exists on the game-core side of this wave's split
-// worktrees — turn-loop.ts's FATAL_NARRATION_FALLBACK (turn-loop.ts:44),
-// recorded via history.record() when narrateScene()/narrateSceneLegacy() rethrow
-// a fatal NarrationError after engine.submitAction() has already mutated world
-// state for the turn (F-c4332895). narrator.ts can't import it directly this
-// wave: turn-loop.ts and narrator.ts sit in separate worktrees, and
-// turn-loop.ts already imports narrateScene from narrator.ts, so importing the
-// other way would create a cycle even once the worktrees are merged. Its value
-// is mirrored here by literal instead, so this becomes the shared home both
-// domains' fallback-sentinel-matching code can read from — game-core can
-// re-point turn-loop.ts's own constant at this export on merge without
-// creating that cycle.
-export const FATAL_NARRATION_FALLBACK_MIRROR =
+// F-e8630a73 / F-18f4dd88: the fatal-path fallback sentinel, recorded via
+// history.record() when narrateScene()/narrateSceneLegacy() rethrow a fatal
+// NarrationError after engine.submitAction() has already mutated world state
+// (F-c4332895). Single definition — turn-loop.ts re-exports it (history.ts
+// imports from there), keeping the chain one-way: history → turn-loop → narrator.
+export const FATAL_NARRATION_FALLBACK =
   '(The narrator could not describe what happened — your action was still resolved.)';
 
 /**
@@ -54,7 +46,7 @@ export const FATAL_NARRATION_FALLBACK_MIRROR =
  */
 export const KNOWN_FALLBACK_NARRATION_SENTINELS: readonly string[] = [
   FALLBACK_NARRATION,
-  FATAL_NARRATION_FALLBACK_MIRROR,
+  FATAL_NARRATION_FALLBACK,
 ];
 
 export type NarrateSceneOpts = {

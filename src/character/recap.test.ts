@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderRecap } from './recap.js';
 import { TurnHistory, type TurnRecord } from '../session/history.js';
-import { FALLBACK_NARRATION, FATAL_NARRATION_FALLBACK_MIRROR } from '../narrator/narrator.js';
+import { FALLBACK_NARRATION, FATAL_NARRATION_FALLBACK } from '../narrator/narrator.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 
 function makeHistory(narrations: string[]): TurnHistory {
@@ -86,7 +86,7 @@ describe('renderRecap F-b6915850: fallback sentinel is never quoted as real narr
 // ever checked FALLBACK_NARRATION, but a second, differently-worded sentinel
 // exists on the game-core side of this wave's split worktrees —
 // turn-loop.ts's FATAL_NARRATION_FALLBACK, mirrored here as
-// FATAL_NARRATION_FALLBACK_MIRROR (see narrator.ts's
+// FATAL_NARRATION_FALLBACK (see narrator.ts's
 // KNOWN_FALLBACK_NARRATION_SENTINELS). A save recorded via that path used to
 // get quoted verbatim on the next load. Separately, once game-core wires
 // NarrationResult.isFallback through TurnRecord (this same wave, in its own
@@ -96,11 +96,11 @@ describe('renderRecap F-18f4dd88: seam contract — second sentinel + isFallback
   it('should not quote a turn whose narration matches the mirrored turn-loop.ts fallback sentinel', () => {
     const history = makeHistory([
       'A real narrated turn.',
-      FATAL_NARRATION_FALLBACK_MIRROR,
+      FATAL_NARRATION_FALLBACK,
       'Another real turn.',
     ]);
     const result = renderRecap(null, history);
-    expect(result).not.toContain(`"${FATAL_NARRATION_FALLBACK_MIRROR}"`);
+    expect(result).not.toContain(`"${FATAL_NARRATION_FALLBACK}"`);
     expect(result).toContain('A real narrated turn.');
     expect(result).toContain('Another real turn.');
   });

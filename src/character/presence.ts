@@ -3,6 +3,7 @@
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
 import type { WorldState } from '@ai-rpg-engine/core';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 import {
   computeLoadoutEffects,
   evaluateRelicGrowth,
@@ -22,6 +23,7 @@ import {
   getEntityFaction,
   getFactionCognition,
 } from '@ai-rpg-engine/modules';
+import { resolveArchetypeName, resolveDisciplineName } from './catalog-names.js';
 
 export type PresenceStrings = {
   /** For the narrator: gear, injuries, title woven into descriptive context. */
@@ -44,15 +46,25 @@ export type StatusData = {
   statuses: string[];
 };
 
-/** Build both presence strings from profile + item catalog. */
+/**
+ * Build both presence strings from profile + item catalog.
+ *
+ * @param catalog F-3c282b18: optional BuildCatalog used to resolve
+ *   archetypeId/disciplineId to their display name (mirrors builder.ts's own
+ *   `archetype.name` / `disc?.name ?? disciplineId` pattern). Omitted callers
+ *   keep getting the raw id back, same as before this fix.
+ */
 export function buildPresence(
   profile: CharacterProfile,
   itemCatalog: ItemCatalog,
   npcStance?: string,
+  catalog?: BuildCatalog,
 ): PresenceStrings {
   const level = computeLevel(profile.progression.xp);
-  const archName = profile.build.archetypeId;
-  const discName = profile.build.disciplineId;
+  const archName = resolveArchetypeName(catalog, profile.build.archetypeId);
+  const discName = profile.build.disciplineId
+    ? resolveDisciplineName(catalog, profile.build.disciplineId)
+    : profile.build.disciplineId;
   const title = profile.custom.title as string | undefined;
   const injuries = getActiveInjuries(profile);
 
@@ -144,12 +156,18 @@ export function buildPresence(
   };
 }
 
-/** Build stance-aware NPC presence for a specific NPC. */
+/**
+ * Build stance-aware NPC presence for a specific NPC.
+ *
+ * @param catalog F-3c282b18: same optional BuildCatalog contract as
+ *   buildPresence, forwarded straight through.
+ */
 export function buildNPCStancePresence(
   profile: CharacterProfile,
   itemCatalog: ItemCatalog,
   world: WorldState,
   npcId: string,
+  catalog?: BuildCatalog,
 ): PresenceStrings {
   const factionId = getEntityFaction(world, npcId);
   const repValue = factionId ? getReputation(profile, factionId) : 0;
@@ -157,7 +175,7 @@ export function buildNPCStancePresence(
   const factionCog = factionId ? getFactionCognition(world, factionId) : null;
   const stance = deriveStance(repValue, cognition, factionCog?.alertLevel ?? 0);
 
-  return buildPresence(profile, itemCatalog, stance);
+  return buildPresence(profile, itemCatalog, stance, catalog);
 }
 
 /**
@@ -168,11 +186,19 @@ export function buildNPCStancePresence(
  * Callers that DO have a WorldState can resolve the same way scene-context.ts does
  * — `(player?.statuses ?? []).map((s) => s.statusId)` — and pass the result here;
  * callers without one keep the empty-array default (backward compatible).
+ *
+ * F-3c282b18: StatusData's own type promises resolved display names for
+ * archetypeName/disciplineName, but this used to assign the raw catalog slug
+ * verbatim (feeds play-renderer.ts's per-turn status bar, the most frequently
+ * rendered line in the app). `catalog` is optional and trailing so every
+ * existing call site keeps compiling and, when omitted, keeps returning the
+ * raw id exactly as before.
  */
 export function buildStatusData(
   profile: CharacterProfile,
   itemCatalog: ItemCatalog,
   statuses: string[] = [],
+  catalog?: BuildCatalog,
 ): StatusData {
   const level = computeLevel(profile.progression.xp);
   const injuries = getActiveInjuries(profile);
@@ -189,8 +215,10 @@ export function buildStatusData(
   return {
     name: profile.build.name,
     level,
-    archetypeName: profile.build.archetypeId,
-    disciplineName: profile.build.disciplineId,
+    archetypeName: resolveArchetypeName(catalog, profile.build.archetypeId),
+    disciplineName: profile.build.disciplineId
+      ? resolveDisciplineName(catalog, profile.build.disciplineId)
+      : profile.build.disciplineId,
     title: profile.custom.title as string | undefined,
     hp: profile.resources.hp ?? 0,
     maxHp: (profile.resources as Record<string, unknown>).maxHp as number | undefined

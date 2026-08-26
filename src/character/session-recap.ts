@@ -13,6 +13,14 @@ const HEAVY_DIVIDER = '═'.repeat(60);
 
 export type FactionDelta = {
   factionId: string;
+  /**
+   * F-bbcef54a: resolved display name, mirroring WhatPeopleAreSaying's own
+   * factionName field. Optional so a hand-built FactionDelta literal (tests,
+   * or any future caller) that omits it still type-checks and still renders
+   * — renderFullRecap falls back to factionId when this is absent, same as
+   * before this fix.
+   */
+  factionName?: string;
   reputationBefore: number;
   reputationAfter: number;
   pressuresFrom: number;
@@ -86,6 +94,11 @@ export function computeFactionDeltas(
   rumors: PlayerRumor[],
   resolvedPressures: PressureFallout[],
   sessionStartTick: number,
+  // F-bbcef54a: optional id->display-name map, same shape and same
+  // ?? id-fallback convention as deriveWhatPeopleAreSaying's factionNames
+  // param below. Optional and trailing so the pre-existing 5-arg call sites
+  // (bin.ts, this file's own tests) keep compiling unchanged.
+  factionNames: Record<string, string> = {},
 ): FactionDelta[] {
   const deltas: FactionDelta[] = [];
   const factionIds = new Set<string>();
@@ -123,6 +136,7 @@ export function computeFactionDeltas(
     if (before !== after || pressuresFrom > 0 || rumorsKnownAfter > rumorsKnownBefore) {
       deltas.push({
         factionId,
+        factionName: factionNames[factionId] ?? factionId,
         reputationBefore: before,
         reputationAfter: after,
         pressuresFrom,
@@ -645,10 +659,14 @@ export function renderFullRecap(
       const rumorInfo = fd.rumorsKnownAfter > fd.rumorsKnownBefore
         ? ` | ${fd.rumorsKnownAfter - fd.rumorsKnownBefore} new rumor${fd.rumorsKnownAfter - fd.rumorsKnownBefore > 1 ? 's' : ''} about you`
         : '';
+      // F-bbcef54a: prefer the resolved display name (matches this same
+      // screen's District Changes / Economy Changes / What People Are Saying
+      // sections); fall back to the raw id when a caller hasn't populated it.
+      const factionLabel = fd.factionName ?? fd.factionId;
       if (repChange !== 0) {
-        lines.push(`  ${fd.factionId}: ${sign}${repChange} (now ${fd.reputationAfter > 0 ? '+' : ''}${fd.reputationAfter})${rumorInfo}`);
+        lines.push(`  ${factionLabel}: ${sign}${repChange} (now ${fd.reputationAfter > 0 ? '+' : ''}${fd.reputationAfter})${rumorInfo}`);
       } else if (rumorInfo) {
-        lines.push(`  ${fd.factionId}:${rumorInfo}`);
+        lines.push(`  ${factionLabel}:${rumorInfo}`);
       }
     }
   }

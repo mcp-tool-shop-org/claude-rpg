@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { renderRecap } from './recap.js';
 import { TurnHistory, type TurnRecord } from '../session/history.js';
 import { FALLBACK_NARRATION, FATAL_NARRATION_FALLBACK } from '../narrator/narrator.js';
@@ -126,5 +126,32 @@ describe('renderRecap F-18f4dd88: seam contract — second sentinel + isFallback
     expect(result).not.toContain('This reads like normal prose but is flagged as a fallback.');
     expect(result).toContain('A real narrated turn.');
     expect(result).toContain('Another real turn.');
+  });
+});
+
+// F-e475c46d: DIVIDER was a hardcoded '═'.repeat(60), unlike play-renderer.ts's
+// own dividers (PFE-005), which adapt to the real terminal width. Mirrors
+// play-renderer-divider.test.ts / help-system.test.ts's F-38eb3dec assertions
+// -- structural (exact-width substring), not a full-screen snapshot. recap.ts
+// renders on every save-load ("LAST TIME ON CLAUDE RPG..."), immediately
+// followed by play-renderer.ts's opening-narration screen, whose divider
+// already adapts -- this closes the visible width mismatch between the two.
+describe('renderRecap divider width (F-e475c46d)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const result = renderRecap(null, makeHistory([]));
+    expect(result).toContain('═'.repeat(40));
+    expect(result).not.toContain('═'.repeat(60));
+  });
+
+  it('divider matches a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const result = renderRecap(null, makeHistory([]));
+    expect(result).toContain('═'.repeat(120));
+    expect(result).not.toContain('═'.repeat(121));
   });
 });

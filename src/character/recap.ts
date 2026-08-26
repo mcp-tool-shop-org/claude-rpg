@@ -4,8 +4,17 @@ import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { computeLevel, getActiveInjuries } from '@ai-rpg-engine/character-profile';
 import { TurnHistory, type TurnRecord } from '../session/history.js';
 import { KNOWN_FALLBACK_NARRATION_SENTINELS } from '../narrator/narrator.js';
+import { getTerminalWidth } from '../display/play-renderer.js';
 
-const DIVIDER = '═'.repeat(60);
+// F-e475c46d: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider()/makeThinDivider() pattern (F-38eb3dec
+// precedent: director-renderer.ts, status-compact.ts, archive-browser.ts,
+// help-system.ts).
+function divider(): string {
+  return '═'.repeat(getTerminalWidth());
+}
 
 /**
  * F-18f4dd88 (seam contract, wave 6): TurnRecord (session/history.ts) doesn't
@@ -31,9 +40,9 @@ export function renderRecap(
   const parts: string[] = [];
 
   parts.push('');
-  parts.push(DIVIDER);
+  parts.push(divider());
   parts.push('  LAST TIME ON CLAUDE RPG...');
-  parts.push(DIVIDER);
+  parts.push(divider());
   parts.push('');
 
   if (profile) {
@@ -72,7 +81,7 @@ export function renderRecap(
     parts.push('');
   }
 
-  parts.push(DIVIDER);
+  parts.push(divider());
   parts.push('');
 
   return parts.join('\n');

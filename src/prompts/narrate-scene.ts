@@ -37,8 +37,8 @@ Respond with a JSON object (NarrationPlan) with this shape:
   "interruptibility": "free" | "locked" | "soft-lock"
 }
 
-Available sound effects: ui_notification, ui_success, ui_error, ui_attention, ui_click, ui_pop, ui_whoosh, alert_warning, alert_critical, alert_info
-Available ambient layers: ambient_rain, ambient_white_noise, ambient_drone
+Available sound effects (use these exact ids only — never invent a new one): ui_notification (notification chime), ui_success (success chime), ui_error (error chime), ui_attention (attention chime), ui_click (click), ui_pop (light pop), ui_whoosh (whoosh transition), alert_warning (warning tone), alert_critical (critical alarm), alert_info (info tone)
+Available ambient layers (use these exact ids only — never invent a new one): ambient_rain (rain), ambient_white_noise (white noise), ambient_drone (low tension drone)
 
 Choose sfx/ambient based on the scene mood. Use sparingly — not every scene needs effects.`;
 

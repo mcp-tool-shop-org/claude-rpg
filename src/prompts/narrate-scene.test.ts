@@ -7,6 +7,7 @@ import {
   EVENTS_CHAR_BUDGET,
   PRESSURES_MAX_COUNT,
   ENTITIES_MAX_COUNT,
+  NARRATE_SYSTEM,
 } from './narrate-scene.js';
 
 function makeInput(overrides: Partial<SceneNarrationInput> = {}): SceneNarrationInput {
@@ -137,5 +138,38 @@ describe('buildNarratePrompt F-9ee9b5a7: defensive prompt-size caps', () => {
     // would have fit by count alone.
     expect(prompt).toContain(longEvents[longEvents.length - 1]);
     expect(prompt).not.toContain(longEvents[0]);
+  });
+});
+
+// F-a465383c: NARRATE_SYSTEM's "Available sound effects"/"Available ambient
+// layers" prose offered the LLM only bare internal machine ids (ui_notification,
+// ambient_white_noise, etc.) with no display-name guidance and no explicit
+// instruction to stick to the list -- nothing downstream constrains the field
+// to it either (@ai-rpg-engine/presentation's isValidNarrationPlan only checks
+// typeof effectId/layerId === 'string', no enum). This in-domain half pairs
+// each id with a humanized gloss and an explicit "use these exact ids only"
+// instruction, strengthening the soft-constraint the LLM sees at generation
+// time. The actual render-time humanization (presentation-renderer.ts
+// interpolating the raw registry token, e.g. 'white_noise' with the
+// underscore intact, into the on-screen cue line) is cross-domain
+// (src/cli/**, src/runtime/**) and is NOT fixed by this prompt-text-only
+// change -- see this wave's skipped[] entry.
+describe('NARRATE_SYSTEM sfx/ambient id guidance (F-a465383c)', () => {
+  it('instructs the LLM to use only the listed sound-effect/ambient ids, not invent new ones', () => {
+    expect(NARRATE_SYSTEM).toMatch(/use (only |these )?exact ids/i);
+  });
+
+  it('pairs every listed sound-effect id with a humanized gloss', () => {
+    const ids = ['ui_notification', 'ui_success', 'ui_error', 'ui_attention', 'ui_click', 'ui_pop', 'ui_whoosh', 'alert_warning', 'alert_critical', 'alert_info'];
+    for (const id of ids) {
+      expect(NARRATE_SYSTEM, `expected a gloss in parens after ${id}`).toMatch(new RegExp(`${id} \\([^)]+\\)`));
+    }
+  });
+
+  it('pairs every listed ambient-layer id with a humanized gloss', () => {
+    const ids = ['ambient_rain', 'ambient_white_noise', 'ambient_drone'];
+    for (const id of ids) {
+      expect(NARRATE_SYSTEM, `expected a gloss in parens after ${id}`).toMatch(new RegExp(`${id} \\([^)]+\\)`));
+    }
   });
 });

@@ -4,8 +4,17 @@
 
 import type { PressureKind, WorldPressure, PressureFallout } from '@ai-rpg-engine/modules';
 import type { PlayerRumor } from '@ai-rpg-engine/modules';
+import { getTerminalWidth } from '../display/play-renderer.js';
 
-const DIVIDER = '─'.repeat(60);
+// F-e475c46d: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider()/makeThinDivider() pattern (F-38eb3dec
+// precedent: director-renderer.ts, status-compact.ts, archive-browser.ts,
+// help-system.ts).
+function divider(): string {
+  return '─'.repeat(getTerminalWidth());
+}
 
 export type WorldSnapshot = {
   activePressureCount: number;
@@ -75,9 +84,9 @@ export function renderWorldDelta(delta: WorldDelta): string {
   const lines: string[] = [];
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('  WORLD CHANGES');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
 
   if (delta.pressuresSpawned > 0) {
@@ -100,7 +109,7 @@ export function renderWorldDelta(delta: WorldDelta): string {
   }
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
 
   return lines.join('\n');

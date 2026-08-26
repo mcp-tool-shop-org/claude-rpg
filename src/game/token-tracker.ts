@@ -1,6 +1,8 @@
 // FT-B-004: Token/cost tracking per LLM call type
 
 import type { ClaudeClient } from '../claude-client.js';
+import { dim } from '../cli/colors.js';
+import { getTerminalWidth } from '../display/play-renderer.js';
 
 export type CallType = 'interpretation' | 'narration' | 'dialogue' | 'other';
 
@@ -62,9 +64,22 @@ export class SessionTokenTracker {
     };
   }
 
-  /** Format a human-readable /cost summary. */
+  /**
+   * Format a human-readable /cost summary.
+   *
+   * F-3453d747: previously used a bare ASCII '--- Session Token Usage ---'
+   * header and a bare '---' mid-divider, and this file imported nothing
+   * from cli/colors.js — every other rendered screen in this codebase uses
+   * a solid Unicode line-drawing divider wrapped in dim(...), either
+   * fixed-width or (as here) adapted to getTerminalWidth(), matching
+   * play-renderer.ts's makeDivider() pattern. token-tracker.ts's own '---'
+   * usage in chronicle-export.ts is legitimate there (that file generates
+   * real Markdown), but /cost's output goes straight to an ANSI terminal
+   * via console.log, so a markdown-shaped divider there was an outlier.
+   */
   formatCostSummary(): string {
-    const lines: string[] = ['--- Session Token Usage ---'];
+    const divider = dim('─'.repeat(getTerminalWidth()));
+    const lines: string[] = [divider, '  Session Token Usage', divider];
     const allTypes: CallType[] = ['interpretation', 'narration', 'dialogue', 'other'];
     for (const callType of allTypes) {
       const record = this.getRecord(callType);
@@ -76,7 +91,7 @@ export class SessionTokenTracker {
     }
     const totals = this.getTotals();
     const totalCost = this.estimateCost();
-    lines.push('---');
+    lines.push(divider);
     lines.push(
       `  Total: ${totals.callCount} calls, ${totals.inputTokens} in / ${totals.outputTokens} out`,
     );

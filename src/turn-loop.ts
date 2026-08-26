@@ -4,7 +4,7 @@
 
 import type { Engine, ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { NarrationPlan } from '@ai-rpg-engine/presentation';
+import type { NarrationPlan, PresentationState } from '@ai-rpg-engine/presentation';
 import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
@@ -18,6 +18,38 @@ import type { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { withTokenTracking, type SessionTokenTracker } from './game/token-tracker.js';
+
+/**
+ * F-4ec3609b (ORDERING contract, game-core half): runtime-foundry added a
+ * public `ImmersionRuntime.inferAndTransition(engine, events, verb):
+ * PresentationState` this same wave (src/runtime/immersion-runtime.ts:206) —
+ * it performs exactly the inference+transition step
+ * ImmersionRuntime.processPresentation() already runs as its own first
+ * step, but returns the resulting state so executeTurn() can run that step
+ * *before* building narration opts instead of after. processPresentation()
+ * is documented to detect the state already matches (via a tick-keyed
+ * pendingTurnInference cache) and skip re-inferring when called afterward,
+ * so calling both in sequence is idempotent-safe.
+ *
+ * Signature note: `engine` is required (not just `events`/`verb`) because
+ * the inference this wraps (PresentationStateMachine.inferFromEvents) reads
+ * engine.tick and engine.world.playerId/world directly — the class never
+ * caches `engine` internally, matching processPresentation()'s own first
+ * parameter. An earlier draft of this type omitted `engine`; reconciled
+ * against the real shipped method (contract adjudication, wave 16) since a
+ * 2-arg call would silently pass `events` where `engine` is expected on the
+ * merged tree.
+ *
+ * src/runtime/** is runtime-foundry-owned and out of this domain's edit
+ * scope, so the method can't be added to the real class from here. This
+ * local intersection type documents the contract at the one call site that
+ * needs it (below) without editing immersion-runtime.ts; once
+ * runtime-foundry's half lands, the real class structurally satisfies this
+ * type with no further change required here.
+ */
+type ImmersionRuntimeWithInference = ImmersionRuntime & {
+  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): PresentationState;
+};
 
 export type ProfileUpdateHints = {
   xpGained: number;
@@ -235,7 +267,19 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
 
   // Step 3 + 4: Build scene context with perception filtering and narrate
   const recentNarration = history.getRecentNarration(3);
-  const presentationState = immersion?.stateMachine.current;
+  // F-4ec3609b: infer + apply THIS turn's presentation-state transition
+  // before narration reads it, not after. Reading immersion.stateMachine
+  // .current here (as this used to) reflects whatever the PRIOR turn last
+  // transitioned to, because inference+transition previously only ran
+  // inside processPresentation() at Step 4.5, below — strictly after
+  // narrateScene already ran. inferAndTransition() runs that same
+  // inference+transition early and returns the resulting state, so the
+  // narrator's prose is generated from this turn's own state label instead
+  // of lagging one turn behind (see the type doc comment above for the
+  // cross-domain contract this leans on).
+  const presentationState = immersion
+    ? (immersion as ImmersionRuntimeWithInference).inferAndTransition(engine, events, interpreted.verb)
+    : undefined;
   let narrationResult: NarrationResult;
   try {
     narrationResult = await narrateScene({
@@ -290,7 +334,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     throw err;
   }
 
-  // Step 4.5: Process through immersion runtime if available
+  // Step 4.5: Process through immersion runtime if available.
+  // F-4ec3609b: the inference+transition this used to do FIRST now already
+  // happened above (inferAndTransition, before narration) whenever
+  // `immersion` is set — processPresentation() is documented (runtime-
+  // foundry contract) to detect its state already matches and skip
+  // re-inferring in that case, so this call still runs unconditionally for
+  // its audio/hook side effects without double-transitioning.
   let audioCalls: McpToolCall[] = [];
   if (immersion) {
     audioCalls = await immersion.processPresentation(

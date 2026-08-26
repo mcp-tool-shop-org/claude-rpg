@@ -7,6 +7,37 @@ import type { OpportunityState } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { loadNpcAgencyFromSession, type SavedSession } from './session/session.js';
 
+/**
+ * F-4ec3609b (ORDERING contract, cross-domain): turn-loop.ts's executeTurn()
+ * now calls immersion.inferAndTransition(engine, events, verb) -- a method
+ * runtime-foundry landed on ImmersionRuntime (src/runtime/**, out of this
+ * domain's owned globs) this same wave. In an isolated worktree where only
+ * game-core's half has landed, the real class doesn't have that method
+ * yet, so any test that plays a real turn through GameSession would throw
+ * "immersion.inferAndTransition is not a function" -- unrelated to
+ * whatever that specific test is actually exercising.
+ *
+ * Documented local stub (per the wave brief's "test your side with a
+ * documented local cast/stub if the other half is absent" allowance):
+ * installs a minimal shim on the real instance ONLY if the method is
+ * genuinely missing, so tests that need a real turn (e.g. to induce a
+ * subsystem failure or drain announcements) can still run today. Once
+ * runtime-foundry's half merges, `typeof ... === 'function'` is already
+ * true and this is a no-op -- the real implementation runs untouched.
+ * Signature reconciled to the real 3-arg shape (contract adjudication,
+ * wave 16) -- an `engine` param was added because the inference this shim
+ * stands in for reads engine.tick/engine.world unguarded.
+ */
+function ensureImmersionInferAndTransitionStub(session: GameSession): void {
+  const immersion = session.immersion as unknown as {
+    inferAndTransition?: (engine: unknown, events: unknown[], verb: string) => unknown;
+    stateMachine: { current: unknown };
+  };
+  if (typeof immersion.inferAndTransition !== 'function') {
+    immersion.inferAndTransition = (_engine: unknown, _events: unknown[], _verb: string) => immersion.stateMachine.current;
+  }
+}
+
 describe('GameSession', () => {
   it('should create a session with a starter world', () => {
     const engine = createGame();
@@ -378,6 +409,27 @@ describe('GameSession', () => {
       const status = await h.play('/status');
       expect(status).toContain('2 subsystem hiccups');
     });
+
+    it('separates the Subsystems line from the status box with a blank line (F-bd2ff8c8)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({ gameOpts: makeStatusGameOpts() });
+      ensureImmersionInferAndTransitionStub(h.session);
+
+      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+        throw new Error('boom');
+      });
+
+      await h.play('look around');
+      const status = await h.play('/status');
+
+      const lines = status.split('\n');
+      const subsystemsIndex = lines.findIndex((l) => l.includes('Subsystems:'));
+
+      expect(subsystemsIndex).toBeGreaterThan(0);
+      // The line immediately above the Subsystems line must be blank -- it
+      // must not sit flush against the box's closing divider.
+      expect(lines[subsystemsIndex - 1]).toBe('');
+    });
   });
 
   describe('autosave (FT-B-002)', () => {
@@ -621,6 +673,42 @@ describe('GameSession', () => {
 
       // Announcements should be drained after processInput
       expect(h.session.pendingAnnouncements).toEqual([]);
+    });
+
+    it('brackets announcements like the subsystem/autosave trailer notices, and separates multiple fired notices with a blank line (F-cfc5ff37)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const profile = makeTestProfile();
+      const h = createHarness({ gameOpts: { profile } });
+      ensureImmersionInferAndTransitionStub(h.session);
+
+      // Force both an announcement AND a subsystem warning to fire on the
+      // same turn, so the trailer region has two notices to separate.
+      // tickFactionAgency (not the broader world.factions getter) is the
+      // established sabotage target for profile-bearing harnesses in this
+      // file (see the F-9319b8d8 describe block below) -- this session has
+      // a profile, so buildMoveRecommendation() also reads world.factions
+      // unguarded later in processInput(), and a broader getter-level
+      // sabotage would crash that call too instead of landing cleanly in
+      // the post-turn tick's own try/catch.
+      h.session.pendingAnnouncements.push('Level up! You are now level 5.');
+      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+        throw new Error('simulated subsystem failure');
+      });
+
+      const output = await h.play('look around');
+      const lines = output.split('\n');
+      const announcementIndex = lines.findIndex((l) => l.includes('Level up! You are now level 5.'));
+      const subsystemIndex = lines.findIndex((l) => l.includes('subsystem hiccupped'));
+
+      expect(announcementIndex).toBeGreaterThan(-1);
+      expect(subsystemIndex).toBeGreaterThan(-1);
+      // Bracket idiom: the announcement now reads as a bracketed system
+      // notice, matching subsystemWarning/autosaveMsg's existing `[...]`
+      // wrapping, instead of bare indented prose.
+      expect(lines[announcementIndex]).toBe('  [Level up! You are now level 5.]');
+      expect(lines[subsystemIndex]).toBe('  [A subsystem hiccupped — your turn was processed safely]');
+      // Spacing: a full blank line separates the two notices, not zero gap.
+      expect(lines[subsystemIndex - 1]).toBe('');
     });
   });
 

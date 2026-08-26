@@ -7,6 +7,7 @@ import {
   loadNpcAgencyFromSession,
   loadPresentationStateFromSession,
   loadChronicleFromSession,
+  loadNpcConversationsFromSession,
   type SavedSession,
 } from './session.js';
 import { createPartyState } from '@ai-rpg-engine/modules';
@@ -609,5 +610,104 @@ describe('loadPresentationStateFromSession (F-8c3e32b7)', () => {
   it('returns the persisted presentation-state label', () => {
     const session = makeSession({ presentationState: 'combat' });
     expect(loadPresentationStateFromSession(session)).toBe('combat');
+  });
+});
+
+// F-462792bb (SLATE-2, persisted per Director ruling R2): mirrors
+// loadObligationsFromSession's exact per-entry try/validate/drop discipline
+// -- npcConversations is a Map<string, ConversationExchange[]> (array value,
+// not an object with a nested field), so the per-entry validator checks
+// Array.isArray + every-element shape instead of a single object's fields.
+describe('loadNpcConversationsFromSession (F-462792bb)', () => {
+  const validExchange = { speaker: 'Player', text: 'hello there' };
+
+  it('returns an empty Map when npcConversations is absent', () => {
+    const session = makeSession();
+    expect(loadNpcConversationsFromSession(session)).toEqual(new Map());
+  });
+
+  it('falls back to an empty Map when npcConversations is not valid JSON', () => {
+    const session = makeSession({ npcConversations: 'NOT VALID JSON!!' });
+    expect(loadNpcConversationsFromSession(session)).toEqual(new Map());
+  });
+
+  it('falls back to an empty Map when the parsed value is not an object at all (e.g. a bare number)', () => {
+    const session = makeSession({ npcConversations: '42' });
+    expect(loadNpcConversationsFromSession(session)).toEqual(new Map());
+  });
+
+  it('round-trips a populated map through save-shape JSON -> load (deep equality)', () => {
+    const populated = new Map([
+      ['pilgrim', [validExchange, { speaker: 'Suspicious Pilgrim', text: 'What do you want?' }]],
+      ['sister-maren', [{ speaker: 'Player', text: 'Are you well?' }]],
+    ]);
+    // Identical serialization shape to saveSession()'s own
+    // `JSON.stringify(Object.fromEntries(npcConversations))`.
+    const session = makeSession({ npcConversations: JSON.stringify(Object.fromEntries(populated)) });
+
+    const result = loadNpcConversationsFromSession(session);
+
+    expect(result).toEqual(populated);
+  });
+
+  it('drops an entry whose value is not an array, with a console.warn when debug is enabled', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      npcConversations: JSON.stringify({ 'npc-bad': { not: 'an array' } }),
+    });
+
+    const result = loadNpcConversationsFromSession(session);
+
+    expect(result.has('npc-bad')).toBe(false);
+    expect(result.size).toBe(0);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it('drops an entry whose array holds a malformed exchange (missing required fields)', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      npcConversations: JSON.stringify({ 'npc-bad': [{ speaker: 'Player' }] }),
+    });
+
+    const result = loadNpcConversationsFromSession(session);
+
+    expect(result.has('npc-bad')).toBe(false);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it('keeps valid entries while dropping invalid ones in the same save (mixed batch)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      npcConversations: JSON.stringify({
+        'npc-good': [validExchange],
+        'npc-bad': [{ speaker: 42, text: 'wrong type' }],
+      }),
+    });
+
+    const result = loadNpcConversationsFromSession(session);
+
+    expect(result.size).toBe(1);
+    expect(result.has('npc-good')).toBe(true);
+    expect(result.has('npc-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT console.warn by default (no --debug/CLAUDE_RPG_DEBUG) when dropping a malformed entry', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      npcConversations: JSON.stringify({ 'npc-bad': { not: 'an array' } }),
+    });
+
+    const result = loadNpcConversationsFromSession(session);
+
+    expect(result.has('npc-bad')).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

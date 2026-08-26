@@ -4,7 +4,11 @@
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
-import { renderPlayScreen, renderWelcome, renderThinking, getTerminalWidth } from '../display/play-renderer.js';
+// F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26):
+// cli-display exports renderDeathScreen from src/display/play-renderer.ts
+// this same wave -- not yet present in this isolated worktree's copy. See
+// this file's own test for the vi.mock covering this gap.
+import { renderPlayScreen, renderWelcome, renderThinking, getTerminalWidth, renderDeathScreen } from '../display/play-renderer.js';
 import { getOnboardingForSession, renderFirstTurnOrientation } from '../display/help-system.js';
 import { formatPartyStatusLine } from '@ai-rpg-engine/modules';
 import type { PartyState } from '@ai-rpg-engine/modules';
@@ -44,8 +48,29 @@ export function renderPlayOutput(input: {
    * existing caller that doesn't pass one keeps rendering the plain divider.
    */
   turnNumber?: number;
+  /**
+   * F-6e75fa93 (SLATE-1, brief ruled 2026-08-26): zero-LLM-cost ambient NPC
+   * chatter lines generated this turn (turn-loop.ts's TurnResult.ambientLines),
+   * passed straight through to renderPlayScreen — mirrors turnNumber's own
+   * passthrough contract just above. Optional so every existing caller that
+   * doesn't pass one keeps rendering without an ambient-lines block.
+   */
+  ambientLines?: string[];
 }): string {
   return renderPlayScreen(input);
+}
+
+// ─── Downed / Death Screen ───────────────────────────────────
+
+/**
+ * F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26): thin
+ * wrapper around cli-display's renderDeathScreen, mirroring
+ * renderConcludeOutput's role just below as the dedicated-framing screen for
+ * a distinct game state (there, campaign conclusion; here, the player going
+ * down) rather than the ordinary play screen.
+ */
+export function renderDeathOutput(narration: string, characterName?: string): string {
+  return renderDeathScreen({ narration, characterName });
 }
 
 /** Render the opening play screen with optional first-turn onboarding. */

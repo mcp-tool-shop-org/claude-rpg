@@ -17,9 +17,13 @@ import {
   getCraftingContext,
   isValidSupplyCategory,
   applyEconomyShiftToMap,
+  getPresenceData,
+  getStatusDataFromProfile,
 } from './game-state.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { PartyState } from '@ai-rpg-engine/modules';
+import type { ItemCatalog } from '@ai-rpg-engine/equipment';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 
 // --- Helpers ---
 
@@ -492,5 +496,62 @@ describe('extractProfileHints — multi-kill accumulation', () => {
     // 15 + 2 base = 17
     expect(hints.xpGained).toBe(17);
     expect(hints.reputationDelta).toEqual({ factionId: 'bandits', delta: -15 });
+  });
+});
+
+// F-97ffd8cd: getPresenceData/getStatusDataFromProfile previously called
+// buildPresence/buildStatusData with only 2 positional args, never the
+// optional trailing `catalog` param both callees already accept (see
+// character/catalog-names.ts's resolveArchetypeName/resolveDisciplineName) —
+// so every status bar / narrator presence string rendered the raw
+// kebab-case catalog id (e.g. 'penitent-knight') instead of its resolved
+// display name ('Penitent Knight'), even when a BuildCatalog was available
+// somewhere upstream. This adds the missing trailing param and threads it
+// through to both compiled-package callees.
+describe('getPresenceData / getStatusDataFromProfile catalog resolution (F-97ffd8cd)', () => {
+  const itemCatalog: ItemCatalog = { items: [] } as any;
+  const buildCatalog: BuildCatalog = {
+    archetypes: [{ id: 'penitent-knight', name: 'Penitent Knight' } as any],
+    backgrounds: [{ id: 'test-bg', name: 'Test Background' } as any],
+    disciplines: [{ id: 'occultist', name: 'Occultist' } as any],
+  } as any;
+
+  function makeCatalogProfile(): CharacterProfile {
+    return makeMinimalProfile({
+      build: {
+        name: 'Tester',
+        archetypeId: 'penitent-knight',
+        backgroundId: 'test-bg',
+        disciplineId: 'occultist',
+        traitIds: [],
+      } as any,
+    });
+  }
+
+  it('getStatusDataFromProfile resolves archetypeName/disciplineName from the catalog when supplied', () => {
+    const profile = makeCatalogProfile();
+    const status = getStatusDataFromProfile(profile, itemCatalog, buildCatalog);
+    expect(status?.archetypeName).toBe('Penitent Knight');
+    expect(status?.disciplineName).toBe('Occultist');
+  });
+
+  it('getStatusDataFromProfile falls back to the raw id when no catalog is supplied (unchanged behavior)', () => {
+    const profile = makeCatalogProfile();
+    const status = getStatusDataFromProfile(profile, itemCatalog);
+    expect(status?.archetypeName).toBe('penitent-knight');
+    expect(status?.disciplineName).toBe('occultist');
+  });
+
+  it('getPresenceData resolves the display name into the narrator summary when a catalog is supplied', () => {
+    const profile = makeCatalogProfile();
+    const presence = getPresenceData(profile, itemCatalog, buildCatalog);
+    expect(presence.narrator).toContain('Penitent Knight');
+    expect(presence.narrator).not.toContain('penitent-knight');
+  });
+
+  it('getPresenceData falls back to the raw id in the narrator summary when no catalog is supplied (unchanged behavior)', () => {
+    const profile = makeCatalogProfile();
+    const presence = getPresenceData(profile, itemCatalog);
+    expect(presence.narrator).toContain('penitent-knight');
   });
 });

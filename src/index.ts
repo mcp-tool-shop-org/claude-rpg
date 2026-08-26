@@ -65,7 +65,7 @@ export {
   type RumorDelta,
   type WhatPeopleAreSaying,
 } from './character/session-recap.js';
-export { loadChronicleFromSession, loadObligationsFromSession, loadConsequenceChainsFromSession } from './session/session.js';
+export { loadChronicleFromSession, loadObligationsFromSession, loadConsequenceChainsFromSession, loadNpcConversationsFromSession } from './session/session.js';
 
 // v0.9: Faction Agency
 // FactionProfile, FactionAction, FactionActionResult, FactionGoal, FactionEffect available via @ai-rpg-engine/modules

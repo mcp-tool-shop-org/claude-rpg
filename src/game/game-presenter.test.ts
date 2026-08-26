@@ -1,6 +1,25 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { renderConcludeOutput } from './game-presenter.js';
-import { getTerminalWidth } from '../display/play-renderer.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+
+// F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26):
+// renderDeathScreen is cli-display's half, landing in THEIR worktree this
+// same wave -- not present in this isolated worktree's copy of
+// play-renderer.ts yet. Spread the real module (getTerminalWidth, used for
+// real by renderConcludeOutput's own tests below, must stay real) and add
+// the pinned export as an inspectable mock, per the wave brief's
+// isolation-discipline note.
+vi.mock('../display/play-renderer.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../display/play-renderer.js')>();
+  return {
+    ...actual,
+    renderDeathScreen: vi.fn((opts: { narration: string; characterName?: string }) =>
+      `[DEATH SCREEN] ${opts.characterName ?? 'Unknown'}: ${opts.narration}`),
+  };
+});
+
+import { renderConcludeOutput, renderDeathOutput } from './game-presenter.js';
+import { getTerminalWidth, renderDeathScreen } from '../display/play-renderer.js';
+
+const mockedRenderDeathScreen = vi.mocked(renderDeathScreen);
 
 // F-001ef2af / F-81067750: renderConcludeOutput's section dividers used to
 // be built as '  ═'.repeat(30) / '  ─'.repeat(30) — repeating the entire
@@ -86,5 +105,25 @@ describe('renderConcludeOutput (F-001ef2af / F-81067750)', () => {
   it('still includes the epilogue text, indented, when present', () => {
     const output = renderConcludeOutput({ ...baseResult, epilogue: 'And so it ends.' });
     expect(output).toContain('  And so it ends.');
+  });
+});
+
+// F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26): thin
+// wrapper delegating to cli-display's renderDeathScreen, mirroring
+// renderConcludeOutput's role above as the dedicated-framing screen for a
+// distinct game state (there, campaign conclusion; here, the player down).
+describe('renderDeathOutput (F-6bc0721e)', () => {
+  it('delegates to renderDeathScreen with narration and characterName', () => {
+    const output = renderDeathOutput('You fall.', 'Aldric');
+
+    expect(mockedRenderDeathScreen).toHaveBeenCalledTimes(1);
+    expect(mockedRenderDeathScreen).toHaveBeenCalledWith({ narration: 'You fall.', characterName: 'Aldric' });
+    expect(output).toBe('[DEATH SCREEN] Aldric: You fall.');
+  });
+
+  it('omits characterName when not provided', () => {
+    renderDeathOutput('You fall.');
+
+    expect(mockedRenderDeathScreen).toHaveBeenCalledWith({ narration: 'You fall.', characterName: undefined });
   });
 });

@@ -1,4 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
+
+// F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26):
+// renderDeathScreen is cli-display's half, landing in THEIR worktree this
+// same wave -- not present in this isolated worktree's copy of
+// play-renderer.ts yet. Spread the real module (renderPlayScreen/
+// renderWelcome/renderThinking/getTerminalWidth are used for real by nearly
+// every test in this file, via game-presenter.ts, and must stay real) and
+// add the pinned export as a deterministic, inspectable stub, per the wave
+// brief's isolation-discipline note.
+vi.mock('./display/play-renderer.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./display/play-renderer.js')>();
+  return {
+    ...actual,
+    renderDeathScreen: vi.fn((opts: { narration: string; characterName?: string }) =>
+      `[DEATH SCREEN] ${opts.characterName ?? 'Unknown'}\n${opts.narration}`),
+  };
+});
+
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
@@ -1301,6 +1319,294 @@ describe('GameSession', () => {
       expect(h.session.immersion.stateMachine.current).toBe('dialogue');
       expect(capturedInputs).toHaveLength(1);
       expect(capturedInputs[0].presentationState).toBe('dialogue');
+    });
+  });
+
+  describe('BuildCatalog resolution (F-97ffd8cd)', () => {
+    function makeCatalogProfile() {
+      return createProfile(
+        {
+          name: 'Aldric',
+          archetypeId: 'penitent-knight',
+          backgroundId: 'oath-breaker',
+          traitIds: ['iron-frame'],
+          disciplineId: 'occultist',
+          portraitRef: 'abc123',
+        },
+        { vigor: 7, instinct: 4, will: 1 },
+        { hp: 25, stamina: 8 },
+        ['martial'],
+        'fantasy',
+      );
+    }
+
+    it("resolves the player's status bar archetypeName/disciplineName from a real pack's BuildCatalog", async () => {
+      const { buildCatalog } = await import('@ai-rpg-engine/starter-fantasy');
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        profile: makeCatalogProfile(),
+        itemCatalog: { items: [] },
+        buildCatalog,
+      });
+
+      const status = session.getStatusData();
+      expect(status?.archetypeName).toBe('Penitent Knight');
+      expect(status?.disciplineName).toBe('Occultist');
+    });
+
+    it('falls back to the raw catalog id when buildCatalog is omitted (unchanged behavior)', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        profile: makeCatalogProfile(),
+        itemCatalog: { items: [] },
+      });
+
+      const status = session.getStatusData();
+      expect(status?.archetypeName).toBe('penitent-knight');
+      expect(status?.disciplineName).toBe('occultist');
+    });
+  });
+
+  describe('consecutiveFallbacks counter (F-940cd4d0)', () => {
+    it('switches to the repeat-aware fallback text on the 2nd consecutive narration failure, and resets after a success', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const { FALLBACK_NARRATION, FALLBACK_NARRATION_REPEATED } = await import('./narrator/narrator.js');
+      const h = createHarness({ clientOpts: { generateFailure: 'timeout' } });
+
+      const out1 = await h.play('look around');
+      expect(out1).toContain(FALLBACK_NARRATION);
+      expect(out1).not.toContain(FALLBACK_NARRATION_REPEATED);
+
+      const out2 = await h.play('look around');
+      expect(out2).toContain(FALLBACK_NARRATION_REPEATED);
+    });
+
+    it('a subsequent successful turn resets the counter, so a later failure shows FALLBACK_NARRATION again (not _REPEATED)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const { FALLBACK_NARRATION, FALLBACK_NARRATION_REPEATED } = await import('./narrator/narrator.js');
+      // Turns 1-2 fail, turn 3 succeeds, turn 4 fails again.
+      const h = createHarness({
+        clientOpts: { generateFailure: (n: number) => (n === 3 ? undefined : 'timeout') },
+      });
+
+      await h.play('look around'); // 1: fails -> FALLBACK_NARRATION, counter -> 1
+      await h.play('look around'); // 2: fails -> FALLBACK_NARRATION_REPEATED, counter -> 2
+      const out3 = await h.play('look around'); // 3: succeeds, counter resets -> 0
+      expect(out3).not.toContain(FALLBACK_NARRATION);
+
+      const out4 = await h.play('look around'); // 4: fails again, first fallback since reset
+      expect(out4).toContain(FALLBACK_NARRATION);
+      expect(out4).not.toContain(FALLBACK_NARRATION_REPEATED);
+    });
+  });
+
+  describe('debugLog reasoning threading (F-9976a6d6, SLATE-5e option (a) only per Director ruling R3)', () => {
+    it('logs the interpreted action reasoning to a real DebugLogger threaded through GameConfig.debugLogger', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const debugLog = createTestLogger();
+      const h = createHarness({ gameOpts: { debugLogger: debugLog } });
+
+      await h.play('look around');
+
+      const entry = debugLog.getEntries().find((e) => e.subsystem === 'interpret' && e.message === 'action-reasoning');
+      expect(entry).toBeDefined();
+      expect(entry!.data?.verb).toBe('look');
+    });
+  });
+
+  describe('NPC conversation memory (F-462792bb, SLATE-2 persisted per Director ruling R2)', () => {
+    it('defaults to an empty Map when GameConfig.npcConversations is not provided', () => {
+      const engine = createGame();
+      const session = new GameSession({ engine, title: 'Test Game', clientConfig: { apiKey: 'test-key' } });
+
+      expect(session.npcConversations).toEqual(new Map());
+    });
+
+    it('restores the exact Map instance passed via GameConfig.npcConversations', () => {
+      const engine = createGame();
+      const restored = new Map([['pilgrim', [{ speaker: 'Player', text: 'hi' }]]]);
+      const session = new GameSession({
+        engine, title: 'Test Game', clientConfig: { apiKey: 'test-key' },
+        npcConversations: restored,
+      });
+
+      expect(session.npcConversations).toBe(restored);
+    });
+
+    it("grows by exactly 2 entries keyed by the NPC's real id after a non-fallback speak turn", async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('speak to pilgrim');
+
+      const entries = h.session.npcConversations.get('pilgrim');
+      expect(entries).toHaveLength(2);
+      expect(entries![0]).toEqual({ speaker: 'Player', text: 'speak to pilgrim' });
+      expect(entries![1].speaker).toBe('Suspicious Pilgrim');
+      // Keyed by real id, never name/genre.
+      expect(h.session.npcConversations.has('Suspicious Pilgrim')).toBe(false);
+    });
+
+    it('does not grow when the dialogue result is a fallback stall (non-event, not remembered)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      // Only the 2nd generate() call (Step 5's generateDialogue) fails —
+      // narrateScene's own call (#1) still succeeds normally.
+      const h = createHarness({
+        clientOpts: { generateFailure: (n: number) => (n === 2 ? 'timeout' : undefined) },
+      });
+
+      await h.play('speak to pilgrim');
+
+      expect(h.session.npcConversations.has('pilgrim')).toBe(false);
+    });
+
+    it('does not grow on a non-speak turn', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('look around');
+
+      expect(h.session.npcConversations.size).toBe(0);
+    });
+
+    it('accumulates across turns within one session (the same Map instance is threaded every turn)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('speak to pilgrim');
+      expect(h.session.npcConversations.get('pilgrim')).toHaveLength(2);
+
+      await h.play('speak to pilgrim');
+      expect(h.session.npcConversations.get('pilgrim')).toHaveLength(4);
+    });
+
+    it('never exceeds 20 entries per NPC', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      for (let i = 0; i < 15; i++) {
+        await h.play('speak to pilgrim');
+      }
+
+      expect(h.session.npcConversations.get('pilgrim')).toHaveLength(20);
+    });
+
+    it('checkAutosave() persists the live npcConversations map', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const capturedInputs: Array<{ npcConversations?: Map<string, unknown> }> = [];
+      vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockImplementation(async (input) => {
+          capturedInputs.push(input);
+        });
+
+      const h = createHarness({ gameOpts: { autosave: { enabled: true, intervalTurns: 1 } } });
+      await h.play('speak to pilgrim');
+
+      expect(capturedInputs).toHaveLength(1);
+      // Reference-equal to the live map (not a stale/empty copy) AND
+      // actually populated -- a session with no npcConversations field at
+      // all would also satisfy a bare `.toBe(undefined)` comparison, so
+      // this asserts real content is present, not just referential parity.
+      expect(capturedInputs[0].npcConversations).toBe(h.session.npcConversations);
+      expect(capturedInputs[0].npcConversations?.get('pilgrim')).toHaveLength(2);
+    });
+  });
+
+  describe('downed gate (F-6bc0721e, SLATE-6 death-as-setback per Director ruling R1)', () => {
+    it("blocks an ordinary action verb while stateMachine.current is 'menu', without consuming a turn", async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      h.session.immersion.stateMachine.transition('menu', 'test-setup');
+      const submitSpy = vi.spyOn(h.session.engine, 'submitAction');
+      const tickBefore = h.session.engine.tick;
+
+      const output = await h.play('attack pilgrim');
+
+      expect(submitSpy).not.toHaveBeenCalled();
+      expect(h.session.engine.tick).toBe(tickBefore);
+      expect(output).toContain('DEATH SCREEN');
+      expect(output).toContain('You are down');
+    });
+
+    it("keeps /status (a non-diegetic introspection command) working while downed", async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      h.session.immersion.stateMachine.transition('menu', 'test-setup');
+
+      const output = await h.play('/status');
+
+      expect(output).not.toContain('DEATH SCREEN');
+      expect(output).toContain('No profile loaded');
+    });
+
+    it("still allows quit while downed", async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      h.session.immersion.stateMachine.transition('menu', 'test-setup');
+
+      const output = await h.play('quit');
+
+      expect(output).toBe('__QUIT__');
+    });
+
+    it('"continue" transitions back to exploration without consuming a turn, and the next ordinary turn proceeds normally', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      h.session.immersion.stateMachine.transition('menu', 'test-setup');
+      const submitSpy = vi.spyOn(h.session.engine, 'submitAction');
+
+      const output = await h.play('continue');
+
+      expect(h.session.immersion.stateMachine.current).toBe('exploration');
+      expect(submitSpy).not.toHaveBeenCalled();
+      expect(output).not.toContain('DEATH SCREEN');
+
+      const next = await h.play('look');
+      expect(next).not.toContain('DEATH SCREEN');
+      expect(submitSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('a save made while downed (restoredPresentationState menu) gates the very first input too', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({ gameOpts: { restoredPresentationState: 'menu' } });
+      const submitSpy = vi.spyOn(h.session.engine, 'submitAction');
+
+      const output = await h.play('attack pilgrim');
+
+      expect(submitSpy).not.toHaveBeenCalled();
+      expect(output).toContain('DEATH SCREEN');
+    });
+
+    it("renders the real turn narration through renderDeathOutput on the turn that transitions into 'menu' (justDied)", async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      // Override inferAndTransition directly to report a menu transition on
+      // the very next turn, mirroring how a real player-defeat event would
+      // resolve (the pinned StateTransition-returning contract this wave --
+      // see ensureImmersionInferAndTransitionStub's own doc comment above
+      // for why this domain can't construct the real inference for real).
+      const immersion = h.session.immersion as unknown as {
+        inferAndTransition: (engine: unknown, events: unknown[], verb: string) => unknown;
+      };
+      const original = immersion.inferAndTransition;
+      immersion.inferAndTransition = (engine: unknown, events: unknown[], verb: string) => {
+        h.session.immersion.stateMachine.transition('menu', 'forced-death');
+        return { from: 'combat', to: 'menu', trigger: verb };
+      };
+
+      const output = await h.play('attack pilgrim');
+
+      expect(output).toContain('DEATH SCREEN');
+      // The narration passed through is this turn's REAL narration, not the
+      // downed-gate's generic "You are down" placeholder.
+      expect(output).not.toContain('You are down');
+      immersion.inferAndTransition = original;
     });
   });
 

@@ -76,3 +76,34 @@ describe('generateOpeningNarration chronicleContext seam (F-7815df9e)', () => {
     expect(callOpts.chronicleContext).toBeUndefined();
   });
 });
+
+// F-f4f6ac90 (coordinator stitch): the finale voice is keyed by narratorTone —
+// this locks down that generateFinaleNarration actually forwards it into
+// narrateFinale's 5th parameter, closing the wave-12 regression where the
+// re-keyed PACK_VOICES lookup received undefined from every caller.
+vi.mock('../narrator/finale-narrator.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../narrator/finale-narrator.js')>();
+  return { ...actual, narrateFinale: vi.fn(actual.narrateFinale) };
+});
+
+describe('generateFinaleNarration narratorTone forwarding (F-f4f6ac90)', () => {
+  it('forwards narratorTone as narrateFinale\'s 5th argument', async () => {
+    const { generateFinaleNarration } = await import('./game-narration.js');
+    const { narrateFinale } = await import('../narrator/finale-narrator.js');
+    const mockedNarrateFinale = vi.mocked(narrateFinale);
+    mockedNarrateFinale.mockResolvedValueOnce({
+      deterministicSummary: 'done', epilogue: 'end', worldAfter: 'after',
+    });
+    await generateFinaleNarration({
+      client: createMockClient(),
+      outline: { kind: 'triumph', beats: [], epilogueSeeds: [] } as never,
+      genre: 'fantasy',
+      characterName: 'Aldric',
+      narratorTone: 'dark fantasy, concise, atmospheric, foreboding',
+    });
+    expect(mockedNarrateFinale).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), 'fantasy', 'Aldric',
+      'dark fantasy, concise, atmospheric, foreboding',
+    );
+  });
+});

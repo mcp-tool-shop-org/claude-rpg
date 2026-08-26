@@ -1788,6 +1788,7 @@ export class GameSession {
       outline,
       genre: this.genre,
       characterName: this.profile?.build.name,
+      narratorTone: this.tone,
     });
 
     return renderConcludeOutput(result);

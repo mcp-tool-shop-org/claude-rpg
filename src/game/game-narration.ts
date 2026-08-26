@@ -60,6 +60,12 @@ export type FinaleNarrationContext = {
   outline: FinaleOutline;
   genre: string;
   characterName?: string;
+  /**
+   * F-f4f6ac90: the session tone (pack.meta.narratorTone for pack-launched
+   * games) — the key PACK_VOICES is indexed by. Without it the finale voice
+   * lookup misses for every pack.
+   */
+  narratorTone?: string;
 };
 
 /** Call the LLM to generate the finale epilogue. */
@@ -68,5 +74,5 @@ export async function generateFinaleNarration(ctx: FinaleNarrationContext): Prom
   epilogue?: string;
   worldAfter: string;
 }> {
-  return narrateFinale(ctx.client, ctx.outline, ctx.genre, ctx.characterName);
+  return narrateFinale(ctx.client, ctx.outline, ctx.genre, ctx.characterName, ctx.narratorTone);
 }

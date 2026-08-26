@@ -9,12 +9,12 @@ import { loadNpcAgencyFromSession, type SavedSession } from './session/session.j
 
 /**
  * F-4ec3609b (ORDERING contract, cross-domain): turn-loop.ts's executeTurn()
- * now calls immersion.inferAndTransition(events, verb) -- a method
- * runtime-foundry is landing on ImmersionRuntime (src/runtime/**, out of
- * this domain's owned globs) in this same wave. In an isolated worktree
- * where only game-core's half has landed, the real class doesn't have that
- * method yet, so any test that plays a real turn through GameSession would
- * throw "immersion.inferAndTransition is not a function" -- unrelated to
+ * now calls immersion.inferAndTransition(engine, events, verb) -- a method
+ * runtime-foundry landed on ImmersionRuntime (src/runtime/**, out of this
+ * domain's owned globs) this same wave. In an isolated worktree where only
+ * game-core's half has landed, the real class doesn't have that method
+ * yet, so any test that plays a real turn through GameSession would throw
+ * "immersion.inferAndTransition is not a function" -- unrelated to
  * whatever that specific test is actually exercising.
  *
  * Documented local stub (per the wave brief's "test your side with a
@@ -24,14 +24,17 @@ import { loadNpcAgencyFromSession, type SavedSession } from './session/session.j
  * subsystem failure or drain announcements) can still run today. Once
  * runtime-foundry's half merges, `typeof ... === 'function'` is already
  * true and this is a no-op -- the real implementation runs untouched.
+ * Signature reconciled to the real 3-arg shape (contract adjudication,
+ * wave 16) -- an `engine` param was added because the inference this shim
+ * stands in for reads engine.tick/engine.world unguarded.
  */
 function ensureImmersionInferAndTransitionStub(session: GameSession): void {
   const immersion = session.immersion as unknown as {
-    inferAndTransition?: (events: unknown[], verb: string) => unknown;
+    inferAndTransition?: (engine: unknown, events: unknown[], verb: string) => unknown;
     stateMachine: { current: unknown };
   };
   if (typeof immersion.inferAndTransition !== 'function') {
-    immersion.inferAndTransition = (_events: unknown[], _verb: string) => immersion.stateMachine.current;
+    immersion.inferAndTransition = (_engine: unknown, _events: unknown[], _verb: string) => immersion.stateMachine.current;
   }
 }
 

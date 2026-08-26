@@ -486,13 +486,17 @@ describe('executeTurn (opts object)', () => {
     });
 
     /**
-     * F-4ec3609b: runtime-foundry is landing a public
-     * `ImmersionRuntime.inferAndTransition(events, verb): PresentationState`
-     * in this same wave (src/runtime/immersion-runtime.ts) -- out of this
-     * domain's owned globs, so it cannot be edited or constructed for real
-     * here. It performs exactly the inference+transition step
-     * processPresentation() already runs as its own first step, but lets
-     * executeTurn() run that step BEFORE narration instead of after.
+     * F-4ec3609b: runtime-foundry landed a public
+     * `ImmersionRuntime.inferAndTransition(engine, events, verb):
+     * PresentationState` this same wave (src/runtime/immersion-runtime.ts)
+     * -- out of this domain's owned globs, so it cannot be edited or
+     * constructed for real here. It performs exactly the inference+
+     * transition step processPresentation() already runs as its own first
+     * step, but lets executeTurn() run that step BEFORE narration instead
+     * of after. `engine` is required (not just events/verb) because the
+     * inference reads engine.tick/engine.world.playerId/engine.world
+     * directly -- reconciled against the real shipped 3-arg signature
+     * (contract adjudication, wave 16).
      *
      * This is a documented local stub (not the real class) standing in for
      * that contract: it implements only the two members executeTurn's Step
@@ -508,7 +512,7 @@ describe('executeTurn (opts object)', () => {
       inferredState: string;
     }) {
       let current = opts.priorState;
-      const inferAndTransition = vi.fn((_events: unknown[], _verb: string) => {
+      const inferAndTransition = vi.fn((_engine: unknown, _events: unknown[], _verb: string) => {
         current = opts.inferredState;
         return opts.inferredState;
       });
@@ -562,7 +566,7 @@ describe('executeTurn (opts object)', () => {
       });
 
       expect(inferAndTransition).toHaveBeenCalledTimes(1);
-      expect(inferAndTransition).toHaveBeenCalledWith(expect.any(Array), 'look');
+      expect(inferAndTransition).toHaveBeenCalledWith(engine, expect.any(Array), 'look');
       expect(processPresentation).toHaveBeenCalledTimes(1);
 
       const inferOrder = inferAndTransition.mock.invocationCallOrder[0];

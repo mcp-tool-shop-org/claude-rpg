@@ -20,15 +20,25 @@ import type { McpToolCall } from './runtime/audio-bridge.js';
 import { withTokenTracking, type SessionTokenTracker } from './game/token-tracker.js';
 
 /**
- * F-4ec3609b (ORDERING contract, game-core half): runtime-foundry is adding
- * a public `ImmersionRuntime.inferAndTransition(events, verb):
- * PresentationState` in this same wave (src/runtime/immersion-runtime.ts) —
+ * F-4ec3609b (ORDERING contract, game-core half): runtime-foundry added a
+ * public `ImmersionRuntime.inferAndTransition(engine, events, verb):
+ * PresentationState` this same wave (src/runtime/immersion-runtime.ts:206) —
  * it performs exactly the inference+transition step
  * ImmersionRuntime.processPresentation() already runs as its own first
  * step, but returns the resulting state so executeTurn() can run that step
  * *before* building narration opts instead of after. processPresentation()
- * is documented to detect the state already matches and skip re-inferring
- * when called afterward, so calling both in sequence is idempotent-safe.
+ * is documented to detect the state already matches (via a tick-keyed
+ * pendingTurnInference cache) and skip re-inferring when called afterward,
+ * so calling both in sequence is idempotent-safe.
+ *
+ * Signature note: `engine` is required (not just `events`/`verb`) because
+ * the inference this wraps (PresentationStateMachine.inferFromEvents) reads
+ * engine.tick and engine.world.playerId/world directly — the class never
+ * caches `engine` internally, matching processPresentation()'s own first
+ * parameter. An earlier draft of this type omitted `engine`; reconciled
+ * against the real shipped method (contract adjudication, wave 16) since a
+ * 2-arg call would silently pass `events` where `engine` is expected on the
+ * merged tree.
  *
  * src/runtime/** is runtime-foundry-owned and out of this domain's edit
  * scope, so the method can't be added to the real class from here. This
@@ -38,7 +48,7 @@ import { withTokenTracking, type SessionTokenTracker } from './game/token-tracke
  * type with no further change required here.
  */
 type ImmersionRuntimeWithInference = ImmersionRuntime & {
-  inferAndTransition(events: ResolvedEvent[], verb: string): PresentationState;
+  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): PresentationState;
 };
 
 export type ProfileUpdateHints = {
@@ -268,7 +278,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // of lagging one turn behind (see the type doc comment above for the
   // cross-domain contract this leans on).
   const presentationState = immersion
-    ? (immersion as ImmersionRuntimeWithInference).inferAndTransition(events, interpreted.verb)
+    ? (immersion as ImmersionRuntimeWithInference).inferAndTransition(engine, events, interpreted.verb)
     : undefined;
   let narrationResult: NarrationResult;
   try {

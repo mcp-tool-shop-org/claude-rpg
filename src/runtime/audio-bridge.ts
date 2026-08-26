@@ -116,9 +116,22 @@ export class VoiceSoundboardBridge implements PresentationRenderer {
   }
 
   async applyUiEffect(effect: UiEffect): Promise<void> {
-    // UI effects are terminal escape codes — handled by the terminal renderer
-    // This is a no-op for the audio bridge
-    void effect;
+    if (!this.enabled) return;
+    // UI effects (fade/flash/shake) are terminal escape codes owned by the terminal
+    // renderer, not this audio bridge — same "future feature, cue owned elsewhere"
+    // shape as setMusic's __music_intent__ below. Emit the intent so callers of
+    // flush()/executeCommands() at least see the request instead of it vanishing
+    // here as a silent no-op (F-6ef6e5a0: this method previously had zero callers
+    // anywhere in the codebase, so e.g. deathHook's fade-to-black never reached
+    // anything downstream of ImmersionRuntime.processPresentation).
+    this.pendingCalls.push({
+      tool: '__ui_effect_intent__',
+      params: {
+        type: effect.type,
+        durationMs: effect.durationMs,
+        color: effect.color,
+      },
+    });
   }
 
   /** Execute a batch of AudioCommands through the bridge. */

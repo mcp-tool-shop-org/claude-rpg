@@ -1,8 +1,8 @@
 // Presentation state machine — tracks game presentation context
 
-import type { ResolvedEvent } from '@ai-rpg-engine/core';
+import type { ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
-import { isPlayerDefeatEvent } from './hooks.js';
+import { isPlayerDefeatEvent, isPlayerAtZeroHp } from './hooks.js';
 
 export type { PresentationState } from '@ai-rpg-engine/presentation';
 
@@ -48,12 +48,19 @@ export class PresentationStateMachine {
    * called twice in the same turn.
    *
    * `playerId` (pass `world.playerId`) gates the player-death check — see below.
+   *
+   * `world` (pass `engine.world`) is optional and, when supplied, additionally
+   * catches a death that reached hp <= 0 without any matching event at all — e.g.
+   * world-gen.ts's environment-hazard effect (F-e57d6a60). Omitting it falls back to
+   * the pure event-based check only, so existing callers that don't have a world
+   * handle keep their prior behavior exactly.
    */
   inferFromEvents(
     events: ResolvedEvent[],
     verb?: string,
     tick?: number,
     playerId?: string,
+    world?: WorldState,
   ): PresentationState {
     // Player death — check first so it isn't masked by general combat/aftermath.
     // F-277b5eca: delegates to hooks.ts's isPlayerDefeatEvent so this predicate can't
@@ -62,8 +69,22 @@ export class PresentationStateMachine {
     // player id is 'player', set at world-gen.ts:378), so hasDeath was always false.
     // Guarded on playerId being supplied so callers that omit it can't accidentally
     // match a defeat event whose payload also omits entityId.
-    const hasDeath = playerId != null && isPlayerDefeatEvent(events, playerId);
-    if (hasDeath) return 'menu';
+    // F-e57d6a60: OR in isPlayerAtZeroHp (when world is supplied) so a hazard death
+    // that emits no event at all still resolves to 'menu' — see its doc comment in
+    // hooks.ts for why the event side of this can't be fixed at the source instead.
+    const hasDeath =
+      playerId != null &&
+      (isPlayerDefeatEvent(events, playerId) ||
+        (world != null && isPlayerAtZeroHp(world, playerId)));
+    if (hasDeath) {
+      // F-eb2f7496: reset the aftermath countdown guard so a death that lands
+      // mid-countdown (an earlier kill's aftermathTurns still ticking down) can't
+      // leave stale state for whatever presentation computation runs next, if
+      // gameplay ever continues through this same instance after 'menu'.
+      this.aftermathTurns = 0;
+      this.lastDecrementTick = -1;
+      return 'menu';
+    }
 
     // Check for combat events
     const hasCombat = events.some((e) =>

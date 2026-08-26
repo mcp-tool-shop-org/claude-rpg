@@ -233,6 +233,20 @@ export async function generateWorld(
               id: `${z.id}-${h.replace(/\s+/g, '-')}`,
               triggerOn: 'world.zone.entered' as const,
               condition: (zone: ZoneState) => zone.id === z.id,
+              // F-e57d6a60: this hazard mutates hp directly and returns no events, so
+              // it is a second, independent death path alongside combat that the
+              // runtime's death presentation used to miss entirely (it keyed
+              // exclusively on combat.entity.defeated). That is NOT fixable by
+              // changing this return value: environment-core.js's checkHazard() calls
+              // `hazard.effect(...)` for its side effect only and discards whatever it
+              // returns (verified in
+              // node_modules/@ai-rpg-engine/modules/dist/environment-core.js — the
+              // effect callback also has no event-bus handle to push an event through
+              // any other way; `world` here is a plain WorldState data bag, not the
+              // WorldStore/EventBus). The actual fix lives in
+              // src/runtime/hooks.ts's isPlayerAtZeroHp, which reads
+              // world.entities[playerId].resources.hp directly instead of waiting for
+              // an event this hazard has no way to deliver.
               effect: (_zone: ZoneState, entity: EntityState) => {
                 entity.resources.hp = Math.max(0, (entity.resources.hp ?? 0) - 1);
                 return [];

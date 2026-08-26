@@ -180,3 +180,82 @@ describe('Built-in hooks', () => {
     expect(merged.sfxCues![0].effectId).toBe('alert_warning');
   });
 });
+
+// ─── F-e57d6a60: deathHook must also catch a hazard-style death that mutates hp
+// directly and emits no event at all (world-gen.ts's environment-hazard effect) ───
+
+describe('deathHook hp-based detection (F-e57d6a60)', () => {
+  it('fires the death presentation when hp reaches zero with no defeat event at all', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    // Mirrors world-gen.ts's environment-hazard effect: hp mutated directly to 0 via
+    // entity.resources.hp = Math.max(0, ...), with the triggering event being
+    // world.zone.entered (not any hp/defeat-shaped event).
+    const ctx = makeContext({
+      hookPoint: 'death',
+      world: {
+        zones: {},
+        entities: { player: { resources: { hp: 0 } } },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('alert_critical');
+    expect(results[0].uiEffects!.length).toBe(1);
+  });
+
+  it('does not fire when hp is above zero and no defeat event exists', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'death',
+      world: {
+        zones: {},
+        entities: { player: { resources: { hp: 5 } } },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [],
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(0);
+  });
+});
+
+// ─── F-91f803b2: combat-end's victory cue must not fire alongside a player death ───
+
+describe('combatEndHook player-death suppression (F-91f803b2)', () => {
+  it('does not fire the victory cue when the defeated entity is the player', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'player' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(0);
+  });
+
+  it('still fires the victory cue when a non-player entity is defeated', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('ui_success');
+  });
+});

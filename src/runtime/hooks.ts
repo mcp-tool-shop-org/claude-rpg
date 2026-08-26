@@ -52,6 +52,30 @@ export function isPlayerDefeatEvent(events: ResolvedEvent[], playerId: string): 
   );
 }
 
+/**
+ * Whether the PLAYER's hp has reached zero directly in world state, independent of
+ * any event. Some death paths mutate hp without emitting a matching event at all —
+ * e.g. world-gen.ts's environment-hazard effect (F-e57d6a60), which does
+ * `entity.resources.hp = Math.max(0, ...)` and `return []`. That empty return is not
+ * a loose end this function tries to route around by matching some other event
+ * shape: the installed engine's environment-core module discards whatever a
+ * hazard's effect callback returns — checkHazard() in
+ * node_modules/@ai-rpg-engine/modules/dist/environment-core.js calls
+ * `hazard.effect(zone, entity, world, event.tick)` for its side effect only and
+ * never reads the return value (verified by reading that dist file directly, not
+ * assumed from the .d.ts's `=> ResolvedEvent[]` signature). The effect closure also
+ * has no event-bus handle to push a new event through some other way — `world`
+ * there is the plain WorldState data bag, not the WorldStore/EventBus. Reading hp
+ * straight off world state is therefore the only mechanism that actually reaches
+ * this domain's death presentation for a hazard death. Call sites that have `world`
+ * in hand should OR this in alongside isPlayerDefeatEvent so combat deaths and
+ * hazard deaths both reach the same death presentation.
+ */
+export function isPlayerAtZeroHp(world: WorldState, playerId: string): boolean {
+  const hp = world.entities[playerId]?.resources.hp;
+  return hp !== undefined && hp <= 0;
+}
+
 /** Manages hook registration and firing. */
 export class HookManager {
   private hooks = new Map<HookPoint, Hook[]>();
@@ -128,6 +152,13 @@ export const combatStartHook: Hook = (ctx) => {
 export const combatEndHook: Hook = (ctx) => {
   const hasDefeat = ctx.events.some((e) => e.type === 'combat.entity.defeated');
   if (!hasDefeat) return null;
+  // F-91f803b2: skip when the PLAYER is the defeated entity — deathHook already
+  // owns that presentation (critical alarm + fade-out). combat-end and death are
+  // dispatched independently and unconditionally off the same combat.entity.defeated
+  // event in ImmersionRuntime.fireEventHooks, so without this gate a player death
+  // via combat played a victory chime and a "soften" music cue immediately alongside
+  // the death alarm.
+  if (isPlayerDefeatEvent(ctx.events, ctx.world.playerId)) return null;
   return {
     sfxCues: [{ effectId: 'ui_success', timing: 'immediate', intensity: 0.7 }],
     musicCue: { action: 'soften', fadeMs: 1000 },
@@ -143,7 +174,13 @@ export const npcSpeakingHook: Hook = (ctx) => {
 
 /** Play critical alert on death. */
 export const deathHook: Hook = (ctx) => {
-  if (!isPlayerDefeatEvent(ctx.events, ctx.world.playerId)) return null;
+  // F-e57d6a60: also match a hazard-style death that mutates hp to 0 without ever
+  // emitting a combat.entity.defeated (or any) event — see isPlayerAtZeroHp's doc
+  // comment for why the event can't be made to appear here instead.
+  const playerDefeated =
+    isPlayerDefeatEvent(ctx.events, ctx.world.playerId) ||
+    isPlayerAtZeroHp(ctx.world, ctx.world.playerId);
+  if (!playerDefeated) return null;
   return {
     sfxCues: [{ effectId: 'alert_critical', timing: 'immediate', intensity: 1.0 }],
     ambientCues: [

@@ -5,7 +5,8 @@ import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { NarrationPlan, PresentationState } from '@ai-rpg-engine/presentation';
 import { isValidNarrationPlan } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient, StreamCallback } from '../claude-client.js';
-import { NarrationError } from '../llm/claude-errors.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { classifyError } from '../llm/claude-adapter.js';
 import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt } from '../prompts/narrate-scene.js';
 import { buildSceneContext, type SceneContext } from './scene-context.js';
 // F-fa65fe50: type-only import of the game-core seam's existing structured
@@ -26,6 +27,16 @@ export type NarrationResult = {
    * text apart from authored narrative instead of quoting it as if it were real.
    */
   isFallback: boolean;
+  /**
+   * F-afb978de (family-of-call-sites sibling of dialogue-mind.ts/
+   * finale-narrator.ts): userMessage(narrationErr)'s actionable per-kind
+   * guidance (claude-errors.ts), set only alongside isFallback: true.
+   * `narration` stays FALLBACK_NARRATION/FALLBACK_NARRATION_REPEATED for
+   * every non-fatal kind — this is a separate, explicitly out-of-fiction
+   * channel (logs, a --debug panel, a future toast) for *why* the fallback
+   * happened, not a replacement for the in-fiction sentinel text.
+   */
+  fallbackMessage?: string;
 };
 
 // F-304fc328: safe fallback narration used when the LLM call fails outright,
@@ -34,6 +45,19 @@ export type NarrationResult = {
 // sentinel by value where `isFallback` isn't threaded all the way through
 // (e.g. TurnRecord in session/history.ts, which only stores narration text).
 export const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
+
+// F-681d3382: shown from the 2nd consecutive non-fatal fallback onward (see
+// NarrateSceneOpts.consecutiveFallbacks below) instead of FALLBACK_NARRATION.
+// During a real outage FALLBACK_NARRATION's isolated-hiccup framing repeats
+// byte-for-byte every turn with no acknowledgment anything is actually
+// wrong; this sentinel names the pattern and gives the player something
+// actionable, the way claude-errors.ts's userMessage() differentiates by
+// failure kind (which this plain-narration path otherwise has no equivalent
+// of at all). Kept as a second constant sentence — not a template — so it
+// stays in KNOWN_FALLBACK_NARRATION_SENTINELS's exact-string-match contract
+// below.
+export const FALLBACK_NARRATION_REPEATED =
+  'The story can\'t reach the narrator right now — this looks like more than a one-off; check your connection or type "save" to be safe.';
 
 // F-e8630a73 / F-18f4dd88: the fatal-path fallback sentinel, recorded via
 // history.record() when narrateScene()/narrateSceneLegacy() rethrow a fatal
@@ -44,14 +68,15 @@ export const FATAL_NARRATION_FALLBACK =
   '(The narrator could not describe what happened — your action was still resolved.)';
 
 /**
- * Every known fallback-narration sentinel, old and new (see the two constants
+ * Every known fallback-narration sentinel, old and new (see the constants
  * above). Consumers that need to recognize placeholder narration — the
  * LLM-facing recentNarration filter below, and recap.ts's save-load recap
  * screen — compare against this list rather than FALLBACK_NARRATION alone, so
- * a turn recorded via either fallback path is treated consistently.
+ * a turn recorded via any fallback path is treated consistently.
  */
 export const KNOWN_FALLBACK_NARRATION_SENTINELS: readonly string[] = [
   FALLBACK_NARRATION,
+  FALLBACK_NARRATION_REPEATED,
   FATAL_NARRATION_FALLBACK,
 ];
 
@@ -80,6 +105,27 @@ export type NarrateSceneOpts = {
   chronicleContext?: string;
   onChunk?: StreamCallback;
   /**
+   * F-681d3382: count of consecutive non-fatal LLM fallbacks immediately
+   * preceding this turn (0 or omitted = none / unknown). When >= 1 — i.e.
+   * this call's own fallback, if it happens, would be the 2nd+ in a row —
+   * narrateScene switches to FALLBACK_NARRATION_REPEATED instead of the
+   * isolated-hiccup FALLBACK_NARRATION text, so a real outage reads as a
+   * pattern instead of the same silent sentence every turn.
+   *
+   * recentNarration can't answer this itself in production: session/
+   * history.ts's getRecentNarration() already excludes fallback turns
+   * entirely before this module ever sees them (filtering them out, not just
+   * marking them), so a run of fallback turns looks identical to a short
+   * real history from in here — the opts.recentNarration filter below (line
+   * ~116) only ever has sentinels to strip when a caller passes an
+   * unfiltered array directly (as several tests in this file do). The
+   * caller that still has the actual run of turns (turn-loop.ts, game-core,
+   * outside this domain's scope) is the only place that can count consecutive
+   * fallbacks and must track + pass this; omitted, behavior is unchanged
+   * from before this fix.
+   */
+  consecutiveFallbacks?: number;
+  /**
    * F-fa65fe50: optional structured logger (src/game/debug-logger.ts). When
    * provided, every degradation this module can hit -- parseNarrationPlan's
    * three failure paths plus its own generation-failure catch below -- is
@@ -102,6 +148,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onChunk, logger,
+    consecutiveFallbacks,
   } = opts;
 
   // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
@@ -192,15 +239,28 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     // per-turn presenter surfaces an actionable message — swallowing them here
     // would make a bad API key indistinguishable from an in-fiction hiccup
     // (the exact failure F-afb978de fixed for dialogue/finale).
-    if (err instanceof NarrationError && err.fatal) throw err;
-    const failureMessage = `narrateScene: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`;
+    // F-afb978de: classify non-NarrationError throws too (matching
+    // dialogue-mind.ts/finale-narrator.ts's pattern) so userMessage() below
+    // always has a real NarrationError to read a kind off of.
+    const narrationErr = err instanceof NarrationError ? err : classifyError(err);
+    if (narrationErr.fatal) throw narrationErr;
+    // F-afb978de: userMessage() was dead code here too (sibling of the
+    // dialogue-mind.ts/finale-narrator.ts fix) -- folded into the warning
+    // and returned via fallbackMessage, not into `narration` itself (see
+    // NarrationResult's doc).
+    const guidance = userMessage(narrationErr);
+    const failureMessage = `narrateScene: LLM generation failed: ${narrationErr.message}. ${guidance} Using fallback.`;
     console.warn(`[narrator] ${failureMessage}`);
     logger?.warn('narrator', failureMessage);
+    // F-681d3382: from the 2nd consecutive fallback onward, name the pattern
+    // instead of repeating the isolated-hiccup sentence unchanged.
+    const narration = (consecutiveFallbacks ?? 0) >= 1 ? FALLBACK_NARRATION_REPEATED : FALLBACK_NARRATION;
     return {
-      narration: FALLBACK_NARRATION,
+      narration,
       plan: null,
       sceneContext,
       isFallback: true,
+      fallbackMessage: guidance,
     };
   }
 }
@@ -211,6 +271,9 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
  * @param logger F-fa65fe50: optional structured logger, same contract as
  *   NarrateSceneOpts.logger above -- this function predates the opts-object
  *   shape narrateScene uses, so it's a trailing positional parameter instead.
+ * @param consecutiveFallbacks F-681d3382: same contract as
+ *   NarrateSceneOpts.consecutiveFallbacks above, also trailing-positional for
+ *   the same reason as `logger`.
  */
 export async function narrateSceneLegacy(
   client: ClaudeClient,
@@ -220,6 +283,7 @@ export async function narrateSceneLegacy(
   recentNarration: string[],
   previousLocationId?: string,
   logger?: DebugLogger,
+  consecutiveFallbacks?: number,
 ): Promise<NarrationResult> {
   // F-e8630a73: same filter as narrateScene above.
   const filteredRecentNarration = recentNarration.filter(
@@ -252,15 +316,21 @@ export async function narrateSceneLegacy(
     };
   } catch (err) {
     // Same fatal-rethrow contract as narrateScene above.
-    if (err instanceof NarrationError && err.fatal) throw err;
-    const failureMessage = `narrateSceneLegacy: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`;
+    const narrationErr = err instanceof NarrationError ? err : classifyError(err);
+    if (narrationErr.fatal) throw narrationErr;
+    // F-afb978de: same userMessage() wiring as narrateScene above.
+    const guidance = userMessage(narrationErr);
+    const failureMessage = `narrateSceneLegacy: LLM generation failed: ${narrationErr.message}. ${guidance} Using fallback.`;
     console.warn(`[narrator] ${failureMessage}`);
     logger?.warn('narrator', failureMessage);
+    // F-681d3382: same repeat-aware switch as narrateScene above.
+    const narration = (consecutiveFallbacks ?? 0) >= 1 ? FALLBACK_NARRATION_REPEATED : FALLBACK_NARRATION;
     return {
-      narration: FALLBACK_NARRATION,
+      narration,
       plan: null,
       sceneContext,
       isFallback: true,
+      fallbackMessage: guidance,
     };
   }
 }

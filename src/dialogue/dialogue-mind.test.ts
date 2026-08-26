@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateDialogue } from './dialogue-mind.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState } from '@ai-rpg-engine/core';
-import { NarrationError } from '../llm/claude-errors.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
 
 // Mock npc-context so we control the context shape
 vi.mock('./npc-context.js', () => ({
@@ -86,6 +86,9 @@ describe('generateDialogue PBR-002: LLM failure fallback', () => {
     expect(result!.speakerName).toBe('Town Guard');
     expect(result!.grounding.beliefCount).toBe(1);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('LLM generation failed'));
+    // F-8b6a50b5: downstream consumers need a way to tell placeholder dialogue
+    // apart from real LLM prose, mirroring NarrationResult.isFallback.
+    expect(result!.isFallback).toBe(true);
     warnSpy.mockRestore();
   });
 
@@ -123,6 +126,8 @@ describe('generateDialogue PBR-002: LLM failure fallback', () => {
     expect(result!.speakerId).toBe('npc-1');
     expect(result!.grounding.morale).toBe(60);
     expect(result!.grounding.suspicion).toBe(30);
+    // F-8b6a50b5: a successful call is never fallback text.
+    expect(result!.isFallback).toBe(false);
   });
 
   it('should use NPC name from world state when available', async () => {
@@ -211,5 +216,44 @@ describe('generateDialogue F-6480985e: fatal errors rethrow instead of swallowin
     expect(result).not.toBeNull();
     expect(result!.text).toBe('The NPC pauses, gathering their thoughts...');
     warnSpy.mockRestore();
+  });
+});
+
+// F-afb978de: userMessage(err) (claude-errors.ts) maps each NarrationErrorKind
+// to a specific, actionable player-facing string but was never called
+// anywhere in this domain. generateDialogue's non-fatal catch branch now logs
+// it and returns it via the new fallbackMessage field. `.text` deliberately
+// stays the generic in-character stall -- swapping userMessage()'s
+// system-voiced text into `.text` would reintroduce the exact immersion
+// break F-6480985e fixed for fatal kinds (see the block above), just for
+// non-fatal kinds instead. `auth` is fatal and always rethrows (never
+// reaches a returned DialogueResult -- see the fatal tests above), so this
+// exercises a representative non-fatal kind instead.
+describe('generateDialogue F-afb978de: userMessage() wired into the non-fatal fallback', () => {
+  it("should surface userMessage()'s per-kind guidance on the returned DialogueResult via fallbackMessage, alongside the console.warn, without changing the in-character text", async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const rateLimitErr = new NarrationError({ kind: 'rate-limit', message: 'rate limited' });
+    const client = makeFailingClient(rateLimitErr);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy');
+
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('The NPC pauses, gathering their thoughts...');
+    expect(result!.isFallback).toBe(true);
+    expect(result!.fallbackMessage).toBe(userMessage(rateLimitErr));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(userMessage(rateLimitErr)));
+    warnSpy.mockRestore();
+  });
+
+  it('should leave fallbackMessage unset on a normal successful call', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Halt! State your business.');
+
+    const result = await generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy');
+
+    expect(result!.fallbackMessage).toBeUndefined();
   });
 });

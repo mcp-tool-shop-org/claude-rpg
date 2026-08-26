@@ -6,7 +6,7 @@ import type { PlayerRumor, WorldPressure, NpcActionResult } from '@ai-rpg-engine
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
-import { NarrationError } from '../llm/claude-errors.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
 
 export type DialogueResult = {
@@ -25,6 +25,26 @@ export type DialogueResult = {
     emotion: string;
     speed: number;
   };
+  /**
+   * F-8b6a50b5: true when `text` is the hardcoded in-character stall (a
+   * non-fatal NarrationError occurred and no real LLM dialogue was
+   * produced), mirroring NarrationResult.isFallback's contract (narrator.ts)
+   * so callers can tell placeholder text apart from authored dialogue
+   * instead of quoting it as if it were real -- e.g. to log/count it, or
+   * render it distinctly (dimmed, or with a small out-of-character marker)
+   * in a future UI pass.
+   */
+  isFallback: boolean;
+  /**
+   * F-afb978de: userMessage(narrationErr)'s actionable per-kind guidance
+   * (claude-errors.ts), set only alongside isFallback: true. `text` stays
+   * the generic in-character stall for every non-fatal kind, preserving
+   * F-6480985e's immersion contract -- this is a separate, explicitly
+   * out-of-character channel for a caller (chronicle logs, a --debug panel,
+   * a future toast) that wants to say *why* the NPC stalled, not just that
+   * it did.
+   */
+  fallbackMessage?: string;
 };
 
 /** Generate grounded NPC dialogue. */
@@ -78,8 +98,14 @@ export async function generateDialogue(
     // in-character stall — a transient hiccup shouldn't break immersion.
     const narrationErr = err instanceof NarrationError ? err : classifyError(err);
     if (narrationErr.fatal) throw narrationErr;
+    // F-afb978de: userMessage() maps each NarrationErrorKind to a specific,
+    // actionable string (claude-errors.ts) but was dead code in this domain.
+    // Logged here alongside the diagnostic message, and returned via
+    // fallbackMessage below -- `text` itself stays the in-character stall
+    // (see the comment above) rather than being replaced by it.
+    const guidance = userMessage(narrationErr);
     console.warn(
-      `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${narrationErr.message}. Using fallback.`,
+      `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${narrationErr.message}. ${guidance} Using fallback.`,
     );
     const npc = world.entities[npcId];
     return {
@@ -93,6 +119,8 @@ export async function generateDialogue(
         morale: context.morale,
         suspicion: context.suspicion,
       },
+      isFallback: true,
+      fallbackMessage: guidance,
     };
   }
 
@@ -109,5 +137,6 @@ export async function generateDialogue(
       morale: context.morale,
       suspicion: context.suspicion,
     },
+    isFallback: false,
   };
 }

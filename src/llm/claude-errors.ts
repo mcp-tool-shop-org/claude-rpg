@@ -20,15 +20,27 @@ export class NarrationError extends Error {
    * call site — narrateScene/narrateSceneLegacy (narrator.ts), generateDialogue
    * (dialogue-mind.ts), narrateFinale (finale-narrator.ts) — MUST rethrow a
    * fatal NarrationError rather than swallow it into in-fiction text (scene
-   * narration, NPC dialogue, campaign epilogue). bin.ts's presentError() is the
-   * only place a fatal error's userMessage() is shown to the player, rendered
-   * as a clearly system-level box instead of narrative content — otherwise a
-   * bad API key becomes indistinguishable from authored prose.
+   * narration, NPC dialogue, campaign epilogue), so a bad API key stays
+   * distinguishable from authored prose.
+   *
+   * F-18928d14: that rethrow eventually reaches bin.ts's presentError(), but
+   * presentError does NOT call userMessage() below — it renders the box via
+   * error-presenter.ts's presentNarrationError(), an independently-authored
+   * switch over the same NarrationErrorKind values with its own headline/
+   * explanation/nextAction copy (a real, tracked duplication, not a bug this
+   * comment can fix by itself; error-presenter.ts sits outside this domain).
+   * userMessage() itself is called directly by every non-fatal fallback path
+   * below (narrator.ts, dialogue-mind.ts, finale-narrator.ts — see
+   * F-afb978de) to label *why* a fallback happened, alongside each site's
+   * diagnostic console.warn — a narrower, distinct purpose from rendering
+   * the fatal-error box.
    *
    * Non-fatal kinds (rate-limit, timeout, transport, unexpected) are safe to
-   * swallow into each call site's own fallback (FALLBACK_NARRATION, the
-   * in-character stall, the blank-epilogue deterministic-only result) since
-   * retrying may succeed and the failure isn't diagnostic-worthy.
+   * swallow into each call site's own fallback (FALLBACK_NARRATION or its
+   * repeated-outage sibling FALLBACK_NARRATION_REPEATED, the in-character
+   * stall, or finale-narrator's labeled degraded-epilogue sentinel — see
+   * F-681d3382 and F-0f76ecc2) since retrying may succeed and the failure
+   * isn't diagnostic-worthy enough to interrupt play.
    *
    * Future call sites must follow this contract rather than inventing a third
    * variant.

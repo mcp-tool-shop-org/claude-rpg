@@ -123,6 +123,70 @@ describe('validateWorldGenProposal (BR-009)', () => {
     const errors = validateWorldGenProposal(proposal);
     expect(errors).toContain('No NPCs generated');
   });
+
+  // F-d68e103d: validateWorldGenProposal never checked proposal.ruleset at all, so a
+  // proposal missing it (or missing ruleset.stats/resources) sailed through validation
+  // with zero errors and then threw a raw TypeError at `proposal.ruleset.id` during
+  // Engine construction instead of surfacing here as a specific message.
+  it('should detect missing ruleset entirely (F-d68e103d)', () => {
+    const proposal = makeValidProposal();
+    (proposal as any).ruleset = undefined;
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toContain('No ruleset generated');
+  });
+
+  it('should detect ruleset missing id (F-d68e103d)', () => {
+    const proposal = makeValidProposal();
+    (proposal.ruleset as any).id = '';
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toContain('Ruleset missing required field: id');
+  });
+
+  it('should detect ruleset missing name (F-d68e103d)', () => {
+    const proposal = makeValidProposal();
+    (proposal.ruleset as any).name = '';
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toContain('Ruleset missing required field: name');
+  });
+
+  it('should detect ruleset with non-array stats (F-d68e103d)', () => {
+    const proposal = makeValidProposal();
+    (proposal.ruleset as any).stats = undefined;
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toContain('Ruleset missing required field: stats');
+  });
+
+  it('should detect ruleset with non-array resources (F-d68e103d)', () => {
+    const proposal = makeValidProposal();
+    (proposal.ruleset as any).resources = 'not-an-array';
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toContain('Ruleset missing required field: resources');
+  });
+
+  // F-dd5436c0: proposal.factions[].memberIds was never validated. memberIds feeds
+  // createFactionCognition eagerly during Engine construction (module config is built
+  // synchronously before the Engine constructor runs), and the compiled module throws
+  // `entityIds is not iterable` the instant a faction's entityIds is undefined.
+  it('should detect faction missing id (F-dd5436c0)', () => {
+    const proposal = makeValidProposal();
+    (proposal.factions[0] as any).id = '';
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toContain('Faction missing required field: id');
+  });
+
+  it('should detect faction with non-array memberIds (F-dd5436c0)', () => {
+    const proposal = makeValidProposal();
+    (proposal.factions[0] as any).memberIds = undefined;
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors.some((e) => e.includes('memberIds'))).toBe(true);
+  });
+
+  it('should allow a faction with an empty memberIds array (F-dd5436c0)', () => {
+    const proposal = makeValidProposal();
+    proposal.factions[0].memberIds = [];
+    const errors = validateWorldGenProposal(proposal);
+    expect(errors).toEqual([]);
+  });
 });
 
 function makeMockClient(proposal: ReturnType<typeof makeValidProposal>): ClaudeClient {
@@ -343,6 +407,42 @@ describe('generateWorld F-105a5718: faction memberIds reconciled after NPC id co
     expect(members.every((id) => id in result.engine!.world.entities)).toBe(true);
 
     warnSpy.mockRestore();
+  });
+});
+
+describe('generateWorld: malformed proposal degrades gracefully (F-d68e103d/F-dd5436c0)', () => {
+  it('returns ok:false with a descriptive error instead of throwing when ruleset is missing', async () => {
+    const proposal = makeValidProposal();
+    (proposal as any).ruleset = undefined;
+    const client = makeMockClient(proposal);
+
+    // Before the fix: proposal.ruleset.id at the RulesetDefinition build site throws a
+    // raw TypeError here, which — being inside an async function — surfaces as this
+    // await rejecting instead of a resolved WorldGenResult. That reaches a real
+    // `claude-rpg new "<prompt>"` invocation as bin.ts's generic "Unexpected error"
+    // fallback box instead of a specific message.
+    const result = await generateWorld(client, 'test', 1);
+
+    expect(result.ok).toBe(false);
+    expect(result.engine).toBeNull();
+    expect(result.errors).toContain('No ruleset generated');
+  });
+
+  it('returns ok:false with a descriptive error instead of throwing when a faction is missing memberIds', async () => {
+    const proposal = makeValidProposal();
+    (proposal.factions[0] as any).memberIds = undefined;
+    const client = makeMockClient(proposal);
+
+    // Before the fix: createFactionCognition's config is built (and its module factory
+    // run) synchronously while constructing the Engine's `modules: [...]` array, so a
+    // faction with entityIds: undefined throws "entityIds is not iterable" before any
+    // zone, player, or NPC entity has been added — same uncaught, unmapped propagation
+    // path as the ruleset case above.
+    const result = await generateWorld(client, 'test', 1);
+
+    expect(result.ok).toBe(false);
+    expect(result.engine).toBeNull();
+    expect(result.errors.some((e) => e.includes('memberIds'))).toBe(true);
   });
 });
 

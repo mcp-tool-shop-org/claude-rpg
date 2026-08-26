@@ -108,6 +108,238 @@ describe('immersion-runtime: error resilience', () => {
   });
 });
 
+// ─── F-023ad9ad (Contract B, runtime-foundry half): game-core threads GameConfig's
+// debug flag into `runtime.debugMode` where the runtime is constructed (game.ts,
+// cross-domain — out of scope here). This domain's half is verifying the runtime side
+// of that wiring actually produces diagnostic output once debugMode is set: all FOUR
+// swallowed-error paths in processPresentation, not just the audio-pipeline one already
+// covered above. ───
+
+describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('debug mode logs pre-narration hook errors to stderr', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    runtime.hookManager.register('pre-narration', () => {
+      throw new Error('pre-narration exploded');
+    });
+
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'world.zone.entered', payload: {} } as any],
+      'look',
+    );
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      '[immersion] Pre-narration hook error (degrading to silence):',
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
+  });
+
+  it('debug mode logs event-hook errors (e.g. enter-room) to stderr', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    runtime.hookManager.register('enter-room', () => {
+      throw new Error('enter-room exploded');
+    });
+
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'world.zone.entered', payload: {} } as any],
+      'move',
+    );
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      '[immersion] Hook error (degrading to silence):',
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
+  });
+
+  it('debug mode logs post-narration hook errors to stderr', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    runtime.hookManager.register('post-narration', () => {
+      throw new Error('post-narration exploded');
+    });
+
+    await runtime.processPresentation(minimalEngine, [], 'look');
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      '[immersion] Post-narration hook error:',
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
+  });
+});
+
+// ─── F-aaaf50d9: transition() itself performs no logging of any kind, and
+// processPresentation's sole call site (`this.stateMachine.transition(...)`) discards
+// the returned StateTransition entirely — so no code path anywhere in this domain, even
+// under --debug, ever surfaces which state a turn transitioned to/from and why. ───
+
+describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('logs the state transition to stderr when debugMode is enabled and the state actually changes', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // exploration -> dialogue via the 'speak' verb (no events needed).
+    await runtime.processPresentation(minimalEngine, [], 'speak');
+
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('exploration -> dialogue'));
+    stderrSpy.mockRestore();
+  });
+
+  it('does not log a transition when debugMode is disabled', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await runtime.processPresentation(minimalEngine, [], 'speak');
+
+    expect(stderrSpy).not.toHaveBeenCalled();
+    stderrSpy.mockRestore();
+  });
+
+  it('does not log anything when the inferred state is unchanged from the prior state', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Starts in 'exploration'; 'look' with no events also infers 'exploration' -> no
+    // transition, so nothing should be logged.
+    await runtime.processPresentation(minimalEngine, [], 'look');
+
+    expect(stderrSpy).not.toHaveBeenCalled();
+    stderrSpy.mockRestore();
+  });
+
+  it('also logs the sibling transition() call site in initialize() (session-restore)', () => {
+    // Family-of-call-sites: initialize() has its own `this.stateMachine.transition(...)`
+    // that discarded its result the same way processPresentation's did, so a save
+    // restored mid-combat was equally undiagnosable under --debug.
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+      modules: { 'combat-core': { inCombat: true, combatants: ['goblin-1'] } },
+    } as any;
+    const engine = { world, store: { state: {} } } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    runtime.initialize(engine);
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('exploration -> combat (session-restore)'),
+    );
+    stderrSpy.mockRestore();
+  });
+});
+
+// ─── F-23bce472: processPresentation fires the 'post-narration' hookPoint every turn
+// but never captured or read the returned HookResult[] -- unlike its 'pre-narration'
+// sibling, which is captured into `preResults` and consumed by mergeHookResults. A
+// future contributor who registers the first post-narration hook (a reasonable
+// extension given pre-narration's parallel structure) would have its return value
+// silently discarded with no error or warning. ───
+
+describe('immersion-runtime: post-narration hook results are no longer silently discarded (F-23bce472)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('debug mode surfaces a post-narration hook result that has nothing consuming it yet', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    runtime.hookManager.register('post-narration', () => ({
+      sfxCues: [{ effectId: 'future-cue', timing: 'immediate' as const, intensity: 0.5 }],
+    }));
+
+    await runtime.processPresentation(minimalEngine, [], 'look');
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('post-narration'),
+      expect.anything(),
+    );
+    stderrSpy.mockRestore();
+  });
+
+  it('does not log anything for post-narration when no hook is registered (today\'s production shape)', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await runtime.processPresentation(minimalEngine, [], 'look');
+
+    expect(stderrSpy).not.toHaveBeenCalled();
+    stderrSpy.mockRestore();
+  });
+
+  it('does not log the post-narration result when debugMode is disabled', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    runtime.hookManager.register('post-narration', () => ({
+      sfxCues: [{ effectId: 'future-cue', timing: 'immediate' as const, intensity: 0.5 }],
+    }));
+
+    await runtime.processPresentation(minimalEngine, [], 'look');
+
+    expect(stderrSpy).not.toHaveBeenCalled();
+    stderrSpy.mockRestore();
+  });
+});
+
 // ─── F-0acb03fe: combat-start hookpoint fires once per fight, not every turn ───
 
 describe('immersion-runtime: combat-start dispatch (F-0acb03fe)', () => {
@@ -343,6 +575,106 @@ describe('immersion-runtime: narrationPlan uiEffects dispatch (F-4ece453e)', () 
     expect(applyUiEffectSpy).toHaveBeenCalledTimes(3);
     const uiEffectCalls = calls.filter((c) => c.tool === '__ui_effect_intent__');
     expect(uiEffectCalls).toHaveLength(3);
+  });
+});
+
+// ─── F-52475879: mergeHookResults built sfx/ambientLayers with no size cap, unlike the
+// sibling uiEffects field on the exact same NarrationPlan (capped at
+// MAX_UI_EFFECTS_PER_PLAN = 3, F-4ece453e/F-6ef6e5a0, above). sfx/ambientLayers are
+// populated by the same per-turn LLM narrator call as uiEffects, under the same
+// prose-only "use sparingly" guidance — not a schema-enforced limit — so a malformed
+// narrator response that goes wide on sfx/ambient cues must not flood the audio
+// pipeline in a single turn. ───
+
+describe('immersion-runtime: sfx/ambientLayers cap (F-52475879)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('caps the sfx array passed to audioDirector.schedule so an oversized narrator plan cannot flood the pipeline', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const scheduleSpy = vi.spyOn(runtime.audioDirector, 'schedule');
+
+    const narrationPlan = {
+      sceneText: '',
+      sfx: Array.from({ length: 10 }, (_, i) => ({
+        effectId: `sfx-${i}`,
+        timing: 'immediate' as const,
+        intensity: 0.5,
+      })),
+      ambientLayers: [],
+      uiEffects: [],
+      musicCue: undefined,
+    } as any;
+
+    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+    const scheduledPlan = scheduleSpy.mock.calls[0][0];
+    expect(scheduledPlan.sfx.length).toBeLessThan(10);
+    expect(scheduledPlan.sfx.length).toBeGreaterThan(0);
+  });
+
+  it('caps the ambientLayers array passed to audioDirector.schedule so an oversized narrator plan cannot flood the pipeline', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const scheduleSpy = vi.spyOn(runtime.audioDirector, 'schedule');
+
+    const narrationPlan = {
+      sceneText: '',
+      sfx: [],
+      ambientLayers: Array.from({ length: 10 }, (_, i) => ({
+        layerId: `ambient-${i}`,
+        action: 'crossfade' as const,
+        volume: 0.4,
+        fadeMs: 1000,
+      })),
+      uiEffects: [],
+      musicCue: undefined,
+    } as any;
+
+    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    expect(scheduleSpy).toHaveBeenCalledTimes(1);
+    const scheduledPlan = scheduleSpy.mock.calls[0][0];
+    expect(scheduledPlan.ambientLayers.length).toBeLessThan(10);
+    expect(scheduledPlan.ambientLayers.length).toBeGreaterThan(0);
+  });
+
+  it('still includes hook-sourced sfx cues within the cap alongside narrator-authored ones', async () => {
+    // mergeHookResults folds pre-narration hook cues into plan.sfx BEFORE capping, the
+    // same ordering already used for uiEffects -- so hook-sourced cues count toward the
+    // cap too, not just narrator-authored ones.
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.hookManager.register('pre-narration', () => ({
+      sfxCues: [{ effectId: 'hook-sfx', timing: 'immediate' as const, intensity: 0.5 }],
+    }));
+    const scheduleSpy = vi.spyOn(runtime.audioDirector, 'schedule');
+
+    const narrationPlan = {
+      sceneText: '',
+      sfx: Array.from({ length: 10 }, (_, i) => ({
+        effectId: `sfx-${i}`,
+        timing: 'immediate' as const,
+        intensity: 0.5,
+      })),
+      ambientLayers: [],
+      uiEffects: [],
+      musicCue: undefined,
+    } as any;
+
+    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    const scheduledPlan = scheduleSpy.mock.calls[0][0];
+    expect(scheduledPlan.sfx.length).toBeLessThan(11);
   });
 });
 

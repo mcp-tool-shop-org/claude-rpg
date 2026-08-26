@@ -1,42 +1,15 @@
 // Tests for companion-bridge.ts (F-39140845: this file previously had zero coverage).
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { Engine, EntityState } from '@ai-rpg-engine/core';
-
-// buildNpcProfile pulls in cognition/relationship/goal-deriving machinery with its own
-// heavy dependencies — mock it so getCompanionProfiles tests stay a unit test of the
-// bridge's own iteration/argument-passing logic, matching the existing
-// src/npc/agency.test.ts convention for isolating from `@ai-rpg-engine/modules` internals.
-vi.mock('@ai-rpg-engine/modules', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@ai-rpg-engine/modules')>();
-  return {
-    ...actual,
-    buildNpcProfile: vi.fn(),
-  };
-});
-
-import {
-  createPartyState,
-  addCompanion,
-  buildNpcProfile,
-  type CompanionState,
-  type NpcProfile,
-  type NpcObligationLedger,
-} from '@ai-rpg-engine/modules';
+import { createPartyState, addCompanion, type CompanionState } from '@ai-rpg-engine/modules';
 import {
   recruitCompanion,
   dismissCompanion,
   followPlayer,
   syncCompanionMorale,
-  getCompanionProfiles,
   inferCompanionRole,
 } from './companion-bridge.js';
-
-const mockedBuildNpcProfile = vi.mocked(buildNpcProfile);
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
 
 function makeEntity(overrides: Partial<EntityState> = {}): EntityState {
   return {
@@ -341,66 +314,10 @@ describe('syncCompanionMorale', () => {
   });
 });
 
-describe('getCompanionProfiles', () => {
-  function fakeProfile(npcId: string): NpcProfile {
-    return {
-      npcId,
-      name: `profile-${npcId}`,
-      factionId: null,
-      goals: [],
-      relationship: {} as NpcProfile['relationship'],
-      breakpoint: 'stable' as NpcProfile['breakpoint'],
-      dominantAxis: 'trust',
-      leverageAngle: '',
-      knownRumors: [],
-      underPressure: false,
-    };
-  }
-
-  it('builds one profile per companion via buildNpcProfile', () => {
-    const engine = makeEngine({
-      player: makeEntity({ id: 'player' }),
-      'comp-1': makeEntity({ id: 'comp-1' }),
-      'comp-2': makeEntity({ id: 'comp-2' }),
-    });
-    let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', role: 'fighter' }));
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-2', role: 'healer' }));
-
-    mockedBuildNpcProfile.mockImplementation((_world, npcId) => fakeProfile(npcId as string));
-
-    const profiles = getCompanionProfiles(engine, party, []);
-
-    expect(profiles).toHaveLength(2);
-    expect(profiles.map((p) => p.npcId)).toEqual(['comp-1', 'comp-2']);
-    expect(mockedBuildNpcProfile).toHaveBeenCalledTimes(2);
-    expect(mockedBuildNpcProfile).toHaveBeenCalledWith(engine.world, 'comp-1', 'player', [], undefined, undefined);
-  });
-
-  it('passes the obligation ledger matching each companions npcId when provided', () => {
-    const engine = makeEngine({ player: makeEntity({ id: 'player' }), 'comp-1': makeEntity({ id: 'comp-1' }) });
-    let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1' }));
-
-    mockedBuildNpcProfile.mockReturnValue(fakeProfile('comp-1'));
-    const ledger = { debts: [] } as unknown as NpcObligationLedger;
-    const obligations = new Map<string, NpcObligationLedger>([['comp-1', ledger]]);
-
-    getCompanionProfiles(engine, party, [], undefined, obligations);
-
-    expect(mockedBuildNpcProfile).toHaveBeenCalledWith(engine.world, 'comp-1', 'player', [], undefined, ledger);
-  });
-
-  it('returns an empty array when the party has no companions', () => {
-    const engine = makeEngine({ player: makeEntity({ id: 'player' }) });
-    const party = createPartyState();
-
-    const profiles = getCompanionProfiles(engine, party, []);
-
-    expect(profiles).toEqual([]);
-    expect(mockedBuildNpcProfile).not.toHaveBeenCalled();
-  });
-});
+// F-4ca425fd: getCompanionProfiles and its test coverage (formerly here) were deleted
+// as dead code — see the doc comment above the "Role Inference" section in
+// companion-bridge.ts for the full call-site audit. buildNpcProfilesForDirector
+// (src/npc/agency.ts) already covers companions as part of "all named NPCs".
 
 describe('inferCompanionRole', () => {
   it('prefers an explicit custom.companionRole over tags', () => {

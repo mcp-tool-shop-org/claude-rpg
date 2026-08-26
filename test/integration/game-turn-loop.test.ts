@@ -23,7 +23,7 @@ describe('turn pipeline — happy path', () => {
     expect(typeof output).toBe('string');
 
     // History was recorded
-    expect(h.session.history.turns[0].playerInput).toBe('look around');
+    expect(h.session.history.getAll()[0].playerInput).toBe('look around');
   });
 
   it('move command changes engine location and records history', async () => {
@@ -69,9 +69,9 @@ describe('turn pipeline — happy path', () => {
     await h.play('look around');
 
     expect(h.turnCount()).toBe(3);
-    expect(h.session.history.turns[0].verb).toBe('look');
-    expect(h.session.history.turns[1].verb).toBe('move');
-    expect(h.session.history.turns[2].verb).toBe('look');
+    expect(h.session.history.getAll()[0].verb).toBe('look');
+    expect(h.session.history.getAll()[1].verb).toBe('move');
+    expect(h.session.history.getAll()[2].verb).toBe('look');
   });
 
   it('presentation output contains narration text', async () => {
@@ -108,7 +108,7 @@ describe('turn pipeline — control path', () => {
 
     expect(h.turnCount()).toBe(3);
     // Each turn is a distinct record
-    const inputs = h.session.history.turns.map((t) => t.playerInput);
+    const inputs = h.session.history.getAll().map((t) => t.playerInput);
     expect(inputs).toEqual(['look around', 'look around', 'look around']);
   });
 
@@ -140,6 +140,12 @@ describe('turn pipeline — narration failure', () => {
       clientOpts: { generateFailure: 'timeout' },
     });
 
+    // F-f53130d8: capture real engine state before either turn so the
+    // "did not corrupt the session" claim below is actually checked, not
+    // just implied by the fallback text repeating on a second call.
+    const tickBefore = h.tick();
+    const locationBefore = h.session.engine.world.locationId;
+
     // F-304fc328 contract: non-fatal narration failures (timeout/rate-limit/
     // transport) degrade to a fallback narration instead of throwing — the
     // turn resolves and play can continue.
@@ -149,6 +155,14 @@ describe('turn pipeline — narration failure', () => {
     // A subsequent turn still works — the failure did not corrupt the session.
     const out2 = await h.play('look around');
     expect(out2).toContain('The scene holds its breath');
+
+    // Engine truth is unaffected by the narration fallback: 'look' never
+    // changes location, the engine tick still advances exactly once per
+    // turn (submitAction runs before narration and isn't rolled back when
+    // narrateScene swallows the failure), and both turns were recorded.
+    expect(h.session.engine.world.locationId).toBe(locationBefore);
+    expect(h.tick()).toBe(tickBefore + 2);
+    expect(h.turnCount()).toBe(2);
   });
 
   it('auth failure throws fatal NarrationError', async () => {

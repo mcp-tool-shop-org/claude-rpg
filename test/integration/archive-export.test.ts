@@ -10,7 +10,7 @@ import {
 } from '../../src/session/chronicle-export.js';
 import { renderArchiveBrowser } from '../../src/display/archive-browser.js';
 import type { SavedSession } from '../../src/session/session.js';
-import { multiTurnJournal } from '../helpers/chronicle-fixtures.js';
+import { multiTurnJournal, longSessionJournal } from '../helpers/chronicle-fixtures.js';
 
 // ─── Session Builders ─────────────────────────────────────────
 
@@ -126,6 +126,43 @@ describe('exportChronicleJSON', () => {
     const obj = exportChronicleJSON(richSave()) as Record<string, unknown>;
     const moments = obj.keyMoments as Array<{ tick: number }>;
     expect(moments.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < moments.length; i++) {
+      expect(moments[i].tick).toBeGreaterThanOrEqual(moments[i - 1].tick);
+    }
+  });
+
+  it('key moments are actually the top-10 by significance, not just "all of them" (F-21e00e6b)', () => {
+    // multiTurnJournal() (used by richSave() above) only clears 7 chronicle
+    // records — fewer than the cap of 10 — so "select top 10 by significance"
+    // and "select everything" are indistinguishable there. longSessionJournal()
+    // produces 14 records across a mix of significance 1.0 (combat) and 0.7
+    // (move), which exceeds the cap and lets us tell a real selection from a
+    // no-op (or a reversed/broken sort that would keep the LEAST significant
+    // records instead).
+    const allRecords = longSessionJournal().serialize();
+    expect(allRecords.length).toBeGreaterThan(10);
+
+    const save = minimalSave({ chronicleRecords: JSON.stringify(allRecords) });
+    const obj = exportChronicleJSON(save) as Record<string, unknown>;
+    const moments = obj.keyMoments as Array<{ tick: number; significance: number }>;
+
+    // Capped at 10 even though 14 candidates exist.
+    expect(moments.length).toBe(10);
+
+    // The selection is genuinely by significance: nothing returned is less
+    // significant than anything left out. A reversed sort (or "pick the
+    // lowest instead of highest") would keep the sig-0.7 records and drop the
+    // sig-1.0 ones, which this catches; a truncation bug that just takes the
+    // first 10 by tick would too.
+    const returnedTicks = new Set(moments.map((m) => m.tick));
+    const excluded = allRecords.filter((r) => !returnedTicks.has(r.tick));
+    expect(excluded.length).toBe(allRecords.length - 10);
+
+    const minReturnedSignificance = Math.min(...moments.map((m) => m.significance));
+    const maxExcludedSignificance = Math.max(...excluded.map((r) => r.significance));
+    expect(minReturnedSignificance).toBeGreaterThanOrEqual(maxExcludedSignificance);
+
+    // Still chronologically ordered (existing contract, F-934b1183).
     for (let i = 1; i < moments.length; i++) {
       expect(moments[i].tick).toBeGreaterThanOrEqual(moments[i - 1].tick);
     }

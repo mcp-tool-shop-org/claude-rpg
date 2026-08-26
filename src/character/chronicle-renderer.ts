@@ -3,9 +3,21 @@
 
 import type { CampaignRecord } from '@ai-rpg-engine/campaign-memory';
 import type { CompactedChronicle, EraSummary } from '../session/chronicle.js';
+import { getTerminalWidth } from '../display/play-renderer.js';
+import { dim } from '../cli/colors.js';
 
-const DIVIDER = '─'.repeat(60);
-const HEAVY_DIVIDER = '═'.repeat(60);
+// F-3a024f07: were both a fixed 60-char divider, uncolored, unlike every
+// other divider in the display layer (play-renderer.ts's PFE-005, and
+// F-38eb3dec's director-renderer.ts/status-compact.ts/archive-browser.ts/
+// help-system.ts precedent), which all adapt to getTerminalWidth() and wrap
+// in dim(). Computed per call (not a module-level constant) so they track
+// the real terminal width.
+function divider(): string {
+  return dim('─'.repeat(getTerminalWidth()));
+}
+function heavyDivider(): string {
+  return dim('═'.repeat(getTerminalWidth()));
+}
 
 export type ChronicleRenderMode = 'timeline' | 'bardic' | 'director';
 
@@ -38,9 +50,20 @@ function renderTimeline(
   const name = characterName ?? 'Unknown';
 
   lines.push('');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push(`  CHRONICLE OF ${name.toUpperCase()} — ${chronicle.totalRecords} events`);
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
+
+  // F-6be2f98b: the ' *' high-significance marker (renderRecordTimeline
+  // below) had no legend anywhere in this mode's own output, or in
+  // director-renderer.ts's /chronicle dispatch (cross-domain, prints nothing
+  // around the call that would supply one) -- a player running /chronicle
+  // timeline saw asterisks on some entries with no stated meaning. Shown only
+  // when at least one rendered record actually carries the marker.
+  if (chronicle.canonicalEvents.some((r) => r.significance >= 0.7)) {
+    lines.push('  * = pivotal moment');
+  }
+
   lines.push('');
 
   // Era summaries first (older events)
@@ -61,7 +84,7 @@ function renderTimeline(
   }
 
   lines.push('');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push('');
 
   return lines.join('\n');
@@ -74,10 +97,21 @@ function renderRecordTimeline(record: CampaignRecord): string {
 
 function renderEraTimeline(era: EraSummary): string {
   const lines: string[] = [];
-  lines.push(`  ${DIVIDER}`);
+  lines.push(`  ${divider()}`);
   lines.push(`  ${era.label} (${era.eventCount} events)`);
+  // F-3a024f07: within timeline mode specifically (the one mode that claims
+  // to be neutral/factual), this used to sit at a double indent while
+  // renderRecordTimeline's canonical events sit at a single indent -- two
+  // different visual treatments for what is conceptually the same "a
+  // chronicle entry happened" fact. Now single-indented to match; the hyphen
+  // bullet (vs. canonical's bracket-tick) stays, since it reflects a real
+  // data difference -- EraSummary.topEvents carries no tick number to show.
+  // bardic's/director's own distinct per-mode voices for this same field
+  // (bare quotes / '>' prefix, see renderEraBardic/renderDirectorChronicle)
+  // are unchanged -- this file's own v0.8 header comment already documents
+  // timeline/bardic/director as three deliberate voices.
   for (const event of era.topEvents) {
-    lines.push(`    - ${event}`);
+    lines.push(`  - ${event}`);
   }
   return lines.join('\n');
 }
@@ -131,15 +165,15 @@ function renderBardic(
   const titleStr = characterTitle ? ` "${characterTitle}"` : '';
 
   lines.push('');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push(`  THE TALE OF ${name.toUpperCase()}${titleStr.toUpperCase()}`);
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push('');
 
   if (chronicle.canonicalEvents.length === 0 && chronicle.eraSummaries.length === 0) {
     lines.push(`  The story of ${name} has yet to be written...`);
     lines.push('');
-    lines.push(HEAVY_DIVIDER);
+    lines.push(heavyDivider());
     lines.push('');
     return lines.join('\n');
   }
@@ -158,7 +192,7 @@ function renderBardic(
   lines.push('');
   lines.push(`  And so the tale continues...`);
   lines.push('');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push('');
 
   return lines.join('\n');
@@ -194,9 +228,13 @@ function renderDirectorChronicle(chronicle: CompactedChronicle): string {
   const lines: string[] = [];
 
   lines.push('');
-  lines.push(DIVIDER);
+  // F-6be2f98b: timeline/bardic frame their header with the heavy divider
+  // while this outer frame used the thinner one instead, for no apparent
+  // semantic reason -- the same conceptual "titled top-level screen" as its
+  // two siblings. Aligned to match.
+  lines.push(heavyDivider());
   lines.push(`  CHRONICLE DEBUG — ${chronicle.totalRecords} records, ${chronicle.eraSummaries.length} eras`);
-  lines.push(DIVIDER);
+  lines.push(heavyDivider());
   lines.push('');
 
   // Era summaries
@@ -232,7 +270,7 @@ function renderDirectorChronicle(chronicle: CompactedChronicle): string {
   }
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(heavyDivider());
   lines.push('');
 
   return lines.join('\n');

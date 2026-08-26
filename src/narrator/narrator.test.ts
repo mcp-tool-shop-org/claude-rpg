@@ -819,3 +819,39 @@ describe('narrateScene/narrateSceneLegacy F-fa65fe50: optional DebugLogger threa
     expect(result.narration).toEqual(expect.any(String));
   });
 });
+
+// F-68cd7368: this domain's four narration-fallback sentinels used
+// inconsistent visual marking for "this is not real narration."
+// FATAL_NARRATION_FALLBACK and finale-narrator.ts's FALLBACK_EPILOGUE both
+// wrap themselves in parentheses as an out-of-fiction marker (mirrors
+// game.ts's own bracket convention for the same category of notice --
+// '[A subsystem hiccupped -- your turn was processed safely]'). FALLBACK_
+// NARRATION and FALLBACK_NARRATION_REPEATED -- the two most commonly hit
+// paths, covering every non-fatal LLM failure -- had no such marker, and
+// cross-domain play-renderer.ts pushes narration as plain, undecorated text
+// with no isFallback-aware styling available at all. Structural assertion
+// (starts-with/ends-with), not a full-string snapshot, so the exact wording
+// can still evolve independently of this contract.
+describe('fallback-sentinel visual marking (F-68cd7368)', () => {
+  it('FALLBACK_NARRATION is wrapped in an out-of-fiction parenthetical marker, matching its siblings', () => {
+    expect(FALLBACK_NARRATION.startsWith('(')).toBe(true);
+    expect(FALLBACK_NARRATION.endsWith(')')).toBe(true);
+  });
+
+  it('FALLBACK_NARRATION_REPEATED is wrapped in an out-of-fiction parenthetical marker, matching its siblings', () => {
+    expect(FALLBACK_NARRATION_REPEATED.startsWith('(')).toBe(true);
+    expect(FALLBACK_NARRATION_REPEATED.endsWith(')')).toBe(true);
+  });
+
+  it('FATAL_NARRATION_FALLBACK keeps its existing parenthetical marker (sibling contract, not a regression)', () => {
+    expect(FATAL_NARRATION_FALLBACK.startsWith('(')).toBe(true);
+    expect(FATAL_NARRATION_FALLBACK.endsWith(')')).toBe(true);
+  });
+
+  it('every KNOWN_FALLBACK_NARRATION_SENTINELS entry is out-of-fiction marked', () => {
+    for (const sentinel of KNOWN_FALLBACK_NARRATION_SENTINELS) {
+      expect(sentinel.startsWith('('), `expected "${sentinel}" to start with "("`).toBe(true);
+      expect(sentinel.endsWith(')'), `expected "${sentinel}" to end with ")"`).toBe(true);
+    }
+  });
+});

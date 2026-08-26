@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { renderChronicle } from './chronicle-renderer.js';
 import type { CampaignRecord } from '@ai-rpg-engine/campaign-memory';
-import type { CompactedChronicle } from '../session/chronicle.js';
+import type { CompactedChronicle, EraSummary } from '../session/chronicle.js';
 
 function makeRecord(overrides: Partial<CampaignRecord> = {}): CampaignRecord {
   return {
@@ -17,10 +17,21 @@ function makeRecord(overrides: Partial<CampaignRecord> = {}): CampaignRecord {
   };
 }
 
-function makeChronicle(records: CampaignRecord[]): CompactedChronicle {
+function makeEra(overrides: Partial<EraSummary> = {}): EraSummary {
+  return {
+    fromTick: 0,
+    toTick: 10,
+    label: 'The Early Days',
+    eventCount: 3,
+    topEvents: ['found the old map'],
+    ...overrides,
+  };
+}
+
+function makeChronicle(records: CampaignRecord[], eraSummaries: EraSummary[] = []): CompactedChronicle {
   return {
     canonicalEvents: records,
-    eraSummaries: [],
+    eraSummaries,
     totalRecords: records.length,
   };
 }
@@ -51,5 +62,120 @@ describe('renderChronicle bardic mode', () => {
     const a = renderChronicle(chronicle, 'bardic', 'Kael');
     const b = renderChronicle(chronicle, 'bardic', 'Kael');
     expect(a).toBe(b);
+  });
+});
+
+// F-3a024f07 / F-e475c46d: DIVIDER/HEAVY_DIVIDER were both a fixed
+// '─'.repeat(60)/'═'.repeat(60), uncolored, unlike every other divider in the
+// display layer (play-renderer.ts's PFE-005, F-38eb3dec's precedent), which
+// adapt to getTerminalWidth() and wrap in dim(). Mirrors
+// play-renderer-divider.test.ts's F-38eb3dec assertions -- structural
+// (exact-width substring), not a full-screen snapshot. dim() is a no-op in
+// this non-TTY test environment (colors.ts's `enabled` gate), so the
+// asserted substrings are the plain repeated-character runs either way.
+describe('renderChronicle divider width (F-3a024f07 / F-e475c46d)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('timeline heavy divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const chronicle = makeChronicle([makeRecord()]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).toContain('═'.repeat(40));
+    expect(result).not.toContain('═'.repeat(60));
+  });
+
+  it('timeline heavy divider matches a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const chronicle = makeChronicle([makeRecord()]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).toContain('═'.repeat(120));
+    expect(result).not.toContain('═'.repeat(121));
+  });
+
+  it('bardic heavy divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const chronicle = makeChronicle([makeRecord()]);
+    const result = renderChronicle(chronicle, 'bardic', 'Kael');
+    expect(result).toContain('═'.repeat(40));
+    expect(result).not.toContain('═'.repeat(60));
+  });
+
+  it('director outer frame matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const chronicle = makeChronicle([makeRecord()]);
+    const result = renderChronicle(chronicle, 'director');
+    expect(result).not.toContain('═'.repeat(60));
+    expect(result).not.toContain('─'.repeat(60));
+  });
+
+  // F-6be2f98b: timeline/bardic frame their header with HEAVY_DIVIDER while
+  // director -- the same conceptual "titled top-level screen" -- used the
+  // thinner DIVIDER instead, for no apparent semantic reason. Director's
+  // outer frame (open/close) now matches its two siblings' weight.
+  it('director outer frame now uses the same heavy weight as timeline/bardic (F-6be2f98b)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const chronicle = makeChronicle([makeRecord()]);
+    const result = renderChronicle(chronicle, 'director');
+    expect(result).toContain('═'.repeat(40));
+  });
+
+  it('era-summary divider (timeline mode) matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const chronicle = makeChronicle([], [makeEra()]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).toContain('─'.repeat(40));
+    expect(result).not.toContain('─'.repeat(60));
+  });
+});
+
+// F-6be2f98b: timeline mode's ' *' high-significance marker (renderRecordTimeline,
+// significance >= 0.7) had no legend anywhere in its own output explaining what
+// it means -- a player running /chronicle timeline saw asterisks on some
+// entries with no stated meaning. Shown only when at least one rendered
+// record actually carries the marker (no dead legend on a chronicle with no
+// pivotal moments yet).
+describe('renderChronicle timeline legend (F-6be2f98b)', () => {
+  it('shows the pivotal-moment legend when a rendered record carries the * marker', () => {
+    const chronicle = makeChronicle([makeRecord({ significance: 0.9 })]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).toContain('* = pivotal moment');
+  });
+
+  it('omits the legend when no rendered record carries the * marker', () => {
+    const chronicle = makeChronicle([makeRecord({ significance: 0.3 })]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).not.toContain('pivotal moment');
+  });
+
+  it('omits the legend when the chronicle has no canonical events at all', () => {
+    const chronicle = makeChronicle([]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).not.toContain('pivotal moment');
+  });
+});
+
+// F-3a024f07: within timeline mode specifically (the one mode that claims to
+// be neutral/factual), canonical events rendered bracket-prefixed at a single
+// indent ('  [Tick N] ...') while era-summary top-events rendered
+// hyphen-bulleted at a DOUBLE indent ('    - ...') -- two different visual
+// treatments for what is conceptually the same "a chronicle entry happened"
+// fact. Era topEvents now sit at the same single-indent column as canonical
+// events; the hyphen bullet (vs. canonical's bracket-tick) is kept because it
+// reflects a real data difference -- EraSummary.topEvents carries no tick
+// number to show. bardic's/director's own distinct per-mode voices for the
+// same field (bare quotes / '>' prefix) are unchanged -- the file's own v0.8
+// header comment already documents timeline/bardic/director as three
+// deliberate voices (neutral/dramatic/forensic).
+describe('renderChronicle timeline era-events indent (F-3a024f07)', () => {
+  it('renders era topEvents at the same single-indent column as canonical events', () => {
+    const chronicle = makeChronicle(
+      [makeRecord({ description: 'defeated a bandit' })],
+      [makeEra({ topEvents: ['found the old map'] })],
+    );
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).toContain('  - found the old map');
+    expect(result).not.toContain('    - found the old map');
   });
 });

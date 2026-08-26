@@ -44,7 +44,12 @@ export type NarrationResult = {
 // F-b6915850: exported so downstream consumers (recap.ts) can recognize the
 // sentinel by value where `isFallback` isn't threaded all the way through
 // (e.g. TurnRecord in session/history.ts, which only stores narration text).
-export const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
+// F-68cd7368: wrapped in parens as an out-of-fiction marker, matching its
+// siblings FATAL_NARRATION_FALLBACK (below) and finale-narrator.ts's
+// FALLBACK_EPILOGUE, and game.ts's bracket convention for the same category
+// of notice -- lets a player visually distinguish "the story stalled" from
+// authored prose at a glance instead of reading it as in-fiction text.
+export const FALLBACK_NARRATION = '(The scene holds its breath, waiting for the story to catch up.)';
 
 // F-681d3382: shown from the 2nd consecutive non-fatal fallback onward (see
 // NarrateSceneOpts.consecutiveFallbacks below) instead of FALLBACK_NARRATION.
@@ -56,8 +61,13 @@ export const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the s
 // of at all). Kept as a second constant sentence — not a template — so it
 // stays in KNOWN_FALLBACK_NARRATION_SENTINELS's exact-string-match contract
 // below.
+// F-68cd7368: wrapped in parens, same out-of-fiction marker as FALLBACK_
+// NARRATION above -- this sentinel used to switch from in-fiction metaphor
+// into literal CLI instruction syntax ('type "save" to be safe') with no
+// visual cue preparing the reader for the register shift; the marker now
+// signals up front that the whole sentence is a system notice, not prose.
 export const FALLBACK_NARRATION_REPEATED =
-  'The story can\'t reach the narrator right now — this looks like more than a one-off; check your connection or type "save" to be safe.';
+  '(The story can\'t reach the narrator right now — this looks like more than a one-off; check your connection or type "save" to be safe.)';
 
 // F-e8630a73 / F-18f4dd88: the fatal-path fallback sentinel, recorded via
 // history.record() when narrateScene()/narrateSceneLegacy() rethrow a fatal

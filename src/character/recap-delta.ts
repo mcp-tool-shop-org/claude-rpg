@@ -2,8 +2,17 @@
 
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { computeLevel } from '@ai-rpg-engine/character-profile';
+import { getTerminalWidth } from '../display/play-renderer.js';
 
-const DIVIDER = '─'.repeat(60);
+// F-e475c46d: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider()/makeThinDivider() pattern (F-38eb3dec
+// precedent: director-renderer.ts, status-compact.ts, archive-browser.ts,
+// help-system.ts).
+function divider(): string {
+  return '─'.repeat(getTerminalWidth());
+}
 
 export type SessionSnapshot = {
   xp: number;
@@ -93,9 +102,9 @@ export function renderSessionDelta(delta: SessionDelta): string {
   }
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('  SESSION SUMMARY');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
 
   lines.push(`  Turns played: ${delta.turnsPlayed}`);
@@ -126,7 +135,7 @@ export function renderSessionDelta(delta: SessionDelta): string {
   }
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
 
   return lines.join('\n');

@@ -2,19 +2,45 @@
 
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 import {
   computeLevel,
   xpToNextLevel,
   getActiveInjuries,
 } from '@ai-rpg-engine/character-profile';
+import { getTerminalWidth } from '../display/play-renderer.js';
+import { resolveArchetypeName, resolveBackgroundName, resolveDisciplineName } from './catalog-names.js';
 
-const DIVIDER = '═'.repeat(60);
-const THIN = '─'.repeat(60);
+// F-e475c46d: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider()/makeThinDivider() pattern (F-38eb3dec
+// precedent: director-renderer.ts, status-compact.ts, archive-browser.ts,
+// help-system.ts).
+function divider(): string {
+  return '═'.repeat(getTerminalWidth());
+}
+function thinDivider(): string {
+  return '─'.repeat(getTerminalWidth());
+}
 
-/** Render a full character sheet for terminal display. */
+/**
+ * Render a full character sheet for terminal display.
+ *
+ * @param catalog F-9c94c4b5: optional BuildCatalog used to resolve
+ *   archetypeId/backgroundId/disciplineId to their display name (same
+ *   contract as presence.ts's buildStatusData/buildPresence catalog param).
+ * @param factionNames F-9c94c4b5: optional id->display-name map for
+ *   REPUTATION, mirroring session-recap.ts's already-established
+ *   `factionNames: Record<string, string>` convention. Both are optional and
+ *   trailing so every pre-existing call site keeps compiling and, when
+ *   omitted, keeps rendering the raw id exactly as before.
+ */
 export function renderCharacterSheet(
   profile: CharacterProfile,
   itemCatalog: ItemCatalog,
+  catalog?: BuildCatalog,
+  factionNames?: Record<string, string>,
 ): string {
   const parts: string[] = [];
   const level = computeLevel(profile.progression.xp);
@@ -22,17 +48,17 @@ export function renderCharacterSheet(
   const title = profile.custom.title as string | undefined;
 
   parts.push('');
-  parts.push(DIVIDER);
+  parts.push(divider());
   parts.push(`  CHARACTER SHEET`);
-  parts.push(DIVIDER);
+  parts.push(divider());
   parts.push('');
 
   // Identity
   parts.push(`  Name:       ${profile.build.name}`);
-  parts.push(`  Archetype:  ${profile.build.archetypeId}`);
-  parts.push(`  Background: ${profile.build.backgroundId}`);
+  parts.push(`  Archetype:  ${resolveArchetypeName(catalog, profile.build.archetypeId)}`);
+  parts.push(`  Background: ${resolveBackgroundName(catalog, profile.build.backgroundId)}`);
   if (profile.build.disciplineId) {
-    parts.push(`  Discipline: ${profile.build.disciplineId}`);
+    parts.push(`  Discipline: ${resolveDisciplineName(catalog, profile.build.disciplineId)}`);
   }
   if (title) {
     parts.push(`  Title:      ${title}`);
@@ -40,7 +66,7 @@ export function renderCharacterSheet(
   parts.push('');
 
   // Progression
-  parts.push(THIN);
+  parts.push(thinDivider());
   parts.push(`  Level: ${level}    XP: ${profile.progression.xp}${xpNeeded !== null ? ` (${xpNeeded} to next)` : ' (MAX)'}    Turns: ${profile.totalTurns}`);
   if (profile.progression.archetypeRank > 1) {
     parts.push(`  Archetype Rank: ${profile.progression.archetypeRank}`);
@@ -51,7 +77,7 @@ export function renderCharacterSheet(
   parts.push('');
 
   // Stats
-  parts.push(THIN);
+  parts.push(thinDivider());
   parts.push('  STATS');
   const statEntries = Object.entries(profile.stats);
   if (statEntries.length > 0) {
@@ -68,7 +94,7 @@ export function renderCharacterSheet(
   parts.push('');
 
   // Equipment
-  parts.push(THIN);
+  parts.push(thinDivider());
   parts.push('  EQUIPMENT');
   const slots = ['weapon', 'armor', 'accessory', 'tool', 'trinket'] as const;
   for (const slot of slots) {
@@ -88,7 +114,7 @@ export function renderCharacterSheet(
   // Injuries
   const injuries = getActiveInjuries(profile);
   if (injuries.length > 0) {
-    parts.push(THIN);
+    parts.push(thinDivider());
     parts.push('  INJURIES');
     for (const inj of injuries) {
       parts.push(`  - ${inj.name}: ${inj.description}`);
@@ -99,18 +125,19 @@ export function renderCharacterSheet(
   // Reputation
   const rep = profile.reputation.filter((r) => r.value !== 0);
   if (rep.length > 0) {
-    parts.push(THIN);
+    parts.push(thinDivider());
     parts.push('  REPUTATION');
     for (const r of rep) {
       const bar = r.value > 0 ? '+' : '';
-      parts.push(`  ${r.factionId.padEnd(20)} ${bar}${r.value}`);
+      const factionName = factionNames?.[r.factionId] ?? r.factionId;
+      parts.push(`  ${factionName.padEnd(20)} ${bar}${r.value}`);
     }
     parts.push('');
   }
 
   // Milestones
   if (profile.milestones.length > 0) {
-    parts.push(THIN);
+    parts.push(thinDivider());
     parts.push('  MILESTONES');
     for (const m of profile.milestones.slice(-5)) {
       parts.push(`  - ${m.label}`);
@@ -121,7 +148,7 @@ export function renderCharacterSheet(
     parts.push('');
   }
 
-  parts.push(DIVIDER);
+  parts.push(divider());
   parts.push('');
 
   return parts.join('\n');

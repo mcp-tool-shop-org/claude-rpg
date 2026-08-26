@@ -121,6 +121,31 @@ describe('computeFactionDeltas', () => {
       expect(result[0].pressuresFrom).toBe(2);
     });
   });
+
+  // F-bbcef54a: FACTION SHIFTS printed the raw fd.factionId slug, unlike the
+  // same renderFullRecap screen's District Changes / Economy Changes /
+  // What People Are Saying sections, which all resolve to a display name.
+  // deriveWhatPeopleAreSaying already takes a `factionNames: Record<string,
+  // string>` map (see below) — computeFactionDeltas now accepts the same
+  // map, optional and trailing so the pre-existing 5-arg call sites (bin.ts,
+  // the tests above) keep compiling and keep getting factionId back when
+  // it's omitted.
+  describe('factionName (F-bbcef54a)', () => {
+    it('resolves factionName from the supplied factionNames map', () => {
+      const before = [{ factionId: 'iron-covenant', value: 0 }];
+      const after = [{ factionId: 'iron-covenant', value: 12 }];
+      const result = computeFactionDeltas(before, after, [], [], 0, { 'iron-covenant': 'Iron Covenant' });
+      expect(result).toHaveLength(1);
+      expect(result[0].factionName).toBe('Iron Covenant');
+    });
+
+    it('falls back to factionId when no factionNames map is supplied (backward compatible)', () => {
+      const before = [{ factionId: 'iron-covenant', value: 0 }];
+      const after = [{ factionId: 'iron-covenant', value: 12 }];
+      const result = computeFactionDeltas(before, after, [], [], 0);
+      expect(result[0].factionName).toBe('iron-covenant');
+    });
+  });
 });
 
 // --- computeRumorDelta ---
@@ -326,5 +351,37 @@ describe('renderFullRecap', () => {
     expect(result).not.toBe('');
     expect(result).toContain('FACTION SHIFTS');
     expect(result).toContain('guild');
+  });
+
+  // F-bbcef54a: FACTION SHIFTS rendered fd.factionId raw even though
+  // 'Section 3: District Changes' / 'Section: Economy Changes' /
+  // 'Section 5: What People Are Saying' in this same screen all resolve to a
+  // display name -- proving the screen's own house style is resolved names.
+  // FactionDelta.factionName is optional (a hand-built literal without it,
+  // like the test right above, still renders fd.factionId unchanged); when
+  // present, renderFullRecap must prefer it over the raw id.
+  it('prefers factionName over the raw factionId in FACTION SHIFTS when present (F-bbcef54a)', () => {
+    const factionDeltas = [
+      {
+        factionId: 'iron-covenant',
+        factionName: 'Iron Covenant',
+        reputationBefore: 9,
+        reputationAfter: 12,
+        pressuresFrom: 0,
+        rumorsKnownBefore: 0,
+        rumorsKnownAfter: 0,
+      },
+    ];
+
+    const result = renderFullRecap(
+      zeroCharacterDelta,
+      zeroWorldDelta,
+      factionDeltas,
+      zeroRumorDelta,
+      [],
+    );
+
+    expect(result).toContain('Iron Covenant');
+    expect(result).not.toContain('iron-covenant');
   });
 });

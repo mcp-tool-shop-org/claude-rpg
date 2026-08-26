@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   captureWorldSnapshot,
   computeWorldDelta,
@@ -134,5 +134,37 @@ describe('renderWorldDelta', () => {
     expect(result).toContain('The bounty was resolved');
     expect(result).toContain('Chain reactions: 1');
     expect(result).toContain('New rumors: 3');
+  });
+});
+
+// F-e475c46d: DIVIDER was a hardcoded '─'.repeat(60), unlike play-renderer.ts's
+// own dividers (PFE-005), which adapt to the real terminal width. Mirrors
+// play-renderer-divider.test.ts's F-38eb3dec assertions -- structural
+// (exact-width substring), not a full-screen snapshot.
+describe('renderWorldDelta divider width (F-e475c46d)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  const nonEmptyDelta = {
+    pressuresSpawned: 1,
+    pressuresResolved: 0,
+    resolutionSummaries: [],
+    chainReactions: 0,
+    rumorsDelta: 0,
+  };
+
+  it('divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const result = renderWorldDelta(nonEmptyDelta);
+    expect(result).toContain('─'.repeat(40));
+    expect(result).not.toContain('─'.repeat(60));
+  });
+
+  it('divider matches a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const result = renderWorldDelta(nonEmptyDelta);
+    expect(result).toContain('─'.repeat(120));
+    expect(result).not.toContain('─'.repeat(121));
   });
 });

@@ -173,6 +173,18 @@ describe('fixture round-trips via loadSession', () => {
 
     const pressures = loadPressuresFromSession(session);
     expect(pressures).toHaveLength(1);
+    // F-ff6dbe12: mirrors the rumor field-level assertion above — the fixture's
+    // pressure entry (v1-rich.json: {id,kind,description,severity}, no
+    // sourceFactionId/triggeredBy/urgency/visibility/potentialOutcomes/tags/
+    // createdAtTick) is legacy-shaped too, so this exercises migrate.ts's
+    // normalizeLegacyPressure fallback branch, not a no-op pass-through.
+    // Without this, a regression in the severity->urgency conversion
+    // (Math.max(0, Math.min(1, legacySeverity / 5)), migrate.ts's
+    // normalizeLegacyPressure) or any of its default-fill branches would pass
+    // this suite undetected — only toHaveLength(1) was ever checked here.
+    expect(pressures[0].urgency).toBeCloseTo(0.4, 5); // severity: 2 / 5
+    expect(pressures[0].sourceFactionId).toBe('unknown');
+    expect(pressures[0].visibility).toBe('known');
 
     const journal = loadChronicleFromSession(session);
     expect(journal.size()).toBe(2);

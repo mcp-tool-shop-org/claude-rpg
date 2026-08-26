@@ -11,3 +11,6 @@ site/
 docs/
 coverage/
 *.tsbuildinfo
+scripts/
+test/
+tsconfig.test.json

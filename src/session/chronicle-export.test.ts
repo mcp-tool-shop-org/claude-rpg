@@ -81,6 +81,25 @@ describe('exportChronicleMarkdown', () => {
     expect(md).toContain('No significant events recorded');
   });
 
+  it('orders key moments chronologically by tick, not by significance (F-934b1183)', () => {
+    // A late, highly significant betrayal (tick 45) and an early, lower
+    // significance discovery (tick 3) — the significance-descending sort
+    // used to pick the top N must not leak into the rendered order.
+    const records = [
+      { id: '1', tick: 3, category: 'discovery', actorId: 'player', description: 'Found the hidden ledger', significance: 0.3, witnesses: [], data: {} },
+      { id: '2', tick: 45, category: 'betrayal', actorId: 'player', description: 'Betrayed by the captain', significance: 0.9, witnesses: [], data: {} },
+    ];
+    const md = exportChronicleMarkdown(makeSession({
+      chronicleRecords: JSON.stringify(records),
+    }));
+
+    const idxTurn3 = md.indexOf('Turn 3');
+    const idxTurn45 = md.indexOf('Turn 45');
+    expect(idxTurn3).toBeGreaterThan(-1);
+    expect(idxTurn45).toBeGreaterThan(-1);
+    expect(idxTurn3).toBeLessThan(idxTurn45);
+  });
+
   it('renders epilogue seeds from finale outline', () => {
     const outline = {
       dominantArc: 'redemption',
@@ -138,5 +157,17 @@ describe('exportChronicleJSON', () => {
     })) as { summary: { campaignDuration: number; totalChronicleEvents: number } };
     expect(result.summary.campaignDuration).toBe(2);
     expect(result.summary.totalChronicleEvents).toBe(2);
+  });
+
+  it('orders keyMoments chronologically by tick, not by significance (F-934b1183)', () => {
+    const records = [
+      { id: '1', tick: 3, category: 'discovery', actorId: 'player', description: 'Found the hidden ledger', significance: 0.3, witnesses: [], data: {} },
+      { id: '2', tick: 45, category: 'betrayal', actorId: 'player', description: 'Betrayed by the captain', significance: 0.9, witnesses: [], data: {} },
+    ];
+    const result = exportChronicleJSON(makeSession({
+      chronicleRecords: JSON.stringify(records),
+    })) as { keyMoments: Array<{ tick: number }> };
+
+    expect(result.keyMoments.map((m) => m.tick)).toEqual([3, 45]);
   });
 });

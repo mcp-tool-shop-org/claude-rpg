@@ -5,7 +5,7 @@
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient, StreamCallback } from '../claude-client.js';
-import { narrateScene, type NarrationResult } from '../narrator/narrator.js';
+import { narrateScene, type NarrationResult, type NarrateSceneOpts } from '../narrator/narrator.js';
 import { narrateFinale } from '../narrator/finale-narrator.js';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 
@@ -23,6 +23,12 @@ export type OpeningNarrationContext = {
   economyContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  /**
+   * F-7815df9e: long-term campaign memory for the narrator (e.g. when
+   * opening narration resumes a loaded campaign), computed by the caller
+   * from buildChronicleContext()/TurnHistory.getChronicleHighlights().
+   */
+  chronicleContext?: string;
   onChunk?: StreamCallback;
 };
 
@@ -43,7 +49,11 @@ export async function generateOpeningNarration(ctx: OpeningNarrationContext): Pr
     arcContext: ctx.arcContext,
     endgameContext: ctx.endgameContext,
     onChunk: ctx.onChunk,
-  });
+    // See the matching note in turn-loop.ts's executeTurn(): narrator.ts is
+    // adding `chronicleContext` to NarrateSceneOpts this same wave. Cast
+    // locally so this compiles whether or not that field has landed yet.
+    chronicleContext: ctx.chronicleContext,
+  } as NarrateSceneOpts & { chronicleContext?: string });
 }
 
 // ─── Finale Narration ────────────────────────────────────────

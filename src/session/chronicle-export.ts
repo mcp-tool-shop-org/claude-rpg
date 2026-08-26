@@ -295,9 +295,15 @@ function parseParty(session: SavedSession): PartyState | null {
 }
 
 function getTopEvents(records: CampaignRecord[], limit: number): CampaignRecord[] {
-  return [...records]
+  const top = [...records]
     .sort((a, b) => b.significance - a.significance)
     .slice(0, limit);
+  // F-934b1183: re-sort by tick ascending so the exported "Key Moments"
+  // read as a chronological timeline, mirroring the same re-sort-after-trim
+  // step already used by compactChronicle()/buildChronicleContext() in
+  // chronicle.ts.
+  top.sort((a, b) => a.tick - b.tick);
+  return top;
 }
 
 function significanceStars(significance: number): string {

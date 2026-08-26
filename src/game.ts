@@ -194,7 +194,7 @@ import { executeTurn, type TurnResult, type ProfileUpdateHints } from './turn-lo
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import type { StatusData } from './character/presence.js';
-import { deriveChronicleEvents, type ChronicleEventSource } from './session/chronicle.js';
+import { deriveChronicleEvents, buildChronicleContext, type ChronicleEventSource } from './session/chronicle.js';
 import { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
 import {
   recruitCompanion,
@@ -474,6 +474,7 @@ export class GameSession {
       economyContext: this.getEconomyContext(),
       arcContext: this.getArcContext(),
       endgameContext: this.getEndgameContext(),
+      chronicleContext: this.getChronicleContext(),
     });
     this.history.record({
       tick: this.engine.tick,
@@ -653,6 +654,7 @@ export class GameSession {
       opportunityContext: this.getOpportunityContext(),
       arcContext: this.getArcContext(),
       endgameContext: this.getEndgameContext(),
+      chronicleContext: this.getChronicleContext(),
     });
 
     // PB-001: Post-turn subsystem ticks wrapped in error containment.
@@ -901,6 +903,23 @@ export class GameSession {
   /** Build crafting context string describing notable crafted/modified gear (v1.8). */
   private getCraftingContext(): string | undefined {
     return _getCraftingContext(this.profile, this.itemCatalog);
+  }
+
+  /**
+   * F-7815df9e: long-term campaign memory for the narrator — combines the
+   * chronicle's top significant events (buildChronicleContext) with the
+   * rolling turn-history compaction summary (TurnHistory.getChronicleHighlights),
+   * so narration can call back to past story beats beyond the last few turns
+   * of raw narration text (a betrayal, a companion death, a resolved pressure
+   * from many turns ago).
+   */
+  private getChronicleContext(): string | undefined {
+    const parts: string[] = [];
+    const chronicle = buildChronicleContext(this.journal, this.engine.tick);
+    if (chronicle) parts.push(chronicle);
+    const highlights = this.history.getChronicleHighlights();
+    if (highlights) parts.push(highlights);
+    return parts.length > 0 ? parts.join(' ') : undefined;
   }
 
   /** Get the faction that controls the player's current zone (for witnessing). */
@@ -1181,6 +1200,7 @@ export class GameSession {
       : resolutionType === 'abandoned' ? 'opportunity-abandoned' as const
       : resolutionType === 'betrayed' ? 'opportunity-betrayed' as const
       : resolutionType === 'expired' ? 'opportunity-expired' as const
+      : resolutionType === 'declined' ? 'opportunity-declined' as const
       : 'opportunity-failed' as const;
     const source: ChronicleEventSource = { kind: chronicleKind, opportunity: resolvedOpp, tick: this.engine.tick };
     for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {

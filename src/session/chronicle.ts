@@ -40,7 +40,8 @@ export type ChronicleEventSource =
   | { kind: 'opportunity-failed'; opportunity: OpportunityState; tick: number }
   | { kind: 'opportunity-abandoned'; opportunity: OpportunityState; tick: number }
   | { kind: 'opportunity-betrayed'; opportunity: OpportunityState; tick: number }
-  | { kind: 'opportunity-expired'; opportunity: OpportunityState; tick: number };
+  | { kind: 'opportunity-expired'; opportunity: OpportunityState; tick: number }
+  | { kind: 'opportunity-declined'; opportunity: OpportunityState; tick: number };
 
 // --- Compaction Types ---
 
@@ -172,6 +173,8 @@ export function deriveChronicleEvents(
       return deriveOpportunityBetrayed(source, playerId);
     case 'opportunity-expired':
       return deriveOpportunityExpired(source);
+    case 'opportunity-declined':
+      return deriveOpportunityDeclined(source, playerId);
   }
 }
 
@@ -882,5 +885,29 @@ function deriveOpportunityExpired(
     significance: 0.3,
     witnesses: [],
     data: { opportunityId: opp.id, kind: opp.kind, expired: true },
+  }];
+}
+
+function deriveOpportunityDeclined(
+  source: Extract<ChronicleEventSource, { kind: 'opportunity-declined' }>,
+  playerId: string,
+): Omit<CampaignRecord, 'id'>[] {
+  const opp = source.opportunity;
+  return [{
+    tick: source.tick,
+    // F-b42790aa: declining is player agency, not a failure — it must not
+    // read as "Failed" in the chronicle. RecordCategory is a closed union
+    // owned by @ai-rpg-engine/campaign-memory (an external published
+    // dependency) with no 'opportunity-declined' member, so — mirroring the
+    // existing precedent above where 'opportunity-betrayed' reuses 'betrayal'
+    // and 'opportunity-expired' reuses 'opportunity-failed' — this reuses the
+    // neutral 'action' category (no relationship-effect penalty) rather than
+    // fabricating an unrecognized category value.
+    category: 'action' as RecordCategory,
+    actorId: playerId,
+    description: `Declined ${opp.kind}: "${opp.title}"`,
+    significance: 0.3,
+    witnesses: [],
+    data: { opportunityId: opp.id, kind: opp.kind, declined: true },
   }];
 }

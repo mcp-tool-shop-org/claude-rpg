@@ -8,7 +8,7 @@ import type { NarrationPlan } from '@ai-rpg-engine/presentation';
 import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
-import { narrateScene, type NarrationResult } from './narrator/narrator.js';
+import { narrateScene, type NarrationResult, type NarrateSceneOpts } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
 import { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
@@ -55,6 +55,13 @@ export type ExecuteTurnOpts = {
   opportunityContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  /**
+   * F-7815df9e: long-term campaign memory for the narrator, computed by the
+   * caller from buildChronicleContext()/TurnHistory.getChronicleHighlights()
+   * so scene narration can callback to past story beats beyond the last few
+   * turns of raw narration text.
+   */
+  chronicleContext?: string;
   onNarrationChunk?: StreamCallback;
 };
 
@@ -65,7 +72,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     characterPresence, npcPlayerPresence, playerProfile, playerRumors,
     pressureContext, worldPressures, lastNpcActions, districtDescriptor,
     partyPresence, economyContext, craftingContext, opportunityContext,
-    arcContext, endgameContext, onNarrationChunk,
+    arcContext, endgameContext, chronicleContext, onNarrationChunk,
   } = opts;
   const previousLocationId = engine.world.locationId;
 
@@ -137,7 +144,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     arcContext,
     endgameContext,
     onChunk: onNarrationChunk,
-  });
+    // F-7815df9e: narrator.ts (narrative-llm domain) is adding
+    // `chronicleContext` to NarrateSceneOpts and folding it into the prompt
+    // this same wave. Cast locally so this compiles whether or not that
+    // field has landed on NarrateSceneOpts yet — once it has, intersecting
+    // with a compatible optional field is a no-op.
+    chronicleContext,
+  } as NarrateSceneOpts & { chronicleContext?: string });
 
   // Step 4.5: Process through immersion runtime if available
   let audioCalls: McpToolCall[] = [];

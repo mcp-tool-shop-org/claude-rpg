@@ -4,6 +4,7 @@ import { GameSession } from './game.js';
 import { createTestLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
 import type { OpportunityState } from '@ai-rpg-engine/modules';
+import type { McpToolCall } from './runtime/audio-bridge.js';
 
 describe('GameSession', () => {
   it('should create a session with a starter world', () => {
@@ -579,6 +580,105 @@ describe('GameSession', () => {
 
       expect(applyHintsSpy).toHaveBeenCalledTimes(1);
       expect(recordChronicleSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // F-79a25863 (presentation seam contract): turn-loop.ts's executeTurn()
+  // already computes TurnResult.audioCalls (sfx/music/ambient/UI-effect MCP
+  // tool calls — e.g. deathHook's fade-to-black), but processInput() read
+  // every other TurnResult field and silently discarded audioCalls, so the
+  // audio/UI-effect presentation layer was inert for every real player of
+  // the shipped CLI. This suite proves the wiring: the new GameConfig
+  // `onPresentation` callback fires with each turn's calls (empty array
+  // included), on the fatal-bookkeeping path too, from the
+  // opening-narration path when it produces calls, and survives a throwing
+  // sink without damaging the turn (mirrors PB-001 containment).
+  describe('presentation seam contract (F-79a25863)', () => {
+    it('invokes onPresentation with the turn\'s audioCalls (empty array) after a normal turn', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onPresentation = vi.fn();
+      const h = createHarness({ gameOpts: { onPresentation } });
+
+      await h.play('look around');
+
+      expect(onPresentation).toHaveBeenCalledTimes(1);
+      expect(onPresentation).toHaveBeenCalledWith([]);
+    });
+
+    it('passes through the turn\'s actual audioCalls content to onPresentation', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onPresentation = vi.fn();
+      const h = createHarness({ gameOpts: { onPresentation } });
+
+      const fakeCalls: McpToolCall[] = [{ tool: '__ui_effect_intent__', params: { type: 'fade-out' } }];
+      vi.spyOn(h.session.immersion, 'processPresentation').mockResolvedValue(fakeCalls);
+
+      await h.play('look around');
+
+      expect(onPresentation).toHaveBeenCalledWith(fakeCalls);
+    });
+
+    it('does not let a throwing onPresentation sink damage the turn (mirrors PB-001 containment)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onPresentation = vi.fn(() => {
+        throw new Error('sink exploded');
+      });
+      const h = createHarness({ gameOpts: { onPresentation } });
+
+      const output = await h.play('look around');
+
+      expect(output).toBeTruthy();
+      expect(onPresentation).toHaveBeenCalled();
+    });
+
+    it('invokes onPresentation with an empty array on the fatal-bookkeeping path (F-c4332895) too', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onPresentation = vi.fn();
+      const h = createHarness({
+        clientOpts: { generateFailure: 'auth' },
+        gameOpts: { onPresentation },
+      });
+
+      await expect(h.play('go to chapel-nave')).rejects.toThrow();
+
+      expect(onPresentation).toHaveBeenCalledWith([]);
+    });
+
+    it('invokes onPresentation for the opening-narration path when it produces calls', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onPresentation = vi.fn();
+      const h = createHarness({ gameOpts: { onPresentation } });
+
+      const fakeCalls: McpToolCall[] = [{ tool: 'sound_effect', params: { effect: 'ambient_rain' } }];
+      vi.spyOn(h.session.immersion, 'processPresentation').mockResolvedValue(fakeCalls);
+
+      await h.session.getOpeningNarration();
+
+      expect(onPresentation).toHaveBeenCalledWith(fakeCalls);
+    });
+
+    it('skips presentation processing for the opening narration when the state machine was already restored into combat, so a mid-fight save is not silently flipped back to exploration before the first real turn', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onPresentation = vi.fn();
+      const h = createHarness({ gameOpts: { onPresentation } });
+
+      // Mirrors ImmersionRuntime.initialize()'s session-restore transition
+      // for a save captured mid-combat.
+      h.session.immersion.stateMachine.transition('combat', 'test-setup');
+      const processPresentationSpy = vi.spyOn(h.session.immersion, 'processPresentation');
+
+      await h.session.getOpeningNarration();
+
+      expect(processPresentationSpy).not.toHaveBeenCalled();
+      expect(onPresentation).toHaveBeenCalledWith([]);
+      expect(h.session.immersion.stateMachine.current).toBe('combat');
+    });
+
+    it('works with no onPresentation callback configured (optional, backward compatible)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await expect(h.play('look around')).resolves.toBeTruthy();
     });
   });
 });

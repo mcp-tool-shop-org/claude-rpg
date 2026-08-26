@@ -35,12 +35,21 @@ describe('stream-presenter: markInterrupted', () => {
     expect(output).toContain('[The narrator pauses...]');
   });
 
-  it('onChunk writes indent before first chunk', () => {
+  // F-f6485d6c: onChunk used to open with '\n  ' (a 2-space indent), per
+  // this line's own comment "match play-renderer narration style" -- but
+  // play-renderer.ts's renderPlayScreen pushes opts.narration completely
+  // unindented (`parts.push(opts.narration)`, flush against the left
+  // margin). bin.ts's turn loop clears the streamed text the instant
+  // streaming finishes and reprints the same narration via the static
+  // renderPlayScreen path, so the player saw the just-streamed paragraph
+  // visually jump 2 columns left the moment the full screen redrew. Fixed
+  // by dropping the indent so both renderings share the same column --
+  // matching the comment's actual (corrected) intent.
+  it('onChunk opens with a bare newline and no indent, matching play-renderer.ts\'s flush-left narration (F-f6485d6c)', () => {
     const session = createStreamPresenter();
     session.onChunk('Hello');
     const output = writeSpy.mock.calls.map((c) => c[0]).join('');
-    expect(output).toContain('\n  ');
-    expect(output).toContain('Hello');
+    expect(output).toBe('\nHello');
     expect(session.chunkCount).toBe(1);
   });
 

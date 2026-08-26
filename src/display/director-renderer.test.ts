@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { executeDirectorCommand, renderDirectorHelp } from './director-renderer.js';
 
 // Minimal world stub for tests
@@ -235,5 +235,84 @@ describe('renderDirectorHelp divider width (F-38eb3dec)', () => {
     const help = renderDirectorHelp();
     expect(help).toContain('─'.repeat(120));
     expect(help).not.toContain('─'.repeat(121));
+  });
+});
+
+/**
+ * F-1367afd9: renderDirectorHelp()'s hand-typed command table had three
+ * concrete defects, verified against true visible columns (color enabled,
+ * ANSI stripped): (a) only '/inspect' was wrapped in cyan() while every
+ * other command name rendered plain, with no reason given; (b) the
+ * description column drifted from the shared baseline on rows whose
+ * command name ran long (e.g. '/trace <entity> <subject> <key>'); (c) the
+ * '/chronicle [mode]' row ran past an 80-column terminal with a hard wrap
+ * and no hanging indent, since the table was hand-typed rather than
+ * computed. Rebuilt programmatically (padEnd + wrapWords/hanging-indent,
+ * the same approach renderArcHelp/renderConcludeHelp already use via
+ * help-system.ts's renderNameDescriptionRow) so every row lands on the same
+ * column and none are individually miscolored.
+ */
+describe('renderDirectorHelp command table (F-1367afd9)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('does not single out /inspect in color while every other command renders plain, even with colors enabled', async () => {
+    const originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./director-renderer.js');
+    const help = mod.renderDirectorHelp();
+    expect(help).toContain('/inspect <entity-id>');
+    // No raw cyan (SGR 36) anywhere in the table -- /inspect no longer gets
+    // singled out, and none of the other 36 rows gained color either
+    // ("either color all consistently or none" -- this picks "none" to
+    // match the other reference tables in this domain, which stay plain).
+    expect(help).not.toContain('\x1b[36m');
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    vi.resetModules();
+  });
+
+  it('every command row starts its description at the same column, including the long /trace row', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const lines = renderDirectorHelp().split('\n');
+    const traceLine = lines.find((l) => l.includes('/trace <entity>'));
+    const leverageLine = lines.find((l) => l.trim().startsWith('/leverage'));
+    expect(traceLine).toBeDefined();
+    expect(leverageLine).toBeDefined();
+    const traceDescCol = traceLine!.indexOf('Trace belief provenance');
+    const leverageDescCol = leverageLine!.indexOf('Show player leverage currencies');
+    expect(traceDescCol).toBeGreaterThan(-1);
+    expect(leverageDescCol).toBeGreaterThan(-1);
+    expect(traceDescCol).toBe(leverageDescCol);
+  });
+
+  it('wraps the /chronicle [mode] row with a hanging indent instead of running past an 80-column terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
+    const lines = renderDirectorHelp().split('\n');
+    const startIdx = lines.findIndex((l) => l.includes('/chronicle [mode]'));
+    expect(startIdx).toBeGreaterThan(-1);
+    expect(lines[startIdx].length).toBeLessThanOrEqual(80);
+    // The description wraps onto a hanging-indented continuation line
+    // rather than a hard 82-char overflow.
+    expect(lines[startIdx]).not.toContain('director)');
+    expect(lines[startIdx + 1].trim().length).toBeGreaterThan(0);
+    expect(lines[startIdx + 1].length).toBeLessThanOrEqual(80);
+  });
+
+  it('still documents every command the table listed before (no content lost in the rebuild)', () => {
+    const help = renderDirectorHelp();
+    for (const cmd of [
+      '/inspect', '/faction', '/zone', '/trace', '/rumors', '/pressures',
+      '/world', '/factions', '/people', '/npc', '/leverage', '/map',
+      '/party', '/item', '/districts', '/district', '/market', '/trade',
+      '/craft', '/materials', '/salvage', '/jobs', '/contracts',
+      '/contract', '/accepted', '/arcs', '/endgame', '/finale', '/status',
+      '/stats', '/help leverage', '/help <pack-id>', '/chronicle',
+      '/history', '/snapshot', '/divergences', '/back',
+    ]) {
+      expect(help, `expected renderDirectorHelp() to still mention ${cmd}`).toContain(cmd);
+    }
   });
 });

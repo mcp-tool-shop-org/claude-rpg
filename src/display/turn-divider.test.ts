@@ -19,10 +19,17 @@ describe('makeTurnDivider (FT-FE-005)', () => {
     expect(result).toContain('═');
   });
 
-  it('starts with a blank line for visual buffering', () => {
+  // F-a2a609b6: makeTurnDivider() used to open with its own hardcoded '\n'
+  // on top of the blank line renderPlayScreen's own parts.push('') already
+  // supplies before it -- giving every numbered turn one more blank line
+  // above its rule than the non-numbered makeDivider() fallback gets, a
+  // rhythm inconsistency between two branches of the same function. The
+  // caller already supplies the blank line, so this must NOT add a second
+  // one.
+  it('does not start with its own blank line -- the caller (renderPlayScreen) already supplies one (F-a2a609b6)', () => {
     Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
     const result = makeTurnDivider(3);
-    expect(result.startsWith('\n')).toBe(true);
+    expect(result.startsWith('\n')).toBe(false);
   });
 });
 
@@ -70,6 +77,48 @@ describe('renderPlayScreen with turnNumber (FT-FE-005)', () => {
 
     expect(output).not.toContain('Turn');
     expect(output).toContain('─'.repeat(80));
+  });
+});
+
+// F-a2a609b6: renderPlayScreen always pushes one blank line (parts.push(''))
+// before branching into makeTurnDivider(n) (turnNumber set) or makeDivider()
+// (turnNumber absent). makeTurnDivider's own extra leading '\n' meant the
+// turnNumber branch rendered TWO blank lines above its rule while the
+// fallback rendered only ONE -- this locks in that both branches now
+// produce the same count.
+describe('renderPlayScreen blank-line rhythm before the divider is consistent across branches (F-a2a609b6)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  const world = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  function leadingBlankLineCount(text: string): number {
+    let count = 0;
+    for (const line of text.split('\n')) {
+      if (line.trim() === '') count++;
+      else break;
+    }
+    return count;
+  }
+
+  it('numbered-turn and fallback screens open with the same number of blank lines before the rule', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
+    const withTurn = renderPlayScreen({ narration: 'Test.', world, availableActions: [], turnNumber: 5 });
+    const withoutTurn = renderPlayScreen({ narration: 'Test.', world, availableActions: [] });
+    expect(leadingBlankLineCount(withTurn)).toBe(leadingBlankLineCount(withoutTurn));
+  });
+
+  it('the numbered-turn screen opens with exactly one blank line before the rule', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
+    const withTurn = renderPlayScreen({ narration: 'Test.', world, availableActions: [], turnNumber: 5 });
+    expect(leadingBlankLineCount(withTurn)).toBe(1);
   });
 });
 

@@ -174,14 +174,29 @@ export function classifyForPresentation(err: unknown, context: ErrorContext): Er
 /**
  * Render an error presentation as CLI output.
  * Returns a string ready for console.error().
+ *
+ * F-643e4d55: every presentation used to render with an identical
+ * yellow('\u26A0 headline') treatment regardless of presentation.exitCode --
+ * but several are fatal (bin.ts calls process.exit() immediately after
+ * presentError() returns on every load/opening failure path) with zero
+ * intervening visual cue. A player couldn't tell from the warning alone
+ * whether it meant "try again" or "this process is about to terminate."
+ * Fatal presentations (exitCode !== null) now get both a distinct color
+ * (red instead of yellow) AND an explicit "Exiting." line, so the
+ * distinction survives NO_COLOR too instead of relying on color alone.
  */
 export function renderError(presentation: ErrorPresentation, debug: boolean, err?: unknown): string {
+  const fatal = presentation.exitCode !== null;
+  const headlineColor = fatal ? red : yellow;
   const lines: string[] = [];
   lines.push('');
-  lines.push(yellow(`  \u26A0 ${presentation.headline}`));
+  lines.push(headlineColor(`  \u26A0 ${presentation.headline}`));
   lines.push(`  ${presentation.explanation}`);
   lines.push(dim(`  ${presentation.preserved}`));
   lines.push(cyan(`  \u2192 ${presentation.nextAction}`));
+  if (fatal) {
+    lines.push(red('  Exiting.'));
+  }
 
   if (debug && err) {
     lines.push('');

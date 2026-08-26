@@ -31,3 +31,27 @@ export function formatSaveDetails(s: SaveSlotSummary): string[] {
   }
   return details;
 }
+
+/**
+ * F-01e3acfc: the "n. identity — date" line's visible prefix -- bin.ts's
+ * runLoad() used to hand-type this same "    ${i + 1}. " shape inline. The
+ * detail line rendered directly beneath it needs blank padding of this
+ * exact width to nest under the identity text (see formatSaveSlotIndent
+ * below); deriving both from one source prevents them from silently
+ * drifting apart the way a hardcoded 7-space literal did once a 10th save
+ * widened the entry number.
+ */
+export function formatSaveSlotPrefix(index: number): string {
+  return `    ${index + 1}. `;
+}
+
+/**
+ * F-01e3acfc: blank-padding indent for the detail line shown under a save
+ * slot, sized to match formatSaveSlotPrefix's own width for the same index
+ * so the detail text always nests under the identity text above it --
+ * column 7 for slots 1-9, column 8 once a 10th save exists. Previously a
+ * hardcoded 7-space literal, which only matched the 1-digit case.
+ */
+export function formatSaveSlotIndent(index: number): string {
+  return ' '.repeat(formatSaveSlotPrefix(index).length);
+}

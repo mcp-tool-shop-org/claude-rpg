@@ -45,12 +45,13 @@ import { presentError } from './cli/error-presenter.js';
 import { slashCompleter } from './cli/slash-completer.js';
 import { createSpinner } from './cli/spinner.js';
 import { createStreamPresenter } from './cli/stream-presenter.js';
-import { renderPresentationCues } from './cli/presentation-renderer.js';
+import { renderPresentationCues, insertCuesBeforePrompt } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
 import { parseSaveSelection, formatSaveSelectionPrompt, formatInvalidSelectionMessage } from './cli/save-selection.js';
-import { formatSaveDetails } from './cli/save-listing.js';
+import { formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent } from './cli/save-listing.js';
 import { isPathInside } from './cli/path-guard.js';
 import { attemptExitAutosave } from './cli/exit-autosave.js';
+import { renderUsage } from './cli/usage.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, resolveWorldFlag } from './character/packs.js';
@@ -121,41 +122,6 @@ function buildSaveInput(session: GameSession, savePath: string, packId?: string)
   };
 }
 
-const USAGE = `
-claude-rpg — simulation-grounded narrative RPG
-
-Usage:
-  claude-rpg play [--fast]                      Play a starter world (choose
-                                                 from 10 worlds interactively)
-                  [--debug]                     Show structured error details
-  claude-rpg load                               Load a saved game
-  claude-rpg new "<prompt>"                     Generate a world from a prompt
-  claude-rpg archive                            Browse completed campaigns
-  claude-rpg --version                          Show version
-  claude-rpg --help                             Show this help
-
-Commands in-game:
-  save           Save the current game
-  /sheet         View character sheet (/character is an alias)
-  /status        Compact strategic snapshot
-  /map           Strategic map overview
-  /leverage      View political capital
-  /jobs          View available opportunities
-  /arcs          View campaign arc trajectory
-  /conclude      Trigger campaign finale
-  /recruit       Recruit an NPC into your party (ids via /status or /map)
-  /dismiss       Remove a companion from your party
-  /archive       Browse completed campaigns
-  /export        Export chronicle (md/json/finale)
-  /director      Inspect hidden truth
-  /cost          View this session's estimated API cost
-  /help          In-game help system
-  quit           Exit the game
-
-Environment:
-  ANTHROPIC_API_KEY   Required. Your Claude API key.
-`;
-
 let debugMode = false;
 
 async function main(): Promise<void> {
@@ -178,7 +144,7 @@ async function main(): Promise<void> {
   }
 
   if (filteredArgs.length === 0 || filteredArgs.includes('--help') || filteredArgs.includes('-h')) {
-    console.log(USAGE);
+    console.log(renderUsage());
     process.exit(0);
   }
 
@@ -225,7 +191,7 @@ async function main(): Promise<void> {
     await runNew(prompt);
   } else {
     console.error(`Unknown command: ${command}`);
-    console.log(USAGE);
+    console.log(renderUsage());
     process.exit(1);
   }
 }
@@ -298,11 +264,15 @@ async function runLoad(): Promise<void> {
       ? `${s.characterName}${s.characterTitle ? `, "${s.characterTitle}"` : ''} (Lv${s.characterLevel ?? '?'})`
       : 'Unknown character';
     const date = new Date(s.savedAt).toLocaleDateString();
-    console.log(`    ${i + 1}. ${identity} — ${date}`);
+    console.log(`${formatSaveSlotPrefix(i)}${identity} — ${date}`);
     // Enhanced details
     const details = formatSaveDetails(s);
     if (details.length > 0) {
-      console.log(`       ${details.join(' | ')}`);
+      // F-01e3acfc: indent tracks formatSaveSlotPrefix's own width (7
+      // columns for slots 1-9, 8 once a 10th save exists) instead of a
+      // hardcoded 7-space literal, so this nests under the identity text
+      // above it regardless of how many digits the entry number has.
+      console.log(`${formatSaveSlotIndent(i)}${details.join(' | ')}`);
     }
   }
   console.log('');
@@ -840,8 +810,15 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       // the same narration back in via renderPlayScreen) doesn't show it
       // twice.
       if (stream.chunkCount > 0) stream.clear();
-      console.log(output);
-      flushPresentationCues(presentationBox);
+      // F-135b1970 / F-e78d68c1: splice this turn's presentation cues into
+      // the screen before the "What do you do?" prompt (insertCuesBeforePrompt,
+      // presentation-renderer.ts) instead of console.logging them in a
+      // separate call after the full screen -- the old order printed cues
+      // BELOW the prompt asking what the player wants to do next, between it
+      // and the actual '  > ' input marker.
+      const cues = renderPresentationCues(presentationBox.calls);
+      presentationBox.calls = [];
+      console.log(insertCuesBeforePrompt(output, cues));
     } catch (err) {
       // A partial stream is still real narration the player already saw --
       // mark it interrupted (visual break) rather than erasing it.

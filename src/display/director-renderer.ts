@@ -81,12 +81,12 @@ import {
 import type { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 import { compactChronicle } from '../session/chronicle.js';
 import { renderChronicle, type ChronicleRenderMode } from '../character/chronicle-renderer.js';
-import { renderDirectorHelpExtended } from './help-system.js';
+import { renderDirectorHelpExtended, wrapWords } from './help-system.js';
 import { renderCompactStatus } from './status-compact.js';
 import { getTerminalWidth } from './play-renderer.js';
 import type { ScoredMove } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
-import { bold, dim, cyan } from '../cli/colors.js';
+import { bold, dim } from '../cli/colors.js';
 
 // F-38eb3dec: was a fixed 60-char divider regardless of terminal size,
 // unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
@@ -96,50 +96,89 @@ function divider(): string {
   return dim('─'.repeat(getTerminalWidth()));
 }
 
+/**
+ * F-1367afd9: renderDirectorHelp()'s command table used to be hand-typed
+ * text with three concrete defects -- only '/inspect' colored (with no
+ * reason given), the description column drifting on rows whose command ran
+ * long, and the '/chronicle [mode]' row hard-wrapping past an 80-column
+ * terminal with no hanging indent. Rebuilt as data + a row renderer:
+ * padEnd for the name column, wrapWords (help-system.ts -- the same
+ * word-wrap renderArcHelp/renderConcludeHelp already use via
+ * renderNameDescriptionRow) for the hanging-indent wrap, and no color on
+ * any row -- matching the plain-name convention every sibling reference
+ * table in this domain already uses.
+ */
+const DIRECTOR_COMMANDS: { cmd: string; desc: string }[] = [
+  { cmd: '/inspect <entity-id>', desc: 'Show entity cognition state' },
+  { cmd: '/faction <faction-id>', desc: 'Show faction beliefs and alert' },
+  { cmd: '/zone <zone-id>', desc: 'Show zone properties' },
+  { cmd: '/trace <entity> <subject> <key>', desc: 'Trace belief provenance' },
+  { cmd: '/rumors [faction-id]', desc: 'Show player rumors (optionally filtered)' },
+  { cmd: '/pressures', desc: 'Show active world pressures' },
+  { cmd: '/world', desc: 'Show resolved pressures and fallout' },
+  { cmd: '/factions', desc: 'Show faction agency (goals, actions, profiles)' },
+  { cmd: '/people [zone]', desc: 'Show named NPCs (goals, stance, last action)' },
+  { cmd: '/npc <npc-id>', desc: 'Inspect individual NPC agency state' },
+  { cmd: '/leverage', desc: 'Show player leverage currencies' },
+  { cmd: '/map', desc: 'Show strategic map (districts + factions)' },
+  { cmd: '/party', desc: 'Show companion party state' },
+  { cmd: '/item <item-id>', desc: 'Inspect item provenance, chronicle, relic state' },
+  { cmd: '/districts', desc: 'Show all districts with mood + metrics' },
+  { cmd: '/district <id>', desc: 'Deep inspect a specific district' },
+  { cmd: '/market', desc: 'Show all district economies at a glance' },
+  { cmd: '/trade <district-id>', desc: 'Detailed district economy + value modifiers' },
+  { cmd: '/craft', desc: 'List available recipes and material costs' },
+  { cmd: '/materials', desc: 'Show current material inventory' },
+  { cmd: '/salvage <item-id>', desc: 'Preview salvage yields without executing' },
+  { cmd: '/jobs', desc: 'Available + accepted opportunities' },
+  { cmd: '/contracts', desc: 'Alias for /jobs' },
+  { cmd: '/contract <id>', desc: 'Detailed opportunity view' },
+  { cmd: '/accepted', desc: 'List accepted/in-progress opportunities' },
+  { cmd: '/arcs', desc: 'Campaign arc signals + dominant arc' },
+  { cmd: '/endgame', desc: 'Endgame trigger history' },
+  { cmd: '/finale', desc: 'Campaign finale outline (if concluded)' },
+  { cmd: '/status', desc: 'Compact strategic snapshot' },
+  { cmd: '/stats', desc: 'Session balance metrics' },
+  { cmd: '/help leverage', desc: 'Full leverage verb reference' },
+  { cmd: '/help <pack-id>', desc: 'Pack-specific quickstart guide' },
+  { cmd: '/chronicle [mode]', desc: 'View campaign chronicle (timeline|bardic|director)' },
+  { cmd: '/history [entity-id]', desc: 'View event history for an entity' },
+  { cmd: '/snapshot', desc: 'Full simulation snapshot' },
+  { cmd: '/divergences', desc: 'Show perception divergences' },
+  { cmd: '/back', desc: 'Return to play mode' },
+];
+
+// Longest command ('/trace <entity> <subject> <key>') is 31 chars; +3 keeps
+// a minimum 3-space gap before the description column on every row.
+const DIRECTOR_COMMAND_NAME_WIDTH = 34;
+
+/**
+ * Renders one "name, padded, then word-wrapped description" row, hanging
+ * subsequent wrapped lines under the name column -- same algorithm as
+ * help-system.ts's renderNameDescriptionRow, but keeping this screen's own
+ * 2-space indent (its divider/header lines already use it) instead of that
+ * helper's hardcoded 4-space convention.
+ */
+function renderCommandRow(cmd: string, desc: string): string {
+  const indent = '  ';
+  const available = Math.max(10, getTerminalWidth() - indent.length - DIRECTOR_COMMAND_NAME_WIDTH);
+  const wrapped = wrapWords(desc, available);
+  const rows = [`${indent}${cmd.padEnd(DIRECTOR_COMMAND_NAME_WIDTH)}${wrapped[0]}`];
+  for (let i = 1; i < wrapped.length; i++) {
+    rows.push(`${indent}${' '.repeat(DIRECTOR_COMMAND_NAME_WIDTH)}${wrapped[i]}`);
+  }
+  return rows.join('\n');
+}
+
 /** Render director mode help. */
 export function renderDirectorHelp(): string {
+  const commandRows = DIRECTOR_COMMANDS.map((c) => renderCommandRow(c.cmd, c.desc)).join('\n');
   return `
 ${divider()}
   ${bold('DIRECTOR MODE')} ${dim('— inspect the hidden truth')}
 ${divider()}
 
-  ${cyan('/inspect')} <entity-id>          Show entity cognition state
-  /faction <faction-id>         Show faction beliefs and alert
-  /zone <zone-id>               Show zone properties
-  /trace <entity> <subject> <key>  Trace belief provenance
-  /rumors [faction-id]          Show player rumors (optionally filtered)
-  /pressures                    Show active world pressures
-  /world                        Show resolved pressures and fallout
-  /factions                     Show faction agency (goals, actions, profiles)
-  /people [zone]                Show named NPCs (goals, stance, last action)
-  /npc <npc-id>                 Inspect individual NPC agency state
-  /leverage                     Show player leverage currencies
-  /map                          Show strategic map (districts + factions)
-  /party                        Show companion party state
-  /item <item-id>               Inspect item provenance, chronicle, relic state
-  /districts                    Show all districts with mood + metrics
-  /district <id>                Deep inspect a specific district
-  /market                       Show all district economies at a glance
-  /trade <district-id>          Detailed district economy + value modifiers
-  /craft                        List available recipes and material costs
-  /materials                    Show current material inventory
-  /salvage <item-id>            Preview salvage yields without executing
-  /jobs                         Available + accepted opportunities
-  /contracts                    Alias for /jobs
-  /contract <id>                Detailed opportunity view
-  /accepted                     List accepted/in-progress opportunities
-  /arcs                         Campaign arc signals + dominant arc
-  /endgame                      Endgame trigger history
-  /finale                       Campaign finale outline (if concluded)
-  /status                       Compact strategic snapshot
-  /stats                        Session balance metrics
-  /help leverage                Full leverage verb reference
-  /help <pack-id>               Pack-specific quickstart guide
-  /chronicle [mode]             View campaign chronicle (timeline|bardic|director)
-  /history [entity-id]          View event history for an entity
-  /snapshot                     Full simulation snapshot
-  /divergences                  Show perception divergences
-  /back                         Return to play mode
+${commandRows}
 
 ${divider()}
 `;

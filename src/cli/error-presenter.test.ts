@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { classifyForPresentation, renderError, type ErrorPresentation } from './error-presenter.js';
 import { NarrationError } from '../llm/claude-errors.js';
 import { SaveValidationError } from '../session/session.js';
@@ -295,5 +295,70 @@ describe('error-presenter: unknown pack on load', () => {
     const err = new Error('ENOENT: file not found');
     const p = classifyForPresentation(err, 'load');
     expect(p.headline).toBe('Could not load save');
+  });
+});
+
+// ─── Fatal vs Reprompt Visual Severity (F-643e4d55) ──────────
+
+/**
+ * F-643e4d55: renderError() used to render all NarrationError kinds plus
+ * all load-error variants with an identical yellow('⚠ headline') treatment
+ * regardless of presentation.exitCode -- but several are fatal (bin.ts
+ * calls process.exit(exitCode ?? 1) or a hardcoded process.exit(1)
+ * immediately after presentError() returns on every load/opening failure
+ * path) with zero intervening visual cue. A player couldn't tell from the
+ * rendered warning alone whether it meant "try again" (exitCode: null) or
+ * "this process is about to terminate" (exitCode !== null). `red` was
+ * imported but had zero call sites, confirming no severity-escalation path
+ * existed. Fixed with both a distinct color (red instead of yellow) AND an
+ * explicit "Exiting." text line, so the distinction survives NO_COLOR too
+ * (never color-only signaling).
+ */
+describe('error-presenter: fatal vs reprompt visual severity (F-643e4d55)', () => {
+  it('adds an explicit "Exiting." line for a fatal (exitCode !== null) presentation', () => {
+    const err = new SaveValidationError('Save file is not valid JSON');
+    const p = classifyForPresentation(err, 'load'); // exitCode: 1
+    const output = renderError(p, false, err);
+    expect(output).toContain('Exiting.');
+  });
+
+  it('does not add an "Exiting." line for a reprompt (exitCode: null) presentation', () => {
+    const err = new NarrationError({ kind: 'timeout', message: 'timed out' });
+    const p = classifyForPresentation(err, 'turn'); // exitCode: null
+    const output = renderError(p, false, err);
+    expect(output).not.toContain('Exiting.');
+  });
+
+  describe('with color enabled', () => {
+    let originalIsTTY: boolean | undefined;
+
+    afterEach(() => {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+      delete process.env.NO_COLOR;
+    });
+
+    it('renders a fatal headline in red, distinct from a reprompt headline\'s yellow', async () => {
+      originalIsTTY = process.stdout.isTTY;
+      delete process.env.NO_COLOR;
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+      vi.resetModules();
+      const mod = await import('./error-presenter.js');
+
+      const fatal = mod.classifyForPresentation(
+        new SaveValidationError('Save file is not valid JSON'),
+        'load',
+      ); // exitCode: 1
+      const reprompt = mod.classifyForPresentation(
+        new NarrationError({ kind: 'timeout', message: 'timed out' }),
+        'turn',
+      ); // exitCode: null
+
+      const fatalOutput = mod.renderError(fatal, false);
+      const repromptOutput = mod.renderError(reprompt, false);
+
+      expect(fatalOutput).toContain('\x1b[31m'); // red
+      expect(repromptOutput).not.toContain('\x1b[31m');
+      expect(repromptOutput).toContain('\x1b[33m'); // yellow, unchanged
+    });
   });
 });

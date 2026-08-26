@@ -21,15 +21,16 @@
 // matching how turn-loop.ts and immersion-runtime.ts already reference the
 // same type across the same domain boundary.
 //
-// These are honest terminal equivalents, not ANSI art: dim/italic text cues
-// for sfx/music/ambient, and a blank-screen pause (plain newlines + a dim
-// rule, never simulated color fades) for fade UI effects. Output respects
-// colors.ts's `enabled` gate automatically — dim()/italic() already no-op to
-// plain text when colors are off (NO_COLOR, or stdout isn't a TTY), so this
-// file does not need its own separate color gate.
+// These are honest terminal equivalents, not ANSI art: dim text cues for
+// sfx/music/ambient, and a blank-screen pause (plain newlines + a bold red
+// '═' rule, distinct from makeDivider()'s routine dim '─' rule, never a
+// simulated color fade) for fade UI effects. Output respects colors.ts's
+// `enabled` gate automatically — dim()/critical() already no-op to plain
+// text when colors are off (NO_COLOR, or stdout isn't a TTY), so this file
+// does not need its own separate color gate.
 
 import type { McpToolCall } from '../runtime/audio-bridge.js';
-import { dim, italic } from './colors.js';
+import { dim, critical } from './colors.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
 
 /**
@@ -62,9 +63,17 @@ function isAmbientCue(params: Record<string, unknown>): boolean {
   return numberParam(params, 'intensity') === undefined && numberParam(params, 'volume') !== undefined;
 }
 
+/**
+ * F-06e3bd9e: this was the only one of the four cue-line renderers wrapped
+ * in italic() on top of dim() -- renderAmbientLine, renderMusicLine, and
+ * renderUiEffectLine's flash/shake/border-pulse fallback all use plain
+ * dim(), with no comment ever explaining why sfx cues alone got different
+ * treatment. Matches the other three now so all four share one visual
+ * language for the same kind of system aside.
+ */
 function renderSfxLine(params: Record<string, unknown>): string {
   const effect = stringParam(params, 'effect') ?? 'effect';
-  return italic(dim(`  · ${effect} sounds`));
+  return dim(`  · ${effect} sounds`);
 }
 
 function renderAmbientLine(params: Record<string, unknown>): string {
@@ -89,10 +98,20 @@ function renderMusicLine(params: Record<string, unknown>): string {
   }
 }
 
-/** A few blank lines + a dim rule — the "screen" pausing, not a simulated
- *  ANSI color fade. Width matches play-renderer.ts's own dividers. */
+/**
+ * F-cbd65014: a few blank lines + a rule -- the "screen" pausing, not a
+ * simulated ANSI color fade. This is only ever triggered by deathHook
+ * (src/runtime/hooks.ts) on player death, the single most dramatic beat in
+ * the game, so it must not reuse makeDivider()'s plain dim '─' rule
+ * (play-renderer.ts) -- that exact token already prints on every ordinary
+ * turn's screen. Width matches play-renderer.ts's own dividers; the '═'
+ * character (matching makeTurnDivider()'s "something more significant just
+ * happened" treatment) plus critical (bold red) coloring give this its own
+ * signature, so a player can tell the pause apart from a routine divider
+ * even under NO_COLOR, from the character alone.
+ */
 function renderScreenPause(): string {
-  return '\n\n\n' + dim('─'.repeat(getTerminalWidth()));
+  return '\n\n\n' + critical('═'.repeat(getTerminalWidth()));
 }
 
 function renderUiEffectLine(params: Record<string, unknown>): string | null {
@@ -144,4 +163,35 @@ export function renderPresentationCues(calls: McpToolCall[]): string {
     }
   }
   return lines.join('\n');
+}
+
+/**
+ * F-135b1970 / F-e78d68c1: bin.ts's per-turn loop used to console.log()
+ * this turn's presentation cues in a separate call AFTER the full rendered
+ * screen -- which already ends with play-renderer.ts's renderPlayScreen
+ * "What do you do?" prompt and its trailing blank line. The on-screen order
+ * read backwards: the cues describing what just happened this turn printed
+ * BELOW the question asking what the player wants to do next, sandwiched
+ * between the prompt and the actual '  > ' input marker.
+ *
+ * The real per-turn call chain that builds `screen` is bin.ts ->
+ * GameSession.processInput() (game.ts, game-core) -> renderPlayOutput()
+ * (src/game/game-presenter.ts, game-core) -> renderPlayScreen() (this
+ * domain's play-renderer.ts) -- game-presenter.ts sits in the middle of
+ * that chain outside cli-display's edit scope this wave, so there is no
+ * seam to pass cues into renderPlayScreen's own composition from bin.ts.
+ * This inserts them into the already-rendered screen instead, anchored on
+ * renderPlayScreen's own "What do you do?" prompt line -- both the anchor
+ * and this function live in cli-display, so the anchor is a stable
+ * in-domain contract, not a guess at game-core's internals. Cues land as
+ * their own paragraph directly above the prompt, so scrollback reads
+ * narration -> status -> cues -> prompt -> input marker.
+ */
+export function insertCuesBeforePrompt(screen: string, cues: string): string {
+  if (!cues) return screen;
+  const marker = 'What do you do?';
+  const idx = screen.indexOf(marker);
+  if (idx === -1) return `${screen}\n${cues}`;
+  const lineStart = screen.lastIndexOf('\n', idx) + 1;
+  return `${screen.slice(0, lineStart)}${cues}\n\n${screen.slice(lineStart)}`;
 }

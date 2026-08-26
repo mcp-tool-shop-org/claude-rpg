@@ -72,9 +72,15 @@ export function createStreamPresenter(): StreamSession {
 
   const onChunk: StreamCallback = (chunk: string) => {
     if (!started) {
-      // Opening indent to match play-renderer narration style
-      process.stdout.write('\n  ');
-      written = '\n  ';
+      // F-f6485d6c: flush-left, matching play-renderer.ts's renderPlayScreen
+      // (`parts.push(opts.narration)` -- no leading indent). This used to
+      // open with a 2-space indent "to match play-renderer narration
+      // style," but that style is actually flush left; the mismatch made
+      // the just-streamed paragraph visibly jump 2 columns left the moment
+      // bin.ts's turn loop cleared the stream and reprinted the same text
+      // through the static renderPlayScreen path.
+      process.stdout.write('\n');
+      written = '\n';
       started = true;
     }
     process.stdout.write(chunk);

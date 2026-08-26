@@ -5,7 +5,7 @@
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient, StreamCallback } from '../claude-client.js';
-import { narrateScene, type NarrationResult, type NarrateSceneOpts } from '../narrator/narrator.js';
+import { narrateScene, type NarrationResult } from '../narrator/narrator.js';
 import { narrateFinale } from '../narrator/finale-narrator.js';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 
@@ -49,11 +49,8 @@ export async function generateOpeningNarration(ctx: OpeningNarrationContext): Pr
     arcContext: ctx.arcContext,
     endgameContext: ctx.endgameContext,
     onChunk: ctx.onChunk,
-    // See the matching note in turn-loop.ts's executeTurn(): narrator.ts is
-    // adding `chronicleContext` to NarrateSceneOpts this same wave. Cast
-    // locally so this compiles whether or not that field has landed yet.
     chronicleContext: ctx.chronicleContext,
-  } as NarrateSceneOpts & { chronicleContext?: string });
+  });
 }
 
 // ─── Finale Narration ────────────────────────────────────────

@@ -523,4 +523,62 @@ describe('GameSession', () => {
       expect(records.some((r) => r.description.includes('Completed contract'))).toBe(true);
     });
   });
+
+  // F-c4332895: engine.submitAction() inside executeTurn() mutates world state
+  // (Step 2) before narrateScene runs (Step 3). Once narrator.ts started
+  // rethrowing fatal NarrationError kinds (auth/bad-request) instead of
+  // swallowing them into fallback prose, processInput()'s unguarded
+  // `await executeTurn(...)` call meant a fatal narration failure skipped
+  // every post-turn bookkeeping call below it (applyProfileHints,
+  // recordChronicleEvents, autosave) even though the turn's world mutation
+  // had already happened and was already in history. This suite proves the
+  // seam: world mutation persists, history has the turn, bookkeeping still
+  // runs, and the error still reaches the caller.
+  describe('fatal narration error preserves post-turn bookkeeping (F-c4332895)', () => {
+    it('runs applyProfileHints/recordChronicleEvents/checkAutosave and rethrows when narration fails fatally after a state-mutating action', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({ clientOpts: { generateFailure: 'auth' } });
+
+      const recordChronicleSpy = vi.spyOn(h.session as unknown as { recordChronicleEvents: (r: unknown) => void }, 'recordChronicleEvents');
+      const applyHintsSpy = vi.spyOn(h.session, 'applyProfileHints');
+      const autosaveSpy = vi.spyOn(h.session, 'checkAutosave');
+
+      const locationBefore = h.session.engine.world.locationId;
+
+      await expect(h.play('go to chapel-nave')).rejects.toThrow();
+
+      // (a) world mutation persists — the move already resolved through the
+      // engine before narration ran and failed fatally.
+      expect(h.session.engine.world.locationId).toBe('chapel-nave');
+      expect(h.session.engine.world.locationId).not.toBe(locationBefore);
+
+      // (b) history has the turn recorded, with fallback narration text —
+      // not the real narrator output, since narrateScene never returned.
+      expect(h.session.history.turns).toHaveLength(1);
+      expect(h.session.history.turns[0].verb).toBe('move');
+      expect(h.session.history.turns[0].narration).toBeTruthy();
+
+      // (c) profile hints / chronicle bookkeeping still ran for the recorded
+      // turn, even though executeTurn() never returned a TurnResult.
+      expect(applyHintsSpy).toHaveBeenCalledTimes(1);
+      expect(recordChronicleSpy).toHaveBeenCalledTimes(1);
+      expect(autosaveSpy).toHaveBeenCalledTimes(1);
+
+      // (d) the error still propagates to the caller — asserted above via
+      // `.rejects.toThrow()`.
+    });
+
+    it('does not run post-turn bookkeeping twice on a normal (non-fatal) turn', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      const recordChronicleSpy = vi.spyOn(h.session as unknown as { recordChronicleEvents: (r: unknown) => void }, 'recordChronicleEvents');
+      const applyHintsSpy = vi.spyOn(h.session, 'applyProfileHints');
+
+      await h.play('look around');
+
+      expect(applyHintsSpy).toHaveBeenCalledTimes(1);
+      expect(recordChronicleSpy).toHaveBeenCalledTimes(1);
+    });
+  });
 });

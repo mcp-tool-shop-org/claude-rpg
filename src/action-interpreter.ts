@@ -172,7 +172,12 @@ function tryFastInterpret(
 
   // Opportunity verbs (accept, decline, abandon, betray, complete job/contract/bounty/mission)
   // FT-B-007: Extended to extract optional name/index for disambiguation
-  const oppMatch = lower.match(/^(accept|decline|abandon|betray|complete|finish|deliver|turn\s+in)\s+(the\s+)?(job|contract|offer|bounty|mission|quest|task)(\s+(.+))?/i);
+  // F-4d102b74: the noun alternation is followed by a boundary lookahead —
+  // without it, "accept jobless benefits" fast-matched on "job" as a bare
+  // prefix of "jobless" since the trailing (\s+(.+))? group is optional and
+  // enforces nothing on its own. The lookahead is zero-width so it doesn't
+  // shift the existing capture-group indices used below (oppMatch[1]/[5]).
+  const oppMatch = lower.match(/^(accept|decline|abandon|betray|complete|finish|deliver|turn\s+in)\s+(the\s+)?(job|contract|offer|bounty|mission|quest|task)(?=\s|$)(\s+(.+))?/i);
   if (oppMatch) {
     const oppVerb = oppMatch[1].replace(/\s+/g, '-');
     const subAction = oppVerb === 'finish' || oppVerb === 'deliver' || oppVerb === 'turn-in'
@@ -329,29 +334,40 @@ const SOCIAL_PATTERNS: LeverageVerbMap[] = [
   { pattern: /^recruit\s+(.+)/i, subAction: 'recruit-ally', extractTarget: true },
   { pattern: /^petition\s+(.+)/i, subAction: 'petition-authority', extractTarget: true },
   { pattern: /^(disguise|hide identity|conceal)(\s|$)/i, subAction: 'disguise', extractTarget: false },
-  { pattern: /^stake\s+claim/i, subAction: 'stake-claim', extractTarget: false },
-  { pattern: /^call\s+in\s+(a\s+)?favor/i, subAction: 'call-in-favor', extractTarget: false },
+  // F-4d102b74: sibling of the F-f57bbfd9/disguise word-boundary fix — these
+  // bare trailing literals had no (\s|$) boundary, so e.g. "stake claiming
+  // the territory" or "call in a favorite ally" fast-matched as a bare
+  // prefix of "claiming"/"favorite" instead of falling through to the LLM.
+  { pattern: /^stake\s+claim(?:\s|$)/i, subAction: 'stake-claim', extractTarget: false },
+  { pattern: /^call\s+in\s+(a\s+)?favor(?:\s|$)/i, subAction: 'call-in-favor', extractTarget: false },
 ];
 
 const RUMOR_PATTERNS: LeverageVerbMap[] = [
   { pattern: /^spread\s+(a\s+)?(rumor|rumour)\s+(about\s+|that\s+)?(.+)/i, subAction: 'seed', extractTarget: true },
-  { pattern: /^(seed|plant)\s+(a\s+)?(rumor|rumour)/i, subAction: 'seed', extractTarget: false },
-  { pattern: /^deny\s+(the\s+)?(rumor|rumour|accusation)/i, subAction: 'deny', extractTarget: false },
+  // F-4d102b74: same missing-boundary shape as the SOCIAL_PATTERNS fix above
+  // — each of these ends on a bare literal/alternation with nothing
+  // enforcing a word boundary, so e.g. "deny the accusations firmly" or
+  // "bury the scandalous affair" fast-matched on an unrelated adjective.
+  { pattern: /^(seed|plant)\s+(a\s+)?(rumor|rumour)(?:\s|$)/i, subAction: 'seed', extractTarget: false },
+  { pattern: /^deny\s+(the\s+)?(rumor|rumour|accusation)(?:\s|$)/i, subAction: 'deny', extractTarget: false },
   { pattern: /^frame\s+(.+)/i, subAction: 'frame', extractTarget: true },
-  { pattern: /^(bury|suppress)\s+(the\s+)?(scandal|rumor|rumour)/i, subAction: 'bury-scandal', extractTarget: false },
-  { pattern: /^leak\s+(the\s+)?truth/i, subAction: 'leak-truth', extractTarget: false },
-  { pattern: /^(spread\s+)?counter[\s-]?rumor/i, subAction: 'spread-counter-rumor', extractTarget: false },
-  { pattern: /^claim\s+(false\s+)?credit/i, subAction: 'claim-false-credit', extractTarget: false },
+  { pattern: /^(bury|suppress)\s+(the\s+)?(scandal|rumor|rumour)(?:\s|$)/i, subAction: 'bury-scandal', extractTarget: false },
+  { pattern: /^leak\s+(the\s+)?truth(?:\s|$)/i, subAction: 'leak-truth', extractTarget: false },
+  { pattern: /^(spread\s+)?counter[\s-]?rumor(?:\s|$)/i, subAction: 'spread-counter-rumor', extractTarget: false },
+  { pattern: /^claim\s+(false\s+)?credit(?:\s|$)/i, subAction: 'claim-false-credit', extractTarget: false },
 ];
 
 const DIPLOMACY_PATTERNS: LeverageVerbMap[] = [
   { pattern: /^request\s+(a\s+)?meeting\s+(with\s+)?(.+)/i, subAction: 'request-meeting', extractTarget: true },
   { pattern: /^improve\s+standing\s+(with\s+)?(.+)/i, subAction: 'improve-standing', extractTarget: true },
   { pattern: /^negotiate\s+access\s+(with\s+|to\s+)?(.+)/i, subAction: 'negotiate-access', extractTarget: true },
-  { pattern: /^broker\s+(a\s+)?truce/i, subAction: 'broker-truce', extractTarget: false },
-  { pattern: /^trade\s+(a\s+)?secret/i, subAction: 'trade-secret', extractTarget: false },
-  { pattern: /^(form|propose)\s+(a\s+)?(temporary\s+)?alliance/i, subAction: 'temporary-alliance', extractTarget: false },
-  { pattern: /^cash\s+(in\s+)?(a\s+)?milestone/i, subAction: 'cash-milestone', extractTarget: false },
+  // F-4d102b74: same missing-boundary shape — e.g. "trade a secretive
+  // letter" or "propose alliances with everyone" fast-matched on a bare
+  // prefix instead of falling through to the LLM.
+  { pattern: /^broker\s+(a\s+)?truce(?:\s|$)/i, subAction: 'broker-truce', extractTarget: false },
+  { pattern: /^trade\s+(a\s+)?secret(?:\s|$)/i, subAction: 'trade-secret', extractTarget: false },
+  { pattern: /^(form|propose)\s+(a\s+)?(temporary\s+)?alliance(?:\s|$)/i, subAction: 'temporary-alliance', extractTarget: false },
+  { pattern: /^cash\s+(in\s+)?(a\s+)?milestone(?:\s|$)/i, subAction: 'cash-milestone', extractTarget: false },
 ];
 
 const SABOTAGE_PATTERNS: LeverageVerbMap[] = [

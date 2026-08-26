@@ -120,8 +120,14 @@ describe('turn pipeline — control path', () => {
     expect(h.session.mode).toBe('director');
 
     await h.play('/back');
-    // /back triggers getOpeningNarration which calls generate() but doesn't record a turn
+    // /back triggers getOpeningNarration(), which unconditionally records a
+    // turn in history (game.ts:479, F-8da2e6f7 — carries isFallback for
+    // recap filtering the same way every other turn does), so this DOES
+    // consume a turn unlike /director above. Whether /back *should* be
+    // turn-count-neutral is a game.ts design question — this just pins
+    // what it actually does today.
     expect(h.session.mode).toBe('play');
+    expect(h.turnCount()).toBe(1);
   });
 
   it('quit returns sentinel without state change', async () => {

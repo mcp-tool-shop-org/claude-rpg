@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import { createProfile } from '@ai-rpg-engine/character-profile';
 import { TurnHistory } from '../../src/session/history.js';
 import { saveSession } from '../../src/session/session.js';
 
@@ -55,30 +56,42 @@ export type BinCliBundle = {
  */
 export async function bundleBinCli(): Promise<BinCliBundle> {
   const scratchDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-'));
-  const distDir = join(scratchDir, 'dist');
-  await mkdir(distDir, { recursive: true });
-  await cp(join(REPO_ROOT, 'package.json'), join(scratchDir, 'package.json'));
+  // F-3730e833: everything past this point can throw (a broken bin.ts
+  // import graph, a missing module, any esbuild.build() failure) before
+  // the function ever returns { entryPath, cleanup } — and cleanup is a
+  // closure that only exists inside that return statement. Without the
+  // try/catch, a rejection here would leak scratchDir (its dist/ subfolder,
+  // copied package.json, and shim file) on every failed bundle instead of
+  // being removed, since the caller never receives a `cleanup` to call.
+  try {
+    const distDir = join(scratchDir, 'dist');
+    await mkdir(distDir, { recursive: true });
+    await cp(join(REPO_ROOT, 'package.json'), join(scratchDir, 'package.json'));
 
-  const shimPath = join(scratchDir, 'import-meta-url-shim.js');
-  await writeFile(shimPath, IMPORT_META_URL_SHIM);
+    const shimPath = join(scratchDir, 'import-meta-url-shim.js');
+    await writeFile(shimPath, IMPORT_META_URL_SHIM);
 
-  const entryPath = join(distDir, 'bin.cjs');
-  await esbuild.build({
-    entryPoints: [join(REPO_ROOT, 'src', 'bin.ts')],
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    target: 'node20',
-    outfile: entryPath,
-    inject: [shimPath],
-    define: { 'import.meta.url': 'importMetaUrl' },
-    logLevel: 'silent',
-  });
+    const entryPath = join(distDir, 'bin.cjs');
+    await esbuild.build({
+      entryPoints: [join(REPO_ROOT, 'src', 'bin.ts')],
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      target: 'node20',
+      outfile: entryPath,
+      inject: [shimPath],
+      define: { 'import.meta.url': 'importMetaUrl' },
+      logLevel: 'silent',
+    });
 
-  return {
-    entryPath,
-    cleanup: () => rm(scratchDir, { recursive: true, force: true }),
-  };
+    return {
+      entryPath,
+      cleanup: () => rm(scratchDir, { recursive: true, force: true }),
+    };
+  } catch (err) {
+    await rm(scratchDir, { recursive: true, force: true });
+    throw err;
+  }
 }
 
 export type MockAnthropicServer = {
@@ -163,6 +176,51 @@ export async function writeFantasySave(saveDir: string, filename = 'test-save'):
     savePath: join(saveDir, `${filename}.json`),
     packId: 'chapel-threshold',
     genre: 'fantasy',
+  });
+}
+
+/**
+ * Like writeFantasySave, but the save also carries a character profile
+ * whose build.name is `characterName` verbatim. bin.ts's SIGINT and
+ * stdin-closed exit paths (bin.ts:551-552, 577-578) build the autosave
+ * filename from session.profile.build.name whenever a profile is loaded —
+ * loadProfileFromSession() only populates session.profile when the save
+ * carries one (writeFantasySave omits it, so those paths fall back to the
+ * profile-less `autosave-<timestamp>` name, which can't be steered).
+ * Passing a name containing '..' path segments is how a real
+ * save -> load -> exit run can reach attemptExitAutosave's 'rejected'
+ * branch at the bin.ts process level (test/integration/bin-cli-turn-loop.test.ts),
+ * mirroring the escaping-path case src/cli/exit-autosave.test.ts exercises
+ * directly against the extracted function.
+ */
+export async function writeFantasySaveWithCharacterName(
+  saveDir: string,
+  characterName: string,
+  filename = 'test-save',
+): Promise<void> {
+  await mkdir(saveDir, { recursive: true });
+  const engine = createGame();
+  const history = new TurnHistory();
+  const profile = createProfile(
+    {
+      name: characterName,
+      archetypeId: 'penitent-knight',
+      backgroundId: 'oath-breaker',
+      traitIds: [],
+    },
+    { vigor: 5, instinct: 5, will: 5 },
+    { hp: 20, stamina: 8 },
+    [],
+    'chapel-threshold',
+  );
+  await saveSession({
+    engine,
+    history,
+    tone: 'dark fantasy',
+    savePath: join(saveDir, `${filename}.json`),
+    packId: 'chapel-threshold',
+    genre: 'fantasy',
+    profile,
   });
 }
 
@@ -275,4 +333,36 @@ export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessE
         });
       }),
   };
+}
+
+export type CliTestResources = {
+  cli?: CliHandle;
+  server?: MockAnthropicServer;
+  homeDir?: string;
+};
+
+/**
+ * Per-test teardown shared by every describe block in
+ * bin-cli-turn-loop.test.ts. F-48984be7: each step must be independent of
+ * the others — if a beforeEach throws between acquiring `homeDir` and
+ * assigning `server` (writeFantasySave()/writeFantasySaveWithCharacterName()
+ * rejecting is the plausible trigger), `server` stays undefined here, and
+ * an unguarded `await server.close()` would throw a TypeError that skips
+ * the homeDir removal on the next line — leaking the mkdtemp'd homeDir
+ * (which contains a real save file under .claude-rpg/saves/) on every test
+ * that hits it.
+ */
+export async function cleanupCliTestResources({ cli, server, homeDir }: CliTestResources): Promise<void> {
+  if (cli && cli.child.exitCode === null) {
+    cli.child.kill();
+  }
+  try {
+    if (server) {
+      await server.close();
+    }
+  } finally {
+    if (homeDir) {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  }
 }

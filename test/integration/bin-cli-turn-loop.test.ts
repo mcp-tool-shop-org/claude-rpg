@@ -19,14 +19,16 @@
 // written for compile-then-run).
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   bundleBinCli,
   startMockAnthropicServer,
   writeFantasySave,
+  writeFantasySaveWithCharacterName,
   spawnCli,
+  cleanupCliTestResources,
   type BinCliBundle,
   type MockAnthropicServer,
   type CliHandle,
@@ -63,12 +65,11 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
   });
 
   afterEach(async () => {
-    if (cli && cli.child.exitCode === null) {
-      cli.child.kill();
-    }
+    // F-48984be7: cleanupCliTestResources() keeps the kill/close/rm steps
+    // independent of each other, so a beforeEach failure that leaves
+    // `server` unassigned can't skip the homeDir removal.
+    await cleanupCliTestResources({ cli, server, homeDir });
     cli = undefined;
-    await server.close();
-    await rm(homeDir, { recursive: true, force: true });
   });
 
   it('a fatal auth error on a turn prints a structured message and the loop keeps prompting', async () => {
@@ -128,5 +129,102 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
     // sequencing (not e.g. every call silently succeeding, which would
     // make the stderr assertions above vacuous) is what actually ran.
     expect(server.callCount()).toBe(2);
+  }, 20000);
+});
+
+// F-2af28d17: attemptExitAutosave's 'rejected' branch (src/cli/exit-autosave.ts,
+// the F-66ec19e3 fix) is unit-tested directly in src/cli/exit-autosave.test.ts,
+// but nothing previously drove bin.ts's own SIGINT handler (bin.ts:544-566)
+// or stdin-closed/EOF handler (bin.ts:573-593) — the actual call sites —
+// into that branch. These reuse the same bundleBinCli()/spawnCli() harness
+// as the describe block above, but load a save whose character name
+// contains '..' path segments so the autosave filename bin.ts builds from
+// session.profile.build.name escapes getDefaultSaveDir() once getSavePath()
+// joins it back together (the same shape exit-autosave.test.ts's "escapes
+// the save directory" case exercises directly against the extracted
+// function, reached here through the real save -> load -> exit flow).
+describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits', () => {
+  let bundle: BinCliBundle;
+  let homeDir: string;
+  let server: MockAnthropicServer;
+  let cli: CliHandle | undefined;
+
+  beforeAll(async () => {
+    bundle = await bundleBinCli();
+  }, 30000);
+
+  afterAll(async () => {
+    await bundle.cleanup();
+  });
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-home-'));
+    await writeFantasySaveWithCharacterName(join(homeDir, '.claude-rpg', 'saves'), '../../escaped-hero');
+    server = await startMockAnthropicServer(1);
+  });
+
+  afterEach(async () => {
+    await cleanupCliTestResources({ cli, server, homeDir });
+    cli = undefined;
+  });
+
+  /** Spawns bin.ts, loads the one save, and waits for the game loop's first prompt. */
+  async function loadToFirstPrompt(): Promise<CliHandle> {
+    const handle = spawnCli(bundle.entryPath, ['load'], {
+      ...process.env,
+      ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+      ANTHROPIC_BASE_URL: server.url,
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+    });
+    await handle.waitForStdout('Choose a save');
+    handle.sendLine('1');
+    await handle.waitForStdout('  > ');
+    return handle;
+  }
+
+  // Windows note (verified empirically on this harness): a piped-stdio
+  // Node child process spawned via child_process.spawn() does not run its
+  // process.on('SIGINT', ...) handler when the parent calls
+  // child.kill('SIGINT') — libuv/Windows hard-terminates the process
+  // instead of delivering a real signal, so bin.ts's SIGINT handler would
+  // never fire and this would hang until timeout for a platform reason
+  // unrelated to bin.ts's own logic. POSIX (this repo's ubuntu-latest CI)
+  // delivers the signal for real, so this still guards the actual SIGINT
+  // call site there; it's skipped only on win32 dev machines.
+  it.skipIf(process.platform === 'win32')(
+    'SIGINT autosave that escapes the save directory prints the rejection message and still exits cleanly',
+    async () => {
+      cli = await loadToFirstPrompt();
+
+      // First Ctrl+C: bin.ts's SIGINT handler attempts the autosave before
+      // exiting. isPathInside rejects the escaped path, so
+      // attemptExitAutosave returns { status: 'rejected' } without ever
+      // calling save() — bin.ts prints outcome.message verbatim.
+      cli.child.kill('SIGINT');
+
+      await cli.waitForStdout('progress was NOT auto-saved');
+      expect(cli.stdout()).toContain('would escape the save directory');
+
+      const exitCode = await cli.waitForExit();
+      expect(exitCode).toBe(0);
+      expect(cli.stdout()).toContain('Farewell.');
+    },
+    20000,
+  );
+
+  it('stdin EOF autosave that escapes the save directory prints the rejection message and still exits cleanly', async () => {
+    cli = await loadToFirstPrompt();
+
+    // Closing stdin (Ctrl+D / pipe EOF) drives the same attemptExitAutosave
+    // call from bin.ts's other exit path (the readline 'close' handler).
+    cli.child.stdin.end();
+
+    await cli.waitForStdout('progress was NOT auto-saved');
+    expect(cli.stdout()).toContain('would escape the save directory');
+
+    const exitCode = await cli.waitForExit();
+    expect(exitCode).toBe(0);
+    expect(cli.stdout()).toContain('Farewell.');
   }, 20000);
 });

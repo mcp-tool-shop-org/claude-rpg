@@ -194,6 +194,10 @@ describe('save corruption handling', () => {
     // Should not crash — individual loaders catch and return defaults
     expect(loadRumorsFromSession(loaded)).toEqual([]);
     expect(loadPressuresFromSession(loaded)).toEqual([]);
+    // partyState: '42' is valid JSON but not a valid PartyState (F-1357a6e0) —
+    // isValidPartyState's guard (session.ts) should fall back to the default
+    // party shape the same way the round-trip test above verifies at line 95.
+    expect(loadPartyFromSession(loaded)).toHaveProperty('companions');
   });
 });
 

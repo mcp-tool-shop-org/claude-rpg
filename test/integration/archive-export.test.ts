@@ -236,5 +236,29 @@ describe('renderArchiveBrowser', () => {
     expect(text).toContain('Alpha');
     expect(text).toContain('Beta');
     expect(text).toContain('2 completed campaign');
+
+    // F-40590620: the assertions above only prove the substrings appear
+    // SOMEWHERE in the whole blob -- they would still pass if entries were
+    // numbered/ordered wrong, or if Alpha's empty companionFates/relicNames/
+    // chronicleHighlights arrays leaked a stray detail line anyway (the
+    // three `if (...length > 0)` guards at archive-browser.ts:53-61 measure
+    // 100% branch coverage from this same test, which only proves both
+    // sides of each `if` executed somewhere -- not that anything asserts
+    // what should differ between them). Split on '\n' and pin both: Alpha's
+    // block carries none of the optional detail lines, Beta's carries the
+    // one it should, and '1. Alpha' precedes '2. Beta'.
+    const lines = text.split('\n');
+    const alphaIdx = lines.findIndex((l) => /^\s*1\.\s*Alpha$/.test(l));
+    const betaIdx = lines.findIndex((l) => /^\s*2\.\s*Beta$/.test(l));
+    expect(alphaIdx).toBeGreaterThanOrEqual(0);
+    expect(betaIdx).toBeGreaterThan(alphaIdx);
+
+    const alphaBlock = lines.slice(alphaIdx, betaIdx);
+    expect(alphaBlock.some((l) => l.startsWith('     Companions:'))).toBe(false);
+    expect(alphaBlock.some((l) => l.startsWith('     Relics:'))).toBe(false);
+    expect(alphaBlock.some((l) => l.startsWith('     Highlights:'))).toBe(false);
+
+    const betaBlock = lines.slice(betaIdx);
+    expect(betaBlock.some((l) => l.startsWith('     Highlights: Fled the city'))).toBe(true);
   });
 });

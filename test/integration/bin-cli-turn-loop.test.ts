@@ -311,6 +311,82 @@ describe('bin.ts exit-autosave — saved path reaches real SIGINT/EOF exits', ()
   }, 20000);
 });
 
+// F-276d4e75: grepping test/** for NO_COLOR/isTTY/isColorEnabled/raw ANSI
+// escapes previously returned zero matches -- nothing anywhere asserted
+// colored-vs-plain output. src/cli/colors.ts computes its module-level
+// `enabled` flag once from `(process.stdout.isTTY ?? false) &&
+// !process.env.NO_COLOR` (colors.ts:6), and every spawnCli() call in this
+// file already spawns with `stdio: ['pipe','pipe','pipe']`
+// (bin-cli-harness.ts:275, never a TTY), so `enabled` was already false in
+// 100% of this file's real-CLI-process runs regardless of NO_COLOR -- the
+// existing `.toContain(...)` assertions passed in a state that was
+// accidentally colorless, never deliberately proven colorless. This spawns
+// with NO_COLOR explicitly set (documenting intent even though piping
+// already forces it) through a full load -> look -> quit run and asserts
+// the ENTIRE captured stdout+stderr contains zero raw ANSI escape
+// sequences (`\x1b[`) -- a direct, structural proof, not an accidental
+// byproduct of substring checks that would still pass if escape codes
+// leaked in around the text they happen to look for. This also covers
+// src/cli/spinner.ts's independent raw-ANSI cursor codes (`\x1b[K`), the
+// only other raw-escape producer in src/** (confirmed by
+// `grep -rn '\\x1b\|\\u001b' src/` outside test files) -- both are gated on
+// `stream.isTTY`, so a real regression in either gate would turn this red.
+describe('bin.ts NO_COLOR / non-TTY output — full run is provably colorless (F-276d4e75)', () => {
+  let homeDir: string;
+  let server: MockAnthropicServer;
+  let cli: CliHandle | undefined;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-home-'));
+    await writeFantasySave(join(homeDir, '.claude-rpg', 'saves'));
+    // Two narration calls happen in a load -> look -> quit run: the opening
+    // narration, then "look"'s fast-path narrateScene() call (see the
+    // "look" fast-paths past interpretation" comment on the describe block
+    // above). Whether the second call actually lands on the mock or
+    // degrades to fallback narration doesn't matter for this test -- both
+    // paths render through the same plain-text pipeline under test.
+    server = await startMockAnthropicServer(2);
+  });
+
+  afterEach(async () => {
+    await cleanupCliTestResources({ cli, server, homeDir });
+    cli = undefined;
+  });
+
+  it('a full load -> look -> quit run emits zero raw ANSI escape codes with NO_COLOR set', async () => {
+    cli = spawnCli(bundle.entryPath, ['load'], {
+      ...process.env,
+      ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+      ANTHROPIC_BASE_URL: server.url,
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+      NO_COLOR: '1',
+    });
+
+    await cli.waitForStdout('Choose a save');
+    cli.sendLine('1');
+    await cli.waitForStdout('  > ');
+    // F-276d4e75: the opening screen's first-turn onboarding hints
+    // (renderOpeningOutput's "TRY: > talk to the pilgrim" lines) contain
+    // their own "  > "-shaped bullets, which inflate a plain occurrence
+    // count -- counting the delta from here (the same pattern the "fatal
+    // auth error" describe block above already uses) rather than a bare
+    // absolute count avoids that collision.
+    const promptsBeforeTurn = countStdoutPrompts(cli.stdout());
+
+    cli.sendLine('look');
+    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, 20000);
+
+    cli.sendLine('quit');
+    const exitCode = await cli.waitForExit();
+    expect(exitCode).toBe(0);
+    expect(cli.stdout()).toContain('Farewell.');
+
+    expect(cli.stdout()).not.toContain('\x1b[');
+    expect(cli.stderr()).not.toContain('\x1b[');
+  }, 20000);
+});
+
 // F-b6e89ebb: locks in the file-level beforeAll/afterAll hoist above.
 // Before the fix, each describe block above called its own bundleBinCli(),
 // so by the time this runs (after both describes have completed) the real

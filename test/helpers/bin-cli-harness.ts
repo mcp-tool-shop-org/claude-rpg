@@ -48,6 +48,18 @@ export type BinCliBundle = {
   cleanup: () => Promise<void>;
 };
 
+// F-b6e89ebb: bundleBinCli()'s output (bundle.entryPath) is read-only, so a
+// test file with multiple describe blocks should share one call via a
+// single file-level beforeAll rather than paying for a separate esbuild
+// bundle per describe. This counter lets a test assert that contract
+// directly instead of just trusting the file's hook structure by eye.
+let bundleCallCount = 0;
+
+/** How many times bundleBinCli() has been invoked in this test file's module instance. */
+export function getBundleBinCliCallCount(): number {
+  return bundleCallCount;
+}
+
 /**
  * Bundles src/bin.ts and its full import graph into a single CommonJS
  * file under a scratch OS temp directory, mirroring the real
@@ -55,6 +67,7 @@ export type BinCliBundle = {
  * `require('../package.json')` resolves correctly at runtime.
  */
 export async function bundleBinCli(): Promise<BinCliBundle> {
+  bundleCallCount++;
   const scratchDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-'));
   // F-3730e833: everything past this point can throw (a broken bin.ts
   // import graph, a missing module, any esbuild.build() failure) before

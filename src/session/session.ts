@@ -373,27 +373,126 @@ export function loadNpcAgencyFromSession(session: SavedSession): { profiles: Npc
   }
 }
 
-/** Load NPC obligations from a saved session. */
+/**
+ * F-cb8a8337: shape guard for a single NpcObligation entry within a parsed
+ * NpcObligationLedger's `.obligations` array. Mirrors migrate.ts's
+ * isValidPlayerRumor/isValidWorldPressure per-entry validation depth for the
+ * same class of problem: JSON.parse succeeds *syntactically* on a
+ * wrong-shape value, so a bare cast trusts it unexamined. Validated so a
+ * ledger whose top-level shape looks right but whose array holds a
+ * malformed obligation still can't reach tickObligations()'s
+ * `ledger.obligations.map(...)` (game.ts's tickNpcAgencyTurn, via the
+ * compiled @ai-rpg-engine/modules implementation).
+ */
+function isValidNpcObligation(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const o = value as Record<string, unknown>;
+  return (
+    typeof o.id === 'string' &&
+    typeof o.kind === 'string' &&
+    typeof o.direction === 'string' &&
+    typeof o.npcId === 'string' &&
+    typeof o.counterpartyId === 'string' &&
+    typeof o.magnitude === 'number' &&
+    typeof o.sourceTag === 'string' &&
+    typeof o.createdAtTick === 'number' &&
+    (o.decayTurns === null || typeof o.decayTurns === 'number')
+  );
+}
+
+/**
+ * F-cb8a8337: shape guard for a single NpcObligationLedger entry (one Map
+ * value), mirroring session.ts's own isValidPartyState pattern below.
+ */
+function isValidNpcObligationLedger(value: unknown): value is NpcObligationLedger {
+  if (value == null || typeof value !== 'object') return false;
+  const l = value as Record<string, unknown>;
+  return Array.isArray(l.obligations) && l.obligations.every(isValidNpcObligation);
+}
+
+/**
+ * Load NPC obligations from a saved session.
+ *
+ * F-cb8a8337: the previous `try { return new
+ * Map(Object.entries(JSON.parse(x))) } catch { return new Map() }` pattern
+ * only fell back to an empty Map on a genuine JSON *syntax* error — a
+ * syntactically valid object whose values were the wrong shape (e.g. a
+ * hand-edited or schema-drifted save missing `.obligations`) was trusted
+ * unexamined into tickNpcAgencyTurn()'s first statement, which throws on
+ * that shape every turn for the rest of the session (see the compiled
+ * @ai-rpg-engine/modules tickObligations implementation). Each entry is now
+ * validated individually; a malformed entry is dropped (with a warning)
+ * instead of poisoning the whole Map or the whole load.
+ */
 export function loadObligationsFromSession(
   session: SavedSession,
 ): Map<string, NpcObligationLedger> {
   if (!session.npcObligations) return new Map();
   try {
-    const obj = JSON.parse(session.npcObligations) as Record<string, NpcObligationLedger>;
-    return new Map(Object.entries(obj));
+    const parsed: unknown = JSON.parse(session.npcObligations);
+    if (parsed == null || typeof parsed !== 'object') return new Map();
+    const result = new Map<string, NpcObligationLedger>();
+    for (const [npcId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isValidNpcObligationLedger(value)) {
+        result.set(npcId, value);
+      } else {
+        console.warn(`[session] Dropping malformed npcObligations entry for "${npcId}" on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return new Map();
   }
 }
 
-/** Load consequence chains from a saved session. */
+/**
+ * F-5bfeeab2: shape guard for a single ConsequenceChain entry (one Map
+ * value). Validates exactly the fields shouldResolveChainStep/
+ * tickConsequenceChain dereference unguarded in the compiled
+ * @ai-rpg-engine/modules implementation (`chain.currentStep <
+ * chain.steps.length`), plus the chain's own identity fields.
+ */
+function isValidConsequenceChain(value: unknown): value is ConsequenceChain {
+  if (value == null || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return (
+    typeof c.id === 'string' &&
+    typeof c.npcId === 'string' &&
+    typeof c.kind === 'string' &&
+    typeof c.trigger === 'string' &&
+    Array.isArray(c.steps) &&
+    typeof c.currentStep === 'number' &&
+    typeof c.turnsUntilNext === 'number' &&
+    typeof c.resolved === 'boolean' &&
+    typeof c.createdAtTick === 'number'
+  );
+}
+
+/**
+ * Load consequence chains from a saved session.
+ *
+ * F-5bfeeab2: shares the exact same unguarded-cast pattern
+ * loadObligationsFromSession had (see its doc comment above) — same fix
+ * shape, applied to the sibling loader tickNpcAgencyTurn() also calls
+ * unconditionally every turn (`tickConsequenceChain`/
+ * `shouldResolveChainStep` over `this.activeConsequenceChains`).
+ */
 export function loadConsequenceChainsFromSession(
   session: SavedSession,
 ): Map<string, ConsequenceChain> {
   if (!session.consequenceChains) return new Map();
   try {
-    const obj = JSON.parse(session.consequenceChains) as Record<string, ConsequenceChain>;
-    return new Map(Object.entries(obj));
+    const parsed: unknown = JSON.parse(session.consequenceChains);
+    if (parsed == null || typeof parsed !== 'object') return new Map();
+    const result = new Map<string, ConsequenceChain>();
+    for (const [npcId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isValidConsequenceChain(value)) {
+        result.set(npcId, value);
+      } else {
+        console.warn(`[session] Dropping malformed consequenceChains entry for "${npcId}" on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return new Map();
   }
@@ -461,11 +560,37 @@ export function loadResolvedOpportunitiesFromSession(session: SavedSession): Opp
   }
 }
 
-/** Load arc snapshot from a saved session. */
+/**
+ * F-d521bb19: shape guard for a parsed ArcSnapshot, mirroring
+ * isValidPartyState. buildArcSnapshot()'s compiled implementation does
+ * `previous.signals.find(...)` unguarded whenever `previous` is truthy
+ * (@ai-rpg-engine/modules), and the `/status` command (game.ts) reads
+ * `.signals.find(...)` directly too.
+ */
+function isValidArcSnapshot(value: unknown): value is ArcSnapshot {
+  if (value == null || typeof value !== 'object') return false;
+  const a = value as Record<string, unknown>;
+  return (
+    Array.isArray(a.signals) &&
+    (a.dominantArc === null || typeof a.dominantArc === 'string') &&
+    typeof a.tick === 'number'
+  );
+}
+
+/**
+ * Load arc snapshot from a saved session.
+ *
+ * F-d521bb19: the previous `JSON.parse(x) as ArcSnapshot | null` cast
+ * trusted a syntactically valid but wrong-shape value unexamined — falls
+ * back to null (mirroring loadPartyFromSession's createPartyState()
+ * fallback) so buildArcSnapshot() never receives a malformed `previous`
+ * argument.
+ */
 export function loadArcSnapshotFromSession(session: SavedSession): ArcSnapshot | null {
   if (!session.arcSnapshot) return null;
   try {
-    return JSON.parse(session.arcSnapshot) as ArcSnapshot;
+    const parsed: unknown = JSON.parse(session.arcSnapshot);
+    return isValidArcSnapshot(parsed) ? parsed : null;
   } catch {
     return null;
   }

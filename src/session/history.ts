@@ -1,8 +1,7 @@
 // Turn history: rolling context window for narration continuity
 // FT-B-006: Turn history compaction — evicted turns generate compressed summaries
 
-import { FALLBACK_NARRATION } from '../narrator/narrator.js';
-import { FATAL_NARRATION_FALLBACK } from '../turn-loop.js';
+import { KNOWN_FALLBACK_NARRATION_SENTINELS } from '../narrator/narrator.js';
 
 export type TurnRecord = {
   tick: number;
@@ -180,10 +179,17 @@ export class TurnHistory {
    * isFallback flag set at record() time; falls back to comparing against
    * the known sentinel strings for turns restored from a save written
    * before that flag existed.
+   *
+   * F-223de079: compares against the shared KNOWN_FALLBACK_NARRATION_SENTINELS
+   * list (same as recap.ts's sentinel filter) rather than hardcoding the two
+   * current constants directly — narrator.ts's own doc comment on that array
+   * asks consumers to "compare against this list rather than
+   * FALLBACK_NARRATION alone" specifically so a future third sentinel is
+   * picked up automatically instead of silently slipping through here.
    */
   private isFallbackTurn(t: TurnRecord): boolean {
     if (t.isFallback !== undefined) return t.isFallback;
-    return t.narration === FALLBACK_NARRATION || t.narration === FATAL_NARRATION_FALLBACK;
+    return KNOWN_FALLBACK_NARRATION_SENTINELS.includes(t.narration);
   }
 
   getAll(): readonly TurnRecord[] {

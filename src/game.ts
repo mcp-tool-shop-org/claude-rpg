@@ -193,6 +193,11 @@ import { TurnHistory } from './session/history.js';
 import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
+// F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
+// TurnResult.audioCalls element type — imported from its origin module
+// (audio-bridge.ts), the same way turn-loop.ts itself imports it, since
+// turn-loop.ts doesn't re-export the type.
+import type { McpToolCall } from './runtime/audio-bridge.js';
 import type { StatusData } from './character/presence.js';
 import { deriveChronicleEvents, buildChronicleContext, type ChronicleEventSource } from './session/chronicle.js';
 import { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
@@ -253,6 +258,21 @@ export type GameConfig = {
   autosave?: Partial<AutosaveConfig>;
   /** Debug logger instance — if omitted, auto-detected from --debug / CLAUDE_RPG_DEBUG. */
   debugLogger?: DebugLogger;
+  /**
+   * F-79a25863 (presentation seam contract): invoked after each completed
+   * turn with that turn's queued audio/UI-effect MCP tool calls (sfx,
+   * music, ambient, and the deathHook fade-to-black
+   * `__ui_effect_intent__`) — previously computed correctly all the way
+   * through ImmersionRuntime.processPresentation() and then silently
+   * discarded at this domain's boundary. Fires every completed turn,
+   * including the fatal-bookkeeping path and (when it produces any) the
+   * opening-narration path — an empty array means "nothing to present this
+   * turn," not "not called." Invoked in a try/catch internally: a throwing
+   * sink must never damage the turn. The caller (e.g. bin.ts /
+   * cli-display's presentation-renderer) owns turning these into terminal
+   * output.
+   */
+  onPresentation?: (calls: McpToolCall[]) => void;
 };
 
 export class GameSession {
@@ -299,6 +319,8 @@ export class GameSession {
   pendingAnnouncements: string[] = [];
   /** Structured debug logger — gated behind --debug flag. */
   readonly debugLog: DebugLogger;
+  /** F-79a25863 (presentation seam contract): see GameConfig.onPresentation. */
+  private readonly onPresentation?: (calls: McpToolCall[]) => void;
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -316,6 +338,7 @@ export class GameSession {
     this.fastMode = config.fastMode ?? false;
     this.autosaveConfig = { ...DEFAULT_AUTOSAVE, ...config.autosave };
     this.debugLog = config.debugLogger ?? createDebugLogger();
+    this.onPresentation = config.onPresentation;
 
     // Initialize district economies from genre + district tags
     this.initializeDistrictEconomies();
@@ -459,6 +482,24 @@ export class GameSession {
     }
   }
 
+  /**
+   * F-79a25863 (presentation seam contract): invoke the registered
+   * onPresentation sink for this turn's audio/UI-effect calls, if the
+   * caller registered one. Wrapped in try/catch — mirrors PB-001's
+   * containment (game.ts's post-turn subsystem-tick block): a throwing
+   * sink must never damage the turn.
+   */
+  private emitPresentation(calls: McpToolCall[]): void {
+    if (!this.onPresentation) return;
+    try {
+      this.onPresentation(calls);
+    } catch (err) {
+      this.debugLog.error('subsystem', 'presentation sink failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   /** Get the initial scene narration. */
   async getOpeningNarration(): Promise<string> {
     const presence = this.getPresence();
@@ -476,6 +517,30 @@ export class GameSession {
       endgameContext: this.getEndgameContext(),
       chronicleContext: this.getChronicleContext(),
     });
+
+    // F-79a25863 (seam contract): mirror turn-loop.ts's Step 4.5 so the
+    // opening scene's own ambient/music intents (from its NarrationPlan)
+    // reach the presentation sink too, not just real turns. Guarded on the
+    // state machine not already being 'combat': ImmersionRuntime.initialize()
+    // (called from this session's constructor) seeds 'combat' from a
+    // mid-fight save's combat-core module state before this ever runs, and
+    // processPresentation()'s empty-events state inference has no "preserve
+    // current state" case — with no events to infer from it falls through to
+    // 'exploration', which would flip a freshly restored 'combat' back
+    // before the player's first real turn ever sees it. Skipping here costs
+    // nothing for that case: the next real turn computes state (and any
+    // cues) from its own actual events.
+    let openingCalls: McpToolCall[] = [];
+    if (this.immersion.stateMachine.current !== 'combat') {
+      openingCalls = await this.immersion.processPresentation(
+        this.engine,
+        [],
+        'look',
+        result.plan ?? undefined,
+      );
+    }
+    this.emitPresentation(openingCalls);
+
     this.history.record({
       tick: this.engine.tick,
       playerInput: '',
@@ -690,6 +755,13 @@ export class GameSession {
             profileHints: bookkeeping.profileHints,
           });
           await this.checkAutosave();
+          // F-79a25863 (seam contract): narrateScene() threw before
+          // executeTurn()'s Step 4.5 could compute audioCalls, so there's
+          // nothing to relay for this turn — but the sink still fires with
+          // an empty array, matching the normal-turn call below, so a
+          // caller can rely on "one onPresentation call per completed
+          // turn" without special-casing the fatal path.
+          this.emitPresentation([]);
         } catch (bookkeepingErr) {
           this.debugLog.error('subsystem', 'fatal-turn bookkeeping failed', {
             error: bookkeepingErr instanceof Error ? bookkeepingErr.message : String(bookkeepingErr),
@@ -698,6 +770,12 @@ export class GameSession {
       }
       throw err;
     }
+
+    // F-79a25863 (seam contract): relay this turn's audio/UI-effect calls —
+    // already computed inside executeTurn()'s Step 4.5 — independent of the
+    // post-turn subsystem-tick block below. A subsystem hiccup after this
+    // point must not swallow presentation for a turn that already completed.
+    this.emitPresentation(turnResult.audioCalls);
 
     // PB-001: Post-turn subsystem ticks wrapped in error containment.
     // The critical path (executeTurn) already completed — subsystem failures

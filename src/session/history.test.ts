@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TurnHistory } from './history.js';
-import { FALLBACK_NARRATION } from '../narrator/narrator.js';
+import { FALLBACK_NARRATION, KNOWN_FALLBACK_NARRATION_SENTINELS } from '../narrator/narrator.js';
 import { FATAL_NARRATION_FALLBACK } from '../turn-loop.js';
 
 describe('TurnHistory', () => {
@@ -336,5 +336,35 @@ describe('TurnHistory.getRecentNarration fallback filtering (F-8da2e6f7)', () =>
     });
 
     expect(restored.getRecentNarration(4)).toEqual(['real one', 'real two']);
+  });
+});
+
+// F-223de079: isFallbackTurn() independently hardcoded `t.narration ===
+// FALLBACK_NARRATION || t.narration === FATAL_NARRATION_FALLBACK` instead of
+// checking KNOWN_FALLBACK_NARRATION_SENTINELS.includes(t.narration) the way
+// recap.ts already does. Harmless today (only two sentinels exist and both
+// are named in the OR-chain), but narrator.ts's own doc comment on the
+// shared array says consumers should "compare against this list rather than
+// FALLBACK_NARRATION alone" specifically so a third sentinel is picked up
+// automatically. This is the mechanism check — the F-8da2e6f7 suite above
+// already covers the *value* check for the current two sentinels, which
+// passes under either implementation and can't tell them apart.
+describe('TurnHistory.isFallbackTurn recognizes the shared sentinel list, not just the two named constants (F-223de079)', () => {
+  it('excludes a narration string added to KNOWN_FALLBACK_NARRATION_SENTINELS after the fact, not just FALLBACK_NARRATION/FATAL_NARRATION_FALLBACK', () => {
+    const extraSentinel = 'a hypothetical third fallback sentinel';
+    // KNOWN_FALLBACK_NARRATION_SENTINELS is typed `readonly string[]` but not
+    // frozen at runtime — simulate a future third sentinel being appended,
+    // exactly the scenario the finding warns a hardcoded OR-chain would miss.
+    (KNOWN_FALLBACK_NARRATION_SENTINELS as string[]).push(extraSentinel);
+    try {
+      const history = new TurnHistory();
+      history.record({ tick: 1, playerInput: 'a', verb: 'look', narration: 'real one' });
+      history.record({ tick: 2, playerInput: 'b', verb: 'look', narration: extraSentinel });
+      history.record({ tick: 3, playerInput: 'c', verb: 'look', narration: 'real two' });
+
+      expect(history.getRecentNarration(3)).toEqual(['real one', 'real two']);
+    } finally {
+      (KNOWN_FALLBACK_NARRATION_SENTINELS as string[]).pop();
+    }
   });
 });

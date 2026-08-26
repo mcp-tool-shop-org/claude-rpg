@@ -225,13 +225,21 @@ function formatNpcAgencyContext(input: DialogueInput): string {
   return `\nNPC agency state:\n${parts.map((p) => `  ${p}`).join('\n')}\n`;
 }
 
-/** PBR-008: Sanitize player utterance — truncate with indicator, strip XML-like tags */
-export function sanitizePlayerUtterance(raw: string): string {
-  const MAX_LEN = 500;
+/**
+ * PBR-008: Sanitize player utterance — truncate with indicator, strip XML-like tags.
+ *
+ * F-b2326fec: `maxLen` defaults to 500, the cap tuned for a live spoken NPC
+ * dialogue line. Other call surfaces reuse this same tag-stripping/truncation
+ * logic on very different inputs (a freeform action description, a one-time
+ * world-concept pitch) and pass a higher cap suited to their own content —
+ * see buildInterpretPrompt (interpret-action.ts) and buildWorldGenPrompt
+ * (world-gen.ts).
+ */
+export function sanitizePlayerUtterance(raw: string, maxLen: number = 500): string {
   // Strip XML-like tags to prevent prompt injection via fake tags
   let sanitized = raw.replace(/<\/?[a-zA-Z][^>]*>/g, '');
-  if (sanitized.length > MAX_LEN) {
-    sanitized = sanitized.slice(0, MAX_LEN) + '...[truncated]';
+  if (sanitized.length > maxLen) {
+    sanitized = sanitized.slice(0, maxLen) + '...[truncated]';
   }
   return sanitized;
 }

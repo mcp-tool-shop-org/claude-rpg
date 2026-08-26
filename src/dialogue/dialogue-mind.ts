@@ -6,7 +6,7 @@ import type { PlayerRumor, WorldPressure, NpcActionResult } from '@ai-rpg-engine
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
-import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { NarrationError } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
 
 export type DialogueResult = {
@@ -69,10 +69,15 @@ export async function generateDialogue(
     });
     resultText = result.text.trim();
   } catch (err) {
-    // F-afb978de: classify to a NarrationError so fatal (auth/bad-request) errors
-    // can surface userMessage()'s actionable guidance instead of being indistinguishable
-    // from a transient in-fiction hiccup. Non-fatal kinds keep the in-character stall.
+    // F-6480985e: domain-wide fatal-error contract (documented in claude-errors.ts
+    // near NarrationError.fatal) — fatal (auth/bad-request) errors rethrow so
+    // bin.ts's presentError renders the structured system-level box, matching
+    // narrator.ts's narrateScene/narrateSceneLegacy. Surfacing userMessage() as
+    // the NPC's own spoken line (the old behavior) made a bad API key
+    // indistinguishable from in-fiction dialogue. Non-fatal kinds keep the
+    // in-character stall — a transient hiccup shouldn't break immersion.
     const narrationErr = err instanceof NarrationError ? err : classifyError(err);
+    if (narrationErr.fatal) throw narrationErr;
     console.warn(
       `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${narrationErr.message}. Using fallback.`,
     );
@@ -80,7 +85,7 @@ export async function generateDialogue(
     return {
       speakerId: npcId,
       speakerName: npc?.name ?? npcId,
-      text: narrationErr.fatal ? userMessage(narrationErr) : 'The NPC pauses, gathering their thoughts...',
+      text: 'The NPC pauses, gathering their thoughts...',
       grounding: {
         beliefCount: context.beliefs.length,
         memoryCount: context.recentMemories.length,

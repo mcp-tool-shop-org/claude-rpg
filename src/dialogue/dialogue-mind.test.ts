@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateDialogue } from './dialogue-mind.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState } from '@ai-rpg-engine/core';
-import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { NarrationError } from '../llm/claude-errors.js';
 
 // Mock npc-context so we control the context shape
 vi.mock('./npc-context.js', () => ({
@@ -156,30 +156,34 @@ describe('generateDialogue PBR-002: LLM failure fallback', () => {
   });
 });
 
-// F-afb978de: fatal NarrationErrors (auth/bad-request) must surface an actionable
-// userMessage() instead of the indistinguishable generic in-character stall.
-describe('generateDialogue F-afb978de: actionable fatal-error messages', () => {
-  it('should surface the auth userMessage when the client throws a fatal auth NarrationError', async () => {
+// F-6480985e: the domain-wide fatal-error contract (documented in
+// claude-errors.ts near NarrationError.fatal) is "rethrow, don't swallow into
+// in-fiction text" — matching narrator.ts's narrateScene/narrateSceneLegacy.
+// generateDialogue previously swallowed fatal errors into DialogueResult.text,
+// so a bad API key would be rendered as the NPC's own spoken line. It must now
+// rethrow so bin.ts's presentError renders the structured system-level box
+// instead.
+describe('generateDialogue F-6480985e: fatal errors rethrow instead of swallowing into dialogue text', () => {
+  it('should rethrow a fatal auth NarrationError instead of returning it as in-character dialogue', async () => {
     const ctx = makeContext();
     mockedBuildContext.mockReturnValue(ctx as any);
     const authErr = new NarrationError({ kind: 'auth', message: 'invalid x-api-key' });
     const client = makeFailingClient(authErr);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await generateDialogue(
-      client,
-      makeWorld(),
-      'npc-1',
-      'Hello',
-      'dark fantasy',
-    );
+    await expect(
+      generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy'),
+    ).rejects.toThrow(authErr);
+  });
 
-    expect(result).not.toBeNull();
-    expect(result!.text).toBe(userMessage(authErr));
-    expect(result!.text).toContain('ANTHROPIC_API_KEY');
-    // Should NOT be the generic indistinguishable in-character stall.
-    expect(result!.text).not.toBe('The NPC pauses, gathering their thoughts...');
-    warnSpy.mockRestore();
+  it('should rethrow a fatal bad-request NarrationError the same way', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const badRequestErr = new NarrationError({ kind: 'bad-request', message: 'malformed request' });
+    const client = makeFailingClient(badRequestErr);
+
+    await expect(
+      generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy'),
+    ).rejects.toThrow(badRequestErr);
   });
 
   it('should keep the generic in-character fallback for non-fatal (retryable) errors', async () => {

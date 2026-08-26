@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { narrateScene, narrateSceneLegacy, type NarrateSceneOpts } from './narrator.js';
+import { narrateScene, narrateSceneLegacy, FALLBACK_NARRATION, type NarrateSceneOpts } from './narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
@@ -294,6 +294,10 @@ describe('narrateScene F-304fc328: LLM failure fallback', () => {
     expect(result.narration.length).toBeGreaterThan(0);
     expect(result.plan).toBeNull();
     expect(result.sceneContext).toBeDefined();
+    // F-b6915850: downstream consumers (e.g. recap.ts's renderRecap) need a way
+    // to tell FALLBACK_NARRATION apart from real LLM prose.
+    expect(result.isFallback).toBe(true);
+    expect(result.narration).toBe(FALLBACK_NARRATION);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
@@ -313,6 +317,7 @@ describe('narrateScene F-304fc328: LLM failure fallback', () => {
     expect(result.narration.length).toBeGreaterThan(0);
     expect(result.plan).toBeNull();
     expect(result.sceneContext).toBeDefined();
+    expect(result.isFallback).toBe(true);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
@@ -332,8 +337,33 @@ describe('narrateSceneLegacy F-304fc328: LLM failure fallback', () => {
     expect(result.narration.length).toBeGreaterThan(0);
     expect(result.plan).toBeNull();
     expect(result.sceneContext).toBeDefined();
+    expect(result.isFallback).toBe(true);
+    expect(result.narration).toBe(FALLBACK_NARRATION);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+// === F-b6915850: NarrationResult.isFallback lets downstream consumers (e.g.
+// recap.ts's renderRecap) tell placeholder text apart from real LLM prose ===
+describe('narrateScene/narrateSceneLegacy F-b6915850: isFallback on the success path', () => {
+  it('narrateScene should report isFallback: false for a normal plain-text response', async () => {
+    const opts = makeOpts({ client: makeClient('A cool breeze greets you.') });
+    const result = await narrateScene(opts);
+    expect(result.isFallback).toBe(false);
+  });
+
+  it('narrateScene should report isFallback: false for a valid NarrationPlan JSON response', async () => {
+    const opts = makeOpts({ client: makeClient(VALID_PLAN) });
+    const result = await narrateScene(opts);
+    expect(result.isFallback).toBe(false);
+  });
+
+  it('narrateSceneLegacy should report isFallback: false for a normal response', async () => {
+    const engine = createGame();
+    const client = makeClient('The market bustles with morning trade.');
+    const result = await narrateSceneLegacy(client, engine.world, [], 'dark fantasy', []);
+    expect(result.isFallback).toBe(false);
   });
 });
 

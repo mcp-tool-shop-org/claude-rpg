@@ -13,11 +13,21 @@ export type NarrationResult = {
   narration: string;
   plan: NarrationPlan | null;
   sceneContext: SceneContext;
+  /**
+   * F-b6915850: true when `narration` is the FALLBACK_NARRATION sentinel
+   * (a non-fatal NarrationError occurred and no real LLM prose was produced).
+   * Lets downstream consumers — e.g. recap.ts's renderRecap — tell placeholder
+   * text apart from authored narrative instead of quoting it as if it were real.
+   */
+  isFallback: boolean;
 };
 
 // F-304fc328: safe fallback narration used when the LLM call fails outright,
 // mirroring dialogue-mind.ts's PBR-002 in-character fallback pattern.
-const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
+// F-b6915850: exported so downstream consumers (recap.ts) can recognize the
+// sentinel by value where `isFallback` isn't threaded all the way through
+// (e.g. TurnRecord in session/history.ts, which only stores narration text).
+export const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
 
 export type NarrateSceneOpts = {
   client: ClaudeClient;
@@ -99,6 +109,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
         narration: result.text.trim(),
         plan: null,
         sceneContext,
+        isFallback: false,
       };
     }
 
@@ -112,6 +123,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
         narration: plan.sceneText,
         plan,
         sceneContext,
+        isFallback: false,
       };
     }
 
@@ -120,6 +132,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
       narration: result.text.trim(),
       plan: null,
       sceneContext,
+      isFallback: false,
     };
   } catch (err) {
     // Fatal kinds (auth/bad-request) rethrow: retrying can never succeed, and the
@@ -134,6 +147,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
       narration: FALLBACK_NARRATION,
       plan: null,
       sceneContext,
+      isFallback: true,
     };
   }
 }
@@ -169,6 +183,7 @@ export async function narrateSceneLegacy(
       narration: result.text.trim(),
       plan: null,
       sceneContext,
+      isFallback: false,
     };
   } catch (err) {
     // Same fatal-rethrow contract as narrateScene above.
@@ -180,6 +195,7 @@ export async function narrateSceneLegacy(
       narration: FALLBACK_NARRATION,
       plan: null,
       sceneContext,
+      isFallback: true,
     };
   }
 }

@@ -34,6 +34,7 @@ import {
   type MockAnthropicServer,
   type CliHandle,
 } from '../helpers/bin-cli-harness.js';
+import { loadSession } from '../../src/session/session.js';
 
 /** Counts how many "  > " prompts bin.ts has printed to stdout so far. */
 function countStdoutPrompts(stdout: string): number {
@@ -225,6 +226,88 @@ describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits',
     const exitCode = await cli.waitForExit();
     expect(exitCode).toBe(0);
     expect(cli.stdout()).toContain('Farewell.');
+  }, 20000);
+});
+
+// F-6eed28b9: the describe block above only ever writes a save whose
+// character name escapes the save directory, so it only ever drives
+// attemptExitAutosave's 'rejected' outcome through bin.ts's real SIGINT/EOF
+// call sites -- never 'saved', which is the far more common player scenario
+// (Ctrl+C or Ctrl+D during a normal session, trusting "Auto-saved to ...").
+// That branch was previously only unit-tested directly against the
+// extracted pure function in src/cli/exit-autosave.test.ts with a mocked
+// save callback, which proves nothing about bin.ts's own wiring: which
+// path it passes, whether the real session save is invoked, what message
+// actually prints. This reuses the same bundleBinCli()/spawnCli() harness
+// with a normal, non-escaping character name so the 'saved' branch is
+// proven end-to-end through the real stdin-closed call site
+// (bin.ts:573-593): the printed message, the exit code, and -- the
+// strongest check -- that the save file on disk was actually rewritten.
+describe('bin.ts exit-autosave — saved path reaches real SIGINT/EOF exits', () => {
+  let homeDir: string;
+  let server: MockAnthropicServer;
+  let cli: CliHandle | undefined;
+  let saveDir: string;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-home-'));
+    saveDir = join(homeDir, '.claude-rpg', 'saves');
+    await writeFantasySaveWithCharacterName(saveDir, 'Aldric');
+    server = await startMockAnthropicServer(1);
+  });
+
+  afterEach(async () => {
+    await cleanupCliTestResources({ cli, server, homeDir });
+    cli = undefined;
+  });
+
+  /** Spawns bin.ts, loads the one save, and waits for the game loop's first prompt. */
+  async function loadToFirstPrompt(): Promise<CliHandle> {
+    const handle = spawnCli(bundle.entryPath, ['load'], {
+      ...process.env,
+      ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+      ANTHROPIC_BASE_URL: server.url,
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+    });
+    await handle.waitForStdout('Choose a save');
+    handle.sendLine('1');
+    await handle.waitForStdout('  > ');
+    return handle;
+  }
+
+  it('stdin EOF autosave with a normal character name actually saves and reports it', async () => {
+    // writeFantasySaveWithCharacterName's default filename.
+    const originalSavePath = join(saveDir, 'test-save.json');
+    const preSave = await loadSession(originalSavePath);
+
+    cli = await loadToFirstPrompt();
+
+    // Cross-platform trigger (see the win32 SIGINT skip note in the describe
+    // block above) -- closing stdin drives bin.ts's readline 'close'
+    // handler exactly like the escaping-path EOF case there, but this
+    // save's character name resolves inside getDefaultSaveDir(), so
+    // attemptExitAutosave takes the 'saved' branch instead of 'rejected'.
+    cli.child.stdin.end();
+
+    await cli.waitForStdout('Farewell.');
+    expect(cli.stdout()).toContain('Auto-saved to');
+    expect(cli.stdout()).not.toContain('would escape the save directory');
+
+    const exitCode = await cli.waitForExit();
+    expect(exitCode).toBe(0);
+
+    const match = cli.stdout().match(/Auto-saved to (.+)/);
+    expect(match).not.toBeNull();
+    const savedPath = match![1].trim();
+
+    // Strongest check: the save file on disk was actually rewritten by the
+    // real SIGINT/EOF call site, not just a message printed with no write
+    // behind it.
+    const postSave = await loadSession(savedPath);
+    expect(new Date(postSave.session.savedAt).getTime()).toBeGreaterThan(
+      new Date(preSave.session.savedAt).getTime(),
+    );
   }, 20000);
 });
 

@@ -8,8 +8,19 @@ import { NarrationError, type NarrationErrorKind } from '../../src/llm/claude-er
 export type FakeClientOptions = {
   /** Canned narration text returned by generate(). Default: scene description from prompt echo. */
   narration?: string;
-  /** If set, generate() throws a NarrationError of this kind. */
-  generateFailure?: NarrationErrorKind;
+  /**
+   * If set, generate() throws a NarrationError of this kind. A fixed kind
+   * fails every call identically (original behavior). A function is
+   * call-count-aware: it receives the 1-indexed call number for THIS
+   * client's generate() calls (log.generate, post-increment) and returns
+   * the kind that call should fail with, or undefined to let it succeed --
+   * e.g. `(n) => (n === 2 ? 'timeout' : undefined)` scripts "only the
+   * second generate() call fails," so a test can express a transient
+   * mid-session outage that clears rather than every call degrading
+   * identically (F-bf400714). generateStream() shares this option and
+   * scripts off its own independent call number (log.generateStream).
+   */
+  generateFailure?: NarrationErrorKind | ((callNumber: number) => NarrationErrorKind | undefined);
   /** If set, generateStructured() throws a NarrationError of this kind. */
   structuredFailure?: NarrationErrorKind;
   /** Canned structured response data. Default: null (triggers fast-path fallback). */
@@ -26,10 +37,27 @@ export type CallLog = {
   generate: number;
   generateStructured: number;
   generateStream: number;
+  /**
+   * F-95191273: the `prompt` string from the most recent generate()/
+   * generateStream() call, if any. Lets a test prove restored session
+   * state (e.g. resumeHarness()'d rumors/pressures/party) actually reached
+   * the next turn's LLM prompt, not just that it round-tripped through
+   * in-memory field assignment.
+   */
+  lastGeneratePrompt?: string;
 };
 
 export function createCallLog(): CallLog {
   return { generate: 0, generateStructured: 0, generateStream: 0 };
+}
+
+/** Resolves a (possibly call-count-scripted) generateFailure option to the kind that should fail THIS call, if any. */
+function resolveGenerateFailure(
+  failure: FakeClientOptions['generateFailure'],
+  callNumber: number,
+): NarrationErrorKind | undefined {
+  if (failure === undefined) return undefined;
+  return typeof failure === 'function' ? failure(callNumber) : failure;
 }
 
 export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
@@ -40,11 +68,13 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
 
     async generate(genOpts): Promise<GenerateResult> {
       log.generate++;
+      log.lastGeneratePrompt = genOpts.prompt;
 
-      if (opts.generateFailure) {
+      const failure = resolveGenerateFailure(opts.generateFailure, log.generate);
+      if (failure) {
         throw new NarrationError({
-          kind: opts.generateFailure,
-          message: `Fake ${opts.generateFailure} error for testing`,
+          kind: failure,
+          message: `Fake ${failure} error for testing`,
         });
       }
 
@@ -98,11 +128,13 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
       onChunk: StreamCallback;
     }): Promise<GenerateResult> => {
       log.generateStream++;
+      log.lastGeneratePrompt = streamOpts.prompt;
 
-      if (opts.generateFailure) {
+      const failure = resolveGenerateFailure(opts.generateFailure, log.generateStream);
+      if (failure) {
         throw new NarrationError({
-          kind: opts.generateFailure,
-          message: `Fake ${opts.generateFailure} error for testing`,
+          kind: failure,
+          message: `Fake ${failure} error for testing`,
         });
       }
 

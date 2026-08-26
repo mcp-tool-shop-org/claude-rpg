@@ -172,6 +172,37 @@ describe('turn pipeline — narration failure', () => {
     expect(h.turnCount()).toBe(2);
   });
 
+  // F-bf400714: every failure case above (and the fake client's own prior
+  // shape) can only script "every call fails identically" -- there was no
+  // way to express a transient outage that clears mid-session, even though
+  // that is exactly what production's real retry path (withRetry in
+  // src/llm/claude-adapter.ts, invisible below the ClaudeClient interface
+  // this fake substitutes for) exists to recover from. This proves one bad
+  // turn doesn't read as the whole session degrading: turn 2's injected
+  // retryable failure degrades to fallback narration while turns 1 and 3,
+  // on the same harness/session, still show real narration text.
+  it('a transient failure on one turn does not degrade the turns before or after it', async () => {
+    const h = createHarness({
+      clientOpts: {
+        narration: 'The chapel breathes around you.',
+        generateFailure: (callNumber) => (callNumber === 2 ? 'timeout' : undefined),
+      },
+    });
+
+    const out1 = await h.play('look');
+    const out2 = await h.play('look');
+    const out3 = await h.play('look');
+
+    expect(out1).toContain('The chapel breathes around you.');
+    expect(out2).toContain('The scene holds its breath');
+    expect(out3).toContain('The chapel breathes around you.');
+
+    // All three turns still resolved and were recorded -- the mid-session
+    // outage degraded narration quality for one turn, not the session.
+    expect(h.turnCount()).toBe(3);
+    expect(h.callLog.generate).toBe(3);
+  });
+
   it('auth failure throws fatal NarrationError', async () => {
     const h = createHarness({
       clientOpts: { generateFailure: 'auth' },

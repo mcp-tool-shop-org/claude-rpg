@@ -74,7 +74,7 @@ export function normalizePath(path) {
 export function getApplicableThreshold(filePath, thresholds) {
   const normalized = normalizePath(filePath);
   for (const [prefix, threshold] of Object.entries(thresholds).sort((a, b) => b[0].length - a[0].length)) {
-    if (normalized.includes(prefix)) {
+    if (normalized.startsWith(prefix)) {
       return threshold;
     }
   }

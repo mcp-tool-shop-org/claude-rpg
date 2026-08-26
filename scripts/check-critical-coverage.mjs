@@ -22,15 +22,18 @@ import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import {
   statementsPercent,
+  branchesPercent,
   getPerPathThresholds,
   getApplicableThreshold,
   normalizePath,
+  coverageReportLine,
 } from './check-coverage-utils.mjs';
-
-const CRITICAL_PATHS = ['src/llm/', 'src/session/', 'src/game/'];
 
 // Single source of the per-path floors, shared with the test suite.
 const THRESHOLDS = getPerPathThresholds();
+
+// Derive CRITICAL_PATHS dynamically from THRESHOLDS to ensure they stay in sync
+const CRITICAL_PATHS = Object.keys(THRESHOLDS);
 
 const baseRef = process.argv[2] || 'HEAD~1';
 
@@ -67,6 +70,9 @@ let failures = 0;
 
 console.log('── Runtime-Critical Changed Files ──\n');
 
+// Global branch coverage floor from vitest.config.ts
+const BRANCH_THRESHOLD = 45;
+
 for (const file of criticalChanged) {
   const absPath = resolve(file);
   const normalizedPath = normalizePath(absPath);
@@ -79,20 +85,29 @@ for (const file of criticalChanged) {
   }
 
   const stmtsPct = statementsPercent(entry);
+  const branchPct = branchesPercent(entry);
   const threshold = getApplicableThreshold(file, THRESHOLDS);
 
+  // Use coverageReportLine to format the output
+  const reportLine = coverageReportLine(file, stmtsPct, branchPct, threshold);
+  console.log(reportLine);
+
+  // Check if statements pass threshold
   let passStmts = false;
   if (stmtsPct === undefined) {
-    console.log(`  ⚠ ${file} — (no statements instrumented — coverage instrumentation issue)`);
     // Treat as failure: if not instrumented, it's not covered
     failures++;
   } else {
     passStmts = stmtsPct >= threshold;
-    const icon = passStmts ? '✓' : '✗';
-    console.log(
-      `  ${icon} ${file} — ${stmtsPct.toFixed(1)}% statements${passStmts ? '' : ` (below ${threshold}%)`}`,
-    );
     if (!passStmts) failures++;
+  }
+
+  // Check if branches pass the global 45% floor (only if branches were instrumented)
+  if (branchPct !== undefined) {
+    const passBranches = branchPct >= BRANCH_THRESHOLD;
+    if (!passBranches) {
+      failures++;
+    }
   }
 }
 

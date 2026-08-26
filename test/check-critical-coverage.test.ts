@@ -149,6 +149,16 @@ describe('branchesPercent', () => {
   });
 });
 
+describe('getApplicableThreshold with path-prefix matching', () => {
+  it('uses startsWith boundary matching instead of substring', () => {
+    const thresholds = getPerPathThresholds();
+    // 'src/gameplay/file.ts' should NOT match 'src/game/' using proper boundaries
+    expect(getApplicableThreshold('src/gameplay/file.ts', thresholds)).toBe(25); // default
+    // 'src/game/file.ts' SHOULD match 'src/game/'
+    expect(getApplicableThreshold('src/game/file.ts', thresholds)).toBe(25); // exact match
+  });
+});
+
 describe('coverageReportLine', () => {
   it('formats a passing file report', () => {
     const line = coverageReportLine('src/llm/test.ts', 75, 60, 70);

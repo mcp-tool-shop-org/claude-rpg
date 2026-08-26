@@ -98,10 +98,13 @@ export function buildNPCDialogueContext(
     .slice(0, RUMORS_MAX)
     .map((r) => `${r.subject ?? 'unknown'}: ${r.key ?? ''} = ${r.value ?? '?'}`);
 
-  // Derive social stance from reputation + cognition
+  // Derive social stance from reputation + cognition. deriveStance requires
+  // non-null cognition (it reads .suspicion/.morale unguarded); when this NPC
+  // has no cognition state, substitute the same 50/30 defaults the returned
+  // context uses for morale/suspicion below — keep the two in sync.
   const repValue = factionId && playerProfile ? getReputation(playerProfile, factionId) : 0;
   const alertLevel = faction?.alertLevel ?? 0;
-  const stance = deriveStance(repValue, cognition, alertLevel);
+  const stance = deriveStance(repValue, cognition ?? { morale: 50, suspicion: 30 }, alertLevel);
   const consequence = getReputationConsequence(repValue);
 
   let relationship = stance as string;

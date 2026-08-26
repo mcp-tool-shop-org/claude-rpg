@@ -124,6 +124,38 @@ describe('buildNPCDialogueContext F-b52349e0: beliefs cap', () => {
   });
 });
 
+// Null cognition guard, mirroring src/npc/agency.test.ts's BR-007 pattern:
+// getCognition returns null for NPCs with no initialized cognition state, and
+// every other use of it in buildNPCDialogueContext is optional-chained -- but
+// the deriveStance call passed the raw value into a non-nullable parameter,
+// crashing (TypeError reading 'suspicion') instead of degrading to defaults.
+describe('buildNPCDialogueContext: null cognition guard', () => {
+  it('does not throw when getCognition returns null, falling back to 50/30 defaults', () => {
+    mockedGetCognition.mockReturnValue(null as any);
+    mockedGetRumorsFrom.mockReturnValue([]);
+
+    let ctx: ReturnType<typeof buildNPCDialogueContext>;
+    expect(() => {
+      ctx = buildNPCDialogueContext(makeWorld(), 'npc-1', 'hello', 'dark fantasy');
+    }).not.toThrow();
+
+    expect(ctx!).not.toBeNull();
+    expect(ctx!.morale).toBe(50);
+    expect(ctx!.suspicion).toBe(30);
+    // Neutral rep + default cognition + no alert derives the neutral stance.
+    expect(ctx!.playerRelationship).toContain('neutral');
+  });
+
+  it('does not throw when getCognition returns undefined', () => {
+    mockedGetCognition.mockReturnValue(undefined as any);
+    mockedGetRumorsFrom.mockReturnValue([]);
+
+    expect(() =>
+      buildNPCDialogueContext(makeWorld(), 'npc-1', 'hello', 'dark fantasy'),
+    ).not.toThrow();
+  });
+});
+
 describe('buildNPCDialogueContext F-b52349e0: rumors cap', () => {
   it('caps rumors, keeping the most recent by originTick', () => {
     mockedGetCognition.mockReturnValue(makeCognition());

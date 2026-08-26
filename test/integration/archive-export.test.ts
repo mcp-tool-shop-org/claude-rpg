@@ -35,7 +35,7 @@ function richSave(): SavedSession {
     characterTitle: 'the Bloodied',
     packId: 'fantasy',
     genre: 'fantasy',
-    chronicleRecords: JSON.stringify(journal.serialize()),
+    chronicleRecords: JSON.stringify(journal.serialize().records),
     campaignStatus: 'completed',
     arcSnapshot: JSON.stringify({
       dominantArc: 'rising-power',
@@ -139,7 +139,7 @@ describe('exportChronicleJSON', () => {
     // (move), which exceeds the cap and lets us tell a real selection from a
     // no-op (or a reversed/broken sort that would keep the LEAST significant
     // records instead).
-    const allRecords = longSessionJournal().serialize();
+    const allRecords = longSessionJournal().serialize().records;
     expect(allRecords.length).toBeGreaterThan(10);
 
     const save = minimalSave({ chronicleRecords: JSON.stringify(allRecords) });

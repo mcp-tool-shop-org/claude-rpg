@@ -127,6 +127,42 @@ export const PACK_ONBOARDING: Record<string, PackOnboarding> = {
     ],
     dangerWarning: 'Shamblers are slow. Runners are not. Check threat levels before exploring.',
   },
+  'iron-colosseum': {
+    quickstartTitle: 'Iron Colosseum Quickstart',
+    flavorIntro: 'The crowd decides who is remembered. The sand decides who is buried.',
+    keyLeverageGuidance: [
+      'Crowd favor is currency — fight with style, not just to win',
+      'Patron debts open doors the arena gate never will',
+      'A rival spared today is a faction shifted tomorrow',
+      'Glory fades; grudges compound',
+    ],
+    suggestedFirstMoves: ['look around', 'talk to the lanista', 'size up the other fighters'],
+    dangerWarning: 'The arena forgives losses. The politics behind it do not.',
+  },
+  'jade-veil': {
+    quickstartTitle: 'Jade Veil Quickstart',
+    flavorIntro: 'Every word at court is a blade half-drawn. Sheathe yours carefully.',
+    keyLeverageGuidance: [
+      'Honor binds harder than chains — spend it deliberately',
+      'A favor owed to the wrong house is a leash',
+      'Silence in the right room speaks louder than steel',
+      'Duels settle nothing the court has not already decided',
+    ],
+    suggestedFirstMoves: ['look around', 'greet the chamberlain', 'listen to the court gossip'],
+    dangerWarning: 'Losing face can be deadlier than losing blood.',
+  },
+  'crimson-court': {
+    quickstartTitle: 'Crimson Court Quickstart',
+    flavorIntro: 'The court has fed for centuries. Tonight it wonders how you taste.',
+    keyLeverageGuidance: [
+      'Blood debts outlast mortal lifetimes — collect carefully',
+      'Daylight is a wall; invitations are doors',
+      'Every elder patron expects tribute in kind',
+      'Mortal pawns are cheap; loyal ones are priceless',
+    ],
+    suggestedFirstMoves: ['look around', 'seek an audience with the elder', 'test the terms of hospitality'],
+    dangerWarning: 'Hunger makes promises your standing cannot keep.',
+  },
   'signal-loss': {
     quickstartTitle: 'Signal Loss Quickstart',
     flavorIntro: 'Something beneath the colony is listening. And it just started talking back.',
@@ -162,6 +198,9 @@ export const GENRE_TO_PACK: Record<string, string> = {
   'weird-west': 'dust-devils-bargain',
   zombie: 'ashfall-dead',
   colony: 'signal-loss',
+  gladiator: 'iron-colosseum',
+  ronin: 'jade-veil',
+  vampire: 'crimson-court',
 };
 
 /** Get onboarding data by genre (for first-turn guidance). */

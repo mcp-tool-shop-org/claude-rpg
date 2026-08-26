@@ -28,7 +28,10 @@ const require = createRequire(import.meta.url);
  * package-lock.json, which is outside src/character/** and outside what
  * this task may do (no npm install/ci -- see PROTOCOL.md worktree notes).
  */
-const KNOWN_BLOCKED_STARTER_PACKS = ['gladiator', 'ronin', 'vampire'];
+// Emptied by the engine 2.9.x migration — every installed starter pack is
+// registerable. Add a name here ONLY with a companion tripwire test proving
+// the block, the way the original gladiator/ronin/vampire entry did.
+const KNOWN_BLOCKED_STARTER_PACKS: string[] = [];
 
 describe('packs registry (F-00ddfc68 drift gate)', () => {
   const pkg = require('../../package.json') as {
@@ -102,24 +105,24 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
  * all three packs, keyed by their narratorTone (see the describe block
  * below and finale-prompt.ts's PACK_VOICES doc comment).
  */
-describe('starter-gladiator/ronin/vampire (F-00ddfc68: blocked on upstream @ai-rpg-engine/modules skew)', () => {
-  it('starter-gladiator is still unimportable due to the missing BUILTIN_PACK_BIASES export', async () => {
-    await expect(import('@ai-rpg-engine/starter-gladiator')).rejects.toThrow(
-      /BUILTIN_PACK_BIASES/,
-    );
-  });
-
-  it('starter-ronin is still unimportable due to the missing BUILTIN_PACK_BIASES export', async () => {
-    await expect(import('@ai-rpg-engine/starter-ronin')).rejects.toThrow(
-      /BUILTIN_PACK_BIASES/,
-    );
-  });
-
-  it('starter-vampire is still unimportable due to the missing BUILTIN_PACK_BIASES export', async () => {
-    await expect(import('@ai-rpg-engine/starter-vampire')).rejects.toThrow(
-      /BUILTIN_PACK_BIASES/,
-    );
-  });
+describe('starter-gladiator/ronin/vampire (F-00ddfc68: registered after the engine 2.9.x migration)', () => {
+  // The wave-10 tripwire asserted these imports THREW on the missing
+  // BUILTIN_PACK_BIASES export; the migration cleared it and the packs are
+  // registered. These are the positive halves the tripwire promised.
+  for (const [family, id] of [
+    ['gladiator', 'iron-colosseum'],
+    ['ronin', 'jade-veil'],
+    ['vampire', 'crimson-court'],
+  ] as const) {
+    it(`starter-${family} imports and is registered in allPacks as ${id}`, async () => {
+      const mod = await import(`@ai-rpg-engine/starter-${family}`);
+      expect(mod.packMeta.id).toBe(id);
+      const entry = getPackById(id);
+      expect(entry).toBeDefined();
+      expect(entry?.meta.id).toBe(id);
+      expect(typeof entry?.createGame).toBe('function');
+    });
+  }
 });
 
 /**

@@ -231,7 +231,7 @@ describe('chronicle continuity across v1→v2', () => {
 
     // 2 records in fixture (cr_1, cr_2)
     expect(journal.size()).toBe(2);
-    const records = journal.serialize();
+    const records = journal.serialize().records;
     expect(records).toHaveLength(2);
     expect(records[0].id).toBe('cr_1');
     expect(records[1].id).toBe('cr_2');

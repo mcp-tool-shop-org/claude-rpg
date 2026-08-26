@@ -1210,7 +1210,7 @@ export class GameSession {
    */
   private trimJournalIfNeeded(): void {
     if (this.journal.size() <= MAX_JOURNAL_RECORDS) return;
-    const trimmed = this.journal.serialize().slice(-MAX_JOURNAL_RECORDS);
+    const trimmed = this.journal.serialize().records.slice(-MAX_JOURNAL_RECORDS);
     this.journal = CampaignJournal.deserialize(trimmed);
   }
 
@@ -2341,7 +2341,10 @@ export class GameSession {
         const notoriety = recognition.stanceDelta !== 0
           ? Math.abs(recognition.stanceDelta) / 10
           : 0.5;
-        if (!shouldRecognize(clarity, notoriety)) continue;
+        // Engine 2.9.x: the recognition roll comes from the world's seeded RNG
+        // (shouldRecognize no longer draws internally — world truth stays
+        // reproducible across same-seed runs).
+        if (!shouldRecognize(clarity, notoriety, this.engine.store.rng.next())) continue;
 
         // 1. Record item chronicle entry
         const npcName = npcProfile.name;

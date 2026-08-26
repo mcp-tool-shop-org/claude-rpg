@@ -117,7 +117,8 @@ export function applyNpcEffects(
       case 'memory': {
         const cognition = getCognition(engine.world, effect.entityId);
         if (!cognition) break;
-        addMemory(cognition, effect.memType, tick, effect.data);
+        // Engine 2.9.x: addMemory takes the world first (zone-aware memories).
+        addMemory(engine.world, cognition, effect.memType, tick, effect.data, effect.entityId);
         break;
       }
 

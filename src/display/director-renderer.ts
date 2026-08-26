@@ -362,7 +362,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       if (!journal) return '  No chronicle available.';
       const entityId = parts[1];
       if (!entityId) {
-        const records = journal.serialize();
+        const records = journal.serialize().records;
         const span = records.length > 0 ? records[records.length - 1].tick - records[0].tick : 0;
         return `  Chronicle: ${records.length} events recorded across ${span} ticks.`;
       }

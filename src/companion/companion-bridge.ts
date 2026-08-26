@@ -94,9 +94,19 @@ export function recruitCompanion(
   entity.custom.companionMorale = companion.morale;
   entity.custom.companionRole = role;
 
-  const newParty = addCompanion(party, companion);
+  // Engine 2.9.x: addCompanion returns { party, success, reason } instead of a
+  // bare PartyState — surface the engine's own refusal reason when it declines.
+  const addResult = addCompanion(party, companion);
+  if (!addResult.success) {
+    return {
+      ok: false,
+      error: addResult.reason === 'party-full'
+        ? 'The party is already at full strength.'
+        : 'They are already traveling with you.',
+    };
+  }
 
-  return { ok: true, party: newParty, companion };
+  return { ok: true, party: addResult.party, companion };
 }
 
 // --- Dismissal ---

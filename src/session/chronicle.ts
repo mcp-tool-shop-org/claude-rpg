@@ -582,7 +582,7 @@ export function compactChronicle(
   recentWindow = DEFAULT_RECENT_WINDOW,
   maxCanonical = DEFAULT_MAX_CANONICAL,
 ): CompactedChronicle {
-  const allRecords = journal.serialize(); // sorted by tick
+  const allRecords = journal.serialize().records; // sorted by tick
   if (allRecords.length === 0) {
     return { canonicalEvents: [], eraSummaries: [], totalRecords: 0 };
   }
@@ -660,7 +660,7 @@ export function buildChronicleContext(
   journal: CampaignJournal,
   currentTick: number,
 ): string | undefined {
-  const allRecords = journal.serialize();
+  const allRecords = journal.serialize().records;
   if (allRecords.length === 0) return undefined;
 
   // Get top 5 most significant events

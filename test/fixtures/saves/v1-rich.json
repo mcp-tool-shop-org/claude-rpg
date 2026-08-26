@@ -3,8 +3,18 @@
   "engineState": "{\"zones\":{\"chapel-nave\":{\"id\":\"chapel-nave\"}},\"entities\":{\"player\":{\"currentZone\":\"chapel-nave\"}}}",
   "turnHistory": {
     "turns": [
-      { "tick": 1, "playerInput": "look", "verb": "look", "narration": "You see a dim chapel." },
-      { "tick": 2, "playerInput": "go nave", "verb": "move", "narration": "You enter the nave." }
+      {
+        "tick": 1,
+        "playerInput": "look",
+        "verb": "look",
+        "narration": "You see a dim chapel."
+      },
+      {
+        "tick": 2,
+        "playerInput": "go nave",
+        "verb": "move",
+        "narration": "You enter the nave."
+      }
     ]
   },
   "tone": "dark fantasy",
@@ -16,6 +26,6 @@
   "genre": "dark fantasy",
   "playerRumors": "[{\"id\":\"r1\",\"text\":\"The chapel guards whisper of a sealed crypt.\",\"source\":\"guard\",\"tick\":1}]",
   "activePressures": "[{\"id\":\"p1\",\"kind\":\"faction-conflict\",\"description\":\"Rival guilds clash over chapel territory\",\"severity\":2}]",
-  "chronicleRecords": "[{\"id\":\"cr_1\"},{\"id\":\"cr_2\"}]",
+  "chronicleRecords": "[{\"id\":\"cr_1\",\"tick\":3,\"category\":\"discovery\",\"actorId\":\"player\",\"description\":\"Uncovered the sealed crypt beneath the chapel.\",\"significance\":0.7,\"witnesses\":[],\"data\":{}},{\"id\":\"cr_2\",\"tick\":9,\"category\":\"combat\",\"actorId\":\"player\",\"description\":\"Drove off the grave-robbers at the crypt mouth.\",\"significance\":0.5,\"witnesses\":[],\"data\":{}}]",
   "campaignStatus": "active"
 }

@@ -587,7 +587,7 @@ describe('GameSession', () => {
       session.activeOpportunities.push(opp);
       resolve(session, opp, 'declined');
 
-      const records = session.journal.serialize();
+      const records = session.journal.serialize().records;
       expect(records).toHaveLength(1);
       expect(records[0].description).toContain('Declined');
       expect(records[0].description).toContain(opp.title);
@@ -607,7 +607,7 @@ describe('GameSession', () => {
       session.activeOpportunities.push(opp);
       resolve(session, opp, 'failed');
 
-      const records = session.journal.serialize();
+      const records = session.journal.serialize().records;
       expect(records).toHaveLength(1);
       expect(records[0].description).toContain('Failed');
     });
@@ -655,7 +655,7 @@ describe('GameSession', () => {
 
       expect(session.journal.size()).toBeLessThan(510);
       // Oldest-first: the earliest ticks are the ones evicted.
-      const remainingTicks = session.journal.serialize().map((r) => r.tick);
+      const remainingTicks = session.journal.serialize().records.map((r) => r.tick);
       expect(Math.min(...remainingTicks)).toBeGreaterThan(0);
       expect(Math.max(...remainingTicks)).toBe(509);
     });
@@ -770,7 +770,7 @@ describe('GameSession', () => {
       expect(h.session.activeOpportunities.find((o) => o.id === opp.id)).toBeUndefined();
       expect(h.session.resolvedOpportunities).toHaveLength(1);
 
-      const records = h.session.journal.serialize();
+      const records = h.session.journal.serialize().records;
       expect(records.some((r) => r.description.includes('Accepted contract'))).toBe(true);
       expect(records.some((r) => r.description.includes('Completed contract'))).toBe(true);
     });

@@ -150,8 +150,11 @@ export class ImmersionRuntime {
         // Merge hook cues into the plan
         const mergedPlan = this.mergeHookResults(narrationPlan, preResults);
 
-        // Schedule through audio director
-        const commands = this.audioDirector.schedule(mergedPlan);
+        // Schedule through audio director. Engine 2.9.x: schedule() takes the
+        // caller's clock for cooldown bookkeeping — wall time is the right
+        // semantic here (audio cue cooldowns pace the live session, not the
+        // deterministic world state).
+        const commands = this.audioDirector.schedule(mergedPlan, Date.now());
 
         // Execute through bridge
         audioCalls = await this.bridge.executeCommands(commands);

@@ -122,7 +122,7 @@ describe('recruitCompanion', () => {
       'npc-1': npc,
     });
     let party = createPartyState(1); // maxSize 1
-    party = addCompanion(party, makeCompanion({ npcId: 'other-npc' }));
+    party = addCompanion(party, makeCompanion({ npcId: 'other-npc' })).party;
 
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
@@ -137,7 +137,7 @@ describe('recruitCompanion', () => {
       'npc-1': npc,
     });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'npc-1' }));
+    party = addCompanion(party, makeCompanion({ npcId: 'npc-1' })).party;
 
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
@@ -208,7 +208,7 @@ describe('dismissCompanion', () => {
     });
     const engine = makeEngine({ player: makeEntity({ id: 'player' }), 'npc-1': npc });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'npc-1', role: 'scout', morale: 70 }));
+    party = addCompanion(party, makeCompanion({ npcId: 'npc-1', role: 'scout', morale: 70 })).party;
 
     const result = dismissCompanion(engine, party, 'npc-1');
 
@@ -234,7 +234,7 @@ describe('dismissCompanion', () => {
   it('does not throw when the companion entity no longer exists in world.entities', () => {
     const engine = makeEngine({ player: makeEntity({ id: 'player' }) }); // npc-1 absent
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'npc-1' }));
+    party = addCompanion(party, makeCompanion({ npcId: 'npc-1' })).party;
 
     let result: ReturnType<typeof dismissCompanion> | undefined;
     expect(() => {
@@ -251,8 +251,8 @@ describe('followPlayer', () => {
     const player = makeEntity({ id: 'player', zoneId: 'zone-new' });
     const engine = makeEngine({ player, 'comp-1': comp1, 'comp-2': comp2 });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', active: true }));
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-2', active: false }));
+    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', active: true })).party;
+    party = addCompanion(party, makeCompanion({ npcId: 'comp-2', active: false })).party;
 
     followPlayer(engine, party);
 
@@ -265,7 +265,7 @@ describe('followPlayer', () => {
     const player = makeEntity({ id: 'player', zoneId: undefined });
     const engine = makeEngine({ player, 'comp-1': comp1 });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1' }));
+    party = addCompanion(party, makeCompanion({ npcId: 'comp-1' })).party;
 
     followPlayer(engine, party);
 
@@ -276,7 +276,7 @@ describe('followPlayer', () => {
     const player = makeEntity({ id: 'player', zoneId: 'zone-new' });
     const engine = makeEngine({ player }); // comp-1 absent
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1' }));
+    party = addCompanion(party, makeCompanion({ npcId: 'comp-1' })).party;
 
     expect(() => followPlayer(engine, party)).not.toThrow();
   });
@@ -287,7 +287,7 @@ describe('syncCompanionMorale', () => {
     const comp1 = makeEntity({ id: 'comp-1' });
     const engine = makeEngine({ player: makeEntity({ id: 'player' }), 'comp-1': comp1 });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', morale: 42 }));
+    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', morale: 42 })).party;
 
     syncCompanionMorale(engine, party);
 
@@ -298,7 +298,7 @@ describe('syncCompanionMorale', () => {
     const comp1 = makeEntity({ id: 'comp-1', custom: undefined });
     const engine = makeEngine({ player: makeEntity({ id: 'player' }), 'comp-1': comp1 });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', morale: 33 }));
+    party = addCompanion(party, makeCompanion({ npcId: 'comp-1', morale: 33 })).party;
 
     syncCompanionMorale(engine, party);
 
@@ -308,7 +308,7 @@ describe('syncCompanionMorale', () => {
   it('skips companions whose entity no longer exists', () => {
     const engine = makeEngine({ player: makeEntity({ id: 'player' }) });
     let party = createPartyState();
-    party = addCompanion(party, makeCompanion({ npcId: 'ghost' }));
+    party = addCompanion(party, makeCompanion({ npcId: 'ghost' })).party;
 
     expect(() => syncCompanionMorale(engine, party)).not.toThrow();
   });

@@ -36,13 +36,13 @@ describe('chronicle append order', () => {
   it('first event appends correctly', () => {
     const journal = buildJournal([combatTurnSource(1, 'pilgrim', 'Pilgrim')]);
     expect(journal.size()).toBeGreaterThan(0);
-    const records = journal.serialize();
+    const records = journal.serialize().records;
     expect(records[0].tick).toBe(1);
   });
 
   it('multiple events preserve exact tick order', () => {
     const journal = multiTurnJournal();
-    const records = journal.serialize();
+    const records = journal.serialize().records;
     for (let i = 1; i < records.length; i++) {
       expect(records[i].tick).toBeGreaterThanOrEqual(records[i - 1].tick);
     }
@@ -50,7 +50,7 @@ describe('chronicle append order', () => {
 
   it('long session does not omit middle entries', () => {
     const journal = longSessionJournal();
-    const records = journal.serialize();
+    const records = journal.serialize().records;
     // Every combat turn (ticks 5,10,15,20,25,30) should produce at least one record
     const combatTicks = [5, 10, 15, 20, 25, 30];
     for (const tick of combatTicks) {
@@ -77,7 +77,7 @@ describe('chronicle append order', () => {
       combatTurnSource(2, 'e2', 'Enemy 2'),
     ];
     const journal = buildJournal(sources);
-    const records = journal.serialize();
+    const records = journal.serialize().records;
     const tick1 = records.filter((r) => r.tick === 1);
     const tick2 = records.filter((r) => r.tick === 2);
     expect(tick1.length).toBeGreaterThan(0);
@@ -190,7 +190,7 @@ describe('chronicle persistence stability', () => {
 
   it('chronicle survives save/load round-trip', async () => {
     const journal = multiTurnJournal();
-    const originalRecords = journal.serialize();
+    const originalRecords = journal.serialize().records;
 
     // Simulate saving: embed serialized chronicle in a minimal save
     const save: SavedSession = {
@@ -208,7 +208,7 @@ describe('chronicle persistence stability', () => {
 
     const result = await loadSession(path);
     const restoredJournal = loadChronicleFromSession(result.session);
-    const restoredRecords = restoredJournal.serialize();
+    const restoredRecords = restoredJournal.serialize().records;
 
     expect(restoredRecords.length).toBe(originalRecords.length);
     for (let i = 0; i < originalRecords.length; i++) {

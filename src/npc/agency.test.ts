@@ -139,7 +139,10 @@ describe('applyNpcEffects — BR-007 null cognition guards', () => {
     ]);
 
     applyNpcEffects(result, ctx);
-    expect(mockedAddMemory).toHaveBeenCalledWith(fakeCog, 'observation', 1, { detail: 'test' });
+    // Engine 2.9.x: addMemory is world-first and zone-aware (entityId trailer).
+    expect(mockedAddMemory).toHaveBeenCalledWith(
+      ctx.engine.world, fakeCog, 'observation', 1, { detail: 'test' }, 'npc-1',
+    );
   });
 
   it('should update morale when cognition exists', () => {

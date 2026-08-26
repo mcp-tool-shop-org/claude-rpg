@@ -357,7 +357,13 @@ export function loadChronicleFromSession(session: SavedSession): CampaignJournal
   try {
     const records = JSON.parse(session.chronicleRecords) as CampaignRecord[];
     return CampaignJournal.deserialize(records);
-  } catch {
+  } catch (err) {
+    // Engine 2.9.x validates records on deserialize (CA-06) — a refusal here
+    // means the save's chronicle is corrupt. Starting an empty journal keeps
+    // the session playable, but the loss must not be silent.
+    console.warn(
+      `[session] Chronicle could not be restored from this save — starting an empty journal. ${err instanceof Error ? err.message : String(err)}`,
+    );
     return new CampaignJournal();
   }
 }

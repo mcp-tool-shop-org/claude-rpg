@@ -226,6 +226,58 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.has('npc-bad')).toBe(false);
     warnSpy.mockRestore();
   });
+
+  // F-dd2851cb: sibling gap one level deeper than F-5bfeeab2's own top-level
+  // fix above — isValidConsequenceChain checked Array.isArray(c.steps) but
+  // never validated each step's own shape. The compiled
+  // @ai-rpg-engine/modules resolveConsequenceChainStep does `step.verb` /
+  // `step.description` on chain.steps[chain.currentStep] and
+  // `chain.steps[nextStep].delayTurns` on the next entry, all unguarded — a
+  // chain whose steps array contains a malformed element (e.g. null) passed
+  // this validator unchanged and reached game.ts's tickNpcAgencyTurn(),
+  // crashing every subsequent turn for the rest of the session.
+  it('drops a chain entry whose steps array contains a malformed element (null), even though the array itself and every chain-level field are well-typed', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const badChain = {
+      ...validChain,
+      steps: [null, { delayTurns: 1, verb: 'warn', description: 'warns you' }],
+    };
+    const session = makeSession({
+      consequenceChains: JSON.stringify({ 'npc-bad': badChain }),
+    });
+    const result = loadConsequenceChainsFromSession(session);
+    expect(result.has('npc-bad')).toBe(false);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('drops a chain entry whose steps array contains a step missing required fields (wrong shape, not null)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const badChain = { ...validChain, steps: [{ delayTurns: 1 }] };
+    const session = makeSession({
+      consequenceChains: JSON.stringify({ 'npc-bad': badChain }),
+    });
+    const result = loadConsequenceChainsFromSession(session);
+    expect(result.has('npc-bad')).toBe(false);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('keeps a well-shaped chain entry while dropping a sibling entry whose steps array holds a malformed element, in the same save (mixed batch)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      consequenceChains: JSON.stringify({
+        'npc-good': validChain,
+        'npc-bad': { ...validChain, steps: [null] },
+      }),
+    });
+    const result = loadConsequenceChainsFromSession(session);
+    expect(result.size).toBe(1);
+    expect(result.has('npc-good')).toBe(true);
+    expect(result.get('npc-good')).toEqual(validChain);
+    expect(result.has('npc-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
 });
 
 // F-d521bb19: loadArcSnapshotFromSession's `JSON.parse(x) as ArcSnapshot |
@@ -280,5 +332,39 @@ describe('loadArcSnapshotFromSession (F-d521bb19)', () => {
   it('returns the parsed snapshot when it matches the ArcSnapshot shape', () => {
     const session = makeSession({ arcSnapshot: JSON.stringify(validSnapshot) });
     expect(loadArcSnapshotFromSession(session)).toEqual(validSnapshot);
+  });
+
+  // F-1c412093: sibling gap one level deeper than F-d521bb19's own top-level
+  // fix above — isValidArcSnapshot checked Array.isArray(a.signals) but
+  // never validated each signal's own shape. The compiled
+  // @ai-rpg-engine/modules buildArcSnapshot does `previous.signals.find((s)
+  // => s.kind === signal.kind)` unguarded whenever a previous snapshot is
+  // passed in (tickArcDetection() does this every turn), and game.ts's
+  // '/status' command handler does `this.arcSnapshot.signals.find((s) =>
+  // s.kind === ...)` directly too — a snapshot whose signals array contains
+  // a malformed element (e.g. null) passed this validator unchanged.
+  it('falls back to null when signals contains a malformed element (null), even though the array itself and every top-level field are well-typed', () => {
+    const session = makeSession({
+      arcSnapshot: JSON.stringify({
+        signals: [
+          null,
+          { kind: 'rising-power', strength: 0.6, momentum: 'building', primaryDrivers: [], turnsActive: 3 },
+        ],
+        dominantArc: 'rising-power',
+        tick: 10,
+      }),
+    });
+    expect(loadArcSnapshotFromSession(session)).toBeNull();
+  });
+
+  it('falls back to null when a signal element is missing required fields (wrong shape, not null)', () => {
+    const session = makeSession({
+      arcSnapshot: JSON.stringify({
+        signals: [{ kind: 'rising-power' }],
+        dominantArc: null,
+        tick: 10,
+      }),
+    });
+    expect(loadArcSnapshotFromSession(session)).toBeNull();
   });
 });

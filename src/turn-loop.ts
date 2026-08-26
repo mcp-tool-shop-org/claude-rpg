@@ -247,30 +247,65 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // Step 5: Generate NPC dialogue if speaking
   let dialogue: DialogueResult | null = null;
   if (interpreted.verb === 'speak' && interpreted.targetIds?.[0]) {
-    dialogue = await generateDialogue(
-      client,
-      engine.world,
-      interpreted.targetIds[0],
-      playerInput,
-      tone,
-      npcPlayerPresence,
-      playerProfile,
-      playerRumors,
-      worldPressures,
-      lastNpcActions,
-      economyContext,
-      craftingContext,
-      opportunityContext,
-    );
+    try {
+      dialogue = await generateDialogue(
+        client,
+        engine.world,
+        interpreted.targetIds[0],
+        playerInput,
+        tone,
+        npcPlayerPresence,
+        playerProfile,
+        playerRumors,
+        worldPressures,
+        lastNpcActions,
+        economyContext,
+        craftingContext,
+        opportunityContext,
+      );
 
-    // Add voice cast to dialogue if immersion is active
-    if (dialogue && immersion) {
-      const cast = immersion.getVoiceCast(interpreted.targetIds[0]);
-      dialogue.voiceCast = {
-        voiceId: cast.voiceId,
-        emotion: cast.defaultEmotion,
-        speed: cast.defaultSpeed,
-      };
+      // Add voice cast to dialogue if immersion is active
+      if (dialogue && immersion) {
+        const cast = immersion.getVoiceCast(interpreted.targetIds[0]);
+        dialogue.voiceCast = {
+          voiceId: cast.voiceId,
+          emotion: cast.defaultEmotion,
+          speed: cast.defaultSpeed,
+        };
+      }
+    } catch (err) {
+      // F-b6494bc2: mirrors Step 3+4's F-c4332895 catch above. By the time
+      // Step 5 runs, engine.submitAction() has already mutated world state
+      // AND narrateScene has already succeeded (narrationResult.narration is
+      // real, authored prose) — generateDialogue only lets an error escape
+      // for fatal NarrationError kinds (auth/bad-request, its own
+      // F-6480985e contract mirroring narrateScene's F-304fc328), realistic
+      // here specifically because buildDialoguePrompt's NPC-context payload
+      // is an independently-sized/shaped request from buildNarratePrompt's
+      // and can trip a request-level rejection the narration call didn't.
+      // That already-succeeded narration must not be lost just because the
+      // dialogue on top of it failed: record the turn with it (dialogue
+      // omitted — it never completed), attach bookkeeping so game.ts's
+      // existing recovery path (including emitPresentation) engages exactly
+      // as it does for the narrateScene-origin case, then rethrow.
+      const profileHints = extractProfileHints(events, interpreted.verb, engine.world, worldPressures);
+      history.record({
+        tick: engine.tick,
+        playerInput,
+        verb: interpreted.verb,
+        narration: narrationResult.narration,
+        isFallback: narrationResult.isFallback,
+      });
+      if (err instanceof Error) {
+        (err as ErrorWithFatalTurnBookkeeping)[FATAL_TURN_BOOKKEEPING] = {
+          events,
+          interpreted,
+          profileHints,
+          tick: engine.tick,
+          narration: narrationResult.narration,
+        };
+      }
+      throw err;
     }
   }
 

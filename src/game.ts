@@ -188,7 +188,7 @@ import {
 import { generateOpeningNarration, generateFinaleNarration } from './game/game-narration.js';
 import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, renderConcludeOutput, renderPlayOutput, buildPartyStatusLine } from './game/game-presenter.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
-import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
+import type { ClaudeClient, ClaudeClientConfig, StreamCallback } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
 import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
@@ -273,6 +273,20 @@ export type GameConfig = {
    * output.
    */
   onPresentation?: (calls: McpToolCall[]) => void;
+  /**
+   * STREAMING SEAM CONTRACT (game-core half): invoked with each narration
+   * chunk as narrateScene() streams it, for a NORMAL turn only — not the
+   * opening narration, not director mode (director commands never reach
+   * executeTurn() at all; see processInput()). narrateScene already accepts
+   * an onChunk callback and only takes the streaming branch when one is
+   * provided (mirrors narrator.ts's `onChunk && client.generateStream`
+   * gate) — omitting this leaves every turn on the existing non-streaming
+   * path, unchanged. Invoked in a try/catch internally: a throwing sink
+   * must never damage the turn (mirrors onPresentation's containment
+   * above). The caller (e.g. bin.ts / cli-display's stream-presenter) owns
+   * turning chunks into incremental terminal output.
+   */
+  onNarrationChunk?: StreamCallback;
 };
 
 export class GameSession {
@@ -321,6 +335,8 @@ export class GameSession {
   readonly debugLog: DebugLogger;
   /** F-79a25863 (presentation seam contract): see GameConfig.onPresentation. */
   private readonly onPresentation?: (calls: McpToolCall[]) => void;
+  /** Streaming seam contract (game-core half): see GameConfig.onNarrationChunk. */
+  private readonly onNarrationChunk?: StreamCallback;
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -339,6 +355,7 @@ export class GameSession {
     this.autosaveConfig = { ...DEFAULT_AUTOSAVE, ...config.autosave };
     this.debugLog = config.debugLogger ?? createDebugLogger();
     this.onPresentation = config.onPresentation;
+    this.onNarrationChunk = config.onNarrationChunk;
 
     // Initialize district economies from genre + district tags
     this.initializeDistrictEconomies();
@@ -495,6 +512,26 @@ export class GameSession {
       this.onPresentation(calls);
     } catch (err) {
       this.debugLog.error('subsystem', 'presentation sink failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Streaming seam contract (game-core half): relay one narration chunk to
+   * the registered onNarrationChunk sink, if any. Wrapped in try/catch —
+   * mirrors emitPresentation's containment above — because this function is
+   * what actually gets passed down as narrateScene's onChunk (via
+   * executeTurn's opts, turn-loop.ts), and that call site invokes it
+   * directly with no try/catch of its own: a throwing sink must never
+   * damage the turn.
+   */
+  private emitNarrationChunk(chunk: string): void {
+    if (!this.onNarrationChunk) return;
+    try {
+      this.onNarrationChunk(chunk);
+    } catch (err) {
+      this.debugLog.error('subsystem', 'narration chunk sink failed', {
         error: err instanceof Error ? err.message : String(err),
       });
     }
@@ -727,6 +764,18 @@ export class GameSession {
         arcContext: this.getArcContext(),
         endgameContext: this.getEndgameContext(),
         chronicleContext: this.getChronicleContext(),
+        // Streaming seam contract (game-core half): only pass a defined
+        // callback when a real sink is registered — narrateScene's
+        // `onChunk && client.generateStream` gate (narrator.ts) must see
+        // `undefined`, not an always-truthy no-op wrapper, or every turn
+        // would silently switch onto the streaming/legacy-prompt path even
+        // when no caller ever asked to stream. NORMAL turns only: director
+        // commands return before this call site (see above), and
+        // getOpeningNarration() calls generateOpeningNarration() directly,
+        // never executeTurn().
+        onNarrationChunk: this.onNarrationChunk
+          ? (chunk: string) => this.emitNarrationChunk(chunk)
+          : undefined,
       });
     } catch (err) {
       // F-c4332895: executeTurn() rethrows once engine.submitAction() has

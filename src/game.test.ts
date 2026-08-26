@@ -681,4 +681,98 @@ describe('GameSession', () => {
       await expect(h.play('look around')).resolves.toBeTruthy();
     });
   });
+
+  // STREAMING SEAM CONTRACT (game-core half): narrateScene already supports
+  // onChunk, and the fake client's streaming mode (test/helpers/fake-claude-
+  // client.ts, opts.streaming) already splits narration into word chunks and
+  // invokes it — but nothing threaded a caller-supplied sink through
+  // GameConfig/executeTurn into that onChunk parameter, so it was inert for
+  // every real player. This suite proves the game-core half of the wire:
+  // GameConfig.onNarrationChunk reaches narrateScene's onChunk for a normal
+  // turn only — not opening narration, not director mode — and a throwing
+  // sink never damages the turn (mirrors emitPresentation's F-79a25863
+  // containment). The cli-display half (bin.ts wiring createStreamPresenter()
+  // through this same opt) lands separately this same wave.
+  describe('streaming narration seam contract (game-core half)', () => {
+    it('relays a normal turn\'s narration chunks to the registered onNarrationChunk sink', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const chunks: string[] = [];
+      const h = createHarness({
+        clientOpts: { streaming: true, narration: 'Two words appear' },
+        gameOpts: { onNarrationChunk: (chunk) => chunks.push(chunk) },
+      });
+
+      await h.play('look around');
+
+      expect(chunks.length).toBeGreaterThan(0);
+      expect(chunks.join('')).toBe('Two words appear');
+      expect(h.callLog.generateStream).toBe(1);
+    });
+
+    it('does not force the streaming client path (and does not stream) when no onNarrationChunk is configured', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({
+        clientOpts: { streaming: true },
+      });
+
+      await h.play('look around');
+
+      // narrateScene only takes the streaming branch when onChunk is
+      // truthy — an inert-but-defined wrapper passed through unconditionally
+      // would silently switch every turn onto the legacy plain-text path
+      // even when no caller ever asked to stream.
+      expect(h.callLog.generateStream).toBe(0);
+      expect(h.callLog.generate).toBeGreaterThan(0);
+    });
+
+    it('does not invoke the sink for the opening narration path', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const chunks: string[] = [];
+      const h = createHarness({
+        clientOpts: { streaming: true, narration: 'Opening scene text' },
+        gameOpts: { onNarrationChunk: (chunk) => chunks.push(chunk) },
+      });
+
+      await h.session.getOpeningNarration();
+
+      expect(chunks).toHaveLength(0);
+    });
+
+    it('does not invoke the sink for director mode commands', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const chunks: string[] = [];
+      const h = createHarness({
+        clientOpts: { streaming: true },
+        gameOpts: { onNarrationChunk: (chunk) => chunks.push(chunk) },
+      });
+
+      await h.play('/director');
+      await h.play('/inspect pilgrim');
+
+      expect(chunks).toHaveLength(0);
+    });
+
+    it('does not let a throwing onNarrationChunk sink damage the turn', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const onNarrationChunk = vi.fn(() => {
+        throw new Error('chunk sink exploded');
+      });
+      const h = createHarness({
+        clientOpts: { streaming: true, narration: 'Two words appear' },
+        gameOpts: { onNarrationChunk },
+      });
+
+      const output = await h.play('look around');
+
+      expect(output).toBeTruthy();
+      expect(onNarrationChunk).toHaveBeenCalled();
+    });
+
+    it('works with no onNarrationChunk callback configured (optional, backward compatible)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await expect(h.play('look around')).resolves.toBeTruthy();
+    });
+  });
 });

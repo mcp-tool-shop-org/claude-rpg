@@ -446,11 +446,37 @@ export function loadObligationsFromSession(
 }
 
 /**
+ * F-dd2851cb: shape guard for a single ConsequenceStep entry within a parsed
+ * ConsequenceChain's `.steps` array. Mirrors isValidNpcObligation's
+ * per-element validation depth for the same class of problem: Array.isArray
+ * alone lets a malformed element (e.g. null) through unexamined.
+ * resolveConsequenceChainStep (compiled @ai-rpg-engine/modules) does
+ * `step.verb` / `step.description` on chain.steps[chain.currentStep] and
+ * `chain.steps[nextStep].delayTurns` on the next entry, all unguarded.
+ */
+function isValidConsequenceStep(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const s = value as Record<string, unknown>;
+  return (
+    typeof s.delayTurns === 'number' &&
+    typeof s.verb === 'string' &&
+    typeof s.description === 'string'
+  );
+}
+
+/**
  * F-5bfeeab2: shape guard for a single ConsequenceChain entry (one Map
  * value). Validates exactly the fields shouldResolveChainStep/
  * tickConsequenceChain dereference unguarded in the compiled
  * @ai-rpg-engine/modules implementation (`chain.currentStep <
  * chain.steps.length`), plus the chain's own identity fields.
+ *
+ * F-dd2851cb: Array.isArray(c.steps) alone only proves `.steps` is an array
+ * — it does not prove each element is a well-shaped ConsequenceStep. A chain
+ * whose steps array contained a malformed element (e.g. null) passed this
+ * validator unchanged and crashed resolveConsequenceChainStep every
+ * subsequent turn (see isValidConsequenceStep's doc comment above). Each
+ * step is now validated individually via isValidConsequenceStep.
  */
 function isValidConsequenceChain(value: unknown): value is ConsequenceChain {
   if (value == null || typeof value !== 'object') return false;
@@ -461,6 +487,7 @@ function isValidConsequenceChain(value: unknown): value is ConsequenceChain {
     typeof c.kind === 'string' &&
     typeof c.trigger === 'string' &&
     Array.isArray(c.steps) &&
+    c.steps.every(isValidConsequenceStep) &&
     typeof c.currentStep === 'number' &&
     typeof c.turnsUntilNext === 'number' &&
     typeof c.resolved === 'boolean' &&
@@ -561,17 +588,47 @@ export function loadResolvedOpportunitiesFromSession(session: SavedSession): Opp
 }
 
 /**
+ * F-1c412093: shape guard for a single ArcSignal entry within a parsed
+ * ArcSnapshot's `.signals` array. Mirrors isValidNpcObligation/
+ * isValidConsequenceStep's per-element validation depth for the same class
+ * of problem: Array.isArray alone lets a malformed element (e.g. null)
+ * through unexamined. buildArcSnapshot's compiled @ai-rpg-engine/modules
+ * implementation does `previous.signals.find((s) => s.kind ===
+ * signal.kind)` unguarded, and game.ts's '/status' command handler does
+ * `this.arcSnapshot.signals.find((s) => s.kind === ...)` directly too.
+ */
+function isValidArcSignal(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const s = value as Record<string, unknown>;
+  return (
+    typeof s.kind === 'string' &&
+    typeof s.strength === 'number' &&
+    typeof s.momentum === 'string' &&
+    Array.isArray(s.primaryDrivers) &&
+    typeof s.turnsActive === 'number'
+  );
+}
+
+/**
  * F-d521bb19: shape guard for a parsed ArcSnapshot, mirroring
  * isValidPartyState. buildArcSnapshot()'s compiled implementation does
  * `previous.signals.find(...)` unguarded whenever `previous` is truthy
  * (@ai-rpg-engine/modules), and the `/status` command (game.ts) reads
  * `.signals.find(...)` directly too.
+ *
+ * F-1c412093: Array.isArray(a.signals) alone only proves `.signals` is an
+ * array — it does not prove each element is a well-shaped ArcSignal. A
+ * snapshot whose signals array contained a malformed element (e.g. null)
+ * passed this validator unchanged and crashed both consumers above every
+ * subsequent turn (see isValidArcSignal's doc comment above). Each signal is
+ * now validated individually via isValidArcSignal.
  */
 function isValidArcSnapshot(value: unknown): value is ArcSnapshot {
   if (value == null || typeof value !== 'object') return false;
   const a = value as Record<string, unknown>;
   return (
     Array.isArray(a.signals) &&
+    a.signals.every(isValidArcSignal) &&
     (a.dominantArc === null || typeof a.dominantArc === 'string') &&
     typeof a.tick === 'number'
   );

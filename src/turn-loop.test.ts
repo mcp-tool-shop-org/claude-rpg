@@ -229,4 +229,80 @@ describe('executeTurn (opts object)', () => {
       expect(history.getAll()[0].isFallback).toBe(true);
     });
   });
+
+  describe('fatal dialogue error after successful narration (F-b6494bc2)', () => {
+    beforeEach(() => {
+      mockedNarrateScene.mockClear();
+    });
+
+    /**
+     * Client whose first generate() call (consumed by narrateScene's Step
+     * 3+4) succeeds, and whose second call (consumed by generateDialogue's
+     * Step 5, gated on the 'speak' verb) rejects with a fatal NarrationError
+     * — dialogue-mind.ts's F-6480985e contract rethrows exactly this kind
+     * (auth/bad-request) rather than absorbing it into an in-character
+     * fallback, mirroring narrateScene's own F-304fc328 fatal contract.
+     * interpretAction's fast path resolves 'speak to pilgrim' without any
+     * client call, so call #1 is deterministically narrateScene's and call
+     * #2 is deterministically generateDialogue's.
+     */
+    function createNarrationThenFatalDialogueClient(): ClaudeClient {
+      let calls = 0;
+      return {
+        model: 'mock',
+        async generate() {
+          calls += 1;
+          if (calls === 1) {
+            return { ok: true, text: 'The pilgrim looks up as you approach.', inputTokens: 0, outputTokens: 0 };
+          }
+          throw new NarrationError({ kind: 'bad-request', message: 'npc dialogue payload rejected' });
+        },
+        async generateStructured() {
+          return { ok: false, data: null, raw: '', error: 'mock' };
+        },
+      };
+    }
+
+    it('records the turn with the narration that already succeeded (dialogue omitted) and rethrows when generateDialogue fails fatally', async () => {
+      const engine = createGame();
+      const client = createNarrationThenFatalDialogueClient();
+      const history = new TurnHistory();
+
+      await expect(
+        executeTurn({ engine, client, history, playerInput: 'speak to pilgrim', tone: 'dark fantasy' }),
+      ).rejects.toBeInstanceOf(NarrationError);
+
+      // Step 3+4 (narrateScene) already succeeded — real narration was
+      // computed. Step 5's fatal dialogue failure must not lose it: the
+      // turn is still recorded, with that real narration, dialogue omitted
+      // (never generated), not the generic FATAL_NARRATION_FALLBACK text
+      // Step 3+4's own catch would have used.
+      const turns = history.getAll();
+      expect(turns).toHaveLength(1);
+      expect(turns[0].verb).toBe('speak');
+      expect(turns[0].narration).toBe('The pilgrim looks up as you approach.');
+      expect(turns[0].dialogue).toBeUndefined();
+      expect(turns[0].isFallback).toBe(false);
+    });
+
+    it('attaches turn bookkeeping (with the real narration) to the rethrown error for the caller to recover', async () => {
+      const engine = createGame();
+      const client = createNarrationThenFatalDialogueClient();
+      const history = new TurnHistory();
+
+      let caught: unknown;
+      try {
+        await executeTurn({ engine, client, history, playerInput: 'speak to pilgrim', tone: 'dark fantasy' });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(NarrationError);
+      const bookkeeping = getFatalTurnBookkeeping(caught);
+      expect(bookkeeping).toBeDefined();
+      expect(bookkeeping!.interpreted.verb).toBe('speak');
+      expect(bookkeeping!.narration).toBe('The pilgrim looks up as you approach.');
+      expect(bookkeeping!.tick).toBe(engine.tick);
+    });
+  });
 });

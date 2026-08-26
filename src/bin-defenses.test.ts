@@ -49,6 +49,11 @@ describe('bin defenses: engine state validation (PFE-007)', () => {
     expect(result.valid).toBe(false);
   });
 
+  it('rejects world.state as an array (F-911bf1ee regression: typeof [] === "object" too, so the null-only guard let an array-shaped state through; distinct from the top-level-array case above, which is caught earlier by the .world lookup)', () => {
+    const result = validateEngineState(JSON.stringify({ world: { state: [1, 2, 3] } }));
+    expect(result.valid).toBe(false);
+  });
+
   it('rejects world.state as primitive', () => {
     const result = validateEngineState(JSON.stringify({ world: { state: 42 } }));
     expect(result.valid).toBe(false);

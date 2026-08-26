@@ -1,7 +1,7 @@
 // help-system — consolidated help rendering + pack onboarding
 // v1.1: Campaign UX & Product Hardening
 
-import type { ResolutionClass } from '@ai-rpg-engine/modules';
+import type { ResolutionClass, ArcKind, ArcMomentum } from '@ai-rpg-engine/modules';
 
 const DIVIDER = '\u2500'.repeat(60);
 const THIN = '\u00b7'.repeat(60);
@@ -308,7 +308,58 @@ export function renderPackQuickstart(packId: string): string {
 
 // --- Arc Help ---
 
+/**
+ * One-line description per arc kind, typed against the engine's real enum
+ * (@ai-rpg-engine/modules ArcKind, arc-detection.d.ts) — the same fix
+ * F-545cb684 applied to RESOLUTION_CLASS_HELP for the identical bug next
+ * door. Before this (F-204465a3), renderArcHelp hand-listed 10 kinds
+ * (rising-power, hunted, kingmaker, resistance, merchant-prince,
+ * shadow-broker, peacemaker, outcast, revelation, betrayer) as untyped
+ * prose; only the first 6 are real. The other 4 real kinds — last-stand,
+ * community-builder, descent, reckoning — went undocumented. Descriptions
+ * for those 4 are grounded in arc-detection.js's actual scoring signals
+ * (low HP/companions/high heat for last-stand; companion morale/legitimacy/
+ * allied NPCs for community-builder; falling reputation/rising heat/losing
+ * companions for descent; NPC obligation load + converging pressures for
+ * reckoning), not guessed.
+ */
+export const ARC_KIND_HELP: Record<ArcKind, string> = {
+  'rising-power': 'Growing faction influence, territory, political capital',
+  'hunted': 'Multiple factions hostile, bounties, allies turning',
+  'kingmaker': 'Holding balance of power between competing factions',
+  'resistance': 'Fighting dominant faction from a weaker position',
+  'merchant-prince': 'Economic dominance through trade and resources',
+  'shadow-broker': 'Intel accumulation, hidden influence, rumor networks',
+  'last-stand': 'Low health, mounting pressures, allies dwindling',
+  'community-builder': 'Loyal companions, legitimacy, and allies anchoring stability',
+  'descent': 'Falling reputation, rising heat, companions and standing slipping',
+  'reckoning': 'Mounting obligations and converging pressures forcing a confrontation',
+};
+
+/**
+ * The three real momentum values (@ai-rpg-engine/modules ArcMomentum). The
+ * old prose said "rising, steady, or fading" — only 'steady' ever matched;
+ * the real values are building/steady/waning (F-204465a3).
+ */
+export const ARC_MOMENTUM_HELP: Record<ArcMomentum, string> = {
+  'building': 'building',
+  'steady': 'steady',
+  'waning': 'waning',
+};
+
+/** "a, b, or c" — derived, not hardcoded, so a future 4th momentum value
+ *  (or kind) added to the map still renders correctly. */
+function joinWithOr(items: string[]): string {
+  if (items.length <= 1) return items.join(', ');
+  return `${items.slice(0, -1).join(', ')}, or ${items[items.length - 1]}`;
+}
+
 export function renderArcHelp(): string {
+  const kindLines = Object.entries(ARC_KIND_HELP)
+    .map(([kind, desc]) => `    ${kind.padEnd(20)}${desc}`)
+    .join('\n');
+  const momentumList = joinWithOr(Object.keys(ARC_MOMENTUM_HELP));
+
   return `
 ${DIVIDER}
   CAMPAIGN ARCS
@@ -316,18 +367,9 @@ ${DIVIDER}
 
   The engine tracks 10 narrative arc kinds based on your actions:
 
-    rising-power       Growing faction influence, territory, political capital
-    hunted             Multiple factions hostile, bounties, allies turning
-    kingmaker          Holding balance of power between competing factions
-    resistance         Fighting dominant faction from a weaker position
-    merchant-prince    Economic dominance through trade and resources
-    shadow-broker      Intel accumulation, hidden influence, rumor networks
-    peacemaker         Resolving conflicts, building alliances
-    outcast            Rejected by all factions, operating independently
-    revelation         Uncovering hidden truths, following belief chains
-    betrayer           Breaking alliances, abandoning obligations
+${kindLines}
 
-  Each arc signal has momentum: rising, steady, or fading.
+  Each arc signal has momentum: ${momentumList}.
   Your dominant arc shapes endgame triggers and the campaign epilogue.
 
   COMMANDS

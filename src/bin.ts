@@ -12,7 +12,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { version: pkgVersion } = require('../package.json') as { version: string };
-import { GameSession } from './game.js';
+import { GameSession, type GameConfig } from './game.js';
+import type { McpToolCall } from './runtime/audio-bridge.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld } from './foundry/world-gen.js';
 import {
@@ -43,6 +44,7 @@ import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError } from './cli/error-presenter.js';
 import { slashCompleter } from './cli/slash-completer.js';
 import { createSpinner } from './cli/spinner.js';
+import { renderPresentationCues } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
 import { parseSaveSelection } from './cli/save-selection.js';
 import { formatSaveDetails } from './cli/save-listing.js';
@@ -230,7 +232,8 @@ async function runPlay(args: string[]): Promise<void> {
   const engine = result.pack.createGame();
 
   const fastMode = args.includes('--fast');
-  const session = new GameSession({
+  const presentationBox: PresentationBox = { calls: [] };
+  const session = new GameSession(withPresentationHook({
     engine,
     title: result.pack.meta.name,
     tone: result.pack.meta.narratorTone,
@@ -238,7 +241,7 @@ async function runPlay(args: string[]): Promise<void> {
     itemCatalog: result.pack.itemCatalog,
     genre: result.pack.meta.genres[0] ?? 'fantasy',
     fastMode,
-  });
+  }, (calls) => { presentationBox.calls = calls; }));
 
   const snapshot = captureSnapshot(result.profile);
   const worldSnap = captureWorldSnapshot(
@@ -251,7 +254,7 @@ async function runPlay(args: string[]): Promise<void> {
   const initialCustom = structuredClone(result.profile.custom);
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop({
-    session, rl, packId: result.pack.meta.id,
+    session, rl, packId: result.pack.meta.id, presentationBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
     initialPartyState: initialParty, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -372,7 +375,8 @@ async function runLoad(): Promise<void> {
   const restoredEndgameTriggers = loadEndgameTriggersFromSession(savedSession);
   const restoredFinale = loadFinaleFromSession(savedSession);
 
-  const session = new GameSession({
+  const presentationBox: PresentationBox = { calls: [] };
+  const session = new GameSession(withPresentationHook({
     engine,
     tone: savedSession.tone,
     title: savedSession.characterName ?? 'claude-rpg',
@@ -381,7 +385,7 @@ async function runLoad(): Promise<void> {
     itemCatalog: itemCatalog ?? undefined,
     genre: savedSession.genre ?? 'fantasy',
     journal: restoredJournal,
-  });
+  }, (calls) => { presentationBox.calls = calls; }));
 
   // Restore rumors, pressures, and fallout history into session
   session.playerRumors = restoredRumors;
@@ -413,7 +417,7 @@ async function runLoad(): Promise<void> {
   const initialCustom = profile ? structuredClone(profile.custom) : {};
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop({
-    session, rl, packId: savedSession.packId,
+    session, rl, packId: savedSession.packId, presentationBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
     initialPartyState: initialParty, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -442,12 +446,13 @@ async function runNew(worldPrompt: string): Promise<void> {
   const title = result.proposal?.title ?? 'Generated World';
   console.log(`  World "${title}" created!\n`);
 
-  const session = new GameSession({
+  const presentationBox: PresentationBox = { calls: [] };
+  const session = new GameSession(withPresentationHook({
     engine: result.engine,
     title,
     tone: result.tone,
     worldPrompt,
-  });
+  }, (calls) => { presentationBox.calls = calls; }));
 
   const rl = createInterface({
     input: process.stdin,
@@ -456,7 +461,7 @@ async function runNew(worldPrompt: string): Promise<void> {
     historySize: 100,
   });
 
-  await runGameLoop({ session, rl });
+  await runGameLoop({ session, rl, presentationBox });
 }
 
 type DistrictMoodSnapshot = {
@@ -496,9 +501,44 @@ function captureDistrictMoods(session: GameSession): DistrictMoodSnapshot {
   return moods;
 }
 
+// F-08f594de (presentation seam contract, wave-8/cli-display.md): accumulates
+// one turn's queued presentation calls between GameSession's onPresentation
+// callback firing and this file printing them via renderPresentationCues().
+// A plain mutable box (not a `let` reassigned across function boundaries) so
+// it can be captured by the constructor callback in runPlay/runLoad/runNew
+// and then read+cleared later inside runGameLoop, which receives the
+// already-built session and box together.
+type PresentationBox = { calls: McpToolCall[] };
+
+/**
+ * game.ts (game-core domain, not owned here) adds `onPresentation` to
+ * GameConfig in a worktree that lands separately this wave, so it is not yet
+ * on the GameConfig type checked in THIS worktree. This cast documents that
+ * seam — once both halves merge, `config.onPresentation` is a real, typed
+ * field on GameConfig and this function becomes a harmless no-op wrapper.
+ */
+function withPresentationHook(
+  config: GameConfig,
+  onPresentation: (calls: McpToolCall[]) => void,
+): GameConfig {
+  return { ...config, onPresentation } as GameConfig;
+}
+
+/** Print any presentation cues queued during the just-completed turn (or the
+ *  opening narration), then clear the box so a failed turn never leaks
+ *  stale cues into the next successful one's output. */
+function flushPresentationCues(box: PresentationBox): void {
+  const calls = box.calls;
+  box.calls = [];
+  if (calls.length === 0) return;
+  const cues = renderPresentationCues(calls);
+  if (cues) console.log(cues);
+}
+
 type GameLoopOptions = {
   session: GameSession;
   rl: ReturnType<typeof createInterface>;
+  presentationBox: PresentationBox;
   packId?: string;
   initialSnapshot?: SessionSnapshot;
   initialWorldSnapshot?: WorldSnapshot;
@@ -512,7 +552,7 @@ type GameLoopOptions = {
 
 async function runGameLoop(opts: GameLoopOptions): Promise<void> {
   const {
-    session, rl, packId,
+    session, rl, packId, presentationBox,
     initialSnapshot, initialWorldSnapshot, initialDistrictMoods,
     initialPartyState, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -524,6 +564,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
   try {
     const opening = await session.getOpeningNarration();
     console.log(opening);
+    flushPresentationCues(presentationBox);
   } catch (err) {
     const exitCode = presentError(err, 'opening', debugMode);
     rl.close();
@@ -657,8 +698,13 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       }
 
       console.log(output);
+      flushPresentationCues(presentationBox);
     } catch (err) {
       presentError(err, 'turn', debugMode);
+      // Discard any cues queued before the turn failed — they describe a
+      // turn that never finished printing and would otherwise leak into the
+      // next successful turn's output.
+      presentationBox.calls = [];
     }
   }
 }

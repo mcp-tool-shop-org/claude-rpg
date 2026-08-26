@@ -56,6 +56,34 @@ describe('narrateFinale', () => {
   });
 });
 
+// F-f4f6ac90: narratorTone forwarding into buildFinalePrompt's PACK_VOICES
+// lookup (see finale-prompt.ts). narrateFinale is the one and only call site
+// for buildFinalePrompt, so this is the seam that proves the new 5th
+// parameter actually reaches the prompt sent to the LLM.
+describe('narrateFinale F-f4f6ac90: narratorTone threading into buildFinalePrompt', () => {
+  it('forwards narratorTone through to the LLM prompt as the matching PACK_VOICES instruction', async () => {
+    const client = makeClient('epilogue text');
+    await narrateFinale(
+      client,
+      makeOutline(),
+      'fantasy',
+      'Kael',
+      'dark fantasy, concise, atmospheric, foreboding',
+    );
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).toContain('epic chronicle voice');
+  });
+
+  it('omits the pack voice instruction when narratorTone is not provided (current production shape)', async () => {
+    const client = makeClient('epilogue text');
+    await narrateFinale(client, makeOutline(), 'fantasy', 'Kael');
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain('epic chronicle voice');
+  });
+});
+
 // F-6480985e: the domain-wide fatal-error contract (documented in
 // claude-errors.ts near NarrationError.fatal) is "rethrow, don't swallow into
 // in-fiction text" — matching narrator.ts's narrateScene/narrateSceneLegacy.

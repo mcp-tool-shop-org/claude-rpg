@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, type MockInstance } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk';
 import { createAdaptedClient, classifyError, withRetry } from './claude-adapter.js';
 import { NarrationError } from './claude-errors.js';
+import { DEFAULT_MODEL, DEFAULT_TIMEOUT_MS } from '../claude-client.js';
 
 // F-18fe36fc: Anthropic.TextBlock.citations is a required field in the
 // installed SDK (`citations: Array<TextCitation> | null`, no `?` —
@@ -51,9 +52,68 @@ describe('createAdaptedClient', () => {
     expect(client.model).toBe('claude-sonnet-4-20250514');
   });
 
+  // F-aaaa105f: createAdaptedClient and createClaudeClient (../claude-client.ts)
+  // used to each hardcode their own copy of this same default model id. Both
+  // factories now consume ONE exported DEFAULT_MODEL from claude-client.ts --
+  // asserting against the imported constant (not a re-hardcoded literal, like
+  // the sibling test above) is what actually proves single-sourcing: it ties
+  // this file's default to claude-client.ts's default.model test via the same
+  // constant, so the two can no longer silently drift apart.
+  it('falls back to the same shared DEFAULT_MODEL constant claude-client.ts exports (F-aaaa105f single-source)', () => {
+    const client = createAdaptedClient();
+    expect(client.model).toBe(DEFAULT_MODEL);
+  });
+
   it('accepts custom model', () => {
     const client = createAdaptedClient({ model: 'claude-haiku-4-5-20251001', maxTokens: 512 });
     expect(client.model).toBe('claude-haiku-4-5-20251001');
+  });
+
+  // F-0929ac97: the installed SDK defaults to timeout=600000 (10 minutes,
+  // core.js:134) and its own internal maxRetries=2 when the client
+  // constructor isn't given explicit values -- both tuned for long-running
+  // server workloads, not a turn-based CLI game. createAdaptedClient must now
+  // pass an explicit short timeout AND maxRetries: 0 (ceding all retry
+  // authority to this module's own withRetry, so the SDK's hidden internal
+  // retries can no longer double up on withRetry's exponential backoff --
+  // see the interplay comment on createAdaptedClient itself).
+  //
+  // The SDK has no public getter for these constructor options, but
+  // Anthropic.Messages extends APIResource, which stores the owning client as
+  // `this._client` (resource.js) -- reading it back from inside the
+  // create()/stream() mock is how core.js's own buildRequest() resolves
+  // per-call timeout/maxRetries too (`options.timeout ?? this.timeout`), so
+  // this is the SDK's own internal wiring, not a private implementation
+  // detail invented for this test.
+  describe('Anthropic client construction (F-0929ac97)', () => {
+    it('constructs the SDK client with DEFAULT_TIMEOUT_MS and maxRetries: 0 by default', async () => {
+      let capturedTimeout: number | undefined;
+      let capturedMaxRetries: number | undefined;
+      createSpy.mockImplementation(function (this: { _client: { timeout: number; maxRetries: number } }) {
+        capturedTimeout = this._client.timeout;
+        capturedMaxRetries = this._client.maxRetries;
+        return Promise.resolve(fakeMessage()) as unknown as ReturnType<typeof Anthropic.Messages.prototype.create>;
+      } as unknown as typeof Anthropic.Messages.prototype.create);
+
+      const client = createAdaptedClient({ apiKey: 'test' });
+      await client.generate({ system: 's', prompt: 'p' });
+
+      expect(capturedTimeout).toBe(DEFAULT_TIMEOUT_MS);
+      expect(capturedMaxRetries).toBe(0);
+    });
+
+    it('honors a custom config.timeout override', async () => {
+      let capturedTimeout: number | undefined;
+      createSpy.mockImplementation(function (this: { _client: { timeout: number } }) {
+        capturedTimeout = this._client.timeout;
+        return Promise.resolve(fakeMessage()) as unknown as ReturnType<typeof Anthropic.Messages.prototype.create>;
+      } as unknown as typeof Anthropic.Messages.prototype.create);
+
+      const client = createAdaptedClient({ apiKey: 'test', timeout: 5000 });
+      await client.generate({ system: 's', prompt: 'p' });
+
+      expect(capturedTimeout).toBe(5000);
+    });
   });
 
   describe('generate', () => {

@@ -14,18 +14,34 @@ export type FinaleNarrationResult = {
   worldAfter: string;
 };
 
-/** Generate a full finale: deterministic summary + LLM epilogue prose. */
+/**
+ * Generate a full finale: deterministic summary + LLM epilogue prose.
+ *
+ * @param narratorTone F-f4f6ac90: the pack's `meta.narratorTone`, forwarded
+ *   to buildFinalePrompt for the PACK_VOICES epilogue-voice lookup (see
+ *   finale-prompt.ts). Optional and currently unwired end-to-end: no
+ *   production caller passes it yet. bin.ts already computes
+ *   `pack.meta.narratorTone` (as `tone`, threaded into GameSession.tone for
+ *   per-turn narration — see bin.ts:241) but game.ts's handleConclude()
+ *   (game.ts:~1608-1613) only forwards `genre: this.genre` into
+ *   generateFinaleNarration, and game-narration.ts's FinaleNarrationContext
+ *   has no narratorTone field to carry it. Wiring `this.tone` through both of
+ *   those requires edits to src/game.ts and src/game/game-narration.ts, both
+ *   outside src/narrator/**'s domain — tracked as a residual caller-side
+ *   remainder rather than made here.
+ */
 export async function narrateFinale(
   client: ClaudeClient,
   outline: FinaleOutline,
   genre: string,
   playerName?: string,
+  narratorTone?: string,
 ): Promise<FinaleNarrationResult> {
   const deterministicSummary = formatFinaleForTerminal(outline);
 
   let epilogue: string;
   try {
-    const userPrompt = buildFinalePrompt(outline, genre, playerName);
+    const userPrompt = buildFinalePrompt(outline, genre, playerName, narratorTone);
     const result = await client.generate({
       system: FINALE_SYSTEM,
       prompt: userPrompt,

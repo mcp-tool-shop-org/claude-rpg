@@ -22,6 +22,17 @@ import {
 import type { DialogueInput } from '../prompts/dialogue-npc.js';
 import { buildNpcPresenceForDialogue, getNpcDialogueHint } from '../npc/presence.js';
 
+// F-b52349e0: unlike recentMemories (.slice(-5)), knownPlayerRumors
+// (.slice(0,3)), and factionPressures (.slice(0,2)) below, beliefs and rumors
+// had no cap at all -- both can grow unboundedly over a long campaign (the
+// engine decays/prunes beliefs by confidence rather than a hard count, and
+// getRumorsFrom has no limit of its own), so a major faction leader or
+// recurring companion would accumulate an ever-larger interpolated block for
+// the rest of the campaign. Matching the pattern the function already
+// establishes for its other three array fields.
+const BELIEFS_MAX = 8;
+const RUMORS_MAX = 5;
+
 /** Build the dialogue context for an NPC from their simulation state. */
 export function buildNPCDialogueContext(
   world: WorldState,
@@ -39,12 +50,20 @@ export function buildNPCDialogueContext(
 
   // Get cognition state
   const cognition = getCognition(world, npcId);
-  const beliefs: DialogueInput['beliefs'] = (cognition?.beliefs ?? []).map((b: Belief) => ({
-    subject: b.subject,
-    key: b.key,
-    value: b.value,
-    confidence: b.confidence,
-  }));
+  // F-b52349e0: sort highest-confidence-first, then cap at BELIEFS_MAX. The
+  // engine already treats confidence as the salience/recency proxy (beliefs
+  // decay in confidence over time, per cognition-core.js), so keeping the
+  // most-confident beliefs when trimming keeps the ones most likely to still
+  // be current, not an arbitrary insertion-order prefix.
+  const beliefs: DialogueInput['beliefs'] = (cognition?.beliefs ?? [])
+    .map((b: Belief) => ({
+      subject: b.subject,
+      key: b.key,
+      value: b.value,
+      confidence: b.confidence,
+    }))
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, BELIEFS_MAX);
 
   // Get recent memories
   const memories: DialogueInput['recentMemories'] = (cognition?.memories ?? [])
@@ -71,10 +90,13 @@ export function buildNPCDialogueContext(
   }
 
   // Get rumors
+  // F-b52349e0: sort most-recent-first (by originTick, explicit rather than
+  // relying on getRumorsFrom's own return order), then cap at RUMORS_MAX.
   const rumorRecords = getRumorsFrom(world, npcId);
-  const rumors = rumorRecords.map(
-    (r) => `${r.subject ?? 'unknown'}: ${r.key ?? ''} = ${r.value ?? '?'}`,
-  );
+  const rumors = [...rumorRecords]
+    .sort((a, b) => b.originTick - a.originTick)
+    .slice(0, RUMORS_MAX)
+    .map((r) => `${r.subject ?? 'unknown'}: ${r.key ?? ''} = ${r.value ?? '?'}`);
 
   // Derive social stance from reputation + cognition
   const repValue = factionId && playerProfile ? getReputation(playerProfile, factionId) : 0;

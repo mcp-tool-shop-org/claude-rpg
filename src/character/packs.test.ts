@@ -61,8 +61,17 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
     },
   );
 
-  it.each(registerableShortNames)('starter-%s has a PACK_VOICES epilogue-voice entry', (shortName) => {
-    expect(PACK_VOICES[shortName]).toBeTruthy();
+  // F-f4f6ac90: PACK_VOICES is keyed by pack.meta.narratorTone, not by the
+  // starter-* short name / genre string (see finale-prompt.ts's PACK_VOICES
+  // doc comment for why the old genre-keyed scheme collided/mismatched).
+  // Look each registered pack up by its real narratorTone via allPacks/
+  // getPackById, not by shortName, so this test tracks the actual production
+  // lookup key instead of a coincidentally-matching string.
+  it.each(registerableShortNames)('starter-%s has a PACK_VOICES epilogue-voice entry keyed by its narratorTone', (shortName) => {
+    const packId = resolveWorldFlag(shortName);
+    const pack = getPackById(packId as string);
+    expect(pack).toBeDefined();
+    expect(PACK_VOICES[pack!.meta.narratorTone]).toBeTruthy();
   });
 
   it('every package.json starter-* dependency is either registered or a documented blocked pack', () => {
@@ -85,9 +94,13 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
  * to keep failing for the specific BUILTIN_PACK_BIASES reason above. The
  * moment @ai-rpg-engine/modules is upgraded to export it, these tests start
  * FAILING -- that failure is the signal to finish F-00ddfc68 for real (wire
- * the pack into packs.ts's imports/allPacks/resolveWorldFlag and into
- * finale-prompt.ts's PACK_VOICES, then delete its name from
- * KNOWN_BLOCKED_STARTER_PACKS and its case here).
+ * the pack into packs.ts's imports/allPacks/resolveWorldFlag, then delete its
+ * name from KNOWN_BLOCKED_STARTER_PACKS and its case here).
+ *
+ * F-f4f6ac90 update: finale-prompt.ts's PACK_VOICES no longer needs a
+ * matching change at that point -- it already carries forward entries for
+ * all three packs, keyed by their narratorTone (see the describe block
+ * below and finale-prompt.ts's PACK_VOICES doc comment).
  */
 describe('starter-gladiator/ronin/vampire (F-00ddfc68: blocked on upstream @ai-rpg-engine/modules skew)', () => {
   it('starter-gladiator is still unimportable due to the missing BUILTIN_PACK_BIASES export', async () => {
@@ -106,5 +119,40 @@ describe('starter-gladiator/ronin/vampire (F-00ddfc68: blocked on upstream @ai-r
     await expect(import('@ai-rpg-engine/starter-vampire')).rejects.toThrow(
       /BUILTIN_PACK_BIASES/,
     );
+  });
+});
+
+/**
+ * F-f4f6ac90 forward entries: gladiator/ronin/vampire aren't registered in
+ * allPacks (see the live tripwire above), so their real PackMetadata can't be
+ * read via getPackById the way the registered-pack test above does --
+ * importing the packages themselves throws. These narratorTone strings are
+ * therefore hardcoded, copied verbatim from each package's compiled
+ * dist/content.js by this wave's static extraction (grep-based, not import
+ * -based). If a package's authored narratorTone ever changes, this test
+ * (or finale-prompt.ts's matching PACK_VOICES key) will drift and should be
+ * reconciled -- same spirit as the live tripwire above, just static instead
+ * of import-based since the import path itself is unavailable here.
+ */
+describe('PACK_VOICES forward entries (F-f4f6ac90): gladiator/ronin/vampire', () => {
+  const BLOCKED_PACK_NARRATOR_TONES: Record<string, string> = {
+    gladiator: 'roman arena, visceral, theatrical, defiant',
+    ronin: 'feudal court, restrained, precise, weighted with consequence',
+    vampire: 'gothic horror, intimate, decadent, predatory',
+  };
+
+  it.each(Object.entries(BLOCKED_PACK_NARRATOR_TONES))(
+    'PACK_VOICES has a forward entry for starter-%s, keyed by its narratorTone',
+    (_shortName, narratorTone) => {
+      expect(PACK_VOICES[narratorTone]).toBeTruthy();
+    },
+  );
+
+  it('every KNOWN_BLOCKED_STARTER_PACKS entry has a matching forward entry documented here', () => {
+    // Keeps this describe block honest if KNOWN_BLOCKED_STARTER_PACKS ever
+    // gains or loses a pack without a matching update here.
+    for (const name of KNOWN_BLOCKED_STARTER_PACKS) {
+      expect(BLOCKED_PACK_NARRATOR_TONES[name]).toBeDefined();
+    }
   });
 });

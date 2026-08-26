@@ -2,10 +2,40 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 
+/**
+ * F-aaaa105f: single-sourced default model id, consumed by both
+ * createClaudeClient (this file) and createAdaptedClient
+ * (llm/claude-adapter.ts) so the two factories can no longer drift out of
+ * sync with each other the way they previously did (each independently
+ * hardcoded this same string). Overridable per-call via
+ * ClaudeClientConfig.model. Not yet wired to an env var anywhere in this
+ * domain -- ANTHROPIC_MODEL-style override plumbing (read in bin.ts, passed
+ * through ClaudeClientConfig.model) is a cross-domain follow-up outside
+ * src/claude-client.ts and src/llm/**.
+ */
+export const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+
+/**
+ * F-0929ac97: the installed SDK (@anthropic-ai/sdk) defaults to a 600000ms
+ * (10-minute) per-request timeout when unset (node_modules/@anthropic-ai/sdk/core.js:134)
+ * -- tuned for long-running server workloads, not a turn-based CLI game that
+ * should fail fast and let its own retry/error layer take over within
+ * seconds. Single-sourced here (like DEFAULT_MODEL above) so both factories
+ * fail at the same, deliberately short ceiling instead of each silently
+ * inheriting the SDK's server-oriented default.
+ */
+export const DEFAULT_TIMEOUT_MS = 30_000;
+
 export type ClaudeClientConfig = {
   apiKey?: string;
   model?: string;
   maxTokens?: number;
+  /**
+   * F-0929ac97: per-request timeout in milliseconds, passed straight to the
+   * underlying Anthropic client constructor. Defaults to DEFAULT_TIMEOUT_MS
+   * (30s) rather than the SDK's own 600000ms (10-minute) default.
+   */
+  timeout?: number;
 };
 
 export type GenerateResult = {
@@ -62,8 +92,12 @@ export type ClaudeClient = {
  * This factory lacks streaming support and adapter-layer features.
  */
 export function createClaudeClient(config: ClaudeClientConfig = {}): ClaudeClient {
-  const anthropic = new Anthropic({ apiKey: config.apiKey });
-  const model = config.model ?? 'claude-sonnet-4-20250514';
+  // F-0929ac97: explicit short timeout (see DEFAULT_TIMEOUT_MS above). This
+  // legacy factory has no retry layer of its own (unlike createAdaptedClient),
+  // so the SDK's own default internal retry (maxRetries: 2) is deliberately
+  // left as-is here -- only the timeout ceiling is overridden.
+  const anthropic = new Anthropic({ apiKey: config.apiKey, timeout: config.timeout ?? DEFAULT_TIMEOUT_MS });
+  const model = config.model ?? DEFAULT_MODEL;
   const defaultMaxTokens = config.maxTokens ?? 1024;
 
   return {

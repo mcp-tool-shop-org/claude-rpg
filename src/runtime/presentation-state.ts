@@ -2,6 +2,7 @@
 
 import type { ResolvedEvent } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
+import { isPlayerDefeatEvent } from './hooks.js';
 
 export type { PresentationState } from '@ai-rpg-engine/presentation';
 
@@ -45,12 +46,23 @@ export class PresentationStateMachine {
    * **Side effects:** mutates `aftermathTurns` countdown. Must only be called
    * once per turn. A tick guard prevents double-decrement if accidentally
    * called twice in the same turn.
+   *
+   * `playerId` (pass `world.playerId`) gates the player-death check — see below.
    */
-  inferFromEvents(events: ResolvedEvent[], verb?: string, tick?: number): PresentationState {
-    // Player death — check first so it isn't masked by general combat/aftermath
-    const hasDeath = events.some(
-      (e) => e.type === 'combat.entity.defeated' && e.payload.entityId === '__player__',
-    );
+  inferFromEvents(
+    events: ResolvedEvent[],
+    verb?: string,
+    tick?: number,
+    playerId?: string,
+  ): PresentationState {
+    // Player death — check first so it isn't masked by general combat/aftermath.
+    // F-277b5eca: delegates to hooks.ts's isPlayerDefeatEvent so this predicate can't
+    // diverge from deathHook's again — this copy previously compared against a
+    // '__player__' sentinel that is never assigned anywhere in production (the real
+    // player id is 'player', set at world-gen.ts:378), so hasDeath was always false.
+    // Guarded on playerId being supplied so callers that omit it can't accidentally
+    // match a defeat event whose payload also omits entityId.
+    const hasDeath = playerId != null && isPlayerDefeatEvent(events, playerId);
     if (hasDeath) return 'menu';
 
     // Check for combat events

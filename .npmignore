@@ -11,6 +11,14 @@ site/
 docs/
 coverage/
 *.tsbuildinfo
+
+# The following rules (lines 14-16) are defensive/redundant and exist to explicitly
+# document what should never be packaged, even if package.json's files field changes.
+# Currently, package.json limits distribution to ['dist', 'CHANGELOG.md'], which already
+# excludes these paths. If the files field is later expanded to include 'src/', 'test/',
+# or 'scripts/', these rules will prevent accidental inclusion of development artifacts.
+# Maintain this documentation for clarity and to reduce risk of unintended packaging
+# changes in future maintenance.
 scripts/
 test/
 tsconfig.test.json

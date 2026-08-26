@@ -108,6 +108,126 @@ describe('immersion-runtime: error resilience', () => {
   });
 });
 
+// ─── F-3fce4373: non-debug players get a distinguishable marker instead of pure
+// silence when a presentation-pipeline stage throws and degrades. All four of
+// processPresentation's guarded stages (pre-narration hooks, event hooks, audio
+// pipeline, post-narration hooks) previously surfaced a failure ONLY via a
+// console.error gated on debugMode -- the returned McpToolCall[] just quietly had
+// fewer entries, with no way for a non-debug player (the default) to tell "no cue
+// this turn" from "a cue was computed and then silently dropped". ───
+
+describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('pushes a degraded marker into the returned calls when a pre-narration hook throws, even without debugMode', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    runtime.hookManager.register('pre-narration', () => {
+      throw new Error('Hook exploded');
+    });
+
+    const calls = await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'world.zone.entered', payload: {} } as any],
+      'look',
+    );
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(1);
+    expect(markers[0].params).toMatchObject({ stage: 'pre-narration' });
+  });
+
+  it('pushes a degraded marker when an event hook throws', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    runtime.hookManager.register('enter-room', () => {
+      throw new Error('enter-room exploded');
+    });
+
+    const calls = await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'world.zone.entered', payload: {} } as any],
+      'move',
+    );
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(1);
+    expect(markers[0].params).toMatchObject({ stage: 'event-hooks' });
+  });
+
+  it('pushes a degraded marker when the audio pipeline throws', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    vi.spyOn(runtime.bridge, 'executeCommands').mockRejectedValue(new Error('Audio crash'));
+
+    const narrationPlan = {
+      segments: [],
+      sfx: [],
+      ambientLayers: [],
+      uiEffects: [],
+      musicCue: undefined,
+    } as any;
+
+    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(1);
+    expect(markers[0].params).toMatchObject({ stage: 'audio' });
+  });
+
+  it('pushes a degraded marker when a post-narration hook throws', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    runtime.hookManager.register('post-narration', () => {
+      throw new Error('post-narration exploded');
+    });
+
+    const calls = await runtime.processPresentation(minimalEngine, [], 'look');
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(1);
+    expect(markers[0].params).toMatchObject({ stage: 'post-narration' });
+  });
+
+  it('does not push a marker on a clean turn with no errors', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+
+    const calls = await runtime.processPresentation(minimalEngine, [], 'look');
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(0);
+  });
+
+  it('still pushes the marker in debug mode too (marker is unconditional, not a debug-only feature)', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = true;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(runtime.bridge, 'executeCommands').mockRejectedValue(new Error('Audio crash'));
+
+    const narrationPlan = {
+      segments: [], sfx: [], ambientLayers: [], uiEffects: [], musicCue: undefined,
+    } as any;
+
+    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(1);
+    stderrSpy.mockRestore();
+  });
+});
+
 // ─── F-023ad9ad (Contract B, runtime-foundry half): game-core threads GameConfig's
 // debug flag into `runtime.debugMode` where the runtime is constructed (game.ts,
 // cross-domain — out of scope here). This domain's half is verifying the runtime side
@@ -729,6 +849,287 @@ describe('immersion-runtime: combat-end suppressed on player death (F-91f803b2)'
 // death presentation — the entire death-presentation system used to key exclusively
 // on combat.entity.defeated, which world-gen.ts's environment-hazard effect never
 // emits (it mutates hp by direct property assignment and returns no events). ───
+
+// ─── F-d9fc231c: combat-end's victory cue must wait for the WHOLE encounter to end,
+// not fire after every individual kill in a multi-enemy fight — and fireEventHooks'
+// dispatch condition itself must not even fire the combat-end hookPoint while hostiles
+// remain. ───
+
+describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231c)', () => {
+  it('does not play the victory chime / soften music when other hostiles are still alive', async () => {
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: {
+        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
+        'goblin-1': { name: 'Goblin', resources: { hp: 5 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
+        'goblin-2': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
+      },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+    } as any;
+    const engine = { world, store: { state: {} } } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'goblin-2' } }] as any,
+      'attack',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).not.toContain('ui_success');
+    expect(setMusicSpy).not.toHaveBeenCalled();
+  });
+
+  it('plays the victory chime once the LAST hostile falls', async () => {
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: {
+        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
+        'goblin-1': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
+      },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+    } as any;
+    const engine = { world, store: { state: {} } } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'goblin-1' } }] as any,
+      'attack',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).toContain('ui_success');
+  });
+
+  it('does not fire the combat-end hookPoint at all while hostiles remain (fireEventHooks dispatch gate)', async () => {
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: {
+        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
+        'goblin-1': { name: 'Goblin', resources: { hp: 5 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
+        'goblin-2': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
+      },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+    } as any;
+    const engine = { world, store: { state: {} } } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'goblin-2' } }] as any,
+      'attack',
+    );
+
+    const combatEndFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-end');
+    expect(combatEndFires).toHaveLength(0);
+  });
+
+  it('still fires the combat-end hookPoint once the encounter is genuinely over', async () => {
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: {
+        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
+        'goblin-1': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
+      },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+    } as any;
+    const engine = { world, store: { state: {} } } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'goblin-1' } }] as any,
+      'attack',
+    );
+
+    const combatEndFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-end');
+    expect(combatEndFires).toHaveLength(1);
+  });
+});
+
+// ─── F-d8d1f51d: a sustained scene mood must not repeat the identical ambient/music
+// cue every turn. AudioDirector.schedule()'s cooldown only ever gates commands whose
+// action is literally 'play' (verified against dist/director.js's isOnCooldown gate)
+// -- ambient cues carry crossfade/start/stop and music cues carry
+// intensify/soften/crossfade/play, so both bypass that cooldown entirely, every time.
+// ImmersionRuntime needs its own de-dup, independent of AudioDirector. ───
+
+describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  // Minimal but VALIDATION-PASSING NarrationPlan base — audio-director's schedule()
+  // runs validateNarrationPlan() first (dist/director.js) and returns zero commands
+  // for an incomplete plan (non-empty sceneText, and valid tone/urgency/
+  // interruptibility are all required), so these fields can't be omitted the way
+  // other tests in this file that never reach the bridge (e.g. F-52475879's cap
+  // tests, which only inspect the args passed INTO schedule()) get away with.
+  const basePlan = {
+    sceneText: 'The rain keeps falling.',
+    tone: 'calm' as const,
+    urgency: 'normal' as const,
+    interruptibility: 'free' as const,
+    sfx: [],
+    uiEffects: [],
+  };
+
+  it('does not re-emit an identical ambient cue on the turn immediately after it was first emitted', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const setAmbientSpy = vi.spyOn(runtime.bridge, 'setAmbient');
+
+    const rainCue = { layerId: 'ambient_rain', action: 'crossfade' as const, volume: 0.4, fadeMs: 2000 };
+    const makePlan = () => ({
+      ...basePlan, musicCue: undefined,
+      ambientLayers: [{ ...rainCue }],
+    } as any);
+
+    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    expect(setAmbientSpy).toHaveBeenCalledTimes(1);
+
+    // Turn 2: the LLM narrator proposes the SAME cue again (sustained rainstorm mood)
+    // -- must be suppressed instead of printing a second identical cue line.
+    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    expect(setAmbientSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('still emits an ambient cue for the same layer when its action actually changes', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const setAmbientSpy = vi.spyOn(runtime.bridge, 'setAmbient');
+
+    await runtime.processPresentation(minimalEngine, [], 'look', {
+      ...basePlan, musicCue: undefined,
+      ambientLayers: [{ layerId: 'ambient_rain', action: 'crossfade', volume: 0.4, fadeMs: 2000 }],
+    } as any);
+    expect(setAmbientSpy).toHaveBeenCalledTimes(1);
+
+    await runtime.processPresentation(minimalEngine, [], 'look', {
+      ...basePlan, musicCue: undefined,
+      ambientLayers: [{ layerId: 'ambient_rain', action: 'stop', volume: 0, fadeMs: 1000 }],
+    } as any);
+    // 'stop' cues never produce a tool call (audio-bridge.ts's setAmbient returns
+    // early for 'stop'), but the bridge method itself must still be INVOKED — this
+    // proves the cue reached the bridge rather than being deduped away.
+    expect(setAmbientSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-emit an identical music cue on consecutive turns of a sustained mood', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    const makePlan = () => ({
+      ...basePlan, ambientLayers: [],
+      musicCue: { action: 'soften', fadeMs: 1000 },
+    } as any);
+
+    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    expect(setMusicSpy).toHaveBeenCalledTimes(1);
+
+    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    expect(setMusicSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits a music cue again once the action actually changes', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    await runtime.processPresentation(minimalEngine, [], 'look', {
+      ...basePlan, ambientLayers: [],
+      musicCue: { action: 'soften', fadeMs: 1000 },
+    } as any);
+    expect(setMusicSpy).toHaveBeenCalledTimes(1);
+
+    await runtime.processPresentation(minimalEngine, [], 'look', {
+      ...basePlan, ambientLayers: [],
+      musicCue: { action: 'intensify', fadeMs: 300 },
+    } as any);
+    expect(setMusicSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('de-dups a hook-sourced music cue against a narrator-authored one proposing the same action', async () => {
+    // combatStartHook fires a one-time 'intensify' music cue on entering combat
+    // (hooks.ts); if the narrator's OWN plan independently proposes the same
+    // 'intensify' action the very next turn (still describing the tense mood), the
+    // second is redundant -- the de-dup state must be shared across both dispatch
+    // paths (hook-sourced cues bypass AudioDirector entirely; see F-d8d1f51d finding).
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    // Turn 1: entering combat fires combatStartHook's hook-sourced 'intensify' cue.
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'combat.contact.hit', payload: {} }] as any,
+      'attack',
+    );
+    expect(setMusicSpy).toHaveBeenCalledTimes(1);
+    expect(setMusicSpy.mock.calls[0][0]).toMatchObject({ action: 'intensify' });
+
+    // Turn 2: still mid-fight (combat-start hook does not re-fire), but the
+    // narrator's own plan proposes the identical 'intensify' action again. Uses a
+    // VALIDATION-PASSING plan (see basePlan above) so this actually exercises
+    // audioDirector.schedule() rather than being short-circuited by
+    // validateNarrationPlan rejecting an incomplete plan before reaching the dedup
+    // logic at all.
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'combat.contact.hit', payload: {} }] as any,
+      'attack',
+      { ...basePlan, ambientLayers: [], musicCue: { action: 'intensify', fadeMs: 300 } } as any,
+    );
+    expect(setMusicSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('still caps and passes through several distinct ambient layers unaffected by de-dup (F-52475879 non-regression)', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const scheduleSpy = vi.spyOn(runtime.audioDirector, 'schedule');
+
+    const narrationPlan = {
+      sceneText: '',
+      sfx: [],
+      ambientLayers: Array.from({ length: 10 }, (_, i) => ({
+        layerId: `ambient-${i}`,
+        action: 'crossfade' as const,
+        volume: 0.4,
+        fadeMs: 1000,
+      })),
+      uiEffects: [],
+      musicCue: undefined,
+    } as any;
+
+    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    const scheduledPlan = scheduleSpy.mock.calls[0][0];
+    expect(scheduledPlan.ambientLayers.length).toBeLessThan(10);
+    expect(scheduledPlan.ambientLayers.length).toBeGreaterThan(0);
+  });
+});
 
 describe('immersion-runtime: hazard death with no defeat event (F-e57d6a60)', () => {
   it('engages death presentation (state -> menu, critical alarm dispatched) when hp reaches zero with no defeat event', async () => {

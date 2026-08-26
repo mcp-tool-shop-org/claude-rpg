@@ -308,3 +308,78 @@ describe('combatEndHook hazard-zeroed-hp suppression (F-f1e475f0)', () => {
     expect(results[0].sfxCues![0].effectId).toBe('ui_success');
   });
 });
+
+// ─── F-d9fc231c: combatEndHook must wait for the WHOLE encounter to end, not fire
+// after every individual kill in a multi-hostile fight ───
+
+describe('combatEndHook waits for the whole encounter (F-d9fc231c)', () => {
+  it('does not fire the victory cue while another hostile is still alive in the same zone', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      world: {
+        zones: {},
+        entities: {
+          player: { resources: { hp: 10 } },
+          'goblin-1': { tags: ['hostile'], resources: { hp: 5 }, zoneId: 'zone1' },
+          'goblin-2': { tags: ['hostile'], resources: { hp: 0 }, zoneId: 'zone1' },
+        },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-2' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(0);
+  });
+
+  it('fires the victory cue once the last hostile in the zone is defeated', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      world: {
+        zones: {},
+        entities: {
+          player: { resources: { hp: 10 } },
+          'goblin-1': { tags: ['hostile'], resources: { hp: 0 }, zoneId: 'zone1' },
+        },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('ui_success');
+  });
+
+  it('ignores a hostile entity in a different zone when checking for survivors', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      world: {
+        zones: {},
+        entities: {
+          player: { resources: { hp: 10 } },
+          'goblin-1': { tags: ['hostile'], resources: { hp: 0 }, zoneId: 'zone1' },
+          'bandit-1': { tags: ['hostile'], resources: { hp: 20 }, zoneId: 'zone-far-away' },
+        },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('ui_success');
+  });
+});

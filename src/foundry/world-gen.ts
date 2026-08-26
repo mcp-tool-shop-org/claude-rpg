@@ -80,12 +80,26 @@ export type WorldGenProposal = {
   }>;
 };
 
+/**
+ * F-cbc186cb: distinguishes generateWorld's two failure classes so a caller (e.g.
+ * bin.ts's runNew()) can offer a next-action hint instead of dumping raw shape-check
+ * strings. 'transient' means the LLM call itself didn't produce usable JSON this
+ * attempt (retrying the identical prompt may succeed). 'validation' means it returned
+ * parseable JSON that fails validateWorldGenProposal's shape checks (e.g. a faction
+ * missing memberIds) -- also frequently transient in practice (structured-generation
+ * completeness is stochastic per attempt), but named distinctly since the underlying
+ * cause differs.
+ */
+export type WorldGenErrorKind = 'transient' | 'validation';
+
 export type WorldGenResult = {
   ok: boolean;
   engine: Engine | null;
   proposal: WorldGenProposal | null;
   tone: string;
   errors: string[];
+  /** F-cbc186cb: which failure class `errors` came from. Undefined when ok is true. */
+  errorKind?: WorldGenErrorKind;
   /** FT-BR-006: Generated quests from the LLM proposal. Stored here so callers can consume them.
    *  TODO: Wire quests into a proper quest journal / quest tracker system when the engine supports it. */
   quests: WorldGenProposal['quests'];
@@ -178,30 +192,65 @@ export async function generateWorld(
 ): Promise<WorldGenResult> {
   const prompt = buildWorldGenPrompt(worldPrompt);
 
-  // Generate world proposal
-  const result = await client.generateStructured<WorldGenProposal>({
-    system: WORLDGEN_SYSTEM,
-    prompt,
-    maxTokens: 4096,
-  });
+  // F-cbc186cb: generate-plus-validate is retried internally before surfacing anything
+  // to the player. Both failure classes below are largely stochastic per attempt --
+  // generateStructured's fixed 4096-token budget covers
+  // title/theme/ruleset/zones/factions/npcs/player/quests in a single completion, so a
+  // dropped field (e.g. a faction's memberIds) is a sampling artifact of that one
+  // attempt, not a property of worldPrompt itself. Mirrors the "retryable failure
+  // kinds get retried" convention llm/claude-adapter.ts's withRetry already applies
+  // one layer down, for transport-level failures (rate-limit/timeout/transport) -- this
+  // loop covers the layer above it: a structurally fine HTTP response whose JSON
+  // payload is incomplete or fails this module's own shape checks, which withRetry has
+  // no visibility into. A thrown NarrationError (e.g. auth/bad-request) is
+  // deliberately NOT caught here and propagates unchanged: retrying can never fix
+  // those (see claude-errors.ts's fatal-error contract, F-6480985e), so swallowing one
+  // into a generic "transient, try again" result would be actively misleading.
+  const MAX_ATTEMPTS = 3;
+  let attemptProposal: WorldGenProposal | null = null;
+  let errors: string[] = [];
+  let errorKind: WorldGenErrorKind = 'transient';
 
-  if (!result.ok || !result.data) {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const result = await client.generateStructured<WorldGenProposal>({
+      system: WORLDGEN_SYSTEM,
+      prompt,
+      maxTokens: 4096,
+    });
+
+    if (!result.ok || !result.data) {
+      attemptProposal = null;
+      errors = [result.error ?? 'Failed to generate world proposal'];
+      errorKind = 'transient';
+      continue;
+    }
+
+    const shapeErrors = validateWorldGenProposal(result.data);
+    if (shapeErrors.length > 0) {
+      attemptProposal = result.data;
+      errors = shapeErrors;
+      errorKind = 'validation';
+      continue;
+    }
+
+    attemptProposal = result.data;
+    errors = [];
+    break;
+  }
+
+  if (errors.length > 0 || !attemptProposal) {
     return {
       ok: false,
       engine: null,
-      proposal: null,
-      tone: '',
-      errors: [result.error ?? 'Failed to generate world proposal'],
-      quests: [],
+      proposal: attemptProposal,
+      tone: attemptProposal?.toneGuide ?? '',
+      errors,
+      errorKind,
+      quests: attemptProposal?.quests ?? [],
     };
   }
 
-  const proposal = result.data;
-  const errors = validateWorldGenProposal(proposal);
-
-  if (errors.length > 0) {
-    return { ok: false, engine: null, proposal, tone: proposal.toneGuide ?? '', errors, quests: proposal.quests ?? [] };
-  }
+  const proposal = attemptProposal;
 
   // Build ruleset
   const ruleset: RulesetDefinition = {

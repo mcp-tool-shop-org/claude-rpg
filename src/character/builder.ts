@@ -19,8 +19,9 @@ import {
   equipItem,
   addToInventory,
 } from '@ai-rpg-engine/equipment';
-import { promptText, promptMenu, promptMultiSelect, promptConfirm } from './prompts.js';
+import { promptText, promptMenu, promptMultiSelect, promptConfirm, promptGroupedMenu, type MenuGroup } from './prompts.js';
 import { allPacks, type PackInfo } from './packs.js';
+import type { PackDifficulty } from '@ai-rpg-engine/pack-registry';
 
 export type BuildResult = {
   build: CharacterBuild;
@@ -29,16 +30,61 @@ export type BuildResult = {
   pack: PackInfo;
 };
 
-/** Run the full interactive character creation flow. Uses a loop instead of recursion for retry. */
-export async function buildCharacter(rl: ReadlineInterface): Promise<BuildResult> {
+// F-6ed5f350 (SLATE-3): fixed group order/labels for the grouped world-select
+// menu. difficulty is single-valued on PackMetadata (no array-index collision
+// risk, unlike genres[0]/tones[0]) and already fully populated on all 10 live
+// packs. Labels are DRAFT copy -- coordinator wording welcome.
+const DIFFICULTY_ORDER: PackDifficulty[] = ['beginner', 'intermediate', 'advanced'];
+const DIFFICULTY_LABEL: Record<PackDifficulty, string> = {
+  beginner: 'BEGINNER-FRIENDLY',
+  intermediate: 'STANDARD',
+  advanced: 'ADVANCED',
+};
+
+/**
+ * Group packs by difficulty tier for the grouped world-select menu
+ * (F-6ed5f350 / SLATE-3). Exported so a drift guard can assert the current
+ * pack-roster split directly, without driving the full interactive flow.
+ */
+export function buildDifficultyGroups(packs: PackInfo[]): MenuGroup<PackInfo>[] {
+  return DIFFICULTY_ORDER
+    .map((d) => ({
+      label: DIFFICULTY_LABEL[d],
+      items: packs
+        .filter((p) => p.meta.difficulty === d)
+        .map((p) => ({ item: p, label: p.meta.name, description: p.meta.tagline })),
+    }))
+    .filter((g) => g.items.length > 0);
+}
+
+/**
+ * Run the full interactive character creation flow. Uses a loop instead of recursion for retry.
+ *
+ * @param presetPack F-ef4a283d (SLATE-4) / Coordinator Brief contract #4: when
+ *   supplied (bin.ts resolves --world to a PackInfo via resolveWorldFlag +
+ *   getPackById BEFORE calling this), Step 1's world-select prompt is skipped
+ *   entirely -- never shown, not even on a retry. Per Director ruling R2, the
+ *   preset stays LOCKED for the lifetime of this call: rejecting the
+ *   character summary and looping back does NOT fall through to the normal
+ *   menu. The only acknowledgment of a reject while a world is preset is a
+ *   hint line telling the player how to change it (rerun the CLI without
+ *   --world) -- there is no in-session escape hatch by design.
+ */
+export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInfo): Promise<BuildResult> {
   // Loop instead of recursion to avoid unbounded stack growth on repeated rejections
   while (true) {
-  // Step 1: Select pack
-  const packIndex = await promptMenu(rl, 'Choose your world:', allPacks.map((p) => ({
-    label: p.meta.name,
-    description: p.meta.tagline,
-  })));
-  const pack = allPacks[packIndex];
+  // Step 1: Select pack.
+  // F-ef4a283d: presetPack (--world) skips this prompt on every pass,
+  // locked per R2. F-6ed5f350 (SLATE-3): the un-preset path now groups the
+  // flat 10-pack list by difficulty instead of one long undifferentiated list.
+  let pack: PackInfo;
+  if (presetPack) {
+    pack = presetPack;
+    console.log(`\n  World: ${pack.meta.name} (preselected via --world)`);
+  } else {
+    const groups = buildDifficultyGroups(allPacks);
+    pack = await promptGroupedMenu(rl, 'Choose your world:', groups);
+  }
   const catalog = pack.buildCatalog;
   const ruleset = pack.ruleset;
 
@@ -156,7 +202,13 @@ export async function buildCharacter(rl: ReadlineInterface): Promise<BuildResult
 
   const confirmed = await promptConfirm(rl, 'Accept this character?');
   if (!confirmed) {
-    console.log('  Starting over...\n');
+    // F-ef4a283d / R2: a preset world stays locked across retries -- the
+    // hint tells the player the only way to change it (rerun without
+    // --world) instead of silently offering a menu the locked design no
+    // longer shows.
+    console.log(presetPack
+      ? '  Starting over... (rerun without --world to pick a different world)\n'
+      : '  Starting over...\n');
     continue; // loop back instead of recursive call
   }
 

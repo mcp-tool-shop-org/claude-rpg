@@ -3,6 +3,25 @@ import { renderRecap } from './recap.js';
 import { TurnHistory, type TurnRecord } from '../session/history.js';
 import { FALLBACK_NARRATION, FATAL_NARRATION_FALLBACK } from '../narrator/narrator.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
+
+// F-4b8a3a39: minimal BuildCatalog fixture, same shape as sheet.test.ts's /
+// presence.test.ts's makeBuildCatalog — only .archetypes is exercised here.
+function makeBuildCatalog(overrides: Partial<BuildCatalog> = {}): BuildCatalog {
+  return {
+    packId: 'test-pack',
+    statBudget: 0,
+    maxTraits: 0,
+    requiredFlaws: 0,
+    archetypes: [{ id: 'warden', name: 'Warden' }] as any,
+    backgrounds: [],
+    traits: [],
+    disciplines: [],
+    crossTitles: [],
+    entanglements: [],
+    ...overrides,
+  } as unknown as BuildCatalog;
+}
 
 function makeHistory(narrations: string[]): TurnHistory {
   const history = new TurnHistory();
@@ -38,6 +57,22 @@ describe('renderRecap basic structure', () => {
     const result = renderRecap(makeProfile(), makeHistory([]));
     expect(result).toContain('Kael');
     expect(result).toContain('12 turns played');
+  });
+
+  // F-4b8a3a39: recap.ts:53 printed the raw archetypeId catalog slug, the
+  // same shape already fixed for presence.ts (F-3c282b18) and sheet.ts
+  // (F-9c94c4b5). renderRecap now accepts an optional trailing BuildCatalog
+  // and resolves through catalog-names.ts, falling back to the raw id when
+  // omitted (backward compatible with every pre-existing call site).
+  it('should resolve archetypeId to its catalog display name when a catalog is supplied', () => {
+    const result = renderRecap(makeProfile(), makeHistory([]), makeBuildCatalog());
+    expect(result).toContain('Warden');
+    expect(result).not.toContain('warden');
+  });
+
+  it('should keep printing the raw archetypeId when no catalog is supplied (unchanged default)', () => {
+    const result = renderRecap(makeProfile(), makeHistory([]));
+    expect(result).toContain('warden');
   });
 
   it('should quote real narration verbatim when no fallback turns are present', () => {

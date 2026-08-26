@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { WorldState } from '@ai-rpg-engine/core';
+import type { WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { Belief } from '@ai-rpg-engine/modules';
 
 // Mock only the specific engine-package functions buildNPCDialogueContext
@@ -18,7 +18,7 @@ vi.mock('@ai-rpg-engine/modules', async (importOriginal) => {
 });
 
 import { getCognition, getEntityFaction, getRumorsFrom, type CognitionState, type RumorRecord } from '@ai-rpg-engine/modules';
-import { buildNPCDialogueContext } from './npc-context.js';
+import { buildNPCDialogueContext, deriveNpcPersonality } from './npc-context.js';
 
 const mockedGetCognition = vi.mocked(getCognition);
 const mockedGetEntityFaction = vi.mocked(getEntityFaction);
@@ -182,5 +182,33 @@ describe('buildNPCDialogueContext F-b52349e0: rumors cap', () => {
 
     expect(ctx!.rumors.length).toBe(1);
     expect(ctx!.rumors[0]).toContain('only-one');
+  });
+});
+
+// F-c8c8c67c (SLATE-1) / Coordinator Brief contract #1: closed-set
+// personality classifier for callers outside this file (game-core's
+// turn-loop.ts, this domain's own ambient-dialogue.ts). Mirrors
+// prompts/dialogue-npc.ts's resolveVoiceArchetype() tests (FT-BR-005)
+// one-for-one, plus the 'default' fallback resolveVoiceArchetype itself
+// doesn't provide.
+describe('deriveNpcPersonality (F-c8c8c67c / Coordinator Brief contract #1)', () => {
+  function makeEntity(overrides: Partial<EntityState> = {}): EntityState {
+    return { id: 'npc-1', blueprintId: 'x', type: 'npc', name: 'Test NPC', tags: [], stats: {}, resources: {}, statuses: [], ...overrides } as EntityState;
+  }
+
+  it('classifies by tags the same way resolveVoiceArchetype does', () => {
+    expect(deriveNpcPersonality(makeEntity({ tags: ['merchant'] }))).toBe('merchant');
+    expect(deriveNpcPersonality(makeEntity({ tags: ['guard', 'patrol'] }))).toBe('guard');
+    expect(deriveNpcPersonality(makeEntity({ tags: ['mage'] }))).toBe('scholar');
+    expect(deriveNpcPersonality(makeEntity({ tags: ['thief'] }))).toBe('rogue');
+    expect(deriveNpcPersonality(makeEntity({ tags: ['lord'] }))).toBe('noble');
+  });
+
+  it('classifies by entity type when tags do not match', () => {
+    expect(deriveNpcPersonality(makeEntity({ type: 'guard', tags: [] }))).toBe('guard');
+  });
+
+  it('returns "default" (not undefined) for an entity resolveVoiceArchetype cannot classify', () => {
+    expect(deriveNpcPersonality(makeEntity({ type: 'npc', tags: ['farmer'] }))).toBe('default');
   });
 });

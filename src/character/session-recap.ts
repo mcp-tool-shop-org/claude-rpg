@@ -5,9 +5,20 @@ import type { SessionDelta } from './recap-delta.js';
 import type { WorldDelta } from './world-delta.js';
 import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState, DistrictEconomy, OpportunityState, OpportunityFallout } from '@ai-rpg-engine/modules';
 import { deriveEconomyDescriptor, type SupplyCategory } from '@ai-rpg-engine/modules';
+import { getTerminalWidth } from '../display/play-renderer.js';
 
-const DIVIDER = '─'.repeat(60);
-const HEAVY_DIVIDER = '═'.repeat(60);
+// F-4b8a3a39: DIVIDER/HEAVY_DIVIDER used to be hardcoded 60-char module constants,
+// unlike play-renderer.ts's own dividers (PFE-005) and this file's five
+// sibling files (recap.ts, recap-delta.ts, sheet.ts, chronicle-renderer.ts,
+// world-delta.ts — all already fixed under F-e475c46d/F-38eb3dec). Computed
+// per call (not a module-level constant) so it tracks the real terminal
+// width, matching play-renderer.ts's makeDivider()/makeThinDivider() pattern.
+function divider(): string {
+  return '─'.repeat(getTerminalWidth());
+}
+function heavyDivider(): string {
+  return '═'.repeat(getTerminalWidth());
+}
 
 // --- Types ---
 
@@ -557,15 +568,15 @@ export function renderFullRecap(
   const lines: string[] = [];
 
   lines.push('');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push('  SESSION SUMMARY');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
 
   // Section 1: Character Changes
   lines.push('');
-  lines.push(`  ${DIVIDER}`);
+  lines.push(`  ${divider()}`);
   lines.push('  CHARACTER CHANGES');
-  lines.push(`  ${DIVIDER}`);
+  lines.push(`  ${divider()}`);
   lines.push('');
 
   const xpStr = characterDelta.xpGained > 0
@@ -590,9 +601,9 @@ export function renderFullRecap(
   // Section 2: World Changes
   if (worldDelta.pressuresSpawned > 0 || worldDelta.pressuresResolved > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  WORLD CHANGES');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     if (worldDelta.pressuresSpawned > 0) {
@@ -612,9 +623,9 @@ export function renderFullRecap(
   // Section 3: District Changes
   if (changedDistricts.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  DISTRICT CHANGES');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const dd of changedDistricts) {
@@ -632,9 +643,9 @@ export function renderFullRecap(
   // Section: Economy Changes
   if (economyRecapEntries && economyRecapEntries.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  ECONOMY CHANGES');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const entry of economyRecapEntries) {
@@ -648,9 +659,9 @@ export function renderFullRecap(
   // Section 4: Faction Shifts
   if (factionDeltas.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  FACTION SHIFTS');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const fd of factionDeltas) {
@@ -674,9 +685,9 @@ export function renderFullRecap(
   // Section 4: Rumor Network
   if (rumorDelta.spawned > 0 || rumorDelta.totalSpread > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  RUMOR NETWORK');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     const parts: string[] = [];
@@ -695,9 +706,9 @@ export function renderFullRecap(
   // Section 5: What People Are Saying
   if (whatPeopleAreSaying.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  WHAT PEOPLE ARE SAYING');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const wps of whatPeopleAreSaying) {
@@ -715,9 +726,9 @@ export function renderFullRecap(
   // Section 6: Notable Characters
   if (npcRecapEntries && npcRecapEntries.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  NOTABLE CHARACTERS');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const entry of npcRecapEntries) {
@@ -738,9 +749,9 @@ export function renderFullRecap(
   // Section: Companion Changes
   if (companionRecapEntries && companionRecapEntries.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  COMPANION CHANGES');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const entry of companionRecapEntries) {
@@ -752,9 +763,9 @@ export function renderFullRecap(
   // Section: Equipment Changes
   if (itemRecapEntries && itemRecapEntries.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  EQUIPMENT CHANGES');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const entry of itemRecapEntries) {
@@ -766,9 +777,9 @@ export function renderFullRecap(
   // Section: Crafting Activity (v1.8)
   if (hasCraftingData) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  CRAFTING ACTIVITY');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     if (craftingData!.entries.length > 0) {
@@ -792,9 +803,9 @@ export function renderFullRecap(
   // Section: Opportunities & Contracts (v1.9)
   if (opportunityRecapEntries && opportunityRecapEntries.length > 0) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  OPPORTUNITIES & CONTRACTS');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     for (const entry of opportunityRecapEntries) {
@@ -806,9 +817,9 @@ export function renderFullRecap(
   // Section: Campaign Arc (v2.0)
   if (arcRecapData && (arcRecapData.dominantArc || arcRecapData.endgameTriggers.length > 0)) {
     lines.push('');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('  CAMPAIGN ARC');
-    lines.push(`  ${DIVIDER}`);
+    lines.push(`  ${divider()}`);
     lines.push('');
 
     if (arcRecapData.dominantArc) {
@@ -820,7 +831,7 @@ export function renderFullRecap(
   }
 
   lines.push('');
-  lines.push(HEAVY_DIVIDER);
+  lines.push(heavyDivider());
   lines.push('');
 
   return lines.join('\n');

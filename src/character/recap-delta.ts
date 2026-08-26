@@ -82,8 +82,27 @@ export function computeSessionDelta(
   };
 }
 
-/** Render session delta as terminal text. */
-export function renderSessionDelta(delta: SessionDelta): string {
+/**
+ * Render session delta as terminal text.
+ *
+ * F-fc8a9b4a / Coordinator Brief ruling R3: this function has zero
+ * production callers in the shipped CLI today (session-recap.ts's
+ * renderFullRecap is the live "SESSION SUMMARY" path; this is a parallel,
+ * simpler single-section renderer). It is KEPT and re-exported from index.ts
+ * as intentional public-library surface — removing it inside a minor release
+ * would break semver for any external embedder calling it directly. Do not
+ * wire it into bin.ts alongside renderFullRecap: that would create a second,
+ * independently-hand-maintained rendering path for the same delta data,
+ * exactly the "two copies drift apart" shape this codebase has already been
+ * bitten by repeatedly (F-223de079, F-8da2e6f7, F-f1eb58cb, F-aaaa105f).
+ *
+ * @param factionNames F-4b8a3a39: optional id->display-name map, mirroring
+ *   session-recap.ts's already-established FACTION SHIFTS convention
+ *   (F-bbcef54a) and sheet.ts's REPUTATION convention (F-9c94c4b5). Default
+ *   {} so every pre-existing call site keeps compiling and keeps rendering
+ *   the raw factionId exactly as before this fix.
+ */
+export function renderSessionDelta(delta: SessionDelta, factionNames: Record<string, string> = {}): string {
   const lines: string[] = [];
 
   // F-579e70a8: gate on every field the body below actually renders, not just
@@ -119,7 +138,8 @@ export function renderSessionDelta(delta: SessionDelta): string {
 
   for (const rep of delta.reputationChanges) {
     const sign = rep.after > rep.before ? '+' : '';
-    lines.push(`  ${rep.factionId}: ${sign}${rep.after - rep.before} (now ${rep.after > 0 ? '+' : ''}${rep.after})`);
+    const factionName = factionNames[rep.factionId] ?? rep.factionId;
+    lines.push(`  ${factionName}: ${sign}${rep.after - rep.before} (now ${rep.after > 0 ? '+' : ''}${rep.after})`);
   }
 
   if (delta.newMilestones > 0) {

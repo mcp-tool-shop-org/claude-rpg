@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   computeFactionDeltas,
   computeRumorDelta,
@@ -383,5 +383,54 @@ describe('renderFullRecap', () => {
 
     expect(result).toContain('Iron Covenant');
     expect(result).not.toContain('iron-covenant');
+  });
+});
+
+// F-4b8a3a39: DIVIDER/HEAVY_DIVIDER were still hardcoded 60-char module
+// constants -- the one file in its own five-file sibling family (recap.ts,
+// recap-delta.ts, sheet.ts, chronicle-renderer.ts, world-delta.ts, all
+// already fixed under F-e475c46d/F-38eb3dec) that never adopted
+// getTerminalWidth(). Mirrors world-delta.test.ts's / recap.test.ts's
+// F-e475c46d assertions -- structural (exact-width substring), not a
+// full-screen snapshot.
+describe('renderFullRecap divider width (F-4b8a3a39)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  const nonEmptyCharacterDelta: SessionDelta = {
+    xpGained: 0,
+    levelBefore: 1,
+    levelAfter: 1,
+    reputationChanges: [],
+    newMilestones: 0,
+    newInjuries: 0,
+    turnsPlayed: 1,
+  };
+  const zeroWorldDelta: WorldDelta = {
+    pressuresSpawned: 0,
+    pressuresResolved: 0,
+    resolutionSummaries: [],
+    chainReactions: 0,
+    rumorsDelta: 0,
+  };
+  const zeroRumorDelta = { spawned: 0, mutated: 0, totalSpread: 0 };
+
+  it('both the heavy and thin dividers match a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const result = renderFullRecap(nonEmptyCharacterDelta, zeroWorldDelta, [], zeroRumorDelta, []);
+    expect(result).toContain('─'.repeat(40));
+    expect(result).not.toContain('─'.repeat(60));
+    expect(result).toContain('═'.repeat(40));
+    expect(result).not.toContain('═'.repeat(60));
+  });
+
+  it('both dividers match a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const result = renderFullRecap(nonEmptyCharacterDelta, zeroWorldDelta, [], zeroRumorDelta, []);
+    expect(result).toContain('─'.repeat(120));
+    expect(result).not.toContain('─'.repeat(121));
+    expect(result).toContain('═'.repeat(120));
+    expect(result).not.toContain('═'.repeat(121));
   });
 });

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { allPacks, getPackById, resolveWorldFlag } from './packs.js';
+import { allPacks, getPackById, resolveWorldFlag, WORLD_FLAG_MAP } from './packs.js';
 import { PACK_VOICES } from '../prompts/finale-prompt.js';
 
 const require = createRequire(import.meta.url);
@@ -89,6 +89,44 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
       const isDocumentedBlocked = KNOWN_BLOCKED_STARTER_PACKS.includes(name);
       expect(isRegistered || isDocumentedBlocked).toBe(true);
     }
+  });
+});
+
+// F-ef4a283d (SLATE-4) / Coordinator Brief contract #3: WORLD_FLAG_MAP is
+// resolveWorldFlag's own inline map, hoisted to an exported const so
+// cli-display (bin.ts) can build its own "valid worlds are: ..." error copy
+// from the SAME source instead of hand-duplicating the list.
+describe('WORLD_FLAG_MAP (F-ef4a283d / Coordinator Brief contract #3)', () => {
+  it('is exported and resolveWorldFlag derives from it directly (same value for every key)', () => {
+    for (const key of Object.keys(WORLD_FLAG_MAP)) {
+      expect(resolveWorldFlag(key)).toBe(WORLD_FLAG_MAP[key]);
+    }
+  });
+
+  it('every value resolves to a pack registered in allPacks', () => {
+    for (const packId of Object.values(WORLD_FLAG_MAP)) {
+      expect(getPackById(packId)).toBeDefined();
+    }
+  });
+});
+
+// F-ef4a283d / Coordinator Brief ruling R1: unknown --world handling
+// (structured error + exit 1) is decided pre-interactively in bin.ts
+// (cli-display's half). packs.ts must stay QUIET -- resolveWorldFlag's old
+// console.warn is removed so this module never prints, matching R1's
+// "packs.ts never prints" instruction.
+describe('resolveWorldFlag quiet-on-unknown (F-ef4a283d / R1)', () => {
+  it('returns undefined for an unrecognized world name without logging anything', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = resolveWorldFlag('not-a-real-world');
+
+    expect(result).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
 

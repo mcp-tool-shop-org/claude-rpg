@@ -2,9 +2,11 @@
 
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { computeLevel, getActiveInjuries } from '@ai-rpg-engine/character-profile';
+import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 import { TurnHistory, type TurnRecord } from '../session/history.js';
 import { KNOWN_FALLBACK_NARRATION_SENTINELS } from '../narrator/narrator.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
+import { resolveArchetypeName } from './catalog-names.js';
 
 // F-e475c46d: was a fixed 60-char divider regardless of terminal size,
 // unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
@@ -32,10 +34,19 @@ function divider(): string {
  */
 type MaybeFallback = TurnRecord & { isFallback?: boolean };
 
-/** Render a session recap shown when loading a save. */
+/**
+ * Render a session recap shown when loading a save.
+ *
+ * @param catalog F-4b8a3a39: optional BuildCatalog used to resolve
+ *   archetypeId to its display name (same contract as presence.ts's
+ *   buildStatusData/buildPresence and sheet.ts's renderCharacterSheet
+ *   catalog param). Omitted callers keep getting the raw id back, same as
+ *   before this fix.
+ */
 export function renderRecap(
   profile: CharacterProfile | null,
   history: TurnHistory,
+  catalog?: BuildCatalog,
 ): string {
   const parts: string[] = [];
 
@@ -49,8 +60,9 @@ export function renderRecap(
     const level = computeLevel(profile.progression.xp);
     const title = profile.custom.title as string | undefined;
     const injuries = getActiveInjuries(profile);
+    const archetypeName = resolveArchetypeName(catalog, profile.build.archetypeId);
 
-    parts.push(`  ${profile.build.name}, level ${level} ${profile.build.archetypeId}${title ? ` — "${title}"` : ''}`);
+    parts.push(`  ${profile.build.name}, level ${level} ${archetypeName}${title ? ` — "${title}"` : ''}`);
     parts.push(`  ${profile.totalTurns} turns played`);
 
     if (injuries.length > 0) {

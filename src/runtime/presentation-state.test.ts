@@ -15,25 +15,15 @@ describe('PresentationStateMachine', () => {
     expect(sm.current).toBe('combat');
   });
 
-  it('should add music shift on combat transition', () => {
+  it('should return only from/to/trigger from a transition (F-81abb66a)', () => {
+    // Cue computation (ambientShift/musicShift) and the onTransition listener mechanism
+    // were removed as dead code: nothing in this domain ever wired onTransition up, and
+    // the hook system (hooks.ts) is the actual, sole source of audio cues. Locks that
+    // decision so the two cue paths can't silently reappear and double-fire.
     const sm = new PresentationStateMachine();
     const t = sm.transition('combat', 'attack');
-    expect(t.musicShift).toBeDefined();
-    expect(t.musicShift!.action).toBe('intensify');
-  });
-
-  it('should add ambient shift on combat transition', () => {
-    const sm = new PresentationStateMachine();
-    const t = sm.transition('combat', 'attack');
-    expect(t.ambientShift).toBeDefined();
-    expect(t.ambientShift!.length).toBeGreaterThan(0);
-  });
-
-  it('should soften music on aftermath', () => {
-    const sm = new PresentationStateMachine();
-    sm.transition('combat', 'attack');
-    const t = sm.transition('aftermath', 'defeat');
-    expect(t.musicShift?.action).toBe('soften');
+    expect(t).toEqual({ from: 'exploration', to: 'combat', trigger: 'attack' });
+    expect('onTransition' in sm).toBe(false);
   });
 
   it('should infer combat from combat events', () => {
@@ -54,15 +44,6 @@ describe('PresentationStateMachine', () => {
     const events = [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any;
     const state = sm.inferFromEvents(events);
     expect(state).toBe('exploration');
-  });
-
-  it('should call transition listeners', () => {
-    const sm = new PresentationStateMachine();
-    const transitions: string[] = [];
-    sm.onTransition((t) => transitions.push(`${t.from}->${t.to}`));
-    sm.transition('combat', 'attack');
-    sm.transition('aftermath', 'defeat');
-    expect(transitions).toEqual(['exploration->combat', 'combat->aftermath']);
   });
 
   it('should countdown aftermath turns then return to exploration (T-010)', () => {

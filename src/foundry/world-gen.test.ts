@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { validateWorldGenProposal, generateWorld } from './world-gen.js';
 import type { WorldGenProposal } from './world-gen.js';
 import type { ClaudeClient } from '../claude-client.js';
+import { getFactionMembers } from '@ai-rpg-engine/modules';
 
 function makeValidProposal(): WorldGenProposal {
   return {
@@ -300,6 +301,47 @@ describe('generateWorld PBR-007: NPC ID collision guard', () => {
     const result = await generateWorld(client, 'test', 1);
     expect(result.ok).toBe(true);
     expect(Object.keys(result.engine!.world.entities)).toContain('merchant');
+    warnSpy.mockRestore();
+  });
+});
+
+describe('generateWorld F-105a5718: faction memberIds reconciled after NPC id collision', () => {
+  it('remaps a faction member id that gets renamed due to a PBR-007 collision', async () => {
+    const proposal = makeValidProposal();
+    // Base proposal already has faction 'guard' with memberIds: ['guard-1'], intending
+    // to reference the ACTUAL Guard Captain — not whichever entity happens to end up
+    // holding the literal id 'guard-1' after collision resolution. Insert an UNRELATED
+    // npc that also claims 'guard-1' BEFORE the real Guard Captain in the array, so the
+    // captain (the real faction member) is the one that gets suffixed to 'guard-1-2'.
+    proposal.npcs.unshift({
+      id: 'guard-1',
+      name: 'Random Villager',
+      type: 'npc',
+      tags: [],
+      zoneId: 'town-square',
+      personality: 'timid',
+      goals: [],
+      stats: {},
+      resources: {},
+      beliefs: [],
+    });
+
+    const client = makeMockClient(proposal);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+
+    const entityIds = Object.keys(result.engine!.world.entities);
+    expect(entityIds).toContain('guard-1'); // Random Villager keeps the unsuffixed id
+    expect(entityIds).toContain('guard-1-2'); // Guard Captain renamed due to the collision
+
+    const members = getFactionMembers(result.engine!.world, 'guard');
+    // Must track the Guard Captain's REAL final id, not the stray original 'guard-1'
+    // (which now belongs to the unrelated Random Villager).
+    expect(members).toEqual(['guard-1-2']);
+    expect(members.every((id) => id in result.engine!.world.entities)).toBe(true);
+
     warnSpy.mockRestore();
   });
 });

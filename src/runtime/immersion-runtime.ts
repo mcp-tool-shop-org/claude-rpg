@@ -11,6 +11,7 @@ import {
 import {
   HookManager,
   registerBuiltinHooks,
+  isPlayerDefeatEvent,
   type HookContext,
   type HookResult,
 } from './hooks.js';
@@ -67,28 +68,44 @@ export class ImmersionRuntime {
     narrationPlan?: NarrationPlan,
   ): Promise<McpToolCall[]> {
     // 1. Infer and transition presentation state
+    const priorState = this.stateMachine.current;
     const inferredState = this.stateMachine.inferFromEvents(events, verb);
-    if (inferredState !== this.stateMachine.current) {
+    if (inferredState !== priorState) {
       this.stateMachine.transition(inferredState, verb);
     }
-
-    // 2. Fire pre-narration hooks
-    const preContext: HookContext = {
-      hookPoint: 'pre-narration',
-      world: engine.world,
-      events,
-      presentationState: this.stateMachine.current,
-    };
-    const preResults = this.hookManager.fire(preContext);
+    // F-0acb03fe: whether combat was JUST entered this call, mirroring
+    // PresentationStateMachine.transition()'s own `to === 'combat' && from !== 'combat'`
+    // guard. Combat.* events recur every turn of an ongoing fight, so gating combat-start
+    // dispatch on the raw event shape (as fireEventHooks used to) fired it every turn
+    // instead of once per fight.
+    const justEnteredCombat = inferredState === 'combat' && priorState !== 'combat';
 
     // PFE-008: Wrap audio/hook pipeline in try/catch so failures degrade to silence
     // rather than killing the turn. The player should never lose gameplay to an audio glitch.
+    let preResults: HookResult[] = [];
     let specificCalls: McpToolCall[] = [];
     let audioCalls: McpToolCall[] = [];
 
+    // 2. Fire pre-narration hooks (guarded — F-e2f0cd27: this was previously unwrapped,
+    // so a throwing pre-narration hook rejected the whole call instead of degrading
+    // gracefully like every other stage of this pipeline).
+    try {
+      const preContext: HookContext = {
+        hookPoint: 'pre-narration',
+        world: engine.world,
+        events,
+        presentationState: this.stateMachine.current,
+      };
+      preResults = this.hookManager.fire(preContext);
+    } catch (err) {
+      if (this.debugMode) {
+        console.error('[immersion] Pre-narration hook error (degrading to silence):', err);
+      }
+    }
+
     try {
       // 3. Fire specific hooks based on events
-      specificCalls = await this.fireEventHooks(engine, events);
+      specificCalls = await this.fireEventHooks(engine, events, justEnteredCombat);
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Hook error (degrading to silence):', err);
@@ -145,12 +162,14 @@ export class ImmersionRuntime {
   private async fireEventHooks(
     engine: Engine,
     events: ResolvedEvent[],
+    justEnteredCombat: boolean,
   ): Promise<McpToolCall[]> {
     const calls: McpToolCall[] = [];
     const state = this.stateMachine.current;
 
-    // Combat hooks
-    if (events.some((e) => e.type.startsWith('combat.'))) {
+    // Combat hooks — fire only on the turn combat is entered (F-0acb03fe), not on every
+    // turn combat.* events keep appearing (they recur for the whole fight).
+    if (justEnteredCombat) {
       const combatCtx: HookContext = {
         hookPoint: 'combat-start',
         world: engine.world,
@@ -188,11 +207,9 @@ export class ImmersionRuntime {
       calls.push(...(await this.executeMergedHookResult(merged)));
     }
 
-    // Death
-    const deathEvent = events.find(
-      (e) => e.type === 'resource.changed' && e.payload.resourceId === 'hp' && (e.payload.newValue as number) <= 0,
-    );
-    if (deathEvent) {
+    // Death — entity-aware: only the PLAYER's defeat triggers the death presentation
+    // (F-adc0d512; shares isPlayerDefeatEvent with hooks.ts's deathHook).
+    if (isPlayerDefeatEvent(events, engine.world.playerId)) {
       const deathCtx: HookContext = {
         hookPoint: 'death',
         world: engine.world,

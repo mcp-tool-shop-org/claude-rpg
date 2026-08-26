@@ -287,6 +287,11 @@ export async function generateWorld(
 
   // Add NPCs — with collision guard and per-NPC error isolation
   const usedEntityIds = new Set<string>(Object.keys(engine.world.entities));
+  // F-105a5718: tracks each NPC's original proposed id -> its actual final entityId, so
+  // faction memberIds (captured into createFactionCognition's config above, BEFORE this
+  // loop resolves PBR-007 collisions) can be reconciled afterward. Populated below from
+  // the SAME entityId used for engine.store.addEntity, so it can't drift from reality.
+  const npcIdRemap = new Map<string, string>();
   for (const npc of proposal.npcs) {
     try {
       // PBR-001: Defensive coercion for missing stats/resources
@@ -322,6 +327,7 @@ export async function generateWorld(
         console.warn(`[world-gen] NPC ID collision: "${npc.id}" already exists. Using "${entityId}" instead.`);
       }
       usedEntityIds.add(entityId);
+      npcIdRemap.set(npc.id, entityId);
 
       const entity: EntityState = {
         id: entityId,
@@ -380,6 +386,24 @@ export async function generateWorld(
       reputation: 0,
       disposition: faction.disposition,
     };
+  }
+
+  // F-105a5718: reconcile faction cognition membership against final (post-collision) NPC
+  // ids. createFactionCognition (passed into the Engine's modules array above) was
+  // configured from each faction's raw, un-reconciled memberIds BEFORE this function's NPC
+  // loop resolved PBR-007 id collisions, so any memberIds entry naming an id that got
+  // suffixed above was left tracking a stray id instead of the entity's real final one.
+  const factionCogState = engine.world.modules['faction-cognition'] as
+    | { membership: Record<string, string>; factionMembers: Record<string, string[]> }
+    | undefined;
+  if (factionCogState) {
+    for (const faction of proposal.factions) {
+      const reconciledIds = faction.memberIds.map((id) => npcIdRemap.get(id) ?? id);
+      factionCogState.factionMembers[faction.id] = reconciledIds;
+      for (const entityId of reconciledIds) {
+        factionCogState.membership[entityId] = faction.id;
+      }
+    }
   }
 
   return {

@@ -116,15 +116,32 @@ describe('Built-in hooks', () => {
     const deathNoEvent = manager.fire(makeContext({ hookPoint: 'death' }));
     expect(deathNoEvent).toHaveLength(0);
 
-    // death: with hp-zero event → returns SFX + ambient + UI effects
-    const deathWithEvent = manager.fire(makeContext({
+    // death (F-adc0d512): a bare hp<=0 resource.changed event with no entityId must NOT
+    // fire — this is the old buggy predicate shape that fired for ANY entity's hp hitting 0.
+    const deathBareHpEvent = manager.fire(makeContext({
       hookPoint: 'death',
       events: [{ type: 'resource.changed', tick: 1, payload: { resourceId: 'hp', newValue: 0 } }] as any,
+    }));
+    expect(deathBareHpEvent).toHaveLength(0);
+
+    // death: the PLAYER's combat.entity.defeated event → returns SFX + ambient + UI effects.
+    // makeContext's default world.playerId is 'player'.
+    const deathWithEvent = manager.fire(makeContext({
+      hookPoint: 'death',
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'player' } }] as any,
     }));
     expect(deathWithEvent).toHaveLength(1);
     expect(deathWithEvent[0].sfxCues![0].effectId).toBe('alert_critical');
     expect(deathWithEvent[0].ambientCues!.length).toBe(2);
     expect(deathWithEvent[0].uiEffects!.length).toBe(1);
+
+    // death (F-adc0d512 regression): a NON-player entity's combat.entity.defeated (e.g. a
+    // defeated monster during combat) must NOT trigger the player-death SFX/fade-out.
+    const deathNonPlayerKill = manager.fire(makeContext({
+      hookPoint: 'death',
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
+    }));
+    expect(deathNonPlayerKill).toHaveLength(0);
   });
 
   it('should emit ambient cues on enter-room with zone change', () => {

@@ -55,9 +55,16 @@ describe('getPerPathThresholds', () => {
   it('returns thresholds matching vitest.config.ts', () => {
     const thresholds = getPerPathThresholds();
 
-    expect(thresholds['src/llm/']).toBe(70);
-    expect(thresholds['src/session/']).toBe(40);
-    expect(thresholds['src/game/']).toBe(25);
+    // F-ce3b86de: ratcheted alongside vitest.config.ts's coverage.thresholds
+    // (source of truth); scripts/check-coverage-utils.mjs mirrors the same
+    // values so the PR-diff gate and the standing vitest gate agree.
+    expect(thresholds['src/llm/']).toBe(82);
+    expect(thresholds['src/session/']).toBe(58);
+    expect(thresholds['src/game/']).toBe(55);
+    // F-ce3b86de: the top-level src/game.ts file gets its own dedicated
+    // key, distinct from the src/game/ subdirectory above -- 'src/game/**'
+    // never matched it (see the getApplicableThreshold cases below).
+    expect(thresholds['src/game.ts']).toBe(30);
   });
 
   it('returns all thresholds as an object', () => {
@@ -98,19 +105,27 @@ describe('isAboveThreshold', () => {
 });
 
 describe('getApplicableThreshold', () => {
-  it('returns 70 for src/llm/ files', () => {
+  it('returns 82 for src/llm/ files', () => {
     const thresholds = getPerPathThresholds();
-    expect(getApplicableThreshold('src/llm/interpreter.ts', thresholds)).toBe(70);
+    expect(getApplicableThreshold('src/llm/interpreter.ts', thresholds)).toBe(82);
   });
 
-  it('returns 40 for src/session/ files', () => {
+  it('returns 58 for src/session/ files', () => {
     const thresholds = getPerPathThresholds();
-    expect(getApplicableThreshold('src/session/manager.ts', thresholds)).toBe(40);
+    expect(getApplicableThreshold('src/session/manager.ts', thresholds)).toBe(58);
   });
 
-  it('returns 25 for src/game/ files', () => {
+  it('returns 55 for src/game/ files', () => {
     const thresholds = getPerPathThresholds();
-    expect(getApplicableThreshold('src/game/engine.ts', thresholds)).toBe(25);
+    // F-ce3b86de: was 'src/game/engine.ts', a path that does not exist
+    // anywhere in this repo -- game-state.ts is a real src/game/ file, so
+    // this case now exercises the actual subdirectory floor it claims to.
+    expect(getApplicableThreshold('src/game/game-state.ts', thresholds)).toBe(55);
+  });
+
+  it('returns 30 for the top-level src/game.ts file specifically (F-ce3b86de: distinct from the src/game/ subdirectory floor above)', () => {
+    const thresholds = getPerPathThresholds();
+    expect(getApplicableThreshold('src/game.ts', thresholds)).toBe(30);
   });
 
   it('returns default 25 for files outside critical paths', () => {
@@ -157,7 +172,7 @@ describe('getApplicableThreshold with path-prefix matching', () => {
     // matching returns the 25 default. This test fails if includes() returns.
     expect(getApplicableThreshold('vendor/src/llm/x.ts', thresholds)).toBe(25);
     // Positive control: a real prefix match still resolves its floor.
-    expect(getApplicableThreshold('src/llm/adapter.ts', thresholds)).toBe(70);
+    expect(getApplicableThreshold('src/llm/adapter.ts', thresholds)).toBe(82);
     // Sibling-directory name sharing the prefix as a string is not a match.
     expect(getApplicableThreshold('src/gameplay/file.ts', thresholds)).toBe(25);
   });

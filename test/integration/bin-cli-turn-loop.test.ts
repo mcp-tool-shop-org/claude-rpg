@@ -29,6 +29,7 @@ import {
   writeFantasySaveWithCharacterName,
   spawnCli,
   cleanupCliTestResources,
+  getBundleBinCliCallCount,
   type BinCliBundle,
   type MockAnthropicServer,
   type CliHandle,
@@ -39,19 +40,26 @@ function countStdoutPrompts(stdout: string): number {
   return stdout.split('  > ').length - 1;
 }
 
+// F-b6e89ebb: bundleBinCli()'s output (bundle.entryPath) is read-only and
+// identical for every test in this file -- both describe blocks below only
+// vary argv/env per spawnCli() call, never the bundle itself. Building it
+// once here (instead of once per describe block) halves this file's real
+// esbuild cost in CI and removes one of two independent 30-second
+// timeout windows that contention could blow.
+let bundle: BinCliBundle;
+
+beforeAll(async () => {
+  bundle = await bundleBinCli();
+}, 30000);
+
+afterAll(async () => {
+  await bundle.cleanup();
+});
+
 describe('bin.ts turn loop — fatal narration error survives to next prompt', () => {
-  let bundle: BinCliBundle;
   let homeDir: string;
   let server: MockAnthropicServer;
   let cli: CliHandle | undefined;
-
-  beforeAll(async () => {
-    bundle = await bundleBinCli();
-  }, 30000);
-
-  afterAll(async () => {
-    await bundle.cleanup();
-  });
 
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-home-'));
@@ -144,18 +152,9 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
 // the save directory" case exercises directly against the extracted
 // function, reached here through the real save -> load -> exit flow).
 describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits', () => {
-  let bundle: BinCliBundle;
   let homeDir: string;
   let server: MockAnthropicServer;
   let cli: CliHandle | undefined;
-
-  beforeAll(async () => {
-    bundle = await bundleBinCli();
-  }, 30000);
-
-  afterAll(async () => {
-    await bundle.cleanup();
-  });
 
   beforeEach(async () => {
     homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-home-'));
@@ -227,4 +226,15 @@ describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits',
     expect(exitCode).toBe(0);
     expect(cli.stdout()).toContain('Farewell.');
   }, 20000);
+});
+
+// F-b6e89ebb: locks in the file-level beforeAll/afterAll hoist above.
+// Before the fix, each describe block above called its own bundleBinCli(),
+// so by the time this runs (after both describes have completed) the real
+// esbuild bundle would have been built twice; the shared beforeAll keeps
+// it at exactly one build for the whole file.
+describe('bin.ts test harness — bundleBinCli is shared, not rebuilt per describe block', () => {
+  it('bundleBinCli() was invoked exactly once for this whole file', () => {
+    expect(getBundleBinCliCallCount()).toBe(1);
+  });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { executeDirectorCommand, renderDirectorHelp } from './director-renderer.js';
 
 // Minimal world stub for tests
@@ -212,5 +212,28 @@ describe('executeDirectorCommand', () => {
     const emptyParty = { companions: [] } as any;
     const result = executeDirectorCommand({ command: '/party', world: makeWorld(), partyState: emptyParty });
     expect(result).toContain('No companions');
+  });
+});
+
+// F-38eb3dec: director-renderer.ts's DIVIDER was a fixed 60-char string,
+// unlike play-renderer.ts's own dividers (PFE-005), which adapt to the
+// real terminal width. Mirrors play-renderer-divider.test.ts's assertions.
+describe('renderDirectorHelp divider width (F-38eb3dec)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const help = renderDirectorHelp();
+    expect(help).toContain('─'.repeat(40));
+    expect(help).not.toContain('─'.repeat(60));
+  });
+
+  it('divider matches a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const help = renderDirectorHelp();
+    expect(help).toContain('─'.repeat(120));
+    expect(help).not.toContain('─'.repeat(121));
   });
 });

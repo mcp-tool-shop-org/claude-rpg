@@ -257,3 +257,43 @@ describe('error-presenter: migration failures', () => {
     expect(output).toContain('newer version');
   });
 });
+
+// ─── Unknown Pack on Load ───────────────────────────────────
+
+/**
+ * F-c8dd84fe: bin.ts's runLoad() used to fall through to a bare
+ * console.error('  Cannot restore engine — unknown pack.') when a save's
+ * packId doesn't resolve via getPackById() — no packId in the message, and
+ * bypassing classifyForPresentation/renderError entirely (so even --debug
+ * surfaced no extra detail), unlike every other fatal branch in that
+ * function. bin.ts now raises an Error carrying the packId and routes it
+ * through presentError(err, 'load', debugMode) like the adjacent
+ * engine-state-validation catch already does — these tests cover the new
+ * classification branch that gives it a headline/explanation/next-action on
+ * par with the isFutureVersion/isMissingVersion branches above, instead of
+ * falling into the generic "Could not load save" bucket that would have
+ * discarded the packId from the non-debug explanation line.
+ */
+describe('error-presenter: unknown pack on load', () => {
+  it('gets a distinct headline and surfaces the failing pack id', () => {
+    const err = new Error('Cannot restore engine — unknown pack "iron-colosseum".');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Unknown character pack');
+    expect(p.explanation).toContain('iron-colosseum');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('debug mode shows the error type alongside the pack id', () => {
+    const err = new Error('Cannot restore engine — unknown pack "iron-colosseum".');
+    const p = classifyForPresentation(err, 'load');
+    const output = rendered(p, true, err);
+    expect(output).toContain('[debug]');
+    expect(output).toContain('iron-colosseum');
+  });
+
+  it('does not shadow the unrelated generic load error path', () => {
+    const err = new Error('ENOENT: file not found');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Could not load save');
+  });
+});

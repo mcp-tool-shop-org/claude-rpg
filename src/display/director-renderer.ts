@@ -83,18 +83,25 @@ import { compactChronicle } from '../session/chronicle.js';
 import { renderChronicle, type ChronicleRenderMode } from '../character/chronicle-renderer.js';
 import { renderDirectorHelpExtended } from './help-system.js';
 import { renderCompactStatus } from './status-compact.js';
+import { getTerminalWidth } from './play-renderer.js';
 import type { ScoredMove } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
 import { bold, dim, cyan } from '../cli/colors.js';
 
-const DIVIDER = dim('─'.repeat(60));
+// F-38eb3dec: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider() pattern.
+function divider(): string {
+  return dim('─'.repeat(getTerminalWidth()));
+}
 
 /** Render director mode help. */
 export function renderDirectorHelp(): string {
   return `
-${DIVIDER}
+${divider()}
   ${bold('DIRECTOR MODE')} ${dim('— inspect the hidden truth')}
-${DIVIDER}
+${divider()}
 
   ${cyan('/inspect')} <entity-id>          Show entity cognition state
   /faction <faction-id>         Show faction beliefs and alert
@@ -134,7 +141,7 @@ ${DIVIDER}
   /divergences                  Show perception divergences
   /back                         Return to play mode
 
-${DIVIDER}
+${divider()}
 `;
 }
 
@@ -241,14 +248,14 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       const header = factionFilter
         ? `  PLAYER RUMORS — faction "${factionFilter}" (${filtered.length})`
         : `  PLAYER RUMORS (${filtered.length})`;
-      return `\n${DIVIDER}\n${header}\n${DIVIDER}\n\n${filtered.map(formatRumorForDirector).join('\n\n')}\n`;
+      return `\n${divider()}\n${header}\n${divider()}\n\n${filtered.map(formatRumorForDirector).join('\n\n')}\n`;
     }
 
     case '/pressures': {
       const pressures = activePressures ?? [];
       if (pressures.length === 0) return '  No active world pressures.';
       const header = `  WORLD PRESSURES (${pressures.length})`;
-      return `\n${DIVIDER}\n${header}\n${DIVIDER}\n\n${pressures.map(formatPressureForDirector).join('\n\n')}\n`;
+      return `\n${divider()}\n${header}\n${divider()}\n\n${pressures.map(formatPressureForDirector).join('\n\n')}\n`;
     }
 
     case '/world':
@@ -256,7 +263,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       const resolved = resolvedPressures ?? [];
       if (resolved.length === 0) return '  No pressures have been resolved yet.';
       const header = `  RESOLUTION HISTORY (${resolved.length})`;
-      return `\n${DIVIDER}\n${header}\n${DIVIDER}\n\n${resolved.map(formatFalloutForDirector).join('\n\n')}\n`;
+      return `\n${divider()}\n${header}\n${divider()}\n\n${resolved.map(formatFalloutForDirector).join('\n\n')}\n`;
     }
 
     case '/factions': {
@@ -546,7 +553,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       if (!endgameTriggers || endgameTriggers.length === 0) {
         return '  No endgame triggers detected yet.';
       }
-      const lines: string[] = ['', `  ${DIVIDER}`, '  ENDGAME TRIGGERS', `  ${DIVIDER}`, ''];
+      const lines: string[] = ['', `  ${divider()}`, '  ENDGAME TRIGGERS', `  ${divider()}`, ''];
       for (const trigger of endgameTriggers) {
         lines.push(formatEndgameForDirector(trigger));
         lines.push('');
@@ -577,9 +584,9 @@ function renderZoneInspection(z: Record<string, unknown>): string {
 function renderStats(custom: Record<string, string | number | boolean>): string {
   const lines: string[] = [];
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('  SESSION STATS');
-  lines.push(DIVIDER);
+  lines.push(divider());
 
   // Leverage action counts
   const actionKeys = Object.keys(custom).filter((k) => k.startsWith('stats.action.'));
@@ -611,13 +618,13 @@ function renderStats(custom: Record<string, string | number | boolean>): string 
   }
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
   return lines.join('\n');
 }
 
 function renderItemList(profile: CharacterProfile, catalog: ItemCatalog, tick: number): string {
-  const lines: string[] = ['', DIVIDER, '  EQUIPMENT', DIVIDER, ''];
+  const lines: string[] = ['', divider(), '  EQUIPMENT', divider(), ''];
   for (const slot of EQUIPMENT_SLOTS) {
     const itemId = profile.loadout.equipped[slot];
     if (!itemId) {
@@ -655,9 +662,9 @@ function renderItemInspection(itemId: string, profile: CharacterProfile, catalog
   const relic = evaluateRelicGrowth(item, chronicle, tick);
   const isEquipped = Object.values(profile.loadout.equipped).includes(itemId);
 
-  const lines: string[] = ['', DIVIDER];
+  const lines: string[] = ['', divider()];
   lines.push(`  ITEM: ${getRelicEpithet(item, relic)}`);
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
   lines.push(`  Slot: ${item.slot} | Rarity: ${item.rarity} | Equipped: ${isEquipped ? 'yes' : 'no'}`);
 
@@ -696,15 +703,15 @@ function renderItemInspection(itemId: string, profile: CharacterProfile, catalog
     lines.push(`  Tags: ${item.grantedTags.join(', ')}`);
   }
 
-  lines.push('', DIVIDER, '');
+  lines.push('', divider(), '');
   return lines.join('\n');
 }
 
 function renderSnapshot(snapshot: Record<string, unknown>): string {
   const parts: string[] = [
-    `${DIVIDER}`,
+    `${divider()}`,
     `  SIMULATION SNAPSHOT — tick ${snapshot.tick ?? '?'}`,
-    `${DIVIDER}`,
+    `${divider()}`,
   ];
   if (snapshot.entityCount != null) parts.push(`  Entities: ${snapshot.entityCount}`);
   if (snapshot.factionCount != null) parts.push(`  Factions: ${snapshot.factionCount}`);

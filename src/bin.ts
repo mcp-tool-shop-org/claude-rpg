@@ -350,7 +350,15 @@ async function runLoad(): Promise<void> {
     }
   }
   if (!engine) {
-    console.error('  Cannot restore engine — unknown pack.');
+    // F-c8dd84fe: was a bare console.error with no packId and no next-action
+    // guidance, unlike every other fatal branch in this function. Routes
+    // through the same presentError(err, 'load', debugMode) pipeline the
+    // adjacent engine-state-validation catch above already uses.
+    presentError(
+      new Error(`Cannot restore engine — unknown pack "${savedSession.packId}".`),
+      'load',
+      debugMode,
+    );
     rl.close();
     process.exit(1);
   }
@@ -515,17 +523,18 @@ function captureDistrictMoods(session: GameSession): DistrictMoodSnapshot {
 type PresentationBox = { calls: McpToolCall[] };
 
 /**
- * game.ts (game-core domain, not owned here) adds `onPresentation` to
- * GameConfig in a worktree that lands separately this wave, so it is not yet
- * on the GameConfig type checked in THIS worktree. This cast documents that
- * seam — once both halves merge, `config.onPresentation` is a real, typed
- * field on GameConfig and this function becomes a harmless no-op wrapper.
+ * game.ts (game-core domain, not owned here) declares `onPresentation` on
+ * GameConfig directly now (F-79a25863's seam merged) — this function is the
+ * harmless wrapper the original seam-documenting `as GameConfig` cast
+ * predicted it would become. F-c885f79f dropped that cast: `onPresentation`
+ * is a real, typed field on GameConfig, so the object literal below needs
+ * no excess-property escape hatch.
  */
 function withPresentationHook(
   config: GameConfig,
   onPresentation: (calls: McpToolCall[]) => void,
 ): GameConfig {
-  return { ...config, onPresentation } as GameConfig;
+  return { ...config, onPresentation };
 }
 
 // F-c94fa782 (streaming seam contract, wave-10/cli-display.md): holds the
@@ -538,14 +547,12 @@ function withPresentationHook(
 type StreamBox = { current: ((chunk: string) => void) | null };
 
 /**
- * game.ts (game-core domain, not owned here) adds `onNarrationChunk` to
- * GameConfig in a worktree that lands separately this wave, so it is not
- * yet on the GameConfig type checked in THIS worktree -- same documented-
- * cast seam as withPresentationHook above. Once both halves merge,
- * `config.onNarrationChunk` is a real, typed field on GameConfig and this
- * function becomes a harmless no-op wrapper. The forwarding callback is
- * guarded: a throwing chunk sink (e.g. a write to a closed stream) must
- * never damage turn processing.
+ * game.ts (game-core domain, not owned here) declares `onNarrationChunk` on
+ * GameConfig directly now (F-c94fa782's seam merged) -- same resolved seam
+ * as withPresentationHook above. F-c885f79f dropped the `as GameConfig`
+ * cast: `onNarrationChunk` is a real, typed field on GameConfig. The
+ * forwarding callback is guarded: a throwing chunk sink (e.g. a write to a
+ * closed stream) must never damage turn processing.
  */
 function withStreamingHook(config: GameConfig, box: StreamBox): GameConfig {
   const onNarrationChunk = (chunk: string) => {
@@ -555,7 +562,7 @@ function withStreamingHook(config: GameConfig, box: StreamBox): GameConfig {
       // Display-only failure -- narration generation must continue.
     }
   };
-  return { ...config, onNarrationChunk } as GameConfig;
+  return { ...config, onNarrationChunk };
 }
 
 /** Print any presentation cues queued during the just-completed turn (or the

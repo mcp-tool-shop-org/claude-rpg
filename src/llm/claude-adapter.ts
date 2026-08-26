@@ -14,6 +14,7 @@ import Anthropic from '@anthropic-ai/sdk';
  *
  * FT-BR-008: Consolidate duplicate client implementations.
  */
+import { DEFAULT_MODEL, DEFAULT_TIMEOUT_MS } from '../claude-client.js';
 import type { ClaudeClient, ClaudeClientConfig, GenerateResult, StreamCallback, StructuredResult } from '../claude-client.js';
 import { NarrationError } from './claude-errors.js';
 
@@ -56,8 +57,30 @@ export async function withRetry<T>(
 }
 
 export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig?: Partial<RetryConfig>): ClaudeClient {
-  const anthropic = new Anthropic({ apiKey: config.apiKey });
-  const model = config.model ?? 'claude-sonnet-4-20250514';
+  // F-0929ac97: explicit short timeout (see claude-client.ts's DEFAULT_TIMEOUT_MS)
+  // PLUS maxRetries: 0 to disable the SDK's own internal retry loop entirely.
+  //
+  // Interplay with `retry`/withRetry below: the installed SDK retries
+  // retryable HTTP failures (408/409/429/5xx) internally, BEFORE this app's
+  // classifyError/withRetry layer ever sees an error. Leaving the SDK's own
+  // default (maxRetries: 2) in place here would let a single withRetry
+  // "attempt" silently retry inside the SDK first -- stacking an unseen,
+  // unlogged retry loop underneath the one withRetry already performs, so a
+  // single logical attempt could take multiple HTTP round trips, the app's
+  // own attempt/backoff accounting (DEFAULT_RETRY above, and the tests that
+  // assert on it) would no longer correspond to real HTTP attempts, and
+  // worst-case latency would multiply (SDK retries x app retries) instead of
+  // adding. withRetry is the one and only retry authority for this factory --
+  // maxRetries: 0 reduces the SDK layer to a single try per withRetry
+  // attempt, so the two budgets never stack. (createClaudeClient in
+  // ../claude-client.ts has no such conflict -- it has no retry wrapper of
+  // its own -- so it deliberately leaves the SDK's default retry alone.)
+  const anthropic = new Anthropic({
+    apiKey: config.apiKey,
+    timeout: config.timeout ?? DEFAULT_TIMEOUT_MS,
+    maxRetries: 0,
+  });
+  const model = config.model ?? DEFAULT_MODEL;
   const defaultMaxTokens = config.maxTokens ?? 1024;
   const retry: RetryConfig = { ...DEFAULT_RETRY, ...retryConfig };
 

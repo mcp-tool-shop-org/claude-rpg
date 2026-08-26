@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { buildNarratePrompt, type SceneNarrationInput } from './narrate-scene.js';
+import {
+  buildNarratePrompt,
+  type SceneNarrationInput,
+  CHRONICLE_CHAR_BUDGET,
+  EVENTS_MAX_COUNT,
+  EVENTS_CHAR_BUDGET,
+  PRESSURES_MAX_COUNT,
+  ENTITIES_MAX_COUNT,
+} from './narrate-scene.js';
 
 function makeInput(overrides: Partial<SceneNarrationInput> = {}): SceneNarrationInput {
   return {
@@ -50,5 +58,84 @@ describe('buildNarratePrompt', () => {
     expect(prompt).toContain('Chronicle');
     expect(prompt).toContain('long-term memory');
     expect(prompt).toContain('The player once spared the bandit chief.');
+  });
+});
+
+// F-9ee9b5a7: buildNarratePrompt previously included chronicleContext and the
+// activePressures/recentEvents/visibleEntities arrays in full, with no cap of
+// its own -- correctness today depended entirely on every upstream caller
+// separately bounding its own context strings. These tests lock in a
+// defensive ceiling enforced by the prompt builder itself, mirroring
+// dialogue-npc.ts's formatConversationHistory pattern (cap chars, trim
+// oldest-first / keep-most-recent).
+describe('buildNarratePrompt F-9ee9b5a7: defensive prompt-size caps', () => {
+  const pad = (i: number) => String(i).padStart(2, '0');
+
+  it('caps recentEvents at EVENTS_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const events = Array.from({ length: EVENTS_MAX_COUNT + 10 }, (_, i) => `event-${pad(i)}`);
+    const prompt = buildNarratePrompt(makeInput({ recentEvents: events }));
+
+    const renderedCount = events.filter((e) => prompt.includes(`- ${e}`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(EVENTS_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    // Most recent (highest index) survives; oldest (index 0) is dropped.
+    expect(prompt).toContain(`- event-${pad(events.length - 1)}`);
+    expect(prompt).not.toContain('- event-00');
+  });
+
+  it('caps activePressures at PRESSURES_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const pressures = Array.from({ length: PRESSURES_MAX_COUNT + 10 }, (_, i) => `pressure-${pad(i)}`);
+    const prompt = buildNarratePrompt(makeInput({ activePressures: pressures }));
+
+    const renderedCount = pressures.filter((p) => prompt.includes(`- ${p}`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(PRESSURES_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- pressure-${pad(pressures.length - 1)}`);
+    expect(prompt).not.toContain('- pressure-00');
+  });
+
+  it('caps visibleEntities at ENTITIES_MAX_COUNT', () => {
+    const entities = Array.from({ length: ENTITIES_MAX_COUNT + 10 }, (_, i) => ({
+      name: `entity-${pad(i)}`,
+      type: 'npc',
+      clarity: 1,
+    }));
+    const prompt = buildNarratePrompt(makeInput({ visibleEntities: entities }));
+
+    const renderedCount = entities.filter((e) => prompt.includes(`${e.name} (`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(ENTITIES_MAX_COUNT);
+    expect(renderedCount).toBeLessThan(entities.length);
+  });
+
+  it('truncates chronicleContext beyond CHRONICLE_CHAR_BUDGET with a visible indicator', () => {
+    const longChronicle = 'x'.repeat(CHRONICLE_CHAR_BUDGET + 500);
+    const prompt = buildNarratePrompt(makeInput({ chronicleContext: longChronicle }));
+
+    expect(prompt).toContain('[truncated]');
+    expect(prompt).not.toContain(longChronicle);
+  });
+
+  it('leaves chronicleContext untouched when under the budget', () => {
+    const shortChronicle = 'The player once spared the bandit chief.';
+    const prompt = buildNarratePrompt(makeInput({ chronicleContext: shortChronicle }));
+
+    expect(prompt).toContain(shortChronicle);
+    expect(prompt).not.toContain('[truncated]');
+  });
+
+  it('enforces a char budget on recentEvents even under the count cap, dropping oldest first', () => {
+    // A handful of long event lines (well under EVENTS_MAX_COUNT in count)
+    // should still be trimmed once their combined length exceeds
+    // EVENTS_CHAR_BUDGET -- proving the char ceiling is independent of the
+    // count ceiling, not just a second way of expressing the same limit.
+    const longLineLength = Math.floor(EVENTS_CHAR_BUDGET / 2) + 50;
+    const longEvents = Array.from({ length: 5 }, (_, i) => `event-${pad(i)}-` + 'y'.repeat(longLineLength));
+    const prompt = buildNarratePrompt(makeInput({ recentEvents: longEvents }));
+
+    // The most recent long event survives; the oldest is trimmed once the
+    // char budget is exceeded, well before all 5 (well under EVENTS_MAX_COUNT)
+    // would have fit by count alone.
+    expect(prompt).toContain(longEvents[longEvents.length - 1]);
+    expect(prompt).not.toContain(longEvents[0]);
   });
 });

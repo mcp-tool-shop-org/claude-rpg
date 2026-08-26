@@ -101,15 +101,65 @@ export type SceneNarrationInput = {
   chronicleContext?: string;
 };
 
-export function buildNarratePrompt(input: SceneNarrationInput): string {
-  const entities = input.visibleEntities
-    .map((e) => {
-      const clarity = e.clarity >= 0.8 ? 'clear' : e.clarity >= 0.5 ? 'partial' : 'vague';
-      return `  - ${e.name} (${e.type}, clarity: ${clarity})${e.description ? ` — ${e.description}` : ''}`;
-    })
-    .join('\n');
+// F-9ee9b5a7: defensive budgets enforced by buildNarratePrompt itself,
+// independent of whatever cap (if any) an upstream caller already applies.
+// Not a fix for a currently-firing bug -- today's callers all separately
+// bound their own context strings -- this is the boundary function (the one
+// whose entire job is assembling the string sent to a paid, latency-sensitive
+// API) finally growing teeth of its own, so a loosened upstream cap or a
+// future context field added in the same freeform-concatenation style
+// doesn't silently blow out a turn's prompt.
+export const CHRONICLE_CHAR_BUDGET = 1500;
+export const EVENTS_MAX_COUNT = 20;
+export const EVENTS_CHAR_BUDGET = 1200;
+export const PRESSURES_MAX_COUNT = 10;
+export const PRESSURES_CHAR_BUDGET = 1200;
+export const ENTITIES_MAX_COUNT = 20;
+export const ENTITIES_CHAR_BUDGET = 1500;
 
-  const events = input.recentEvents.map((e) => `  - ${e}`).join('\n');
+/**
+ * F-9ee9b5a7: cap a set of already-formatted lines to the most recent
+ * `maxCount`, then further trim oldest-first until the joined char budget is
+ * met. Mirrors dialogue-npc.ts's formatConversationHistory (cap chars, keep
+ * most recent, drop oldest first) so this domain's two prompt builders share
+ * one defensive-capping shape instead of each reinventing it.
+ */
+function capRecentLines(lines: string[], maxCount: number, maxChars: number): string[] {
+  const recent = lines.slice(-maxCount);
+  const kept: string[] = [];
+  let charCount = 0;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const line = recent[i];
+    if (charCount + line.length > maxChars && kept.length > 0) break;
+    kept.unshift(line);
+    charCount += line.length;
+  }
+  return kept;
+}
+
+/** Truncate a single free-text block to a hard character ceiling, with a visible indicator when trimmed. */
+function capText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars) + '...[truncated]';
+}
+
+/** Format the world-pressures section, capped like the other array fields below. */
+function formatActivePressures(pressures?: string[]): string {
+  if (!pressures || pressures.length === 0) return '';
+  const lines = capRecentLines(pressures.map((p) => `  - ${p}`), PRESSURES_MAX_COUNT, PRESSURES_CHAR_BUDGET);
+  if (lines.length === 0) return '';
+  return `\n\nWorld pressures:\n${lines.join('\n')}`;
+}
+
+export function buildNarratePrompt(input: SceneNarrationInput): string {
+  const entityLines = input.visibleEntities.map((e) => {
+    const clarity = e.clarity >= 0.8 ? 'clear' : e.clarity >= 0.5 ? 'partial' : 'vague';
+    return `  - ${e.name} (${e.type}, clarity: ${clarity})${e.description ? ` — ${e.description}` : ''}`;
+  });
+  const entities = capRecentLines(entityLines, ENTITIES_MAX_COUNT, ENTITIES_CHAR_BUDGET).join('\n');
+
+  const eventLines = input.recentEvents.map((e) => `  - ${e}`);
+  const events = capRecentLines(eventLines, EVENTS_MAX_COUNT, EVENTS_CHAR_BUDGET).join('\n');
 
   const recent = input.recentNarration.length > 0
     ? `\nPrevious narration (for continuity):\n${input.recentNarration.slice(-2).map(n => `  "${n}"`).join('\n')}`
@@ -121,8 +171,10 @@ export function buildNarratePrompt(input: SceneNarrationInput): string {
 
   // F-7815df9e (game-core seam contract): compact long-term-memory section,
   // rendered only when game-core supplies condensed chronicle context.
+  // F-9ee9b5a7: defensively capped to CHRONICLE_CHAR_BUDGET regardless of
+  // how condensed the caller claims it already is.
   const chronicle = input.chronicleContext
-    ? `\n\nChronicle (long-term memory): ${input.chronicleContext}`
+    ? `\n\nChronicle (long-term memory): ${capText(input.chronicleContext, CHRONICLE_CHAR_BUDGET)}`
     : '';
 
   return `${input.isNewZone ? 'The player just entered a new area.' : 'The player is still in the same area.'}
@@ -139,5 +191,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
-Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${chronicle}${recent}`;
+Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${formatActivePressures(input.activePressures)}${stateHint}${chronicle}${recent}`;
 }

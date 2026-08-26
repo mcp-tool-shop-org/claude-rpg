@@ -10,6 +10,7 @@ import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { NARRATE_SYSTEM_LEGACY } from '../prompts/narrate-scene.js';
+import { createTestLogger } from '../game/debug-logger.js';
 
 function makeGenerateResult(text: string): GenerateResult {
   return { ok: true, text, inputTokens: 10, outputTokens: 20 };
@@ -517,5 +518,140 @@ describe('narrateSceneLegacy F-e8630a73: fallback sentinels are filtered from th
     const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.prompt).not.toContain(FALLBACK_NARRATION);
     expect(call.prompt).not.toContain('Previous narration');
+  });
+});
+
+// === F-fa65fe50: every parseNarrationPlan failure path, plus narrateScene/
+// narrateSceneLegacy's own generation-failure catches, reported via bare
+// console.warn with no session-level tally anywhere. debug-logger.ts's
+// DebugLogger already keeps a queryable, taggable entries[] regardless of
+// whether --debug is set -- these tests prove opts.logger (new, optional)
+// actually reaches every one of those warn sites, using createTestLogger()
+// (captures entries without writing to stderr). ===
+describe('narrateScene/narrateSceneLegacy F-fa65fe50: optional DebugLogger threading', () => {
+  it('parseNarrationPlan logs to the logger when no JSON structure is found', async () => {
+    const logger = createTestLogger();
+    const opts = makeOpts({
+      client: makeClient('Just some narration text with no braces at all.'),
+      logger,
+    });
+
+    await narrateScene(opts);
+
+    const entries = logger.getEntries();
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'narrator',
+        message: expect.stringContaining('no JSON structure found'),
+      }),
+    );
+  });
+
+  it('parseNarrationPlan logs to the logger when JSON parses but has no sceneText', async () => {
+    const logger = createTestLogger();
+    const noSceneText = JSON.stringify({ tone: 'calm', urgency: 'normal' });
+    const opts = makeOpts({ client: makeClient(noSceneText), logger });
+
+    await narrateScene(opts);
+
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'narrator',
+        message: expect.stringContaining('missing sceneText'),
+      }),
+    );
+  });
+
+  it('parseNarrationPlan logs to the logger on malformed JSON', async () => {
+    const logger = createTestLogger();
+    const opts = makeOpts({ client: makeClient('{ broken json: }'), logger });
+
+    await narrateScene(opts);
+
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'narrator',
+        message: expect.stringContaining('JSON parse failed'),
+      }),
+    );
+  });
+
+  // F-fa65fe50's narrower gap: validation-fails-but-sceneText-present
+  // (narrator.ts's parseNarrationPlan) previously returned a silently
+  // coerced plan with NO warning at all -- not even a console.warn, unlike
+  // the three harder-failure paths above. Both channels must now fire so
+  // all three degrees of "didn't get a fully valid NarrationPlan" are
+  // counted consistently.
+  it('warns (both console and logger) on the previously-silent coerced-plan branch', async () => {
+    const logger = createTestLogger();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const partialPlan = JSON.stringify({
+      sceneText: 'A shadow moves.',
+      tone: 'invalid-tone-value',
+      urgency: 'bogus',
+    });
+    const opts = makeOpts({ client: makeClient(partialPlan), logger });
+
+    const result = await narrateScene(opts);
+
+    expect(result.plan!.sceneText).toBe('A shadow moves.');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('sceneText'));
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({ level: 'warn', subsystem: 'narrator' }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('narrateScene logs to the logger when the LLM call itself fails', async () => {
+    const logger = createTestLogger();
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const opts = makeOpts({ client, logger });
+
+    await narrateScene(opts);
+
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'narrator',
+        message: expect.stringContaining('narrateScene: LLM generation failed'),
+      }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('narrateSceneLegacy logs to the logger when the LLM call itself fails', async () => {
+    const logger = createTestLogger();
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API down')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    const engine = createGame();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await narrateSceneLegacy(client, engine.world, [], 'dark fantasy', [], undefined, logger);
+
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'narrator',
+        message: expect.stringContaining('narrateSceneLegacy: LLM generation failed'),
+      }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('works exactly as before when no logger is provided (backward compatible)', async () => {
+    const opts = makeOpts({ client: makeClient('Just some narration text with no braces at all.') });
+    const result = await narrateScene(opts);
+    expect(result.narration).toEqual(expect.any(String));
   });
 });

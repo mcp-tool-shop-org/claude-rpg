@@ -8,6 +8,12 @@ import type { ClaudeClient, StreamCallback } from '../claude-client.js';
 import { NarrationError } from '../llm/claude-errors.js';
 import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt } from '../prompts/narrate-scene.js';
 import { buildSceneContext, type SceneContext } from './scene-context.js';
+// F-fa65fe50: type-only import of the game-core seam's existing structured
+// logger. debug-logger.ts has no imports of its own (a standalone leaf
+// module), so this doesn't introduce a circular dependency even though the
+// established direction elsewhere is game/** -> narrator/** (e.g.
+// game-narration.ts already imports narrateScene/narrateFinale from here).
+import type { DebugLogger } from '../game/debug-logger.js';
 
 export type NarrationResult = {
   narration: string;
@@ -73,6 +79,19 @@ export type NarrateSceneOpts = {
    */
   chronicleContext?: string;
   onChunk?: StreamCallback;
+  /**
+   * F-fa65fe50: optional structured logger (src/game/debug-logger.ts). When
+   * provided, every degradation this module can hit -- parseNarrationPlan's
+   * three failure paths plus its own generation-failure catch below -- is
+   * also recorded via logger.warn('narrator', ...) alongside the existing
+   * console.warn, so occurrences land in the logger's queryable entries[]
+   * (available via getEntries() regardless of whether --debug is set) and
+   * can eventually be tallied into a per-session degradation rate instead of
+   * only ever appearing as scattered terminal scrollback. Omitted entirely
+   * by every current caller (bin.ts doesn't construct/pass one here yet) --
+   * behavior is unchanged when absent.
+   */
+  logger?: DebugLogger;
 };
 
 /** Narrate the current scene after action resolution. Returns structured plan when possible. */
@@ -82,7 +101,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     previousLocationId, presentationState, characterPresence,
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
-    arcContext, endgameContext, chronicleContext, onChunk,
+    arcContext, endgameContext, chronicleContext, onChunk, logger,
   } = opts;
 
   // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
@@ -150,7 +169,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     const result = await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
 
     // Try to parse as NarrationPlan JSON
-    const plan = parseNarrationPlan(result.text);
+    const plan = parseNarrationPlan(result.text, logger);
 
     if (plan) {
       return {
@@ -174,9 +193,9 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     // would make a bad API key indistinguishable from an in-fiction hiccup
     // (the exact failure F-afb978de fixed for dialogue/finale).
     if (err instanceof NarrationError && err.fatal) throw err;
-    console.warn(
-      `[narrator] narrateScene: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
-    );
+    const failureMessage = `narrateScene: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`;
+    console.warn(`[narrator] ${failureMessage}`);
+    logger?.warn('narrator', failureMessage);
     return {
       narration: FALLBACK_NARRATION,
       plan: null,
@@ -186,7 +205,13 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
   }
 }
 
-/** Narrate using legacy plain-text mode (for tests or fallback). */
+/**
+ * Narrate using legacy plain-text mode (for tests or fallback).
+ *
+ * @param logger F-fa65fe50: optional structured logger, same contract as
+ *   NarrateSceneOpts.logger above -- this function predates the opts-object
+ *   shape narrateScene uses, so it's a trailing positional parameter instead.
+ */
 export async function narrateSceneLegacy(
   client: ClaudeClient,
   world: WorldState,
@@ -194,6 +219,7 @@ export async function narrateSceneLegacy(
   tone: string,
   recentNarration: string[],
   previousLocationId?: string,
+  logger?: DebugLogger,
 ): Promise<NarrationResult> {
   // F-e8630a73: same filter as narrateScene above.
   const filteredRecentNarration = recentNarration.filter(
@@ -227,9 +253,9 @@ export async function narrateSceneLegacy(
   } catch (err) {
     // Same fatal-rethrow contract as narrateScene above.
     if (err instanceof NarrationError && err.fatal) throw err;
-    console.warn(
-      `[narrator] narrateSceneLegacy: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
-    );
+    const failureMessage = `narrateSceneLegacy: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`;
+    console.warn(`[narrator] ${failureMessage}`);
+    logger?.warn('narrator', failureMessage);
     return {
       narration: FALLBACK_NARRATION,
       plan: null,
@@ -239,8 +265,16 @@ export async function narrateSceneLegacy(
   }
 }
 
-/** Try to parse Claude's response as a NarrationPlan JSON. */
-function parseNarrationPlan(text: string): NarrationPlan | null {
+/**
+ * Try to parse Claude's response as a NarrationPlan JSON.
+ *
+ * @param logger F-fa65fe50: optional structured logger -- see
+ *   NarrateSceneOpts.logger's doc comment above for the full contract. Every
+ *   branch below that previously only console.warn'd now also calls
+ *   logger?.warn('narrator', ...), and the validation-fails-but-sceneText
+ *   branch (previously silent on BOTH channels) now warns on both too.
+ */
+function parseNarrationPlan(text: string, logger?: DebugLogger): NarrationPlan | null {
   let jsonStr = text.trim();
 
   const jsonBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -252,7 +286,10 @@ function parseNarrationPlan(text: string): NarrationPlan | null {
       jsonStr = braceMatch[0];
     } else {
       // PBR-004: Log when no JSON structure found
-      console.warn(`[narrator] parseNarrationPlan: no JSON structure found in response. Raw (truncated): "${text.slice(0, 200)}"`);
+      const message = 'parseNarrationPlan: no JSON structure found in response';
+      const raw = text.slice(0, 200);
+      console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
+      logger?.warn('narrator', message, { raw });
       return null;
     }
   }
@@ -271,6 +308,14 @@ function parseNarrationPlan(text: string): NarrationPlan | null {
     }
     // If validation fails but we have sceneText, still use it
     if (typeof parsed.sceneText === 'string') {
+      // F-fa65fe50: this branch previously returned a silently-coerced plan
+      // with no warning on EITHER channel -- the only one of the three
+      // "didn't get a fully valid NarrationPlan" degrees that wasn't counted
+      // anywhere. Now warns like its two harder-failure siblings above/below.
+      const message = 'parseNarrationPlan: parsed JSON failed full NarrationPlan validation but has sceneText; using coerced plan';
+      const raw = text.slice(0, 200);
+      console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
+      logger?.warn('narrator', message, { raw });
       return {
         sceneText: parsed.sceneText,
         tone: parsed.tone ?? 'calm',
@@ -282,11 +327,17 @@ function parseNarrationPlan(text: string): NarrationPlan | null {
       };
     }
     // PBR-004: Log when parsed JSON doesn't match expected shape
-    console.warn(`[narrator] parseNarrationPlan: parsed JSON but missing sceneText. Raw (truncated): "${text.slice(0, 200)}"`);
+    const message = 'parseNarrationPlan: parsed JSON but missing sceneText';
+    const raw = text.slice(0, 200);
+    console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
+    logger?.warn('narrator', message, { raw });
     return null;
   } catch (err) {
     // PBR-004: Log JSON parse failures with truncated raw text
-    console.warn(`[narrator] parseNarrationPlan: JSON parse failed: ${err instanceof Error ? err.message : String(err)}. Raw (truncated): "${text.slice(0, 200)}"`);
+    const message = `parseNarrationPlan: JSON parse failed: ${err instanceof Error ? err.message : String(err)}`;
+    const raw = text.slice(0, 200);
+    console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
+    logger?.warn('narrator', message, { raw });
     return null;
   }
 }

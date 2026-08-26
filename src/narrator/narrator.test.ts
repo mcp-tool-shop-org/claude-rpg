@@ -459,6 +459,25 @@ describe('narrateScene F-e8630a73: fallback sentinels are filtered from the prom
     expect(call.prompt).not.toContain(FATAL_NARRATION_FALLBACK);
     expect(call.prompt).toContain('A real narrated turn.');
   });
+
+  // F-14316911: the all-fallback case -- every recentNarration entry is a
+  // known sentinel -- reduces to an empty array post-filter (narrator.ts:97-99),
+  // which should omit the 'Previous narration' header entirely rather than
+  // rendering an empty-but-present section. Distinct from the mixed-array
+  // cases above, which still have one real turn surviving the filter.
+  it('should omit the "Previous narration" header entirely when recentNarration is all fallback sentinels', async () => {
+    const client = makeClient('A cool breeze greets you.');
+    const opts = makeOpts({
+      client,
+      recentNarration: [FALLBACK_NARRATION, FALLBACK_NARRATION, FALLBACK_NARRATION],
+    });
+
+    await narrateScene(opts);
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain(FALLBACK_NARRATION);
+    expect(call.prompt).not.toContain('Previous narration');
+  });
 });
 
 describe('narrateSceneLegacy F-e8630a73: fallback sentinels are filtered from the prompt', () => {
@@ -477,5 +496,26 @@ describe('narrateSceneLegacy F-e8630a73: fallback sentinels are filtered from th
     const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.prompt).not.toContain(FALLBACK_NARRATION);
     expect(call.prompt).toContain('A real narrated turn.');
+  });
+
+  // F-14316911: sibling of narrateScene's all-fallback case above -- same
+  // guard chain (history.ts's filter -> narrator.ts's redundant filter ->
+  // buildNarratePrompt's length>0 gate) applies identically on the legacy
+  // plain-text path.
+  it('should omit the "Previous narration" header entirely when recentNarration is all fallback sentinels', async () => {
+    const client = makeClient('You arrive.');
+    const engine = createGame();
+
+    await narrateSceneLegacy(
+      client,
+      engine.world,
+      [],
+      'dark fantasy',
+      [FALLBACK_NARRATION, FALLBACK_NARRATION, FALLBACK_NARRATION],
+    );
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain(FALLBACK_NARRATION);
+    expect(call.prompt).not.toContain('Previous narration');
   });
 });

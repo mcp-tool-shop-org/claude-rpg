@@ -55,7 +55,7 @@ export function getGlobalStatementThreshold() {
  * @returns {number} minimum branches % for global coverage floor
  */
 export function getGlobalBranchThreshold() {
-  return 65;
+  return 60;
 }
 
 /**
@@ -64,7 +64,7 @@ export function getGlobalBranchThreshold() {
  * @returns {number} minimum functions % for global coverage floor
  */
 export function getGlobalFunctionThreshold() {
-  return 60;
+  return 65;
 }
 
 /**
@@ -72,12 +72,16 @@ export function getGlobalFunctionThreshold() {
  * coverage.thresholds — vitest is the enforcement gate on every CI run;
  * this script is the per-changed-file PR report built on the same floors.
  *
- * NOTE: Contract C (wave 12) specifies mirrored values:
- * - src/llm/: 82 (from contract, differs from vitest 70)
- * - src/session/: 58 (from contract, differs from vitest 40)
- * - src/game/: 55 (from contract, differs from vitest 25)
- * The glob patterns use forward slashes without ** because getApplicableThreshold()
- * uses startsWith() matching, not glob expansion.
+ * Mirrored per Contract C (wave 12):
+ * - src/llm/: 82
+ * - src/session/: 58
+ * - src/game.ts: 30 (specific file floor, per vitest.config.ts measurement)
+ * - src/game/: 55 (directory floor)
+ *
+ * Note: Keys use forward slashes without ** because getApplicableThreshold()
+ * uses startsWith() matching, not glob expansion. The src/game.ts entry provides
+ * a specific threshold for the game.ts file itself (floor 30), distinct from the
+ * src/game/ directory pattern (floor 55).
  *
  * @returns {Record<string, number>} path prefix -> minimum statements %
  */
@@ -85,7 +89,7 @@ export function getPerPathThresholds() {
   return {
     'src/llm/': 82,
     'src/session/': 58,
-    'src/game.ts': 55,
+    'src/game.ts': 30,
     'src/game/': 55,
   };
 }

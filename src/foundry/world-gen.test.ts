@@ -187,6 +187,114 @@ describe('validateWorldGenProposal (BR-009)', () => {
     const errors = validateWorldGenProposal(proposal);
     expect(errors).toEqual([]);
   });
+
+  // F-840c1a1c: title/toneGuide and every zone/npc/faction name were typed as bare
+  // `string` with only a truthy presence check (`if (!x)`), which a whitespace-only
+  // LLM output like "   " silently passes since non-empty whitespace is truthy in JS.
+  // Nothing capped length either. The immediate consumer is the player's very first
+  // screen (play-renderer.ts's renderWelcome()), which frames title/toneGuide between
+  // two terminal-width-clamped divider rules with no wrapping/truncation of its own —
+  // an overlong or blank LLM name breaks that framed layout on first impression.
+  describe('name-field guards (F-840c1a1c)', () => {
+    it('should detect a whitespace-only title', () => {
+      const proposal = makeValidProposal();
+      proposal.title = '   ';
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('Title') && e.includes('blank'))).toBe(true);
+    });
+
+    it('should detect a missing title', () => {
+      const proposal = makeValidProposal();
+      (proposal as any).title = '';
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors).toContain('No title generated');
+    });
+
+    it('should detect a title over the length cap', () => {
+      const proposal = makeValidProposal();
+      proposal.title = 'A'.repeat(81);
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('Title') && e.includes('exceeds'))).toBe(true);
+    });
+
+    it('should allow a title at exactly the length cap', () => {
+      const proposal = makeValidProposal();
+      proposal.title = 'A'.repeat(80);
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors).toEqual([]);
+    });
+
+    it('should detect a whitespace-only toneGuide', () => {
+      const proposal = makeValidProposal();
+      proposal.toneGuide = '   ';
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('toneGuide') && e.includes('blank'))).toBe(true);
+    });
+
+    it('should detect a toneGuide over the length cap', () => {
+      const proposal = makeValidProposal();
+      proposal.toneGuide = 'dark and brooding '.repeat(10);
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('toneGuide') && e.includes('exceeds'))).toBe(true);
+    });
+
+    it('should NOT flag a missing/empty toneGuide — it stays optional (WorldGenResult falls back to "")', () => {
+      const proposal = makeValidProposal();
+      (proposal as any).toneGuide = undefined;
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors).toEqual([]);
+    });
+
+    it('should detect a whitespace-only NPC name distinct from a missing one', () => {
+      const proposal = makeValidProposal();
+      proposal.npcs[0].name = '   ';
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('name') && e.includes('blank'))).toBe(true);
+      // Must not ALSO report it as the pre-existing "missing required field" case —
+      // the two are distinct failure modes with distinct messages.
+      expect(errors.some((e) => e.includes('missing required field: name'))).toBe(false);
+    });
+
+    it('should detect an NPC name over the length cap', () => {
+      const proposal = makeValidProposal();
+      proposal.npcs[0].name = 'B'.repeat(81);
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('name') && e.includes('exceeds'))).toBe(true);
+    });
+
+    it('should detect a whitespace-only zone name', () => {
+      const proposal = makeValidProposal();
+      proposal.zones[0].name = '   ';
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('name') && e.includes('blank'))).toBe(true);
+    });
+
+    it('should detect a zone name over the length cap', () => {
+      const proposal = makeValidProposal();
+      proposal.zones[0].name = 'C'.repeat(81);
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('name') && e.includes('exceeds'))).toBe(true);
+    });
+
+    it('should detect a whitespace-only faction name (previously unchecked at all)', () => {
+      const proposal = makeValidProposal();
+      proposal.factions[0].name = '   ';
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('name') && e.includes('blank'))).toBe(true);
+    });
+
+    it('should detect a faction name over the length cap', () => {
+      const proposal = makeValidProposal();
+      proposal.factions[0].name = 'D'.repeat(81);
+      const errors = validateWorldGenProposal(proposal);
+      expect(errors.some((e) => e.includes('name') && e.includes('exceeds'))).toBe(true);
+    });
+
+    it('should still return no errors for a valid proposal with normal-length names', () => {
+      const errors = validateWorldGenProposal(makeValidProposal());
+      expect(errors).toEqual([]);
+    });
+  });
 });
 
 function makeMockClient(proposal: ReturnType<typeof makeValidProposal>): ClaudeClient {

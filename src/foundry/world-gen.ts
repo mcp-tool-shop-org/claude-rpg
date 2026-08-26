@@ -105,11 +105,55 @@ export type WorldGenResult = {
   quests: WorldGenProposal['quests'];
 };
 
+// F-840c1a1c: title/toneGuide and every zone/npc/faction .name are pure LLM
+// creative-generation output (prompts/world-gen.ts's WORLDGEN_SYSTEM has no schema
+// enforcement beyond `"name": "string"`), and every one of these fields previously had
+// at most a truthy presence check (`if (!x)`) -- a check that a whitespace-only LLM
+// output like "   " silently passes, since non-empty whitespace is truthy in JS.
+// Nothing capped length either. The immediate consumer is the literal first screen a
+// player sees after any LLM-generated world: play-renderer.ts's renderWelcome() frames
+// title/toneGuide between two terminal-width-clamped divider rules while the
+// title/tone line itself is neither wrapped nor truncated, so an overlong or blank LLM
+// name breaks that framed layout on first impression. The same title is also echoed at
+// bin.ts's "World ... created!" message, and unbounded npc names reach
+// companion-bridge.ts's recruitment error prose -- both already protected transitively
+// by rejecting a bad name here, before generateWorld ever constructs the engine.
+const MAX_NAME_LENGTH = 80;
+
+/**
+ * Push a blank/whitespace-only or over-length error for one name-shaped field, in
+ * addition to (never instead of) each call site's own presence check above. Presence
+ * (`if (!x)`) and blankness (`if (!x.trim())`) are deliberately kept as separate
+ * checks with distinct messages -- collapsing them would either lose the existing
+ * "missing required field" wording other tests already assert on, or let a
+ * whitespace-only value read as "missing" when it is actually present-but-garbage.
+ */
+function pushNameFieldErrors(errors: string[], value: string, label: string): void {
+  if (!value.trim()) {
+    errors.push(`${label} must not be blank or whitespace-only`);
+  } else if (value.length > MAX_NAME_LENGTH) {
+    errors.push(`${label} exceeds ${MAX_NAME_LENGTH} characters`);
+  }
+}
+
 /** Validate that a WorldGenProposal has the required structure. Returns error strings. */
 export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
   const errors: string[] = [];
 
   // Validate basic structure
+  // F-840c1a1c: title had no presence check at all before this -- generateWorld
+  // dereferences proposal.title.toLowerCase() unconditionally to build the engine
+  // manifest id, so a missing title must be caught here rather than throwing a raw
+  // TypeError, mirroring the existing "No X generated" checks below.
+  if (!proposal.title) {
+    errors.push('No title generated');
+  } else {
+    pushNameFieldErrors(errors, proposal.title, 'Title');
+  }
+  // toneGuide stays optional (WorldGenResult falls back to `proposal.toneGuide ?? ''`
+  // in both branches below) -- only guard it when present, so a genuinely omitted
+  // toneGuide keeps behaving exactly as before this fix.
+  if (proposal.toneGuide) pushNameFieldErrors(errors, proposal.toneGuide, 'toneGuide');
   if (!proposal.zones?.length) errors.push('No zones generated');
   if (!proposal.npcs?.length) errors.push('No NPCs generated');
   if (!proposal.factions?.length) errors.push('No factions generated');
@@ -121,7 +165,11 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
     const zoneIds = new Set((proposal.zones ?? []).map((z) => z.id));
     for (const npc of proposal.npcs) {
       if (!npc.id) errors.push(`NPC missing required field: id`);
-      if (!npc.name) errors.push(`NPC "${npc.id ?? '?'}" missing required field: name`);
+      if (!npc.name) {
+        errors.push(`NPC "${npc.id ?? '?'}" missing required field: name`);
+      } else {
+        pushNameFieldErrors(errors, npc.name, `NPC "${npc.id ?? '?'}" name`);
+      }
       if (!npc.zoneId) errors.push(`NPC "${npc.id ?? '?'}" missing required field: zoneId`);
       else if (!zoneIds.has(npc.zoneId)) errors.push(`NPC "${npc.id}" has zoneId "${npc.zoneId}" that does not match any zone`);
     }
@@ -131,7 +179,11 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
   if (proposal.zones) {
     for (const zone of proposal.zones) {
       if (!zone.id) errors.push('Zone missing required field: id');
-      if (!zone.name) errors.push(`Zone "${zone.id ?? '?'}" missing required field: name`);
+      if (!zone.name) {
+        errors.push(`Zone "${zone.id ?? '?'}" missing required field: name`);
+      } else {
+        pushNameFieldErrors(errors, zone.name, `Zone "${zone.id ?? '?'}" name`);
+      }
     }
   }
 
@@ -145,6 +197,13 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
   if (proposal.factions) {
     for (const faction of proposal.factions) {
       if (!faction.id) errors.push('Faction missing required field: id');
+      // F-840c1a1c: faction.name previously had NO check at all (unlike its zone/npc
+      // siblings) -- added here so it gets the same "missing" + blank/length coverage.
+      if (!faction.name) {
+        errors.push(`Faction "${faction.id ?? '?'}" missing required field: name`);
+      } else {
+        pushNameFieldErrors(errors, faction.name, `Faction "${faction.id ?? '?'}" name`);
+      }
       if (!Array.isArray(faction.memberIds)) {
         errors.push(`Faction "${faction.id ?? '?'}" missing required field: memberIds`);
       }

@@ -83,13 +83,28 @@ class NoopLogger implements DebugLogger {
   getEntries(): readonly LogEntry[] { return []; }
 }
 
-/** Create a debug logger. Enabled when --debug is in argv or CLAUDE_RPG_DEBUG env var is set. */
-export function createDebugLogger(forceEnabled?: boolean): DebugLogger {
-  const enabled = forceEnabled ?? (
+/**
+ * F-34078c07: shared predicate for "should diagnostic-level output be
+ * visible to this run" — the same --debug/CLAUDE_RPG_DEBUG check
+ * createDebugLogger() uses to decide whether GameDebugLogger writes to
+ * stderr. Exported so call sites that only need a yes/no gate around an
+ * existing side effect (e.g. session.ts's/migrate.ts's load-time
+ * console.warn diagnostics, which run outside any DebugLogger instance)
+ * don't have to duplicate the env/argv check or construct a full
+ * DebugLogger just to ask the same question createDebugLogger() already
+ * answers.
+ */
+export function isDebugEnabled(): boolean {
+  return (
     process.argv.includes('--debug') ||
     process.env.CLAUDE_RPG_DEBUG === '1' ||
     process.env.CLAUDE_RPG_DEBUG === 'true'
   );
+}
+
+/** Create a debug logger. Enabled when --debug is in argv or CLAUDE_RPG_DEBUG env var is set. */
+export function createDebugLogger(forceEnabled?: boolean): DebugLogger {
+  const enabled = forceEnabled ?? isDebugEnabled();
   return enabled ? new GameDebugLogger(true) : new NoopLogger();
 }
 

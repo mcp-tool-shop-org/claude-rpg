@@ -641,7 +641,13 @@ function buildEraSummaries(records: CampaignRecord[]): EraSummary[] {
     eras.push({
       fromTick: eraStart,
       toTick: eraRecords[eraRecords.length - 1].tick,
-      label: `Ticks ${eraStart}–${eraRecords[eraRecords.length - 1].tick}`,
+      // F-1a855326: "Turns" (not "Ticks") — every other player-facing
+      // rendering of this same CampaignRecord.tick field says "Turn"
+      // (play-renderer.ts's makeTurnDivider, game.ts's endgame indicator,
+      // this file's own sibling chronicle-export.ts:48), and era.label is
+      // consumed verbatim by chronicle-renderer.ts's /chronicle modes with
+      // no rewording.
+      label: `Turns ${eraStart}–${eraRecords[eraRecords.length - 1].tick}`,
       eventCount: eraRecords.length,
       topEvents,
     });

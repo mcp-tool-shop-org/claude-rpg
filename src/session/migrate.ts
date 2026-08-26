@@ -3,6 +3,7 @@
 // Pure functions — no runtime state, no filesystem, no client.
 
 import { SaveValidationError } from './session.js';
+import { isDebugEnabled } from '../game/debug-logger.js';
 
 /** Current schema version. Increment when save shape changes. */
 export const CURRENT_SCHEMA_VERSION = 2;
@@ -203,7 +204,12 @@ function normalizeLegacyJsonArrayField(
     else dropped++;
   }
 
-  if (dropped > 0) {
+  // F-34078c07: gated behind --debug/CLAUDE_RPG_DEBUG — the same condition
+  // debug-logger.ts's DebugLogger already checks — so a normal player's
+  // terminal doesn't get raw diagnostic text mixed into the styled game
+  // screen the moment an old save happens to drop a legacy entry during
+  // migration. The drop itself is unaffected; only the diagnostic is gated.
+  if (dropped > 0 && isDebugEnabled()) {
     console.warn(
       `[migrate] v1→v2: dropped ${dropped} unrecognizable ${fieldName} entr${dropped === 1 ? 'y' : 'ies'} during migration (missing an id).`,
     );

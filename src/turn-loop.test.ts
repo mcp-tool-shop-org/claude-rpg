@@ -479,4 +479,97 @@ describe('executeTurn (opts object)', () => {
       expect(prompts[1]).toContain('get it');
     });
   });
+
+  describe('presentation-state ordering (F-4ec3609b, game-core half of the ORDERING contract)', () => {
+    beforeEach(() => {
+      mockedNarrateScene.mockClear();
+    });
+
+    /**
+     * F-4ec3609b: runtime-foundry is landing a public
+     * `ImmersionRuntime.inferAndTransition(events, verb): PresentationState`
+     * in this same wave (src/runtime/immersion-runtime.ts) -- out of this
+     * domain's owned globs, so it cannot be edited or constructed for real
+     * here. It performs exactly the inference+transition step
+     * processPresentation() already runs as its own first step, but lets
+     * executeTurn() run that step BEFORE narration instead of after.
+     *
+     * This is a documented local stub (not the real class) standing in for
+     * that contract: it implements only the two members executeTurn's Step
+     * 3+4/4.5 actually call, so the ordering fix below can be proven from
+     * this domain's side independent of whether runtime-foundry's half has
+     * landed in this worktree yet. The `as unknown as ImmersionRuntime`
+     * cast is deliberate -- every other ImmersionRuntime member
+     * (hookManager, audioDirector, voiceCaster, ...) is unreachable from
+     * executeTurn() and therefore from this test.
+     */
+    function createImmersionStub(opts: {
+      priorState: string;
+      inferredState: string;
+    }) {
+      let current = opts.priorState;
+      const inferAndTransition = vi.fn((_events: unknown[], _verb: string) => {
+        current = opts.inferredState;
+        return opts.inferredState;
+      });
+      const processPresentation = vi.fn(async () => []);
+      const raw = {
+        stateMachine: {
+          get current() {
+            return current;
+          },
+        },
+        inferAndTransition,
+        processPresentation,
+      };
+      return {
+        immersion: raw as unknown as ExecuteTurnOpts['immersion'],
+        inferAndTransition,
+        processPresentation,
+      };
+    }
+
+    it("passes this turn's inferred presentation state to narrateScene, not the prior turn's stateMachine.current", async () => {
+      const engine = createGame();
+      const client = createMockClient();
+      const history = new TurnHistory();
+      const { immersion } = createImmersionStub({ priorState: 'exploration', inferredState: 'combat' });
+
+      await executeTurn({
+        engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+        immersion,
+      });
+
+      expect(mockedNarrateScene).toHaveBeenCalledTimes(1);
+      const callOpts = mockedNarrateScene.mock.calls[0][0] as unknown as { presentationState?: string };
+      // Before the fix, this read immersion.stateMachine.current *before*
+      // inferAndTransition ran, so it would still be 'exploration' here.
+      expect(callOpts.presentationState).toBe('combat');
+    });
+
+    it('calls inferAndTransition (pre-narration pass) before narrateScene, and processPresentation after', async () => {
+      const engine = createGame();
+      const client = createMockClient();
+      const history = new TurnHistory();
+      const { immersion, inferAndTransition, processPresentation } = createImmersionStub({
+        priorState: 'exploration',
+        inferredState: 'exploration',
+      });
+
+      await executeTurn({
+        engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+        immersion,
+      });
+
+      expect(inferAndTransition).toHaveBeenCalledTimes(1);
+      expect(inferAndTransition).toHaveBeenCalledWith(expect.any(Array), 'look');
+      expect(processPresentation).toHaveBeenCalledTimes(1);
+
+      const inferOrder = inferAndTransition.mock.invocationCallOrder[0];
+      const narrateOrder = mockedNarrateScene.mock.invocationCallOrder[0];
+      const processOrder = processPresentation.mock.invocationCallOrder[0];
+      expect(inferOrder).toBeLessThan(narrateOrder);
+      expect(narrateOrder).toBeLessThan(processOrder);
+    });
+  });
 });

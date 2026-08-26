@@ -869,7 +869,13 @@ export class GameSession {
         // renderCompactStatus opts field instead); omitted entirely when
         // there have been no subsystem failures this session.
         const subsystemInd = this.buildSubsystemHealthIndicator();
-        return subsystemInd ? `${statusOutput}  Subsystems: ${subsystemInd}\n` : statusOutput;
+        // F-bd2ff8c8: statusOutput already ends in exactly one trailing
+        // newline (renderCompactStatus's own closing divider + empty-string
+        // line joined by '\n'), so appending straight onto it here put the
+        // Subsystems line flush against the box's bottom border instead of
+        // clearly inside or clearly separated from it. One more '\n' gives
+        // it the same blank-line breathing room every in-box field has.
+        return subsystemInd ? `${statusOutput}\n  Subsystems: ${subsystemInd}\n` : statusOutput;
       }
       if (playCmd === '/map') {
         if (!this.profile) return '  No profile loaded.';
@@ -1111,7 +1117,7 @@ export class GameSession {
       this.subsystemFailureCount++;
       this.subsystemFailures.push({ tick: this.engine.tick, error: errStack });
       this.capOldestFirst(this.subsystemFailures, MAX_SUBSYSTEM_FAILURE_RECORDS);
-      subsystemWarning = '\n  [A subsystem hiccupped — your turn was processed safely]';
+      subsystemWarning = this.formatTrailerNotice('A subsystem hiccupped — your turn was processed safely');
     }
     this.debugLog.info('turn', 'turn-end', { tick: this.engine.tick });
 
@@ -1178,17 +1184,45 @@ export class GameSession {
       turnNumber: this.history.getAll().length,
     });
     let finalOutput = output;
-    // Drain structured announcements into the output
+    // F-cfc5ff37: collect the post-turn "trailer notices" (structured
+    // announcements, subsystem warning, autosave notice) and join them with
+    // a blank-line separator between fired notices, instead of
+    // concatenating each ad hoc. Previously announcements alone appended an
+    // extra trailing '\n' (a blank-line gap after them) while
+    // subsystemWarning/autosaveMsg had none, so when multiple notices fired
+    // on the same turn they sat flush against each other with zero visual
+    // break — and announcements were the one trailer notice NOT wrapped in
+    // the `[...]` bracket idiom the other two use, despite being arguably
+    // the biggest positive beats a player sees. Each fragment below already
+    // carries its own leading '\n' (formatTrailerNotice / subsystemWarning
+    // / autosaveMsg all start with '\n  [...]'), so joining with one more
+    // '\n' between fragments yields exactly one blank line between
+    // consecutive notices, while a single fired notice keeps the same
+    // one-newline gap from `output` as before.
+    const trailerNotices: string[] = [];
     if (this.pendingAnnouncements.length > 0) {
-      const announcementBlock = this.pendingAnnouncements
-        .map((a) => `\n  ${a}`)
-        .join('');
-      finalOutput += announcementBlock + '\n';
+      for (const announcement of this.pendingAnnouncements) {
+        trailerNotices.push(this.formatTrailerNotice(announcement));
+      }
       this.pendingAnnouncements = [];
     }
-    if (subsystemWarning) finalOutput += subsystemWarning;
-    if (autosaveMsg) finalOutput += autosaveMsg;
+    if (subsystemWarning) trailerNotices.push(subsystemWarning);
+    if (autosaveMsg) trailerNotices.push(autosaveMsg);
+    finalOutput += trailerNotices.join('\n');
     return finalOutput;
+  }
+
+  /**
+   * F-cfc5ff37: shared formatter for the three post-turn "trailer notices"
+   * (structured announcements, the subsystem-hiccup warning, the autosave
+   * notice) so all three agree on bracket idiom instead of differing by an
+   * accident of which code path was written first. The leading '\n'
+   * matches the shape these fragments have always had; processInput()'s
+   * drain step joins multiple fired fragments with one more '\n' so
+   * consecutive notices land a full blank line apart.
+   */
+  private formatTrailerNotice(text: string): string {
+    return `\n  [${text}]`;
   }
 
   /**
@@ -1247,7 +1281,7 @@ export class GameSession {
       };
       await saveSession(input);
       this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
-      return { status: 'saved', message: '\n  [autosaved]' };
+      return { status: 'saved', message: this.formatTrailerNotice('autosaved') };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.debugLog.error('autosave', 'autosave-failed', { error: errMsg });
@@ -1271,7 +1305,7 @@ export class GameSession {
     if (outcome.status === 'failed') {
       if (this.autosaveFailureWarned) return null;
       this.autosaveFailureWarned = true;
-      return '\n  [autosave failed — your last save may be out of date; use /export to back up your progress]';
+      return this.formatTrailerNotice('autosave failed — your last save may be out of date; use /export to back up your progress');
     }
     return null;
   }

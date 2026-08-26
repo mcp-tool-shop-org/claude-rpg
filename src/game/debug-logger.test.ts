@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { createDebugLogger, createTestLogger } from './debug-logger.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { createDebugLogger, createTestLogger, isDebugEnabled } from './debug-logger.js';
 
 describe('debug-logger (PB-004)', () => {
   it('createTestLogger captures entries without stderr output', () => {
@@ -56,5 +56,30 @@ describe('debug-logger (PB-004)', () => {
     const logger = createTestLogger();
     logger.info('x', 'no data');
     expect(logger.getEntries()[0].data).toBeUndefined();
+  });
+
+  describe('isDebugEnabled (F-34078c07)', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('is false by default (no --debug argv, no CLAUDE_RPG_DEBUG env var)', () => {
+      expect(isDebugEnabled()).toBe(false);
+    });
+
+    it('is true when CLAUDE_RPG_DEBUG=1', () => {
+      vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+      expect(isDebugEnabled()).toBe(true);
+    });
+
+    it('is true when CLAUDE_RPG_DEBUG=true', () => {
+      vi.stubEnv('CLAUDE_RPG_DEBUG', 'true');
+      expect(isDebugEnabled()).toBe(true);
+    });
+
+    it('is false for an unrecognized CLAUDE_RPG_DEBUG value', () => {
+      vi.stubEnv('CLAUDE_RPG_DEBUG', 'yes');
+      expect(isDebugEnabled()).toBe(false);
+    });
   });
 });

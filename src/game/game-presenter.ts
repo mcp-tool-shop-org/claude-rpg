@@ -4,7 +4,7 @@
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
-import { renderPlayScreen, renderWelcome, renderThinking } from '../display/play-renderer.js';
+import { renderPlayScreen, renderWelcome, renderThinking, getTerminalWidth } from '../display/play-renderer.js';
 import { getOnboardingForSession, renderFirstTurnOrientation } from '../display/help-system.js';
 import { formatPartyStatusLine } from '@ai-rpg-engine/modules';
 import type { PartyState } from '@ai-rpg-engine/modules';
@@ -76,29 +76,45 @@ export function renderOpeningOutput(
 
 // ─── Finale Output ───────────────────────────────────────────
 
-/** Format the conclusion terminal output from decided finale data. */
+/**
+ * Format the conclusion terminal output from decided finale data.
+ *
+ * F-001ef2af / F-81067750: the section dividers used to be built as
+ * '  ═'.repeat(30) / '  ─'.repeat(30) — repeating the entire 3-character
+ * UNIT "two spaces + the glyph" 30 times, not "2 spaces followed by 30
+ * solid glyphs". That produced a 90-character, space-gapped
+ * "  ═  ═  ═ ..." string instead of a solid banner rule, on the single
+ * most narratively climactic screen in the game. Fixed to match the
+ * established sibling pattern (sheet.ts's DIVIDER, chronicle-renderer.ts's
+ * HEAVY_DIVIDER, play-renderer.ts's makeDivider): a bare, solid repeated
+ * glyph with no baked-in indent — content lines carry their own 2-space
+ * indent instead — sized via play-renderer.ts's getTerminalWidth() so the
+ * banner adapts to narrow terminals instead of staying hardcoded.
+ */
 export function renderConcludeOutput(result: {
   deterministicSummary: string;
   epilogue?: string;
   worldAfter: string;
 }): string {
+  const heavyDivider = '═'.repeat(getTerminalWidth());
+  const thinDivider = '─'.repeat(getTerminalWidth());
   const lines: string[] = [];
   lines.push('');
-  lines.push('  ═'.repeat(30));
+  lines.push(heavyDivider);
   lines.push('  CAMPAIGN CONCLUSION');
-  lines.push('  ═'.repeat(30));
+  lines.push(heavyDivider);
   lines.push('');
   lines.push(result.deterministicSummary);
   if (result.epilogue) {
     lines.push('');
-    lines.push('  ─'.repeat(30));
+    lines.push(thinDivider);
     lines.push('');
     lines.push(`  ${result.epilogue.split('\n').join('\n  ')}`);
   }
   lines.push('');
   lines.push(result.worldAfter);
   lines.push('');
-  lines.push('  ─'.repeat(30));
+  lines.push(thinDivider);
   lines.push('  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit');
 
   return lines.join('\n');

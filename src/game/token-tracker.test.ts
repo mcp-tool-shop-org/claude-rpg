@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { SessionTokenTracker, withTokenTracking } from './token-tracker.js';
 import type { ClaudeClient } from '../claude-client.js';
+import { getTerminalWidth } from '../display/play-renderer.js';
 
 describe('SessionTokenTracker (FT-B-004)', () => {
   it('should record and retrieve tokens by call type', () => {
@@ -69,6 +70,31 @@ describe('SessionTokenTracker (FT-B-004)', () => {
     expect(summary).toContain('Estimated cost:');
     // Should not include dialogue since no calls were made
     expect(summary).not.toContain('dialogue');
+  });
+
+  describe('divider convention (F-3453d747)', () => {
+    afterEach(() => {
+      Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+    });
+
+    it('frames the summary with the app-wide solid divider instead of a bare "---" markdown divider', () => {
+      Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
+      const tracker = new SessionTokenTracker();
+      tracker.record('narration', 100, 50);
+
+      const summary = tracker.formatCostSummary();
+      const lines = summary.split('\n');
+
+      // The old bare '---'-wrapped header/mid-divider is gone entirely...
+      expect(summary).not.toContain('--- Session Token Usage ---');
+      expect(lines).not.toContain('---');
+      // ...replaced by the same solid heavy-rule convention every other
+      // rendered screen in the app uses (sheet.ts's DIVIDER,
+      // play-renderer.ts's makeDivider), sized to the terminal.
+      const width = getTerminalWidth();
+      const dividerLines = lines.filter((l) => l === '─'.repeat(width));
+      expect(dividerLines.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   it('should reset all tracked data', () => {

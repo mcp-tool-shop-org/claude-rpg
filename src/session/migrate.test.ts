@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { migrateSave } from './migrate.js';
 
 // F-c5ff2a5c: migrateV1toV2 shallow-spread the raw save object and never
@@ -96,6 +96,49 @@ describe('migrateSave — legacy rumor/pressure normalization (F-c5ff2a5c)', () 
 
     expect(rumors).toHaveLength(1);
     expect(rumors[0].id).toBe('r3');
+  });
+
+  // F-34078c07: the "dropped N unrecognizable entries" diagnostic used a
+  // bare, unconditional console.warn, mixing raw text into a normal
+  // player's terminal on every v1-save migration that happened to drop a
+  // legacy entry. Gated behind --debug/CLAUDE_RPG_DEBUG, matching
+  // session.ts's sibling loaders (see session.test.ts).
+  it('console.warns about the dropped entry when debug is enabled', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const raw = {
+      version: '1.4.0',
+      playerRumors: JSON.stringify([
+        { text: 'floating text with no id at all' },
+        { id: 'r3', text: 'a second, id-bearing legacy rumor', source: 'npc', tick: 2 },
+      ]),
+    };
+
+    migrateSave(raw);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain('dropped 1 unrecognizable playerRumors entry');
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it('does NOT console.warn about the dropped entry by default (no --debug/CLAUDE_RPG_DEBUG)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const raw = {
+      version: '1.4.0',
+      playerRumors: JSON.stringify([
+        { text: 'floating text with no id at all' },
+        { id: 'r3', text: 'a second, id-bearing legacy rumor', source: 'npc', tick: 2 },
+      ]),
+    };
+
+    const result = migrateSave(raw);
+    const rumors = JSON.parse(result.data.playerRumors as string);
+
+    // The drop itself still happens -- only the diagnostic is gated.
+    expect(rumors).toHaveLength(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('leaves absent playerRumors/activePressures fields absent (no crash on v1 saves without them)', () => {

@@ -6,9 +6,11 @@ import {
   loadArcSnapshotFromSession,
   loadNpcAgencyFromSession,
   loadPresentationStateFromSession,
+  loadChronicleFromSession,
   type SavedSession,
 } from './session.js';
 import { createPartyState } from '@ai-rpg-engine/modules';
+import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 
 function makeSession(overrides: Partial<SavedSession> = {}): SavedSession {
   return {
@@ -152,7 +154,11 @@ describe('loadObligationsFromSession (F-cb8a8337)', () => {
     expect(result.get('npc-1')).toEqual({ obligations: [validObligation] });
   });
 
-  it('drops a ledger entry whose obligations field is missing/wrong-shape, with a console.warn, instead of letting it reach the Map', () => {
+  it('drops a ledger entry whose obligations field is missing/wrong-shape, with a console.warn when debug is enabled, instead of letting it reach the Map', () => {
+    // F-34078c07: this diagnostic is now gated behind --debug/
+    // CLAUDE_RPG_DEBUG — see the "does not warn" test below for the
+    // default (non-debug) case this finding was actually about.
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // A hand-edited or schema-drifted save: 'obligations' is an object, not
     // an array — the exact shape that crashes tickObligations()'s
@@ -165,9 +171,11 @@ describe('loadObligationsFromSession (F-cb8a8337)', () => {
     expect(result.size).toBe(0);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('drops a ledger entry whose obligations array holds a malformed obligation (missing required fields)', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const session = makeSession({
       npcObligations: JSON.stringify({ 'npc-bad': { obligations: [{ id: 'obl-1' }] } }),
@@ -176,6 +184,7 @@ describe('loadObligationsFromSession (F-cb8a8337)', () => {
     expect(result.has('npc-bad')).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('keeps valid entries while dropping invalid ones in the same save (mixed batch)', () => {
@@ -190,6 +199,22 @@ describe('loadObligationsFromSession (F-cb8a8337)', () => {
     expect(result.size).toBe(1);
     expect(result.has('npc-good')).toBe(true);
     expect(result.has('npc-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT console.warn by default (no --debug/CLAUDE_RPG_DEBUG) when dropping a malformed entry (F-34078c07)', () => {
+    // Previously this warned unconditionally, mixing raw diagnostic text
+    // into a normal player's terminal the moment they loaded an old or
+    // hand-edited save. Routed through debug-logger.ts's isDebugEnabled()
+    // gate so it's silent by default, matching every other DebugLogger-
+    // gated diagnostic in this codebase.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      npcObligations: JSON.stringify({ 'npc-bad': { obligations: { not: 'an array' } } }),
+    });
+    const result = loadObligationsFromSession(session);
+    expect(result.has('npc-bad')).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 });
@@ -237,7 +262,11 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.get('npc-1')).toEqual(validChain);
   });
 
-  it('drops a chain entry whose steps field is missing/wrong-shape, with a console.warn, instead of letting it reach the Map', () => {
+  it('drops a chain entry whose steps field is missing/wrong-shape, with a console.warn when debug is enabled, instead of letting it reach the Map', () => {
+    // F-34078c07: this diagnostic is now gated behind --debug/
+    // CLAUDE_RPG_DEBUG — see the "does not warn" test below for the
+    // default (non-debug) case this finding was actually about.
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const badChain = { ...validChain, steps: undefined };
     const session = makeSession({
@@ -247,9 +276,11 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.has('npc-bad')).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('drops a chain entry with a wrong-typed currentStep/turnsUntilNext/resolved field (the exact fields shouldResolveChainStep dereferences unguarded)', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const badChain = { ...validChain, currentStep: 'zero' };
     const session = makeSession({
@@ -259,6 +290,7 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.has('npc-bad')).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('keeps valid entries while dropping invalid ones in the same save (mixed batch)', () => {
@@ -286,6 +318,7 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
   // this validator unchanged and reached game.ts's tickNpcAgencyTurn(),
   // crashing every subsequent turn for the rest of the session.
   it('drops a chain entry whose steps array contains a malformed element (null), even though the array itself and every chain-level field are well-typed', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const badChain = {
       ...validChain,
@@ -298,9 +331,11 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.has('npc-bad')).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('drops a chain entry whose steps array contains a step missing required fields (wrong shape, not null)', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const badChain = { ...validChain, steps: [{ delayTurns: 1 }] };
     const session = makeSession({
@@ -310,6 +345,7 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.has('npc-bad')).toBe(false);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+    vi.unstubAllEnvs();
   });
 
   it('keeps a well-shaped chain entry while dropping a sibling entry whose steps array holds a malformed element, in the same save (mixed batch)', () => {
@@ -325,6 +361,60 @@ describe('loadConsequenceChainsFromSession (F-5bfeeab2)', () => {
     expect(result.has('npc-good')).toBe(true);
     expect(result.get('npc-good')).toEqual(validChain);
     expect(result.has('npc-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT console.warn by default (no --debug/CLAUDE_RPG_DEBUG) when dropping a malformed entry (F-34078c07)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const badChain = { ...validChain, steps: undefined };
+    const session = makeSession({
+      consequenceChains: JSON.stringify({ 'npc-bad': badChain }),
+    });
+    const result = loadConsequenceChainsFromSession(session);
+    expect(result.has('npc-bad')).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+// F-34078c07: loadChronicleFromSession's corrupt-chronicle fallback used a
+// bare, unconditional console.warn -- the same anti-pattern as
+// loadObligationsFromSession/loadConsequenceChainsFromSession above, in a
+// function that previously had no dedicated test coverage at all.
+describe('loadChronicleFromSession (F-34078c07)', () => {
+  it('returns an empty journal when chronicleRecords is absent', () => {
+    const session = makeSession();
+    const journal = loadChronicleFromSession(session);
+    expect(journal).toBeInstanceOf(CampaignJournal);
+    expect(journal.serialize().records).toEqual([]);
+  });
+
+  it('falls back to an empty journal, with a console.warn when debug is enabled, when chronicleRecords is not valid JSON', () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({ chronicleRecords: 'NOT VALID JSON!!' });
+
+    const journal = loadChronicleFromSession(session);
+
+    expect(journal.serialize().records).toEqual([]);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy.mock.calls[0][0]).toContain('Chronicle could not be restored');
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it('does NOT console.warn by default (no --debug/CLAUDE_RPG_DEBUG) when chronicleRecords is corrupt (F-34078c07)', () => {
+    // Previously this warned unconditionally -- raw diagnostic text mixed
+    // into a normal player's terminal the moment they loaded a save whose
+    // chronicle failed to restore, starting an empty journal silently in
+    // every other respect except this one unstyled stderr line.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({ chronicleRecords: 'NOT VALID JSON!!' });
+
+    const journal = loadChronicleFromSession(session);
+
+    expect(journal.serialize().records).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 });

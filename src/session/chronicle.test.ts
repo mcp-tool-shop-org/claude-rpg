@@ -291,6 +291,28 @@ describe('compactChronicle', () => {
     expect(result.eraSummaries[0].eventCount).toBeGreaterThan(0);
   });
 
+  it('labels era summaries with player-facing "Turns" wording, matching chronicle-export.ts and the rest of the app (F-1a855326)', () => {
+    // Every other player-facing rendering of this same underlying tick
+    // field says "Turn" (display/play-renderer.ts's makeTurnDivider,
+    // game.ts's endgame indicator, this domain's own
+    // chronicle-export.ts:48) -- era.label was the one place that said
+    // "Ticks", an internal-engine noun leaking into player-facing copy
+    // reachable via the real /chronicle command.
+    const records = Array.from({ length: 20 }, (_, i) => ({
+      tick: i,
+      category: 'action',
+      significance: 0.15,
+      description: `Minor event ${i}`,
+    }));
+    const journal = makeJournalWithRecords(records);
+    const result = compactChronicle(journal, 100, 20, 5);
+
+    expect(result.eraSummaries.length).toBeGreaterThan(0);
+    const era = result.eraSummaries[0];
+    expect(era.label).toBe(`Turns ${era.fromTick}–${era.toTick}`);
+    expect(era.label).not.toContain('Ticks');
+  });
+
   it('trims canonical to maxCanonical limit', () => {
     const records = Array.from({ length: 30 }, (_, i) => ({
       tick: 80 + i,

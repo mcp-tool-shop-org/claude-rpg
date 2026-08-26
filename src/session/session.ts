@@ -10,6 +10,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { CURRENT_SCHEMA_VERSION, migrateSave } from './migrate.js';
+import { isDebugEnabled } from '../game/debug-logger.js';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
@@ -388,10 +389,17 @@ export function loadChronicleFromSession(session: SavedSession): CampaignJournal
   } catch (err) {
     // Engine 2.9.x validates records on deserialize (CA-06) — a refusal here
     // means the save's chronicle is corrupt. Starting an empty journal keeps
-    // the session playable, but the loss must not be silent.
-    console.warn(
-      `[session] Chronicle could not be restored from this save — starting an empty journal. ${err instanceof Error ? err.message : String(err)}`,
-    );
+    // the session playable, but the loss must not be silent to someone
+    // running with diagnostics on (F-34078c07: gated behind the same
+    // --debug/CLAUDE_RPG_DEBUG condition debug-logger.ts's DebugLogger
+    // already checks, so a normal player's terminal doesn't get raw
+    // diagnostic text mixed into the styled game screen on every load of an
+    // old or hand-edited save).
+    if (isDebugEnabled()) {
+      console.warn(
+        `[session] Chronicle could not be restored from this save — starting an empty journal. ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     return new CampaignJournal();
   }
 }
@@ -568,7 +576,11 @@ export function loadObligationsFromSession(
       if (isValidNpcObligationLedger(value)) {
         result.set(npcId, value);
       } else {
-        console.warn(`[session] Dropping malformed npcObligations entry for "${npcId}" on load — shape mismatch.`);
+        // F-34078c07: gated behind --debug/CLAUDE_RPG_DEBUG — see the
+        // loadChronicleFromSession comment above for why.
+        if (isDebugEnabled()) {
+          console.warn(`[session] Dropping malformed npcObligations entry for "${npcId}" on load — shape mismatch.`);
+        }
       }
     }
     return result;
@@ -648,7 +660,11 @@ export function loadConsequenceChainsFromSession(
       if (isValidConsequenceChain(value)) {
         result.set(npcId, value);
       } else {
-        console.warn(`[session] Dropping malformed consequenceChains entry for "${npcId}" on load — shape mismatch.`);
+        // F-34078c07: gated behind --debug/CLAUDE_RPG_DEBUG — see the
+        // loadChronicleFromSession comment above for why.
+        if (isDebugEnabled()) {
+          console.warn(`[session] Dropping malformed consequenceChains entry for "${npcId}" on load — shape mismatch.`);
+        }
       }
     }
     return result;

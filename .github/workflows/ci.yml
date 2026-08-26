@@ -27,6 +27,21 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Action Pinning & Update Policy
+# ===============================
+# GitHub Actions are pinned to commit SHAs (v6.0.2, v6.4.0, v7.0.0) verified for
+# Node 24 compatibility as of c18d3bf. Maintenance cadence:
+#   - Patch versions: update immediately when security fixes are released
+#   - Minor versions: update quarterly (e.g., first Monday of each quarter)
+#   - Major versions: only after downstream compatibility is verified
+#
+# To review upstream releases:
+#   - Set a quarterly reminder to check GitHub Release notes for each action
+#   - Test any minor/major bumps in a feature branch before merging to main
+#   - Document the compatibility baseline date in this comment
+#
+# Last reviewed: 2026-08-26 (Node-24 baseline verified against c18d3bf)
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest

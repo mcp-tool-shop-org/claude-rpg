@@ -2,6 +2,7 @@
 // These represent story state, not test trivia.
 
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
+import type { PressureFallout, OpportunityState } from '@ai-rpg-engine/modules';
 import type { ChronicleEventSource } from '../../src/session/chronicle.js';
 import { deriveChronicleEvents } from '../../src/session/chronicle.js';
 
@@ -13,7 +14,7 @@ const PLAYER = 'player';
 export function lookTurnSource(tick: number): ChronicleEventSource {
   return {
     kind: 'turn',
-    events: [{ type: 'world.zone.inspected', payload: { zoneId: 'chapel-entrance' } }],
+    events: [{ id: `evt-${tick}-inspected`, tick, type: 'world.zone.inspected', payload: { zoneId: 'chapel-entrance' } }],
     hints: { xpGained: 0 },
     tick,
     zoneId: 'chapel-entrance',
@@ -24,7 +25,7 @@ export function lookTurnSource(tick: number): ChronicleEventSource {
 export function moveTurnSource(tick: number, toZone: string): ChronicleEventSource {
   return {
     kind: 'turn',
-    events: [{ type: 'world.zone.entered', payload: { zoneId: toZone, zoneName: toZone, previousZoneId: 'chapel-entrance', tags: [] } }],
+    events: [{ id: `evt-${tick}-entered`, tick, type: 'world.zone.entered', payload: { zoneId: toZone, zoneName: toZone, previousZoneId: 'chapel-entrance', tags: [] } }],
     hints: { xpGained: 5, milestoneTriggered: { label: `Entered ${toZone}`, description: `Discovered ${toZone}`, tags: ['exploration'] } },
     tick,
     zoneId: toZone,
@@ -36,9 +37,9 @@ export function combatTurnSource(tick: number, defeatedId: string, defeatedName:
   return {
     kind: 'turn',
     events: [
-      { type: 'combat.contact.hit', payload: { attackerId: PLAYER, targetId: defeatedId, roll: 85, hitChance: 60 } },
-      { type: 'combat.damage.applied', payload: { entityId: defeatedId, damage: 15 } },
-      { type: 'combat.entity.defeated', payload: { entityId: defeatedId } },
+      { id: `evt-${tick}-hit`, tick, type: 'combat.contact.hit', payload: { attackerId: PLAYER, targetId: defeatedId, roll: 85, hitChance: 60 } },
+      { id: `evt-${tick}-damage`, tick, type: 'combat.damage.applied', payload: { entityId: defeatedId, damage: 15 } },
+      { id: `evt-${tick}-defeated`, tick, type: 'combat.entity.defeated', payload: { entityId: defeatedId } },
     ],
     hints: {
       xpGained: 15,
@@ -52,18 +53,21 @@ export function combatTurnSource(tick: number, defeatedId: string, defeatedName:
 
 /** A pressure resolved event. */
 export function pressureResolvedSource(tick: number): ChronicleEventSource {
+  const fallout: PressureFallout = {
+    resolution: {
+      pressureId: 'p-bounty-1',
+      pressureKind: 'bounty-issued',
+      resolutionType: 'resolved-by-player',
+      resolvedBy: 'player',
+      resolvedAtTick: tick,
+      resolutionVisibility: 'known',
+    },
+    summary: 'The bounty on your head has been lifted.',
+    effects: [],
+  };
   return {
     kind: 'pressure-resolved',
-    fallout: {
-      resolution: {
-        pressureId: 'p-bounty-1',
-        pressureKind: 'bounty-issued',
-        resolutionType: 'resolved-by-player',
-        resolvedBy: 'player',
-      },
-      summary: 'The bounty on your head has been lifted.',
-      effects: [],
-    } as any,
+    fallout,
     tick,
   };
 }
@@ -85,17 +89,28 @@ export function itemAcquiredSource(tick: number): ChronicleEventSource {
 
 /** Opportunity completed event. */
 export function opportunityCompletedSource(tick: number): ChronicleEventSource {
+  const opportunity: OpportunityState = {
+    id: 'opp-1',
+    kind: 'bounty',
+    status: 'completed',
+    sourceFactionId: 'guardians',
+    title: 'Clear the Crypt',
+    description: 'Clear the crypt of undead.',
+    objectiveDescription: 'Clear the crypt of undead.',
+    linkedRumorIds: [],
+    linkedNpcIds: [],
+    tags: [],
+    rewards: [],
+    risks: [],
+    visibility: 'known',
+    urgency: 0.5,
+    turnsRemaining: null,
+    createdAtTick: tick - 5,
+    genre: 'fantasy',
+  };
   return {
     kind: 'opportunity-completed',
-    opportunity: {
-      id: 'opp-1',
-      title: 'Clear the Crypt',
-      kind: 'bounty',
-      description: 'Clear the crypt of undead.',
-      status: 'completed',
-      offeredByFactionId: 'guardians',
-      createdAtTick: tick - 5,
-    } as any,
+    opportunity,
     tick,
   };
 }

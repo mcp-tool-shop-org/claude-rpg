@@ -71,7 +71,7 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
         });
       }
 
-      if (opts.structuredData) {
+      if (opts.structuredData !== undefined) {
         return {
           ok: true,
           data: opts.structuredData as T,

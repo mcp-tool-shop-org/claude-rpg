@@ -16,14 +16,15 @@ import { multiTurnJournal } from '../helpers/chronicle-fixtures.js';
 
 function minimalSave(overrides: Partial<SavedSession> = {}): SavedSession {
   return {
+    schemaVersion: 2,
     version: '1.4.0',
     engineState: '{}',
-    turnHistory: [],
+    turnHistory: { turns: [] },
     tone: 'dark fantasy',
     savedAt: new Date().toISOString(),
     campaignStatus: 'active',
     ...overrides,
-  } as any;
+  };
 }
 
 function richSave(): SavedSession {
@@ -79,7 +80,7 @@ describe('exportChronicleMarkdown', () => {
 
   it('handles missing finale outline', () => {
     const save = richSave();
-    delete (save as any).finaleOutline;
+    delete save.finaleOutline;
     const md = exportChronicleMarkdown(save);
     expect(md).toContain('# Campaign Chronicle');
     // No crash
@@ -87,7 +88,7 @@ describe('exportChronicleMarkdown', () => {
 
   it('handles missing chronicle records', () => {
     const save = richSave();
-    delete (save as any).chronicleRecords;
+    delete save.chronicleRecords;
     const md = exportChronicleMarkdown(save);
     expect(md).toContain('# Campaign Chronicle');
   });

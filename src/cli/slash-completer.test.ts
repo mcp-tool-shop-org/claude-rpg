@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { slashCompleter, SLASH_COMMANDS } from './slash-completer.js';
 
 describe('slashCompleter (FT-FE-003)', () => {
@@ -44,19 +46,37 @@ describe('SLASH_COMMANDS (FT-FE-003)', () => {
 });
 
 describe('SLASH_COMMANDS documentation reconciliation (F-f1eb58cb)', () => {
-  // Mirrors the CLI's documented command surface: bin.ts's USAGE text
-  // ("Commands in-game:") plus /character, which bin.ts's game loop
-  // handles as a documented alias for /sheet. Update this list if either
-  // surface changes, so SLASH_COMMANDS can never silently drift from what
-  // the CLI actually documents and handles again.
-  const DOCUMENTED_COMMANDS = [
-    '/sheet', '/character', '/status', '/map', '/leverage', '/jobs',
-    '/arcs', '/conclude', '/archive', '/export', '/director', '/help',
-  ];
+  // F-623e763f: DOCUMENTED_COMMANDS used to be a hand-typed literal copy of
+  // bin.ts's "Commands in-game:" USAGE text — a second hardcoded copy of the
+  // same list SLASH_COMMANDS itself is, so this test could only ever check
+  // one hardcoded list against another, both maintained by hand. A future
+  // edit to USAGE (add/remove/rename a slash command) without updating both
+  // SLASH_COMMANDS and this list would have passed silently, reintroducing
+  // exactly the drift F-f1eb58cb fixed.
+  //
+  // Parsing bin.ts's actual source text instead (not importing it — bin.ts
+  // is a bare CLI entry point that calls main() as a module-level side
+  // effect, so importing it would run the CLI) means an edit to the real
+  // documented command surface fails this test automatically. Mirrors the
+  // "read a sibling source file as text" pattern already used in
+  // claude-client-deprecated.test.ts.
+  function readDocumentedCommands(): string[] {
+    const binSrc = readFileSync(resolve(import.meta.dirname, '..', 'bin.ts'), 'utf-8');
+    const start = binSrc.indexOf('Commands in-game:');
+    const end = binSrc.indexOf('Environment:', start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const block = binSrc.slice(start, end);
+    // Slash-command tokens, including inline mentions like "(/character is
+    // an alias)" — excludes mid-word slashes like the "md/json/finale" in
+    // the /export line via the negative lookbehind.
+    return [...block.matchAll(/(?<![a-zA-Z0-9])\/[a-z][a-z-]*/g)].map((m) => m[0]);
+  }
 
   it('every SLASH_COMMANDS entry is referenced in the documented command set', () => {
+    const documented = readDocumentedCommands();
     for (const cmd of SLASH_COMMANDS) {
-      expect(DOCUMENTED_COMMANDS).toContain(cmd);
+      expect(documented).toContain(cmd);
     }
   });
 

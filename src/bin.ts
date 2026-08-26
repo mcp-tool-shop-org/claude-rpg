@@ -45,6 +45,7 @@ import { slashCompleter } from './cli/slash-completer.js';
 import { createSpinner } from './cli/spinner.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
 import { parseSaveSelection } from './cli/save-selection.js';
+import { formatSaveDetails } from './cli/save-listing.js';
 import { isPathInside } from './cli/path-guard.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
@@ -279,22 +280,7 @@ async function runLoad(): Promise<void> {
     const date = new Date(s.savedAt).toLocaleDateString();
     console.log(`    ${i + 1}. ${identity} — ${date}`);
     // Enhanced details
-    const details: string[] = [];
-    if (s.packId) {
-      details.push(`pack: ${s.packId}`);
-    }
-    if (s.companionCount != null && s.companionCount > 0) {
-      details.push(`${s.companionCount} companion${s.companionCount > 1 ? 's' : ''}`);
-    }
-    if (s.lastZoneName) {
-      details.push(`zone: ${s.lastZoneName}`);
-    }
-    if (s.chronicleEvents != null && s.chronicleEvents > 0) {
-      details.push(`${s.chronicleEvents} chronicle events`);
-    }
-    if (s.campaignAge != null && s.campaignAge > 0) {
-      details.push(`${s.campaignAge} ticks`);
-    }
+    const details = formatSaveDetails(s);
     if (details.length > 0) {
       console.log(`       ${details.join(' | ')}`);
     }

@@ -1,5 +1,7 @@
 // archive-browser — render completed campaign archive for terminal display
 
+import type { ResolutionClass } from '@ai-rpg-engine/modules';
+
 export type ArchivedCampaign = {
   filename: string;
   packId?: string;
@@ -61,16 +63,26 @@ ${DIVIDER}`;
   return lines.join('\n');
 }
 
+/**
+ * Display label per resolution class, keyed by the engine's real enum
+ * (@ai-rpg-engine/modules ResolutionClass) instead of a bare `Record<string,
+ * string>`, so this table can't silently drop out of sync with what
+ * completed campaigns actually produce — TypeScript now errors if a class
+ * is missing or misspelled. Exported so other in-domain surfaces (e.g.
+ * help-system.ts's renderConcludeHelp) can derive their own class list from
+ * this same source instead of hand-duplicating it (F-545cb684).
+ */
+export const RESOLUTION_CLASS_LABELS: Record<ResolutionClass, string> = {
+  'victory': 'VICTORY',
+  'exile': 'EXILE',
+  'martyrdom': 'MARTYRDOM',
+  'collapse': 'COLLAPSE',
+  'overthrow': 'OVERTHROW',
+  'puppet-master': 'PUPPET MASTER',
+  'quiet-retirement': 'QUIET RETIREMENT',
+  'tragic-stabilization': 'TRAGIC STABILIZATION',
+};
+
 function getResolutionLabel(resolution: string): string {
-  const labels: Record<string, string> = {
-    'victory': 'VICTORY',
-    'exile': 'EXILE',
-    'martyrdom': 'MARTYRDOM',
-    'collapse': 'COLLAPSE',
-    'overthrow': 'OVERTHROW',
-    'puppet-master': 'PUPPET MASTER',
-    'quiet-retirement': 'QUIET RETIREMENT',
-    'tragic-stabilization': 'TRAGIC STABILIZATION',
-  };
-  return labels[resolution] ?? resolution.toUpperCase();
+  return RESOLUTION_CLASS_LABELS[resolution as ResolutionClass] ?? resolution.toUpperCase();
 }

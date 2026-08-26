@@ -5,7 +5,7 @@
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
 import { renderPlayScreen, renderWelcome, renderThinking } from '../display/play-renderer.js';
-import { getOnboardingByGenre, renderFirstTurnOrientation } from '../display/help-system.js';
+import { getOnboardingForSession, renderFirstTurnOrientation } from '../display/help-system.js';
 import { formatPartyStatusLine } from '@ai-rpg-engine/modules';
 import type { PartyState } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
@@ -55,6 +55,7 @@ export function renderOpeningOutput(
   availableActions: string[],
   profileStatus: StatusData | undefined,
   genre: string,
+  packId?: string,
 ): string {
   let output = renderPlayScreen({
     narration,
@@ -63,7 +64,9 @@ export function renderOpeningOutput(
     profileStatus,
   });
 
-  const onboarding = getOnboardingByGenre(genre);
+  // F-ed5f7d25: prefer the pack-id lookup — genre keying collides ('historical'
+  // is shared) and misses 7 of 10 packs; genre stays as the custom-world fallback.
+  const onboarding = getOnboardingForSession(packId, genre);
   if (onboarding) {
     output += renderFirstTurnOrientation(onboarding);
   }

@@ -191,7 +191,7 @@ async function main(): Promise<void> {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error('Error: ANTHROPIC_API_KEY environment variable is required to narrate gameplay.');
     console.error('Get your API key at https://console.anthropic.com, then add it permanently to');
-    console.error('your shell config: echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc');
+    console.error('your shell profile — e.g. on macOS/Linux: echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc');
     console.error('(or ~/.zshrc on macOS). Restart your terminal, then run claude-rpg again.');
     process.exit(1);
   }
@@ -362,6 +362,15 @@ async function runLoad(): Promise<void> {
           process.exit(1);
         }
         Object.assign(engine.store.state, structuredClone(validation.state));
+        // task_3ddb1c06 (c): the save carries the full engine.serialize()
+        // envelope — restore the seeded RNG stream too, or every resume
+        // silently forks the world's determinism. (Full Engine.deserialize
+        // needs the pack's module list, which packs don't export; state +
+        // rngState covers the material fidelity.)
+        const envelope = JSON.parse(savedSession.engineState) as { world?: { rngState?: unknown } };
+        if (typeof envelope.world?.rngState === 'number') {
+          engine.store.rng.setState(envelope.world.rngState);
+        }
       } catch (err) {
         // F-c7e13af2: every exception here is fatal (not just JSON parse errors,
         // which validateEngineState now handles internally) — falling through with
@@ -419,6 +428,11 @@ async function runLoad(): Promise<void> {
     itemCatalog: itemCatalog ?? undefined,
     genre: savedSession.genre ?? 'fantasy',
     journal: restoredJournal,
+    // task_3ddb1c06 (a)+(b): resumed sessions keep their narration continuity
+    // and their concluded-ness — both were computed from the save and dropped.
+    history,
+    packId: savedSession.packId,
+    campaignStatus: savedSession.campaignStatus ?? 'active',
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   // Restore rumors, pressures, and fallout history into session

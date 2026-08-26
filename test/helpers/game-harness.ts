@@ -24,6 +24,7 @@ import {
 } from '../../src/session/session.js';
 import { getPackById } from '../../src/character/packs.js';
 import { validateEngineState } from '../../src/cli/engine-state-validator.js';
+import { TurnHistory } from '../../src/session/history.js';
 
 export type HarnessOptions = {
   /** Options for the fake Claude client. */
@@ -98,17 +99,11 @@ export function createHarness(opts: HarnessOptions = {}): GameHarness {
  * test/integration/bin-cli-turn-loop.test.ts's real child-process harness
  * proves, and it must keep doing so.
  *
- * One gap this *faithfully mirrors* from bin.ts's actual behavior today,
- * rather than "improving" on it (which would let this helper's tests pass
- * while real bin.ts stayed subtly wrong): GameSession.history is
- * `readonly` and always starts empty from the constructor, and bin.ts's
- * runLoad() only ever uses its own restored TurnHistory to render the
- * one-time post-load recap text -- it is never assigned onto the new
- * session. So, exactly like a real `claude-rpg load`, a harness returned
- * from resumeHarness() reports turnCount() 0 and has no recentNarration
- * continuity from before the save, even though the save file on disk has
- * a full turn history. (Flagged separately for the domain that owns
- * bin.ts -- not fixed here.)
+ * task_3ddb1c06: the restoration gaps this helper originally mirrored
+ * faithfully (turn history dropped, campaignStatus not restored, rngState
+ * discarded) are FIXED in bin.ts's runLoad() and mirrored as fixed here:
+ * the restored TurnHistory, campaignStatus, packId, and the envelope's
+ * rngState all flow into the resumed session, exactly as production does.
  */
 export async function resumeHarness(
   savePath: string,
@@ -131,6 +126,11 @@ export async function resumeHarness(
     throw new Error(`resumeHarness: save at "${savePath}" has invalid engine state (${validation.error}).`);
   }
   Object.assign(engine.store.state, structuredClone(validation.state));
+  // Mirrors bin.ts task_3ddb1c06 (c): restore the seeded RNG stream too.
+  const envelope = JSON.parse(savedSession.engineState) as { world?: { rngState?: unknown } };
+  if (typeof envelope.world?.rngState === 'number') {
+    engine.store.rng.setState(envelope.world.rngState);
+  }
 
   const profile = loadProfileFromSession(savedSession);
   const restoredRumors = loadRumorsFromSession(savedSession);
@@ -162,6 +162,10 @@ export async function resumeHarness(
     itemCatalog: pack.itemCatalog,
     genre: savedSession.genre ?? 'fantasy',
     journal: restoredJournal,
+    // task_3ddb1c06 (a)+(b): mirrored as fixed — see bin.ts runLoad().
+    history: TurnHistory.fromJSON(savedSession.turnHistory),
+    packId: savedSession.packId,
+    campaignStatus: savedSession.campaignStatus ?? 'active',
     ...opts.gameOpts,
   });
 

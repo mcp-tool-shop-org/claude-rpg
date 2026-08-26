@@ -34,6 +34,7 @@ describe('play-renderer', () => {
         speakerId: 'pilgrim',
         speakerName: 'Suspicious Pilgrim',
         text: 'Turn back, traveler.',
+        isFallback: false,
         grounding: {
           beliefCount: 2,
           memoryCount: 1,

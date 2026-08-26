@@ -230,20 +230,27 @@ describe('turn pipeline — narration failure', () => {
     expect(out).toContain('The scene holds its breath');
   });
 
-  it('interpretation failure (structured) currently propagates NarrationError (fallback to look verb not yet implemented)', async () => {
+  it('interpretation failure (structured) resolves to the in-fiction clarification (F-d026f78d)', async () => {
     // "xyzzy" won't match any fast-path pattern, so interpretAction calls the
-    // slow path (generateStructured), which fails here.
-    // A graceful fallback would catch that failure and resolve to
-    // { verb: 'look', confidence: 'low' }, short-circuiting the turn with a
-    // clarification instead of an error. That fallback is NOT implemented yet:
-    // interpretAction's slow path lets the NarrationError propagate uncaught.
-    // This test documents the current (propagating) behavior so a future fix
-    // that adds the fallback will be forced to update this test deliberately.
+    // slow path (generateStructured), which fails here. This is the deliberate
+    // inversion the old propagating-behavior test demanded of "a future fix":
+    // wave 14 landed that fix — a non-fatal interpretation failure now resolves
+    // to the low-confidence clarification path instead of a system error box,
+    // consumes no billed narration, and the session continues.
     const h = createHarness({
       clientOpts: { structuredFailure: 'timeout' },
     });
 
-    await expect(h.play('xyzzy')).rejects.toThrow(NarrationError);
+    const out = await h.play('xyzzy');
+    expect(out).toContain("I'm not sure what you mean");
+    // The clarification exchange IS recorded (one history turn) so the next
+    // interpretation call carries the "was asked to clarify" context.
+    expect(h.turnCount()).toBe(1);
+
+    // The session is not stranded — a normal turn still works afterward.
+    const out2 = await h.play('look around');
+    expect(typeof out2).toBe('string');
+    expect(h.turnCount()).toBe(2);
   });
 
   it('fast-path commands bypass Claude entirely', async () => {

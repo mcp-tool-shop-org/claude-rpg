@@ -99,14 +99,11 @@ describe('resumeHarness — session-state continuity (F-95191273)', () => {
     expect(h2.callLog.lastGeneratePrompt).toContain('the resumed-pressure marker XJ-9 stalks the chapel halls');
   });
 
-  // Faithful-mirror contract this helper deliberately carries over from
-  // bin.ts's actual runLoad() (see resumeHarness's doc comment in
-  // game-harness.ts): GameSession.history is `readonly` and always starts
-  // empty from the constructor, and bin.ts never assigns its own restored
-  // TurnHistory onto the new session either. Pinned here so a future change
-  // to either bin.ts or this helper has to touch this test deliberately
-  // instead of silently drifting the two apart.
-  it('does not restore turn history onto the resumed session (mirrors bin.ts runLoad, which does not either)', async () => {
+  // task_3ddb1c06: this is the deliberate inversion of the old faithful-mirror
+  // test ("does not restore turn history") — bin.ts's runLoad() now passes the
+  // restored TurnHistory into the GameSession constructor, so the resumed
+  // session keeps its narration continuity, and the helper mirrors THAT.
+  it('restores turn history onto the resumed session (mirrors the fixed bin.ts runLoad)', async () => {
     tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-resume-harness-history-'));
     const savePath = join(tmpDir, 'save.json');
 
@@ -125,7 +122,31 @@ describe('resumeHarness — session-state continuity (F-95191273)', () => {
     });
 
     const h2 = await resumeHarness(savePath);
-    expect(h2.turnCount()).toBe(0);
+    expect(h2.turnCount()).toBe(2);
+    expect(h2.session.history.getRecentNarration(3).length).toBeGreaterThan(0);
+  });
+
+  it('restores rng continuity from the save envelope (task_3ddb1c06 c)', async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-resume-harness-rng-'));
+    const savePath = join(tmpDir, 'save.json');
+
+    const h1 = createHarness();
+    await h1.play('look');
+    // Advance the rng stream past its seed state, then capture it at save time.
+    h1.session.engine.store.rng.next();
+    const stateAtSave = h1.session.engine.store.rng.getState();
+
+    await saveSession({
+      engine: h1.session.engine,
+      history: h1.session.history,
+      tone: h1.session.tone,
+      savePath,
+      packId: 'chapel-threshold',
+      genre: h1.session.genre,
+    });
+
+    const h2 = await resumeHarness(savePath);
+    expect(h2.session.engine.store.rng.getState()).toBe(stateAtSave);
   });
 
   it('throws a clear error when the save has no packId to restore an engine from', async () => {

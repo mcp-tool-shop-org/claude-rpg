@@ -1274,3 +1274,25 @@ describe('GameSession', () => {
     });
   });
 });
+
+// task_3ddb1c06 companion: /conclude must be retry-safe — the epilogue
+// fallback copy promises "type /conclude again to retry", so a second
+// invocation must not duplicate the campaign-concluded chronicle record
+// (handleConclude reuses the existing finale outline once concluded).
+describe('handleConclude retry safety', () => {
+  it('a second /conclude does not duplicate the campaign-concluded record', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.session.processInput('/conclude');
+    const countAfterFirst = h.session.journal
+      .serialize().records.filter((r) => r.category === 'campaign-concluded').length;
+    expect(countAfterFirst).toBe(1);
+    expect(h.session.campaignStatus).toBe('completed');
+
+    await h.session.processInput('/conclude');
+    const countAfterSecond = h.session.journal
+      .serialize().records.filter((r) => r.category === 'campaign-concluded').length;
+    expect(countAfterSecond).toBe(1);
+  });
+});

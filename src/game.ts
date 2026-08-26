@@ -194,6 +194,7 @@ import { TurnHistory } from './session/history.js';
 import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
+import { hasLivingHostiles } from './runtime/hooks.js';
 // F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
 // TurnResult.audioCalls element type — imported from its origin module
 // (audio-bridge.ts), the same way turn-loop.ts itself imports it, since
@@ -293,6 +294,16 @@ export type GameConfig = {
   itemCatalog?: ItemCatalog;
   genre?: string;
   journal?: CampaignJournal;
+  /**
+   * Restored turn history for resumed sessions (task_3ddb1c06): without this,
+   * every `claude-rpg load` started narration with zero recent-narration
+   * continuity even though the save carries the full history.
+   */
+  history?: TurnHistory;
+  /** Pack id for pack-launched sessions — keys onboarding and voice lookups. */
+  packId?: string;
+  /** Restored campaign status for resumed sessions (defaults to 'active'). */
+  campaignStatus?: 'active' | 'completed';
   fastMode?: boolean;
   /** Autosave configuration. */
   autosave?: Partial<AutosaveConfig>;
@@ -348,6 +359,8 @@ export class GameSession {
   readonly engine: Engine;
   readonly client: ClaudeClient;
   readonly history: TurnHistory;
+  /** Pack id for pack-launched sessions (undefined for custom worlds). */
+  readonly packId?: string;
   readonly tone: string;
   readonly title: string;
   readonly worldPrompt?: string;
@@ -425,7 +438,9 @@ export class GameSession {
   constructor(config: GameConfig) {
     this.engine = config.engine;
     this.client = config.client ?? createAdaptedClient(config.clientConfig);
-    this.history = new TurnHistory();
+    this.history = config.history ?? new TurnHistory();
+    this.packId = config.packId;
+    if (config.campaignStatus) this.campaignStatus = config.campaignStatus;
     this.tone = config.tone ?? 'dark fantasy, concise, atmospheric';
     this.title = config.title ?? 'claude-rpg';
     this.worldPrompt = config.worldPrompt;
@@ -749,6 +764,7 @@ export class GameSession {
       this.engine.getAvailableActions(),
       this.getStatusData() ?? undefined,
       this.genre,
+      this.packId,
     );
   }
 
@@ -1033,7 +1049,10 @@ export class GameSession {
       // Companion reactions to combat and district conditions
       if (this.partyState.companions.length > 0) {
         // Combat reactions
-        const hasCombatWon = turnResult.events.some((e) => e.type === 'combat.entity.defeated');
+        // A defeat event alone fires prematurely mid-melee — combat is won only
+        // when no living hostiles remain (same fix shape as combatEndHook).
+        const hasCombatWon = turnResult.events.some((e) => e.type === 'combat.entity.defeated')
+          && !hasLivingHostiles(this.engine.world);
         const hasCombatLost = turnResult.events.some(
           (e) => e.type === 'combat.entity.defeated' &&
             e.payload.entityId === this.engine.world.playerId,
@@ -1851,7 +1870,14 @@ export class GameSession {
 
   /** Handle /conclude: build finale, generate LLM epilogue, return formatted. */
   async handleConclude(): Promise<string> {
-    const outline = this.buildFinale();
+    // Retry-safe (task_3ddb1c06 companion): re-invoking /conclude after the
+    // campaign is already concluded reuses the existing outline instead of
+    // re-running buildFinale(), which would duplicate the campaign-concluded
+    // chronicle record and re-mutate triggers. This is what makes the
+    // epilogue-fallback copy's "type /conclude again to retry" promise true.
+    const outline = this.campaignStatus === 'completed' && this.finaleOutline
+      ? this.finaleOutline
+      : this.buildFinale();
 
     // Mark all triggers as acknowledged and campaign as completed
     for (const trigger of this.endgameTriggers) {

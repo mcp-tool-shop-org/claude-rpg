@@ -92,7 +92,7 @@ describe('generateFinaleNarration narratorTone forwarding (F-f4f6ac90)', () => {
     const { narrateFinale } = await import('../narrator/finale-narrator.js');
     const mockedNarrateFinale = vi.mocked(narrateFinale);
     mockedNarrateFinale.mockResolvedValueOnce({
-      deterministicSummary: 'done', epilogue: 'end', worldAfter: 'after',
+      deterministicSummary: 'done', epilogue: 'end', worldAfter: 'after', isFallback: false,
     });
     await generateFinaleNarration({
       client: createMockClient(),

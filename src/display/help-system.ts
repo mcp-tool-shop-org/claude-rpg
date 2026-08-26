@@ -2,9 +2,19 @@
 // v1.1: Campaign UX & Product Hardening
 
 import type { ResolutionClass, ArcKind, ArcMomentum } from '@ai-rpg-engine/modules';
+import { getTerminalWidth } from './play-renderer.js';
 
-const DIVIDER = '\u2500'.repeat(60);
-const THIN = '\u00b7'.repeat(60);
+// F-38eb3dec: both were a fixed 60-char divider regardless of terminal
+// size, unlike play-renderer.ts's own dividers (PFE-005). Computed per
+// call (not a module-level constant) so they track the real terminal
+// width, matching play-renderer.ts's makeDivider()/makeThinDivider()
+// pattern.
+function divider(): string {
+  return '\u2500'.repeat(getTerminalWidth());
+}
+function thinDivider(): string {
+  return '\u00b7'.repeat(getTerminalWidth());
+}
 
 // --- Pack Onboarding Data ---
 
@@ -16,7 +26,11 @@ export type PackOnboarding = {
   dangerWarning?: string;
 };
 
-const PACK_ONBOARDING: Record<string, PackOnboarding> = {
+// Exported (F-6c9e02d4) so a drift test can assert this map's key set
+// stays in sync with packs.ts's allPacks ids -- the same "typed/derived
+// against the real source" guard already applied to ARC_KIND_HELP and
+// RESOLUTION_CLASS_LABELS elsewhere in this domain.
+export const PACK_ONBOARDING: Record<string, PackOnboarding> = {
   'chapel-threshold': {
     quickstartTitle: 'Chapel Threshold Quickstart',
     flavorIntro: 'Sacred ground, corrupted below. The dead stir beneath crumbling stones.',
@@ -135,8 +149,12 @@ export function getPackOnboarding(packId: string): PackOnboarding | undefined {
   return PACK_ONBOARDING[packId];
 }
 
-/** Map genre to starter pack ID for first-turn onboarding. */
-const GENRE_TO_PACK: Record<string, string> = {
+/**
+ * Map genre to starter pack ID for first-turn onboarding. Exported
+ * (F-6c9e02d4) for the same drift-test purpose as PACK_ONBOARDING above --
+ * this map's values must stay a subset of packs.ts's allPacks ids.
+ */
+export const GENRE_TO_PACK: Record<string, string> = {
   fantasy: 'chapel-threshold',
   cyberpunk: 'neon-lockbox',
   detective: 'gaslight-detective',
@@ -156,7 +174,7 @@ export function getOnboardingByGenre(genre: string): PackOnboarding | undefined 
 export function renderFirstTurnOrientation(data: PackOnboarding): string {
   const lines: string[] = [];
   lines.push('');
-  lines.push(THIN);
+  lines.push(thinDivider());
   lines.push(`  ${data.flavorIntro}`);
   lines.push('');
   lines.push('  TRY:');
@@ -175,9 +193,9 @@ export function renderFirstTurnOrientation(data: PackOnboarding): string {
 
 export function renderPlayHelp(): string {
   return `
-${DIVIDER}
+${divider()}
   QUICK REFERENCE
-${DIVIDER}
+${divider()}
 
   BASIC ACTIONS
     look / inspect <target>       Examine your surroundings or a target
@@ -208,7 +226,7 @@ ${DIVIDER}
     /sheet                        Character sheet
     /director                     Enter director mode
 
-${DIVIDER}
+${divider()}
 `;
 }
 
@@ -216,9 +234,9 @@ ${DIVIDER}
 
 export function renderLeverageHelp(): string {
   return `
-${DIVIDER}
+${divider()}
   LEVERAGE REFERENCE
-${DIVIDER}
+${divider()}
 
   CURRENCIES (0-100)
     Favor        Earned from positive reputation, resolved pressures, speaking
@@ -266,7 +284,7 @@ ${DIVIDER}
     Heat > 80 risks bounty pressure
     Some actions require minimum reputation with target faction
 
-${DIVIDER}
+${divider()}
 `;
 }
 
@@ -281,9 +299,9 @@ export function renderPackQuickstart(packId: string): string {
 
   const lines: string[] = [];
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push(`  ${data.quickstartTitle.toUpperCase()}`);
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
   lines.push(`  ${data.flavorIntro}`);
   lines.push('');
@@ -301,7 +319,7 @@ export function renderPackQuickstart(packId: string): string {
     lines.push(`  WARNING: ${data.dangerWarning}`);
   }
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
   return lines.join('\n');
 }
@@ -361,9 +379,9 @@ export function renderArcHelp(): string {
   const momentumList = joinWithOr(Object.keys(ARC_MOMENTUM_HELP));
 
   return `
-${DIVIDER}
+${divider()}
   CAMPAIGN ARCS
-${DIVIDER}
+${divider()}
 
   The engine tracks 10 narrative arc kinds based on your actions:
 
@@ -376,7 +394,7 @@ ${kindLines}
     /arcs              View your current arc trajectory
     /status            See arc indicator in strategic snapshot
 
-${DIVIDER}
+${divider()}
 `;
 }
 
@@ -407,9 +425,9 @@ export function renderConcludeHelp(): string {
     .join('\n');
 
   return `
-${DIVIDER}
+${divider()}
   CAMPAIGN CONCLUSIONS
-${DIVIDER}
+${divider()}
 
   When your story reaches critical mass, endgame triggers fire.
   These are one-shot pivotal moments based on 8 resolution classes:
@@ -427,7 +445,7 @@ ${classLines}
     /conclude          Render campaign epilogue (when triggers present)
     /arcs              View arc trajectory leading to conclusion
 
-${DIVIDER}
+${divider()}
 `;
 }
 

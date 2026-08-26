@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { renderCompactStatus } from './status-compact.js';
 import type { StatusData } from '../character/presence.js';
 import type { LeverageState, ScoredMove } from '@ai-rpg-engine/modules';
@@ -136,5 +136,28 @@ describe('renderCompactStatus (F-478cbef8)', () => {
       const result = renderCompactStatus(baseOpts({ suggestedMove: null }));
       expect(result).not.toContain('Suggested:');
     });
+  });
+});
+
+// F-38eb3dec: status-compact.ts's DIVIDER was a fixed 60-char string,
+// unlike play-renderer.ts's own dividers (PFE-005), which adapt to the
+// real terminal width. Mirrors play-renderer-divider.test.ts's assertions.
+describe('renderCompactStatus divider width (F-38eb3dec)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const result = renderCompactStatus(baseOpts());
+    expect(result).toContain('─'.repeat(40));
+    expect(result).not.toContain('─'.repeat(60));
+  });
+
+  it('divider matches a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const result = renderCompactStatus(baseOpts());
+    expect(result).toContain('─'.repeat(120));
+    expect(result).not.toContain('─'.repeat(121));
   });
 });

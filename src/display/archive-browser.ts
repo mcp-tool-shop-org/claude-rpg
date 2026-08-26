@@ -1,6 +1,7 @@
 // archive-browser — render completed campaign archive for terminal display
 
 import type { ResolutionClass } from '@ai-rpg-engine/modules';
+import { getTerminalWidth } from './play-renderer.js';
 
 export type ArchivedCampaign = {
   filename: string;
@@ -14,24 +15,30 @@ export type ArchivedCampaign = {
   relicNames: string[];
 };
 
-const DIVIDER = '─'.repeat(60);
+// F-38eb3dec: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider() pattern.
+function divider(): string {
+  return '─'.repeat(getTerminalWidth());
+}
 
 export function renderArchiveBrowser(campaigns: ArchivedCampaign[]): string {
   if (campaigns.length === 0) {
     return `
-${DIVIDER}
+${divider()}
   CAMPAIGN ARCHIVE
-${DIVIDER}
+${divider()}
   No archived campaigns yet.
   Complete a campaign with /conclude and save to create an archive.
-${DIVIDER}`;
+${divider()}`;
   }
 
   const lines: string[] = [];
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('  CAMPAIGN ARCHIVE');
-  lines.push(DIVIDER);
+  lines.push(divider());
 
   for (let i = 0; i < campaigns.length; i++) {
     const c = campaigns[i];
@@ -55,10 +62,10 @@ ${DIVIDER}`;
   }
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push(`  ${campaigns.length} completed campaign${campaigns.length === 1 ? '' : 's'}`);
   lines.push(`  Use /export md or /export json to export campaign data`);
-  lines.push(DIVIDER);
+  lines.push(divider());
 
   return lines.join('\n');
 }

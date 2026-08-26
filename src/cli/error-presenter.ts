@@ -84,6 +84,11 @@ function presentLoadError(err: Error): ErrorPresentation {
   const isSaveValidation = err instanceof SaveValidationError;
   const isFutureVersion = isSaveValidation && err.message.includes('newer version');
   const isMissingVersion = isSaveValidation && err.message.includes('no recognizable version');
+  // F-c8dd84fe: bin.ts's runLoad() raises this when a save's packId doesn't
+  // resolve via getPackById() (e.g. a renamed/retired starter world). Gets
+  // its own branch so the failing pack id survives into the non-debug
+  // explanation line, instead of falling into the generic bucket below.
+  const isUnknownPack = err.message.includes('unknown pack');
 
   if (isFutureVersion) {
     return {
@@ -101,6 +106,16 @@ function presentLoadError(err: Error): ErrorPresentation {
       explanation: 'The file has no version metadata — it may not be a claude-rpg save.',
       preserved: 'No session was started.',
       nextAction: 'Check the file path, or start a new game.',
+      exitCode: 1,
+    };
+  }
+
+  if (isUnknownPack) {
+    return {
+      headline: 'Unknown character pack',
+      explanation: err.message,
+      preserved: 'No session was started. The save file was not modified.',
+      nextAction: 'The pack this save depends on is not installed in this build. Check for an updated version of claude-rpg, or start a new game.',
       exitCode: 1,
     };
   }

@@ -6,8 +6,15 @@ import type { LeverageState, ScoredMove } from '@ai-rpg-engine/modules';
 import { formatLeverageStatus } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
 import { bold, dim, red, yellow, green, cyan, danger } from '../cli/colors.js';
+import { getTerminalWidth } from './play-renderer.js';
 
-const DIVIDER = dim('\u2500'.repeat(60));
+// F-38eb3dec: was a fixed 60-char divider regardless of terminal size,
+// unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
+// a module-level constant) so it tracks the real terminal width, matching
+// play-renderer.ts's makeDivider() pattern.
+function divider(): string {
+  return dim('\u2500'.repeat(getTerminalWidth()));
+}
 
 export function renderCompactStatus(opts: {
   statusData: StatusData;
@@ -26,10 +33,10 @@ export function renderCompactStatus(opts: {
   const lines: string[] = [];
 
   lines.push('');
-  lines.push(DIVIDER);
+  lines.push(divider());
   const fastLabel = opts.fastMode ? ' (Fast Campaign)' : '';
   lines.push(bold(`  STATUS \u2014 ${situationTag}${fastLabel}`));
-  lines.push(DIVIDER);
+  lines.push(divider());
 
   // Character line
   const titlePart = s.title ? ` "${s.title}"` : '';
@@ -88,7 +95,7 @@ export function renderCompactStatus(opts: {
     lines.push(`  Suggested: ${cyan(suggestedMove.reason)}`);
   }
 
-  lines.push(DIVIDER);
+  lines.push(divider());
   lines.push('');
   return lines.join('\n');
 }

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { renderConcludeHelp, renderArcHelp, ARC_KIND_HELP, ARC_MOMENTUM_HELP } from './help-system.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { renderConcludeHelp, renderArcHelp, renderPlayHelp, getPackOnboarding, renderFirstTurnOrientation, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK } from './help-system.js';
 import { RESOLUTION_CLASS_LABELS } from './archive-browser.js';
+import { allPacks } from '../character/packs.js';
 
 /**
  * F-545cb684: renderConcludeHelp's '/help conclude' prose used to hand-list
@@ -94,5 +95,67 @@ describe('renderArcHelp', () => {
   it('still introduces the list as "10 narrative arc kinds"', () => {
     const text = renderArcHelp();
     expect(text).toContain('10 narrative arc kinds');
+  });
+});
+
+/**
+ * F-6c9e02d4: PACK_ONBOARDING and GENRE_TO_PACK both hand-duplicate the
+ * pack id set that packs.ts's allPacks array is the real source of truth
+ * for -- currently identical (7 of 7), but nothing enforced that. The
+ * still-open F-00ddfc68 (allPacks itself lags 3 installed-but-unregistered
+ * starter packages) means allPacks WILL gain entries later; when it does,
+ * these two in-repo maps must be forced to keep up rather than silently
+ * drifting from allPacks (and each other) the way ARC_KIND_HELP and
+ * RESOLUTION_CLASS_LABELS were once allowed to drift from their real
+ * engine enums (F-204465a3, F-545cb684). This is a minimum floor, not a
+ * fix for F-00ddfc68's own gap: a future allPacks addition still needs a
+ * PACK_ONBOARDING entry (and, per F-6c9e02d4's fix note, may need
+ * GENRE_TO_PACK's Record<string,string> shape rethought if two new packs
+ * share a genre) -- this test only guarantees the addition can't be
+ * forgotten silently.
+ */
+describe('PACK_ONBOARDING / GENRE_TO_PACK drift guard (F-6c9e02d4)', () => {
+  const registeredPackIds = allPacks.map((p) => p.meta.id).sort();
+
+  it('PACK_ONBOARDING has exactly one entry per pack registered in packs.ts allPacks', () => {
+    expect(Object.keys(PACK_ONBOARDING).sort()).toEqual(registeredPackIds);
+  });
+
+  it('GENRE_TO_PACK points only at pack ids registered in packs.ts allPacks, with none missing', () => {
+    expect(Object.values(GENRE_TO_PACK).sort()).toEqual(registeredPackIds);
+  });
+});
+
+// F-38eb3dec: help-system.ts's DIVIDER/THIN were both a fixed 60-char
+// string, unlike play-renderer.ts's own dividers (PFE-005), which adapt to
+// the real terminal width. Mirrors play-renderer-divider.test.ts's
+// assertions. renderPlayHelp exercises DIVIDER; renderFirstTurnOrientation
+// (via a real PACK_ONBOARDING entry) exercises THIN.
+describe('help-system divider width (F-38eb3dec)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('renderPlayHelp divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const help = renderPlayHelp();
+    expect(help).toContain('─'.repeat(40));
+    expect(help).not.toContain('─'.repeat(60));
+  });
+
+  it('renderPlayHelp divider matches a wide terminal width, clamped to 120', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const help = renderPlayHelp();
+    expect(help).toContain('─'.repeat(120));
+    expect(help).not.toContain('─'.repeat(121));
+  });
+
+  it('renderFirstTurnOrientation thin divider matches a narrow terminal width instead of a fixed 60', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const onboarding = getPackOnboarding('chapel-threshold');
+    expect(onboarding).toBeDefined();
+    const output = renderFirstTurnOrientation(onboarding!);
+    expect(output).toContain('·'.repeat(40));
+    expect(output).not.toContain('·'.repeat(60));
   });
 });

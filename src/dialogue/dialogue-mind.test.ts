@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateDialogue } from './dialogue-mind.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState } from '@ai-rpg-engine/core';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
 
 // Mock npc-context so we control the context shape
 vi.mock('./npc-context.js', () => ({
@@ -152,5 +153,52 @@ describe('generateDialogue PBR-002: LLM failure fallback', () => {
 
     expect(result!.speakerName).toBe('unknown-npc');
     vi.restoreAllMocks();
+  });
+});
+
+// F-afb978de: fatal NarrationErrors (auth/bad-request) must surface an actionable
+// userMessage() instead of the indistinguishable generic in-character stall.
+describe('generateDialogue F-afb978de: actionable fatal-error messages', () => {
+  it('should surface the auth userMessage when the client throws a fatal auth NarrationError', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const authErr = new NarrationError({ kind: 'auth', message: 'invalid x-api-key' });
+    const client = makeFailingClient(authErr);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe(userMessage(authErr));
+    expect(result!.text).toContain('ANTHROPIC_API_KEY');
+    // Should NOT be the generic indistinguishable in-character stall.
+    expect(result!.text).not.toBe('The NPC pauses, gathering their thoughts...');
+    warnSpy.mockRestore();
+  });
+
+  it('should keep the generic in-character fallback for non-fatal (retryable) errors', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
+    const client = makeFailingClient(timeoutErr);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('The NPC pauses, gathering their thoughts...');
+    warnSpy.mockRestore();
   });
 });

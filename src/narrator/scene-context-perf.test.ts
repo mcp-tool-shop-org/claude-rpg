@@ -1,37 +1,72 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { WorldState } from '@ai-rpg-engine/core';
 
-describe('scene-context source verification (BR-004)', () => {
-  it('should call getPerceptionLog before the .map() loop, not inside it', () => {
-    // Read the actual source to verify the fix structurally
-    const src = readFileSync(resolve(__dirname, 'scene-context.ts'), 'utf-8');
-
-    // getPerceptionLog should appear BEFORE the .map( call, not inside it
-    const perceptionCallIndex = src.indexOf('getPerceptionLog(');
-    const mapCallIndex = src.indexOf('zoneEntities.map(');
-
-    expect(perceptionCallIndex).toBeGreaterThan(-1);
-    expect(mapCallIndex).toBeGreaterThan(-1);
-    // The perception call should come before the map
-    expect(perceptionCallIndex).toBeLessThan(mapCallIndex);
-
-    // Additionally, getPerceptionLog should NOT appear inside the .map callback
-    const mapBlock = src.slice(mapCallIndex);
-    const closingIndex = findMatchingBrace(mapBlock);
-    const mapBody = mapBlock.slice(0, closingIndex);
-    expect(mapBody).not.toContain('getPerceptionLog(');
-  });
+// F-3d2d5767: the old BR-004 regression test read scene-context.ts's own source
+// text (readFileSync) and checked that 'getPerceptionLog(' appeared textually
+// before 'zoneEntities.map(' — it never called buildSceneContext or counted how
+// many times getPerceptionLog actually ran. A harmless refactor (e.g. extracting
+// the lookup into a differently-named helper that still calls getPerceptionLog
+// exactly once) would fail it on entirely correct code, while a real O(n)
+// regression added *after* the map block would still pass it. Replaced with a
+// behavioral test: spy on getPerceptionLog and assert it is called exactly once
+// regardless of zone entity count — the actual O(1)-vs-O(n) property BR-004 fixed.
+vi.mock('@ai-rpg-engine/modules', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ai-rpg-engine/modules')>();
+  return {
+    ...actual,
+    getPerceptionLog: vi.fn(actual.getPerceptionLog),
+  };
 });
 
-/** Find the index of the closing paren/brace that matches the first opening one. */
-function findMatchingBrace(code: string): number {
-  let depth = 0;
-  let started = false;
-  for (let i = 0; i < code.length; i++) {
-    if (code[i] === '(') { depth++; started = true; }
-    if (code[i] === ')') { depth--; }
-    if (started && depth === 0) return i;
+import { getPerceptionLog } from '@ai-rpg-engine/modules';
+import { buildSceneContext } from './scene-context.js';
+
+const mockedGetPerceptionLog = vi.mocked(getPerceptionLog);
+
+beforeEach(() => {
+  mockedGetPerceptionLog.mockClear();
+});
+
+function makeWorld(zoneEntityCount: number): WorldState {
+  const entities: Record<string, unknown> = {
+    player: { id: 'player', zoneId: 'zone-1', resources: { hp: 10 }, custom: {} },
+  };
+  for (let i = 0; i < zoneEntityCount; i++) {
+    entities[`npc-${i}`] = { id: `npc-${i}`, name: `NPC ${i}`, type: 'npc', zoneId: 'zone-1' };
   }
-  return code.length;
+  return {
+    zones: {
+      'zone-1': { name: 'Town Square', tags: [], neighbors: [], light: 5, noise: 3, stability: 8 },
+    },
+    entities,
+    locationId: 'zone-1',
+    playerId: 'player',
+    modules: {},
+  } as unknown as WorldState;
 }
+
+describe('buildSceneContext BR-004: getPerceptionLog call count', () => {
+  it('should call getPerceptionLog exactly once with several zone entities', () => {
+    const world = makeWorld(25);
+    buildSceneContext(world, [], 'dark fantasy', []);
+    expect(mockedGetPerceptionLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call getPerceptionLog exactly once with zero zone entities', () => {
+    const world = makeWorld(0);
+    buildSceneContext(world, [], 'dark fantasy', []);
+    expect(mockedGetPerceptionLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call getPerceptionLog exactly once even with a large N — locks in O(1), not O(n)', () => {
+    const world = makeWorld(500);
+    buildSceneContext(world, [], 'dark fantasy', []);
+    expect(mockedGetPerceptionLog).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call getPerceptionLog with the world and playerId', () => {
+    const world = makeWorld(3);
+    buildSceneContext(world, [], 'dark fantasy', []);
+    expect(mockedGetPerceptionLog).toHaveBeenCalledWith(world, 'player');
+  });
+});

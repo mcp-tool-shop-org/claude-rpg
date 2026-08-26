@@ -77,7 +77,18 @@ export function computeSessionDelta(
 export function renderSessionDelta(delta: SessionDelta): string {
   const lines: string[] = [];
 
-  if (delta.turnsPlayed === 0 && delta.xpGained === 0) {
+  // F-579e70a8: gate on every field the body below actually renders, not just
+  // turnsPlayed/xpGained — otherwise a session with only e.g. a reputation shift,
+  // a milestone, an injury, or a title change renders as fully empty.
+  const hasAnyContent =
+    delta.turnsPlayed > 0 ||
+    delta.xpGained > 0 ||
+    delta.reputationChanges.length > 0 ||
+    delta.newMilestones > 0 ||
+    delta.newInjuries > 0 ||
+    (!!delta.titleAfter && delta.titleAfter !== delta.titleBefore);
+
+  if (!hasAnyContent) {
     return '';
   }
 

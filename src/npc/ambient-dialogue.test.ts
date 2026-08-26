@@ -77,3 +77,44 @@ describe('generateZoneAmbience (FT-BR-007)', () => {
     expect(lines).toHaveLength(3);
   });
 });
+
+// F-20ec59de: JS `%` preserves the dividend's sign, so a negative seed used to
+// index a template array with pool[negativeIndex] === undefined and throw on
+// the following .replace() call.
+describe('generateAmbientLine F-20ec59de: negative seed safety', () => {
+  it('should not throw and should return a valid line for a negative seed', () => {
+    const npc = makeNpc();
+    expect(() => generateAmbientLine(npc, -1)).not.toThrow();
+    const line = generateAmbientLine(npc, -1);
+    expect(typeof line).toBe('string');
+    expect(line).toContain('Guard Captain');
+  });
+
+  it('should produce deterministic output for the same negative seed', () => {
+    const npc = makeNpc();
+    const a = generateAmbientLine(npc, -42);
+    const b = generateAmbientLine(npc, -42);
+    expect(a).toBe(b);
+  });
+
+  it('should not throw for a negative seed that also triggers a belief overlay', () => {
+    const npc = makeNpc({ beliefs: { 'player.trust': 'low' } });
+    expect(() => generateAmbientLine(npc, -7)).not.toThrow();
+    const line = generateAmbientLine(npc, -7);
+    expect(line).toContain('Guard Captain');
+  });
+});
+
+describe('generateZoneAmbience F-20ec59de: negative seed safety', () => {
+  it('should not throw when effectiveSeed + i goes negative for some NPCs', () => {
+    const npcs = [
+      makeNpc({ name: 'Alice', personality: 'friendly' }),
+      makeNpc({ name: 'Bob', personality: 'merchant' }),
+    ];
+    expect(() => generateZoneAmbience(npcs, -2)).not.toThrow();
+    const lines = generateZoneAmbience(npcs, -2);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('Alice');
+    expect(lines[1]).toContain('Bob');
+  });
+});

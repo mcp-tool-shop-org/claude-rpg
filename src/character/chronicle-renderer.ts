@@ -166,7 +166,10 @@ function renderBardic(
 
 function renderRecordBardic(record: CampaignRecord, name: string): string {
   const openers = BARDIC_OPENERS[record.category] ?? BARDIC_OPENERS.default;
-  const opener = openers[record.tick % openers.length].replace('{name}', name);
+  // F-20ec59de sibling: normalize the modulo to always be non-negative — same
+  // bare-modulo-on-a-plain-number pattern as generateAmbientLine's seed bug.
+  const openerIndex = ((record.tick % openers.length) + openers.length) % openers.length;
+  const opener = openers[openerIndex].replace('{name}', name);
   const desc = record.description.charAt(0).toLowerCase() + record.description.slice(1);
   return `  ${capitalize(opener)} ${desc}.`;
 }

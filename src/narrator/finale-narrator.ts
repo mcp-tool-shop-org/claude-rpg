@@ -5,6 +5,8 @@ import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import { formatFinaleForTerminal } from '@ai-rpg-engine/campaign-memory';
 import type { ClaudeClient } from '../claude-client.js';
 import { FINALE_SYSTEM, buildFinalePrompt } from '../prompts/finale-prompt.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { classifyError } from '../llm/claude-adapter.js';
 
 export type FinaleNarrationResult = {
   epilogue: string;
@@ -30,9 +32,15 @@ export async function narrateFinale(
       maxTokens: 400,
     });
     epilogue = result.text.trim();
-  } catch {
-    // Fallback: no LLM epilogue, just the deterministic summary
-    epilogue = '';
+  } catch (err) {
+    // F-afb978de: classify to a NarrationError so fatal (auth/bad-request) errors
+    // can surface userMessage()'s actionable guidance instead of a silently blank
+    // epilogue with no explanation. Non-fatal kinds keep the deterministic-only fallback.
+    const narrationErr = err instanceof NarrationError ? err : classifyError(err);
+    console.warn(
+      `[finale-narrator] LLM epilogue generation failed: ${narrationErr.message}. Falling back to deterministic summary only.`,
+    );
+    epilogue = narrationErr.fatal ? userMessage(narrationErr) : '';
   }
 
   const worldAfter = buildWorldAfter(outline);

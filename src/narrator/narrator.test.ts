@@ -253,6 +253,90 @@ describe('parseNarrationPlan PBR-004: observability logging', () => {
   });
 });
 
+// === F-7815df9e: game-core seam contract — chronicleContext ===
+describe('narrateScene F-7815df9e: chronicleContext seam', () => {
+  it('should fold opts.chronicleContext into the prompt sent to the client when present', async () => {
+    const client = makeClient('plain text fallback');
+    const opts = makeOpts({ client, chronicleContext: 'The player once spared the bandit chief.' });
+
+    await narrateScene(opts);
+
+    expect(client.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('The player once spared the bandit chief.'),
+      }),
+    );
+  });
+
+  it('should not add chronicle text to the prompt when chronicleContext is absent', async () => {
+    const client = makeClient('plain text fallback');
+    const opts = makeOpts({ client });
+
+    await narrateScene(opts);
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain('Chronicle');
+  });
+});
+
+// === F-304fc328: LLM call sites must not throw uncaught ===
+describe('narrateScene F-304fc328: LLM failure fallback', () => {
+  it('should return a fallback NarrationResult instead of throwing when generate() rejects', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const opts = makeOpts({ client });
+
+    const result = await narrateScene(opts);
+
+    expect(result.narration).toEqual(expect.any(String));
+    expect(result.narration.length).toBeGreaterThan(0);
+    expect(result.plan).toBeNull();
+    expect(result.sceneContext).toBeDefined();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('should return a fallback NarrationResult instead of throwing when generateStream() rejects', async () => {
+    const chunks: string[] = [];
+    const client: ClaudeClient = {
+      generate: vi.fn(),
+      generateStream: vi.fn().mockRejectedValue(new Error('stream disconnected')),
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const opts = makeOpts({ client, onChunk: (c) => chunks.push(c) });
+
+    const result = await narrateScene(opts);
+
+    expect(result.narration).toEqual(expect.any(String));
+    expect(result.narration.length).toBeGreaterThan(0);
+    expect(result.plan).toBeNull();
+    expect(result.sceneContext).toBeDefined();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+describe('narrateSceneLegacy F-304fc328: LLM failure fallback', () => {
+  it('should return a fallback NarrationResult instead of throwing when generate() rejects', async () => {
+    const client: ClaudeClient = {
+      generate: vi.fn().mockRejectedValue(new Error('API down')),
+    };
+    const engine = createGame();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateSceneLegacy(client, engine.world, [], 'dark fantasy', []);
+
+    expect(result.narration).toEqual(expect.any(String));
+    expect(result.narration.length).toBeGreaterThan(0);
+    expect(result.plan).toBeNull();
+    expect(result.sceneContext).toBeDefined();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
 // === FT-BR-004: Streaming-friendly narration ===
 describe('narrateScene streaming with LEGACY prompt (FT-BR-004)', () => {
   it('should use NARRATE_SYSTEM_LEGACY when streaming', async () => {

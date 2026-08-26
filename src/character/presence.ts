@@ -160,10 +160,19 @@ export function buildNPCStancePresence(
   return buildPresence(profile, itemCatalog, stance);
 }
 
-/** Build structured status data for terminal display. */
+/**
+ * Build structured status data for terminal display.
+ *
+ * F-0d9b451a: buildStatusData only receives CharacterProfile + ItemCatalog, so it
+ * has no access to the live WorldState the player's active status effects live on.
+ * Callers that DO have a WorldState can resolve the same way scene-context.ts does
+ * — `(player?.statuses ?? []).map((s) => s.statusId)` — and pass the result here;
+ * callers without one keep the empty-array default (backward compatible).
+ */
 export function buildStatusData(
   profile: CharacterProfile,
   itemCatalog: ItemCatalog,
+  statuses: string[] = [],
 ): StatusData {
   const level = computeLevel(profile.progression.xp);
   const injuries = getActiveInjuries(profile);
@@ -189,6 +198,6 @@ export function buildStatusData(
     weaponName: weaponItem?.name,
     armorName: armorItem?.name,
     injuryTags,
-    statuses: [],
+    statuses,
   };
 }

@@ -137,6 +137,7 @@ export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig
       system: string;
       prompt: string;
       maxTokens?: number;
+      validator?: (data: unknown) => void;
     }): Promise<StructuredResult<T>> {
       const response = await callApi(opts.system, opts.prompt, opts.maxTokens ?? defaultMaxTokens);
       const text = extractText(response);
@@ -146,12 +147,25 @@ export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig
         return { ok: false, data: null, raw: text, error: 'No JSON found in response' };
       }
 
+      let data: T;
       try {
-        const data = JSON.parse(jsonMatch[1]) as T;
-        return { ok: true, data, raw: text };
+        data = JSON.parse(jsonMatch[1]) as T;
       } catch (e) {
         return { ok: false, data: null, raw: text, error: `JSON parse error: ${e}` };
       }
+
+      // F-853904a0: honor the optional validator exactly like the legacy
+      // createClaudeClient does (claude-client.ts) — reject bad shapes early.
+      if (opts.validator) {
+        try {
+          opts.validator(data);
+        } catch (validationErr) {
+          const msg = validationErr instanceof Error ? validationErr.message : 'Validation failed';
+          return { ok: false, data: null, raw: text, error: msg };
+        }
+      }
+
+      return { ok: true, data, raw: text };
     },
   };
 }

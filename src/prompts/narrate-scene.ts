@@ -93,6 +93,12 @@ export type SceneNarrationInput = {
   opportunityContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  /**
+   * F-7815df9e (game-core seam contract): compact, pre-condensed long-term-memory
+   * summary drawn from the campaign chronicle (e.g. past significant deeds).
+   * Folded into the prompt as its own section when present.
+   */
+  chronicleContext?: string;
 };
 
 export function buildNarratePrompt(input: SceneNarrationInput): string {
@@ -113,6 +119,12 @@ export function buildNarratePrompt(input: SceneNarrationInput): string {
     ? `\nPresentation state: ${input.presentationState}`
     : '';
 
+  // F-7815df9e (game-core seam contract): compact long-term-memory section,
+  // rendered only when game-core supplies condensed chronicle context.
+  const chronicle = input.chronicleContext
+    ? `\n\nChronicle (long-term memory): ${input.chronicleContext}`
+    : '';
+
   return `${input.isNewZone ? 'The player just entered a new area.' : 'The player is still in the same area.'}
 
 Zone: ${input.zoneName} [${input.zoneTags.join(', ')}]${input.districtDescriptor ? `\nDistrict: ${input.districtDescriptor}` : ''}
@@ -127,5 +139,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
-Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${recent}`;
+Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.activePressures && input.activePressures.length > 0 ? `\n\nWorld pressures:\n${input.activePressures.map((p) => `  - ${p}`).join('\n')}` : ''}${stateHint}${chronicle}${recent}`;
 }

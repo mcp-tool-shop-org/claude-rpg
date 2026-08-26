@@ -959,7 +959,7 @@ describe('ambient NPC dialogue (F-6e75fa93)', () => {
     expect(engine.world.locationId).toBe('chapel-entrance');
     expect(mockedGenerateZoneAmbience).toHaveBeenCalledTimes(1);
     expect(mockedGenerateAmbientLine).not.toHaveBeenCalled();
-    const [npcs] = mockedGenerateZoneAmbience.mock.calls[0] as [{ name: string }[]];
+    const [npcs] = mockedGenerateZoneAmbience.mock.calls[0];
     expect(npcs.map((n) => n.name).sort()).toEqual(['Sister Maren', 'Suspicious Pilgrim']);
     expect(result.ambientLines).toHaveLength(2);
   });

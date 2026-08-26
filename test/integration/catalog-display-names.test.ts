@@ -112,7 +112,10 @@ describe('full-session regression sweep: no raw catalog id ever reaches player-f
   it('a catalog-backed profile whose archetype/background id differ from their display names never leaks a raw id across several real turns (covers bin.ts/game-state.ts-derived rendering paths end-to-end)', async () => {
     const profile = makeProfile('penitent-knight', 'oath-breaker');
     const h = createHarness({
-      gameOpts: { profile, itemCatalog: pack.itemCatalog },
+      // Coordinator stitch (wave 18): buildCatalog is the load-bearing input
+      // here -- without it the session's raw-id output is the DESIGNED
+      // no-catalog fallback, not a leak. bin.ts supplies it in production.
+      gameOpts: { profile, itemCatalog: pack.itemCatalog, buildCatalog: pack.buildCatalog },
       clientOpts: { narration: 'Dust motes drift through broken glass.' },
     });
 

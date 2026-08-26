@@ -13,6 +13,7 @@ import {
   loadChronicleFromSession,
   loadNpcAgencyFromSession,
   loadObligationsFromSession,
+  loadNpcConversationsFromSession,
   loadConsequenceChainsFromSession,
   loadPartyFromSession,
   loadEconomiesFromSession,
@@ -166,6 +167,9 @@ export async function resumeHarness(
     history: TurnHistory.fromJSON(savedSession.turnHistory),
     packId: savedSession.packId,
     campaignStatus: savedSession.campaignStatus ?? 'active',
+    // Coordinator stitch (wave 18): mirror bin.ts's conversation-memory
+    // restoration (F-462792bb, Director ruling: persisted).
+    npcConversations: loadNpcConversationsFromSession(savedSession),
     ...opts.gameOpts,
   });
 

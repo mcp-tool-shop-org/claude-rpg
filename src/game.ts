@@ -1072,6 +1072,11 @@ export class GameSession {
             audioCalls: [],
             tick: bookkeeping.tick,
             profileHints: bookkeeping.profileHints,
+            // Fatal-turn bookkeeping: the recorded narration is the fatal
+            // fallback sentinel (the narrator degraded), and no presentation
+            // inference ran on this path.
+            isFallback: true,
+            justDied: false,
           });
           await this.checkAutosave();
           // F-79a25863 (seam contract): narrateScene() threw before
@@ -1345,10 +1350,10 @@ export class GameSession {
     const isContinuation = normalized === 'continue' || normalized === 'get up' || normalized === 'rise';
     if (isContinuation) {
       this.immersion.stateMachine.transition('exploration', 'player-continue');
-      return '\n  You steady yourself and rise, the ground steady beneath you once more.\n';
+      return '\n  You steady yourself and rise. The world resumes its breath.\n';
     }
     return renderDeathOutput(
-      'You are down. The world holds its breath.\n\nType "continue" when you are ready to get back up.',
+      'You are down. The world holds its breath.',
       this.profile?.build.name,
     );
   }

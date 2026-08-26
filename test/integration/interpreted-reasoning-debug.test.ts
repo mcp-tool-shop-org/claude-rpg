@@ -15,15 +15,24 @@
 
 import { describe, it, expect } from 'vitest';
 import { createHarness } from '../helpers/game-harness.js';
-import { createDebugLogger } from '../../src/game/debug-logger.js';
+import { createDebugLogger, createTestLogger } from '../../src/game/debug-logger.js';
 
 describe('interpreted.reasoning wire-into---debug (F-8c64ade6, Coordinator Brief R3 = branch A)', () => {
-  it('red in-worktree, green expected at merge: a successful high-confidence action surfaces interpreted.reasoning as a debug-only trailer when --debug is on', async () => {
-    const h = createHarness({ gameOpts: { debugLogger: createDebugLogger(true) } });
+  it('a successful high-confidence action surfaces interpreted.reasoning through the debug logger when --debug is on', async () => {
+    // Coordinator stitch (wave 18): the approved design (F-8c64ade6 branch A)
+    // routes reasoning through DebugLogger.debug('interpret', ...) -- stderr
+    // diagnostics, NOT an in-output trailer -- so the proof reads the
+    // captured entries via createTestLogger(), not the rendered screen.
+    const logger = createTestLogger();
+    const h = createHarness({ gameOpts: { debugLogger: logger } });
     // Fast-path reasoning for a bare "look around" with no target
     // (action-interpreter.ts:121): reasoning = 'Look around'.
-    const output = await h.play('look around');
-    expect(output).toContain('Look around');
+    await h.play('look around');
+    const entry = logger
+      .getEntries()
+      .find((e) => e.subsystem === 'interpret' && e.message === 'action-reasoning');
+    expect(entry).toBeDefined();
+    expect(entry?.data?.reasoning).toBe('Look around');
   });
 
   it('the more important negative case: the same successful action shows NO reasoning trailer when debug mode is off, protecting the non-debug case from new noise', async () => {

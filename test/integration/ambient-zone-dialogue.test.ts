@@ -41,9 +41,17 @@ import { createHarness } from '../helpers/game-harness.js';
 const PILGRIM_NAME = 'Suspicious Pilgrim';
 const SISTER_NAME = 'Sister Maren';
 
-/** True if any line in `output` opens with an ambient-dialogue-shaped "{ExactName} <verb>..." sentence for one of the zone's real NPCs. */
+/** Strip ANSI + the renderer's dim '· ' bullet so a line can be matched by its bare ambient sentence. */
+function normalizeLine(l: string): string {
+  return l
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .trim()
+    .replace(/^·\s*/, '');
+}
+
+/** True if any line in `output` opens with an ambient-dialogue-shaped "{ExactName} <verb>..." sentence for one of the zone's real NPCs (the renderer prefixes '  · ' and dim styling — see play-renderer.ts). */
 function hasAmbientLineFor(output: string, ...names: string[]): boolean {
-  const lines = output.split('\n').map((l) => l.trim());
+  const lines = output.split('\n').map(normalizeLine);
   return lines.some((l) => names.some((name) => l.startsWith(`${name} `)));
 }
 
@@ -52,8 +60,12 @@ describe('ambient zone dialogue wiring (F-6f33a480)', () => {
     const h = createHarness();
     // chapel-entrance (the starting zone) has both Suspicious Pilgrim and
     // Sister Maren -- generateZoneAmbience()'s own 2+ NPC gate is satisfied
-    // with no fixture setup needed.
-    const output = await h.play('look around');
+    // with no fixture setup needed. Coordinator stitch (wave 18): the shipped
+    // cadence fires on ZONE ENTRY or every 5th quiet turn -- a single
+    // stationary turn is deliberately silent -- so drive a real zone entry:
+    // step out to the empty alcove and back into the 2-NPC entrance.
+    await h.play('go to chapel-alcove');
+    const output = await h.play('go to chapel-entrance');
 
     expect(hasAmbientLineFor(output, PILGRIM_NAME, SISTER_NAME)).toBe(true);
 
@@ -61,7 +73,7 @@ describe('ambient zone dialogue wiring (F-6f33a480)', () => {
     // section, distinct from the status/zone-exits lines rather than
     // interleaved inside them.
     const lines = output.split('\n');
-    const ambientIdx = lines.findIndex((l) => l.trim().startsWith(`${PILGRIM_NAME} `) || l.trim().startsWith(`${SISTER_NAME} `));
+    const ambientIdx = lines.findIndex((l) => normalizeLine(l).startsWith(`${PILGRIM_NAME} `) || normalizeLine(l).startsWith(`${SISTER_NAME} `));
     const zoneIdx = lines.findIndex((l) => l.includes('Location:'));
     if (ambientIdx !== -1 && zoneIdx !== -1) {
       expect(ambientIdx).not.toBe(zoneIdx);

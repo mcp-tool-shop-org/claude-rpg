@@ -628,7 +628,6 @@ function buildAmbientNpcInfo(world: WorldState, npc: EntityState): AmbientNpcInf
     name: npc.name,
     personality: deriveNpcPersonality(npc),
     beliefs,
-    tags: npc.tags,
   };
 }
 

@@ -264,7 +264,7 @@ export function renderWelcome(title: string, tone?: string): string {
  */
 export function renderDeathScreen(opts: { narration: string; characterName?: string }): string {
   const rule = critical('═'.repeat(getTerminalWidth()));
-  const headline = opts.characterName ? `${opts.characterName} HAS FALLEN` : 'YOUR STORY ENDS HERE';
+  const headline = opts.characterName ? `${opts.characterName} HAS FALLEN` : 'YOU HAVE FALLEN';
 
   const parts: string[] = [];
   parts.push('');
@@ -276,7 +276,7 @@ export function renderDeathScreen(opts: { narration: string; characterName?: str
   parts.push('');
   parts.push(dim('─'.repeat(getTerminalWidth())));
   parts.push(hint('  Type "continue" when you are ready to rise.'));
-  parts.push(hint('  "save" and "quit" are still available.'));
+  parts.push(hint('  "quit" will save and exit.'));
   parts.push('');
   return parts.join('\n');
 }

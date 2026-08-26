@@ -37,10 +37,12 @@ export function createFakeReadline(answers: string[]): FakeReadline {
   const queue = [...answers];
   const consumed: string[] = [];
 
-  const fake: Partial<ReadlineInterface> & {
-    consumed: string[];
-    remaining: string[];
-  } = {
+  // Typed structurally rather than as Partial<ReadlineInterface>: the real
+  // Interface's question() is overloaded (with an Abortable variant this
+  // double never needs), so satisfying it verbatim is impossible for a
+  // minimal stub — the unknown-mediated cast at the return is the same
+  // escape the repo's mockStream double already uses (F-0b96939a).
+  const fake = {
     question(_prompt: string, callback: (answer: string) => void): void {
       const answer = queue.length > 0 ? queue.shift()! : '';
       consumed.push(answer);
@@ -62,5 +64,5 @@ export function createFakeReadline(answers: string[]): FakeReadline {
     },
   };
 
-  return fake as FakeReadline;
+  return fake as unknown as FakeReadline;
 }

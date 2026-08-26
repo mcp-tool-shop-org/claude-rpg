@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createProfile } from '@ai-rpg-engine/character-profile';
 import { createHarness } from '../helpers/game-harness.js';
 import { NarrationError } from '../../src/llm/claude-errors.js';
+import { FALLBACK_NARRATION_REPEATED } from '../../src/narrator/narrator.js';
 import type { McpToolCall } from '../../src/runtime/audio-bridge.js';
 import { getPackById } from '../../src/character/packs.js';
 import { renderConcludeOutput } from '../../src/game/game-presenter.js';
@@ -163,8 +164,10 @@ describe('turn pipeline — narration failure', () => {
     expect(out).toContain('The scene holds its breath');
 
     // A subsequent turn still works — the failure did not corrupt the session.
+    // F-940cd4d0: as the 2nd consecutive fallback it renders the repeat-aware
+    // outage message, not the isolated-hiccup text turn 1 got above.
     const out2 = await h.play('look around');
-    expect(out2).toContain('The scene holds its breath');
+    expect(out2).toContain(FALLBACK_NARRATION_REPEATED);
 
     // Engine truth is unaffected by the narration fallback: 'look' never
     // changes location, the engine tick still advances exactly once per

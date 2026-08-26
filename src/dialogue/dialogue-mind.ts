@@ -67,11 +67,12 @@ export type DialogueResult = {
  * 2. Buffer ownership: keyed per-NPC (`Map<string, ConversationExchange[]>`),
  *    never a single flat shared list — a flat list would leak one NPC's
  *    lines into an unrelated NPC's conversation in the same session.
- *    In-memory only (e.g. on GameSession), NOT part of SavedSession — losing
- *    continuity across a save/reload is an acceptable graceful degradation.
+ *    Persisted via SavedSession.npcConversations (Director ruling, wave 18)
+ *    behind a shape-guarded loader (loadNpcConversationsFromSession) — an
+ *    old or malformed save degrades to an empty map, never a crash.
  * 3. Growth cap: cap each per-NPC array at push time, oldest-out, at
- *    MAX_STORED_EXCHANGES = 10 (~2x formatConversationHistory's own 5-read
- *    window) even though the read side already self-limits.
+ *    20 entries (4x formatConversationHistory's own 5-read window; the
+ *    storage cap bounds save size, the read side self-limits the prompt).
  * 4. Never record a fallback exchange: skip pushing when
  *    `DialogueResult.isFallback === true` (see that field's own doc comment
  *    above) — feeding a hardcoded stall line back in as "the NPC's prior

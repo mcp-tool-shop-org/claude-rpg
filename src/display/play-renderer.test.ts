@@ -300,14 +300,19 @@ describe('renderDeathScreen (F-7484bd2e, SLATE-6, director ruling R3: setback no
 
   it('falls back to a generic headline when no characterName is given', () => {
     const output = renderDeathScreen({ narration: 'Darkness takes you.' });
-    expect(output).toContain('YOUR STORY ENDS HERE');
+    // Coordinator stitch (wave 18): setback-consistent fallback — the story
+    // does not end on a combat loss, so the headline must not claim it does.
+    expect(output).toContain('YOU HAVE FALLEN');
+    expect(output).not.toContain('STORY ENDS');
   });
 
-  it('offers a continue-first affordance (a setback, not an ending) and notes save/quit remain available', () => {
+  it('offers a continue-first affordance (a setback, not an ending) and only promises real commands', () => {
     const output = renderDeathScreen({ narration: 'Darkness takes you.' });
     expect(output).toContain('"continue"');
-    expect(output).toContain('"save"');
-    expect(output).toContain('"quit"');
+    // Coordinator stitch (wave 18): no dispatchable "save" command exists —
+    // saving happens on quit/autosave, so the copy promises exactly that.
+    expect(output).toContain('"quit" will save and exit.');
+    expect(output).not.toContain('"save" and "quit"');
   });
 
   it('does not point at a nonexistent in-game "load" command (bin.ts has no such dispatchable verb)', () => {

@@ -8,6 +8,7 @@ on:
       - "scripts/**"
       - "package.json"
       - "tsconfig.json"
+      - "tsconfig.test.json"
       - "vitest.config.ts"
       - ".github/workflows/**"
   pull_request:
@@ -17,6 +18,7 @@ on:
       - "scripts/**"
       - "package.json"
       - "tsconfig.json"
+      - "tsconfig.test.json"
       - "vitest.config.ts"
       - ".github/workflows/**"
   workflow_dispatch:

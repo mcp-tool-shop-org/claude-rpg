@@ -635,7 +635,11 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     // stateMachine.current, which must already agree -- to build narration context.
     // Before this method existed, a bare `stateMachine.current` read at this point in
     // the turn would still say 'exploration'.
-    expect(result).toBe('combat');
+    // F-f3781f2a/SLATE-6: broadened from a bare PresentationState to the full
+    // {from, to, trigger} StateTransition -- `.to` is what callers previously got back
+    // directly; `.from` is what a death-framing consumer additionally needs to derive
+    // the death edge (`to === 'menu' && from !== 'menu'`) without a second mechanism.
+    expect(result).toEqual({ from: 'exploration', to: 'combat', trigger: 'attack' });
     expect(runtime.stateMachine.current).toBe('combat');
   });
 
@@ -647,7 +651,7 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     // Mirrors the fixed call order: the caller infers+transitions first (for
     // narration), THEN processPresentation runs with the same engine/events/verb.
     const inferred = runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
-    expect(inferred).toBe('combat');
+    expect(inferred).toEqual({ from: 'exploration', to: 'combat', trigger: 'attack' });
 
     await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
 
@@ -707,7 +711,9 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     // Same ordered pair as production: the caller infers+transitions before building
     // narration context, then processPresentation runs.
     const inferred = runtime.inferAndTransition(engine, combatEvents, 'attack');
-    expect(inferred).toBe('combat');
+    // Already 'combat' going in (session-restore seed) and still 'combat' coming out --
+    // from === to here, unlike the combat-entry case above, and the shape must still hold.
+    expect(inferred).toEqual({ from: 'combat', to: 'combat', trigger: 'attack' });
     await runtime.processPresentation(engine, combatEvents, 'attack');
 
     const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
@@ -724,6 +730,127 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     expect(runtime.stateMachine.current).toBe('combat');
     const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
     expect(combatStarts).toHaveLength(1);
+  });
+});
+
+// ─── F-f3781f2a / SLATE-6: death dispatch must be EDGE-triggered off the state
+// machine's own from/to transition, not LEVEL-triggered off a raw
+// isPlayerDefeatEvent(...) || isPlayerAtZeroHp(...) OR-check -- the old gate re-fired
+// the 'death' hookPoint every subsequent turn the player's hp stayed at/below zero.
+// inferAndTransition() itself is broadened to return the full {from, to, trigger}
+// StateTransition (not just `to`) so a death-framing consumer (game-core) can derive
+// the same edge this fix uses internally: `justDied = to === 'menu' && from !== 'menu'`. ───
+
+describe('immersion-runtime: inferAndTransition return shape + edge-triggered death gate (F-f3781f2a/SLATE-6)', () => {
+  const makeWorld = (hp: number) =>
+    ({
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: { p1: { name: 'Hero', resources: { hp }, statuses: [] } },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+    }) as any;
+
+  it('inferAndTransition returns a {from, to, trigger} StateTransition on a death turn', () => {
+    const world = makeWorld(10);
+    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+
+    // Get into 'combat' first so `from` is observably not the initial 'exploration'
+    // default -- matches the routed finding's test sketch shape
+    // {from:'combat',to:'menu',trigger:'attack'}.
+    runtime.inferAndTransition(engine, [{ type: 'combat.contact.hit', payload: {} }] as any, 'attack');
+    expect(runtime.stateMachine.current).toBe('combat');
+
+    engine.tick = 2;
+    const result = runtime.inferAndTransition(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      'attack',
+    );
+
+    expect(result).toEqual({ from: 'combat', to: 'menu', trigger: 'attack' });
+    expect(runtime.stateMachine.current).toBe('menu');
+  });
+
+  it('fires the death hookPoint exactly once on the turn death is entered', async () => {
+    const world = makeWorld(10);
+    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      'attack',
+    );
+
+    expect(runtime.stateMachine.current).toBe('menu');
+    const deathFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'death');
+    expect(deathFires).toHaveLength(1);
+  });
+
+  it('does NOT re-fire the death hookPoint on a second consecutive turn with hp still 0 and no new defeat event (repeat-fire regression)', async () => {
+    const world = makeWorld(0); // player already at 0 hp -- hazard-style death, no event needed (F-e57d6a60)
+    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+
+    // Turn 1: hp is already 0 with no defeat event at all -- isPlayerAtZeroHp alone
+    // resolves hasDeath, mirroring F-e57d6a60's hazard-death path.
+    await runtime.processPresentation(engine, [], 'wait');
+    expect(runtime.stateMachine.current).toBe('menu');
+    let deathFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'death');
+    expect(deathFires).toHaveLength(1);
+    fireSpy.mockClear();
+
+    // Turn 2: hp is STILL 0 (nothing revived the player) and there's still no new
+    // defeat event. The OLD level-triggered gate (isPlayerDefeatEvent || isPlayerAtZeroHp)
+    // would re-fire here every turn indefinitely; the new edge-triggered gate must not,
+    // because priorState is already 'menu' going into this turn.
+    engine.tick = 2;
+    await runtime.processPresentation(engine, [], 'wait');
+    expect(runtime.stateMachine.current).toBe('menu');
+    deathFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'death');
+    expect(deathFires).toHaveLength(0);
+  });
+
+  it('fires the death hookPoint again on a fresh death after an intervening non-menu turn', async () => {
+    const world = makeWorld(0);
+    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+
+    // Turn 1: initial death.
+    await runtime.processPresentation(engine, [], 'wait');
+    expect(runtime.stateMachine.current).toBe('menu');
+    fireSpy.mockClear();
+
+    // Intervening turn: the player is revived (hp restored above 0) and no death
+    // signal fires, so the state machine leaves 'menu'.
+    world.entities.p1.resources.hp = 10;
+    engine.tick = 2;
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'world.zone.entered', payload: {} }] as any,
+      'look',
+    );
+    expect(runtime.stateMachine.current).not.toBe('menu');
+    const deathFiresAfterRevive = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'death');
+    expect(deathFiresAfterRevive).toHaveLength(0);
+    fireSpy.mockClear();
+
+    // Turn 3: a fresh, later death must fire the hookPoint again -- the edge-triggered
+    // gate must not have "used up" its one firing permanently.
+    engine.tick = 3;
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      'attack',
+    );
+    expect(runtime.stateMachine.current).toBe('menu');
+    const deathFiresOnFreshDeath = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'death');
+    expect(deathFiresOnFreshDeath).toHaveLength(1);
   });
 });
 

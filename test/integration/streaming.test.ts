@@ -104,7 +104,7 @@ describe('streaming: fallback to non-streaming', () => {
 // ─── Stream Interruption ─────────────────────────────────────
 
 describe('streaming: interruption handling', () => {
-  it('interrupted stream throws but does not corrupt engine state', async () => {
+  it('interrupted stream degrades to fallback narration without corrupting engine state', async () => {
     const engine = createGame();
     const history = new TurnHistory();
     const initialZone = engine.world.locationId;
@@ -116,14 +116,14 @@ describe('streaming: interruption handling', () => {
     });
 
     const chunks: string[] = [];
-    // executeTurn should propagate the error (narration failure)
-    await expect(
-      executeTurn({
-        engine, client, history,
-        playerInput: 'look', tone: 'dark fantasy',
-        onNarrationChunk: (chunk) => { chunks.push(chunk); },
-      }),
-    ).rejects.toThrow();
+    // F-304fc328 contract: a mid-stream transport failure is non-fatal — the
+    // narrator returns the fallback narration instead of throwing.
+    const result = await executeTurn({
+      engine, client, history,
+      playerInput: 'look', tone: 'dark fantasy',
+      onNarrationChunk: (chunk) => { chunks.push(chunk); },
+    });
+    expect(result.narration).toContain('The scene holds its breath');
 
     // Some chunks were emitted before interruption
     expect(chunks.length).toBeGreaterThan(0);
@@ -132,8 +132,11 @@ describe('streaming: interruption handling', () => {
     // Engine state is intact (look doesn't change state, but zone is preserved)
     expect(engine.world.locationId).toBe(initialZone);
 
-    // History was not updated (turn didn't complete)
-    expect(history.toJSON().turns).toHaveLength(0);
+    // The turn completed with the fallback — history records it as a real
+    // turn whose narration is the degraded text, not the partial stream.
+    const turns = history.toJSON().turns;
+    expect(turns).toHaveLength(1);
+    expect(turns[0].narration).toContain('The scene holds its breath');
   });
 });
 

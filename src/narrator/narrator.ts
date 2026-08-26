@@ -5,6 +5,7 @@ import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { NarrationPlan, PresentationState } from '@ai-rpg-engine/presentation';
 import { isValidNarrationPlan } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient, StreamCallback } from '../claude-client.js';
+import { NarrationError } from '../llm/claude-errors.js';
 import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt } from '../prompts/narrate-scene.js';
 import { buildSceneContext, type SceneContext } from './scene-context.js';
 
@@ -121,6 +122,11 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
       sceneContext,
     };
   } catch (err) {
+    // Fatal kinds (auth/bad-request) rethrow: retrying can never succeed, and the
+    // per-turn presenter surfaces an actionable message — swallowing them here
+    // would make a bad API key indistinguishable from an in-fiction hiccup
+    // (the exact failure F-afb978de fixed for dialogue/finale).
+    if (err instanceof NarrationError && err.fatal) throw err;
     console.warn(
       `[narrator] narrateScene: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
     );
@@ -165,6 +171,8 @@ export async function narrateSceneLegacy(
       sceneContext,
     };
   } catch (err) {
+    // Same fatal-rethrow contract as narrateScene above.
+    if (err instanceof NarrationError && err.fatal) throw err;
     console.warn(
       `[narrator] narrateSceneLegacy: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
     );

@@ -140,11 +140,15 @@ describe('turn pipeline — narration failure', () => {
       clientOpts: { generateFailure: 'timeout' },
     });
 
-    // The turn should not crash — it should either surface a fallback or throw
-    // a NarrationError that the caller can handle. Current behavior: throws.
-    // This test documents the current behavior and will be updated when
-    // game.ts catches NarrationErrors at the processInput boundary.
-    await expect(h.play('look around')).rejects.toThrow(NarrationError);
+    // F-304fc328 contract: non-fatal narration failures (timeout/rate-limit/
+    // transport) degrade to a fallback narration instead of throwing — the
+    // turn resolves and play can continue.
+    const out = await h.play('look around');
+    expect(out).toContain('The scene holds its breath');
+
+    // A subsequent turn still works — the failure did not corrupt the session.
+    const out2 = await h.play('look around');
+    expect(out2).toContain('The scene holds its breath');
   });
 
   it('auth failure throws fatal NarrationError', async () => {
@@ -161,20 +165,17 @@ describe('turn pipeline — narration failure', () => {
     }
   });
 
-  it('rate-limit failure throws retryable NarrationError', async () => {
+  it('rate-limit failure degrades to fallback narration (non-fatal, retryable kind)', async () => {
     const h = createHarness({
       clientOpts: { generateFailure: 'rate-limit' },
     });
 
-    // Unconditional assertion first: forces a real failure if the code ever
-    // stops throwing for rate-limit errors (mirrors the auth-failure test above).
-    await expect(h.play('look around')).rejects.toThrow(NarrationError);
-    try {
-      await h.play('look');
-    } catch (e) {
-      expect(e).toBeInstanceOf(NarrationError);
-      expect((e as NarrationError).retryable).toBe(true);
-    }
+    // F-304fc328 contract: rate-limit is a non-fatal kind — after withRetry
+    // exhausts its budget the narrator returns fallback narration rather than
+    // throwing. Unconditional assertion (F-bfc23b00 discipline): this fails
+    // for real if the fallback contract regresses in either direction.
+    const out = await h.play('look around');
+    expect(out).toContain('The scene holds its breath');
   });
 
   it('interpretation failure (structured) currently propagates NarrationError (fallback to look verb not yet implemented)', async () => {

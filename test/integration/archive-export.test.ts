@@ -122,13 +122,12 @@ describe('exportChronicleJSON', () => {
     expect(moments).toEqual([]);
   });
 
-  it('key moments are sorted by significance', () => {
+  it('key moments are selected by significance but ordered chronologically (F-934b1183)', () => {
     const obj = exportChronicleJSON(richSave()) as Record<string, unknown>;
-    const moments = obj.keyMoments as Array<{ significance: number }>;
-    if (moments.length >= 2) {
-      for (let i = 1; i < moments.length; i++) {
-        expect(moments[i].significance).toBeLessThanOrEqual(moments[i - 1].significance);
-      }
+    const moments = obj.keyMoments as Array<{ tick: number }>;
+    expect(moments.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < moments.length; i++) {
+      expect(moments[i].tick).toBeGreaterThanOrEqual(moments[i - 1].tick);
     }
   });
 });

@@ -44,6 +44,18 @@ export default defineConfig({
         'src/game.ts': {
           statements: 30,
         },
+        // F-26ec045e: src/display/** had no dedicated floor -- only the
+        // generic global one -- despite being the Stage-D lens's own
+        // subject and, per this wave's `vitest run --coverage` at HEAD, the
+        // weakest-tested directory that already has a sibling floor
+        // (director-renderer.ts alone: 36.19% statements / 42.15%
+        // branches; the src/display aggregate: 65.85% statements / 68.07%
+        // branches / 75% functions). Same headroom-below-actuals pattern as
+        // the three floors above. Set with headroom below the measured
+        // 65.85%.
+        'src/display/**': {
+          statements: 55,
+        },
       },
     },
   },

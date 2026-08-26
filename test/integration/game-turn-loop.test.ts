@@ -3,9 +3,12 @@
 // Validates state transitions, history, output structure, and failure behavior.
 
 import { describe, it, expect, vi } from 'vitest';
+import { createProfile } from '@ai-rpg-engine/character-profile';
 import { createHarness } from '../helpers/game-harness.js';
 import { NarrationError } from '../../src/llm/claude-errors.js';
 import type { McpToolCall } from '../../src/runtime/audio-bridge.js';
+import { getPackById } from '../../src/character/packs.js';
+import { renderConcludeOutput } from '../../src/game/game-presenter.js';
 
 // ─── Happy Path ───────────────────────────────────────────────
 
@@ -362,5 +365,279 @@ describe('presentation seam — real turn integration (F-f9b5f874)', () => {
     expect(output).toBeTruthy();
     expect(h.turnCount()).toBe(1);
     expect(onPresentation).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── Welcome Screen (F-d665f2ef) ──────────────────────────────
+
+// GameSession.getWelcome() (game.ts:485-487) is a plain zero-argument
+// public method trivially reachable from this file's own createHarness(),
+// yet grepping test/** for getWelcome previously returned zero matches --
+// this is the first screen every new player sees, with zero integration
+// coverage. renderWelcome (src/display/play-renderer.ts:153-172) has
+// substring-only unit assertions in the cross-domain file
+// src/display/play-renderer.test.ts (outside this domain, read only for
+// context), so even combined, nothing anywhere pinned this screen's actual
+// line order or the tone-line's presence/absence when tone is omitted.
+describe('getWelcome() — the first screen every new player sees (F-d665f2ef)', () => {
+  it('renders title before tone before the /help hint, in that relative order', () => {
+    const h = createHarness({
+      gameOpts: { title: 'The Sundered Chapel', tone: 'dark fantasy, quiet dread' },
+    });
+
+    const lines = h.session.getWelcome().split('\n');
+    // Substring search (not exact-line regex) tolerates colors.ts's ANSI
+    // wrapping being on or off depending on the real test runner's stdout
+    // TTY-ness -- this pins order/content, not color state.
+    const titleIdx = lines.findIndex((l) => l.includes('The Sundered Chapel'));
+    const toneIdx = lines.findIndex((l) => l.includes('dark fantasy, quiet dread'));
+    const helpHintIdx = lines.findIndex((l) => l.includes('/help'));
+
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    expect(toneIdx).toBeGreaterThan(titleIdx);
+    expect(helpHintIdx).toBeGreaterThan(toneIdx);
+  });
+
+  it('omits the tone line entirely (not a blank placeholder) when no tone is configured', () => {
+    const withTone = createHarness({
+      gameOpts: { title: 'The Sundered Chapel', tone: 'dark fantasy' },
+    }).session.getWelcome();
+    const withoutTone = createHarness({
+      gameOpts: { title: 'The Sundered Chapel', tone: '' },
+    }).session.getWelcome();
+
+    expect(withTone).toContain('dark fantasy');
+    expect(withoutTone).not.toContain('dark fantasy');
+    // Genuinely absent: exactly one whole line fewer, not an empty
+    // placeholder line left behind in its place (renderWelcome's `if
+    // (tone)` guard skips the push entirely -- play-renderer.ts:158-160).
+    expect(withoutTone.split('\n').length).toBe(withTone.split('\n').length - 1);
+  });
+});
+
+// ─── Play Screen Structural Sections (F-3595c07b) ─────────────
+
+// renderPlayScreen (src/display/play-renderer.ts:40-145) assembles ~9
+// independently-gated sections for every ordinary turn, but before this,
+// only one test in the whole file asserted anything about the returned
+// string ('presentation output contains narration text' above), and only a
+// narration substring. A regression that silently drops the status bar,
+// doubles it, or reorders sections relative to the divider would have
+// passed every existing test/** check. These pin relative line order
+// across both status-bar branches (profileStatus vs. the legacy
+// world-entity fallback) without snapshotting the whole screen, since
+// narration text and the divider's terminal-width-dependent length are
+// expected to vary.
+describe('renderPlayScreen — structural section order (F-3595c07b)', () => {
+  it('legacy status bar (no profile): turn divider, then narration, then status, then zone line', async () => {
+    const h = createHarness({ clientOpts: { narration: 'Dust motes drift through broken glass.' } });
+
+    const output = await h.play('look around');
+    const lines = output.split('\n');
+
+    const turnIdx = lines.findIndex((l) => l.includes('Turn 1'));
+    const narrationIdx = lines.findIndex((l) => l.includes('Dust motes drift through broken glass.'));
+    // The legacy branch's status line (play-renderer.ts:107) is built from
+    // the world's own 'player' entity ("Wanderer" in the fantasy starter
+    // content) plus its raw resource keys, joined with ' | '.
+    const statusIdx = lines.findIndex((l) => l.includes('Wanderer') && l.includes('hp:'));
+    const zoneIdx = lines.findIndex((l) => l.includes('Location:'));
+
+    expect(turnIdx).toBeGreaterThanOrEqual(0);
+    expect(narrationIdx).toBeGreaterThan(turnIdx);
+    expect(statusIdx).toBeGreaterThan(narrationIdx);
+    expect(zoneIdx).toBeGreaterThan(statusIdx);
+  });
+
+  it('enhanced status bar (with profile): the profile name/level line renders instead of the legacy line, same relative position', async () => {
+    const pack = getPackById('chapel-threshold')!;
+    const profile = createProfile(
+      { name: 'Kael Ashwood', archetypeId: 'penitent-knight', backgroundId: 'oath-breaker', traitIds: [] },
+      { vigor: 5, instinct: 5, will: 5 },
+      { hp: 20, stamina: 8 },
+      [],
+      'chapel-threshold',
+    );
+    const h = createHarness({
+      gameOpts: { profile, itemCatalog: pack.itemCatalog },
+      clientOpts: { narration: 'Dust motes drift through broken glass.' },
+    });
+
+    const output = await h.play('look around');
+    const lines = output.split('\n');
+
+    const turnIdx = lines.findIndex((l) => l.includes('Turn 1'));
+    const narrationIdx = lines.findIndex((l) => l.includes('Dust motes drift through broken glass.'));
+    const statusIdx = lines.findIndex((l) => l.includes('Kael Ashwood'));
+    const zoneIdx = lines.findIndex((l) => l.includes('Location:'));
+
+    expect(turnIdx).toBeGreaterThanOrEqual(0);
+    expect(narrationIdx).toBeGreaterThan(turnIdx);
+    expect(statusIdx).toBeGreaterThan(narrationIdx);
+    expect(zoneIdx).toBeGreaterThan(statusIdx);
+    // Proves the enhanced branch genuinely rendered instead of the legacy
+    // fallback (rather than this test coincidentally passing because both
+    // branches happen to share some other substring).
+    expect(output).not.toContain('Wanderer |');
+  });
+});
+
+// ─── Director Mode — Live Session State (F-b54e8238) ──────────
+
+// 'slash commands do not consume turns' above is the only place in
+// test/** that ever enters director mode, and it immediately calls /back
+// next -- only ever exercising the trivial renderDirectorHelp() return.
+// executeDirectorCommand (src/display/director-renderer.ts:189+), which
+// renders every real director-mode screen from ~20 live context fields
+// GameSession hands it, was never invoked from anywhere in test/**. The
+// cross-domain unit file src/display/director-renderer.test.ts (outside
+// this domain, read only for context) hand-builds
+// ExecuteDirectorCommandOptions directly, so it cannot prove GameSession
+// wires its own live state through correctly end-to-end. /inspect <id> is
+// used here (rather than e.g. /status or /map) because it needs no
+// character profile to be configured -- it reads directly off
+// `this.engine.world`, which every harness always has.
+describe('director mode — executeDirectorCommand receives real live session state (F-b54e8238)', () => {
+  it('a real director sub-command reflects live world state, not just the canned help screen', async () => {
+    const h = createHarness();
+
+    await h.play('/director');
+    expect(h.session.mode).toBe('director');
+
+    // "Suspicious Pilgrim" (@ai-rpg-engine/starter-fantasy's `pilgrim` NPC,
+    // also used by the combat-seam tests above) is real content flowing
+    // through GameSession's own `this.engine.world` -- proving this
+    // command reflects the live session, not a hand-built fixture.
+    const inspection = await h.play('/inspect pilgrim');
+    expect(inspection).toContain('Suspicious Pilgrim');
+    expect(inspection).toContain('pilgrim');
+
+    await h.play('/back');
+    expect(h.session.mode).toBe('play');
+  });
+});
+
+// ─── Campaign Conclusion Screen (F-4905e69f) ──────────────────
+
+// renderConcludeOutput (src/game/game-presenter.ts:80-105) is the terminal
+// screen GameSession.handleConclude() returns for '/conclude'
+// (game.ts:889-890, 1872-1898) -- reachable from this file's existing
+// createHarness() with no new infrastructure, yet grepping test/** for
+// renderConcludeOutput previously returned zero matches. The epilogue
+// block is gated on bare truthiness (`if (result.epilogue)`,
+// game-presenter.ts:92) -- the exact silent-omission shape already-fixed
+// finding F-0f76ecc2 flagged upstream in the narrator -- and nothing in
+// test/** would have caught a regression reintroducing an empty epilogue,
+// or breaking the divider/line assembly around it, in either branch.
+//
+// Two layers: a live end-to-end smoke test through the real
+// harness/session (proves '/conclude' actually reaches this screen with a
+// real generated epilogue), and direct calls against renderConcludeOutput
+// with controlled inputs (pins the two branches' exact section order/
+// blank-line shape without coupling to @ai-rpg-engine/campaign-memory's
+// own nested formatting, which embeds its own 'CAMPAIGN CONCLUSION'
+// sub-header and dividers inside deterministicSummary).
+describe('renderConcludeOutput — the /conclude terminal screen (F-4905e69f)', () => {
+  it('/conclude reaches renderConcludeOutput end-to-end with a real generated epilogue', async () => {
+    const h = createHarness({
+      clientOpts: { narration: 'The bells of the chapel ring once more, and then fall silent.' },
+    });
+
+    const output = await h.play('/conclude');
+
+    expect(output).toContain('CAMPAIGN CONCLUSION');
+    expect(output).toContain('The bells of the chapel ring once more, and then fall silent.');
+    expect(h.session.campaignStatus).toBe('completed');
+  });
+
+  it('epilogue present: header, summary, epilogue (with its own divider), worldAfter, footer appear in order with blank-line discipline', () => {
+    const output = renderConcludeOutput({
+      deterministicSummary: '  Resolution: QUIET RETIREMENT',
+      epilogue: 'The chapel bells ring again, calling no one.',
+      worldAfter: '  === WORLD AFTER ===',
+    });
+    const lines = output.split('\n');
+
+    expect(lines[0]).toBe('');
+    expect(lines[2]).toBe('  CAMPAIGN CONCLUSION');
+    expect(lines[4]).toBe('');
+    expect(lines[5]).toBe('  Resolution: QUIET RETIREMENT');
+    expect(lines[6]).toBe('');
+    // lines[7] is the epilogue's own divider line -- present (non-blank).
+    // Its exact fill-character solidity/width is covered by the dedicated
+    // rule-solidity test below, not re-asserted here.
+    expect(lines[7].trim().length).toBeGreaterThan(0);
+    expect(lines[8]).toBe('');
+    expect(lines[9]).toBe('  The chapel bells ring again, calling no one.');
+    expect(lines[10]).toBe('');
+    expect(lines[11]).toBe('  === WORLD AFTER ===');
+    expect(lines[12]).toBe('');
+    expect(lines[14]).toBe('  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit');
+    expect(lines.length).toBe(15);
+  });
+
+  it('epilogue absent: summary transitions directly to worldAfter with no stray epilogue divider', () => {
+    const output = renderConcludeOutput({
+      deterministicSummary: '  Resolution: QUIET RETIREMENT',
+      worldAfter: '  === WORLD AFTER ===',
+    });
+    const lines = output.split('\n');
+
+    expect(lines[0]).toBe('');
+    expect(lines[2]).toBe('  CAMPAIGN CONCLUSION');
+    expect(lines[4]).toBe('');
+    expect(lines[5]).toBe('  Resolution: QUIET RETIREMENT');
+    expect(lines[6]).toBe('');
+    expect(lines[7]).toBe('  === WORLD AFTER ===');
+    expect(lines[8]).toBe('');
+    expect(lines[10]).toBe('  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit');
+    expect(lines.length).toBe(11);
+  });
+
+  it('an empty-string epilogue (the real "nothing generated" shape narrateFinale can return) is treated as absent, not a blank block', () => {
+    // finale-narrator.ts's narrateFinale() never produces `undefined` --
+    // a non-fatal generation failure resolves to the always-truthy
+    // FALLBACK_EPILOGUE sentinel, and a *successful* call that happens to
+    // return empty/whitespace-only text is the one real path that reaches
+    // renderConcludeOutput with a falsy `epilogue: ''`. This pins that
+    // exact shape, not just `undefined`.
+    const output = renderConcludeOutput({
+      deterministicSummary: '  Resolution: QUIET RETIREMENT',
+      epilogue: '',
+      worldAfter: '  === WORLD AFTER ===',
+    });
+    const lines = output.split('\n');
+
+    expect(lines[5]).toBe('  Resolution: QUIET RETIREMENT');
+    expect(lines[6]).toBe('');
+    expect(lines[7]).toBe('  === WORLD AFTER ===');
+    expect(lines.length).toBe(11);
+  });
+
+  // F-4905e69f (parallel-wave caveat): game-presenter.ts's header/footer
+  // rules are built as '  ═'.repeat(30) / '  ─'.repeat(30) -- repeating the
+  // WHOLE 3-character "  ═" pattern rather than the bare rule character,
+  // which produces a gapped "  ═  ═  ═ ..." line 90 columns wide, not a
+  // solid rule within a sane terminal width. This is a known target of a
+  // sibling wave-16 fix in game-core/cli-display's own worktree (outside
+  // this domain's src/game/game-presenter.ts), asserted here against the
+  // CORRECT post-fix invariant. EXPECTED TO FAIL in THIS worktree until
+  // that sibling fix lands in the cumulative tree -- see this agent's
+  // summary for the cross-worktree divergence note; do not weaken this
+  // assertion to match the current buggy output.
+  it('header and footer rules render as a single solid character at a terminal-safe width <= 80 (F-4905e69f)', () => {
+    const output = renderConcludeOutput({
+      deterministicSummary: '  Resolution: QUIET RETIREMENT',
+      worldAfter: '  === WORLD AFTER ===',
+    });
+    const lines = output.split('\n');
+    const headerTop = lines[1];
+    const headerBottom = lines[3];
+    const footerRule = lines[lines.length - 2];
+
+    for (const rule of [headerTop, headerBottom, footerRule]) {
+      expect(rule.trimStart()).toMatch(/^[═─]+$/);
+      expect(rule.length).toBeLessThanOrEqual(80);
+    }
   });
 });

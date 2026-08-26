@@ -1,6 +1,38 @@
 // Prompt template: scene narration from perception-filtered state
 // v0.2: outputs NarrationPlan JSON for multi-modal presentation
 
+/**
+ * Coordinator Brief contract #7: the 10-id sound-effect list, single-sourced
+ * here so BOTH this file's own prompt text (below) AND cli-display's
+ * humanization parity tripwire (src/cli/**, src/runtime/** -- see
+ * F-a465383c's note that render-time humanization of these ids is
+ * cross-domain) read from the SAME list instead of maintaining two
+ * independently-hand-copied ones. Mirrors dialogue-npc.ts's
+ * `VOICE_PROFILES: Record<VoiceArchetype, string>` convention (archetype/id
+ * -> human-readable content). Keys are the literal ids the LLM is
+ * instructed to use verbatim in NarrationPlan.sfx[].effectId; values are the
+ * humanized gloss shown to the LLM in parens.
+ */
+export const SOUND_EFFECT_IDS: Record<string, string> = {
+  ui_notification: 'notification chime',
+  ui_success: 'success chime',
+  ui_error: 'error chime',
+  ui_attention: 'attention chime',
+  ui_click: 'click',
+  ui_pop: 'light pop',
+  ui_whoosh: 'whoosh transition',
+  alert_warning: 'warning tone',
+  alert_critical: 'critical alarm',
+  alert_info: 'info tone',
+};
+
+/** Render SOUND_EFFECT_IDS as the "id (gloss)" comma-joined prose the prompt below expects. */
+function formatSoundEffectIds(): string {
+  return Object.entries(SOUND_EFFECT_IDS)
+    .map(([id, gloss]) => `${id} (${gloss})`)
+    .join(', ');
+}
+
 export const NARRATE_SYSTEM = `You are the narrator of a text RPG. You describe what the player character perceives — not objective truth, but their subjective experience.
 
 Rules:
@@ -37,7 +69,7 @@ Respond with a JSON object (NarrationPlan) with this shape:
   "interruptibility": "free" | "locked" | "soft-lock"
 }
 
-Available sound effects (use these exact ids only — never invent a new one): ui_notification (notification chime), ui_success (success chime), ui_error (error chime), ui_attention (attention chime), ui_click (click), ui_pop (light pop), ui_whoosh (whoosh transition), alert_warning (warning tone), alert_critical (critical alarm), alert_info (info tone)
+Available sound effects (use these exact ids only — never invent a new one): ${formatSoundEffectIds()}
 Available ambient layers (use these exact ids only — never invent a new one): ambient_rain (rain), ambient_white_noise (white noise), ambient_drone (low tension drone)
 
 Choose sfx/ambient based on the scene mood. Use sparingly — not every scene needs effects.`;

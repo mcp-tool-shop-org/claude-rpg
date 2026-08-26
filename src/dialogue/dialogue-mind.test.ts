@@ -257,3 +257,56 @@ describe('generateDialogue F-afb978de: userMessage() wired into the non-fatal fa
     expect(result!.fallbackMessage).toBeUndefined();
   });
 });
+
+// F-35969d3a (SLATE-2): confirms the conversationHistory contract end-to-end
+// through generateDialogue -- today only dialogue-npc.test.ts unit-tests
+// formatConversationHistory directly (in isolation from generateDialogue).
+// npc-context.js's buildNPCDialogueContext is mocked (see the top of this
+// file) so `context` is a plain object generateDialogue mutates directly
+// (dialogue-mind.ts assigns `context.conversationHistory = conversationHistory`
+// when both are present); buildDialoguePrompt itself is NOT mocked, so this
+// exercises the real prompt-assembly path, not a stubbed one.
+describe('generateDialogue F-35969d3a: conversationHistory reaches the built prompt', () => {
+  it('includes a Recent conversation section built from the supplied history in the prompt sent to the client', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Understood.');
+
+    await generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+      undefined, // playerPresence
+      undefined, // playerProfile
+      undefined, // playerRumors
+      undefined, // activePressures
+      undefined, // lastNpcActions
+      undefined, // economyContext
+      undefined, // craftingContext
+      undefined, // opportunityContext
+      [
+        { speaker: 'Player', text: 'What do you know about the harbor?' },
+        { speaker: 'Town Guard', text: 'Nothing good. Keep your voice down.' },
+      ],
+    );
+
+    expect(client.generate).toHaveBeenCalledTimes(1);
+    const callArgs = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.prompt).toContain('Recent conversation:');
+    expect(callArgs.prompt).toContain('Player: What do you know about the harbor?');
+    expect(callArgs.prompt).toContain('Town Guard: Nothing good. Keep your voice down.');
+  });
+
+  it('omits the Recent conversation section entirely when no history is supplied', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Understood.');
+
+    await generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy');
+
+    const callArgs = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.prompt).not.toContain('Recent conversation:');
+  });
+});

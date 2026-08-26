@@ -47,7 +47,40 @@ export type DialogueResult = {
   fallbackMessage?: string;
 };
 
-/** Generate grounded NPC dialogue. */
+/**
+ * F-35969d3a (SLATE-2): `conversationHistory` below is already fully wired —
+ * threaded into context.conversationHistory (see the assignment a few lines
+ * down) and rendered by formatConversationHistory (prompts/dialogue-npc.ts),
+ * which already self-caps at the last 5 exchanges AND an ~800-char budget
+ * (oldest-out). This domain needs no further code change. The remainder is a
+ * CONTRACT for the game-core caller that owns the buffer this parameter
+ * expects to receive:
+ *
+ * 1. Shape: `ConversationExchange = { speaker: string; text: string }`
+ *    (prompts/dialogue-npc.ts). `speaker` is the fixed literal `'Player'` for
+ *    the player's turns, and the NPC's resolved display name
+ *    (`world.entities[npcId]?.name ?? npcId`) for the NPC's — the same
+ *    resolution this file already uses for `speakerName` below. Do not
+ *    thread the player's own character name in here — nothing in this
+ *    domain's LLM prompts references it today (buildDialoguePrompt's closing
+ *    section says the generic "Player says:").
+ * 2. Buffer ownership: keyed per-NPC (`Map<string, ConversationExchange[]>`),
+ *    never a single flat shared list — a flat list would leak one NPC's
+ *    lines into an unrelated NPC's conversation in the same session.
+ *    In-memory only (e.g. on GameSession), NOT part of SavedSession — losing
+ *    continuity across a save/reload is an acceptable graceful degradation.
+ * 3. Growth cap: cap each per-NPC array at push time, oldest-out, at
+ *    MAX_STORED_EXCHANGES = 10 (~2x formatConversationHistory's own 5-read
+ *    window) even though the read side already self-limits.
+ * 4. Never record a fallback exchange: skip pushing when
+ *    `DialogueResult.isFallback === true` (see that field's own doc comment
+ *    above) — feeding a hardcoded stall line back in as "the NPC's prior
+ *    line" would quote a placeholder as real dialogue, the same anti-pattern
+ *    already fixed for narration (F-e8630a73).
+ * 5. Player-turn append: push the player's line into the SAME NPC's buffer
+ *    at the same time as the NPC's reply, or "recent conversation" reads as
+ *    a one-sided monologue.
+ */
 export async function generateDialogue(
   client: ClaudeClient,
   world: WorldState,

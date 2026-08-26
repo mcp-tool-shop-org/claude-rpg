@@ -1,6 +1,6 @@
 // Serialize NPC cognitive state into dialogue prompt context
 
-import type { WorldState } from '@ai-rpg-engine/core';
+import type { WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { getReputation } from '@ai-rpg-engine/character-profile';
 import {
@@ -20,7 +20,33 @@ import {
   type NpcActionResult,
 } from '@ai-rpg-engine/modules';
 import type { DialogueInput } from '../prompts/dialogue-npc.js';
+import { resolveVoiceArchetype } from '../prompts/dialogue-npc.js';
 import { buildNpcPresenceForDialogue, getNpcDialogueHint } from '../npc/presence.js';
+
+/**
+ * F-c8c8c67c (SLATE-1) / Coordinator Brief contract #1: closed-set
+ * personality classifier for callers OUTSIDE this file's own dialogue-prompt
+ * assembly (e.g. game-core's turn-loop.ts, this domain's own
+ * npc/ambient-dialogue.ts) that need an NPC's "personality" as one of a
+ * small fixed set, not free text. Mirrors prompts/dialogue-npc.ts's
+ * resolveVoiceArchetype() classifier exactly (same tag/type keyword
+ * matching) so ambient-dialogue.ts's PERSONALITY_TEMPLATES and this
+ * dialogue path's own voice-archetype resolution key off ONE shared
+ * vocabulary instead of two independently-drifting ones. Returns 'default'
+ * instead of resolveVoiceArchetype's `undefined` — every caller of this
+ * function wants a value to index a template map with directly, not an
+ * optional it has to null-coalesce itself.
+ *
+ * NOTE: deliberately NOT the same thing as buildNPCDialogueContext's own
+ * internal `personality` local below (npc.ai?.profileId ?? a
+ * merchant/cautious/aggressive tag heuristic) — that value feeds free text
+ * into the LLM prompt's "Personality: ..." line, where a richer, uncapped
+ * vocabulary the model reads as prose is fine. deriveNpcPersonality is for
+ * callers that need a closed set to key a template map with instead.
+ */
+export function deriveNpcPersonality(npc: EntityState): string {
+  return resolveVoiceArchetype(npc.type, npc.tags) ?? 'default';
+}
 
 // F-b52349e0: unlike recentMemories (.slice(-5)), knownPlayerRumors
 // (.slice(0,3)), and factionPressures (.slice(0,2)) below, beliefs and rumors

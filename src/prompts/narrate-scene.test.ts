@@ -8,6 +8,7 @@ import {
   PRESSURES_MAX_COUNT,
   ENTITIES_MAX_COUNT,
   NARRATE_SYSTEM,
+  SOUND_EFFECT_IDS,
 } from './narrate-scene.js';
 
 function makeInput(overrides: Partial<SceneNarrationInput> = {}): SceneNarrationInput {
@@ -159,9 +160,14 @@ describe('NARRATE_SYSTEM sfx/ambient id guidance (F-a465383c)', () => {
     expect(NARRATE_SYSTEM).toMatch(/use (only |these )?exact ids/i);
   });
 
-  it('pairs every listed sound-effect id with a humanized gloss', () => {
-    const ids = ['ui_notification', 'ui_success', 'ui_error', 'ui_attention', 'ui_click', 'ui_pop', 'ui_whoosh', 'alert_warning', 'alert_critical', 'alert_info'];
-    for (const id of ids) {
+  // Coordinator Brief contract #7: the sound-effect id list is now
+  // single-sourced from the exported SOUND_EFFECT_IDS const (this test used
+  // to hardcode its own second copy of the same 10 ids -- deriving from the
+  // export instead of a parallel literal is what actually proves
+  // single-sourcing, matching claude-adapter.test.ts's F-aaaa105f precedent
+  // of asserting against the shared constant rather than a re-hardcoded one).
+  it('pairs every SOUND_EFFECT_IDS id with a humanized gloss', () => {
+    for (const id of Object.keys(SOUND_EFFECT_IDS)) {
       expect(NARRATE_SYSTEM, `expected a gloss in parens after ${id}`).toMatch(new RegExp(`${id} \\([^)]+\\)`));
     }
   });
@@ -170,6 +176,24 @@ describe('NARRATE_SYSTEM sfx/ambient id guidance (F-a465383c)', () => {
     const ids = ['ambient_rain', 'ambient_white_noise', 'ambient_drone'];
     for (const id of ids) {
       expect(NARRATE_SYSTEM, `expected a gloss in parens after ${id}`).toMatch(new RegExp(`${id} \\([^)]+\\)`));
+    }
+  });
+});
+
+// Coordinator Brief contract #7: `export const SOUND_EFFECT_IDS` from this
+// file -- the 10-id sound list extracted to ONE exported const consumed by
+// both this prompt builder and cli-display's humanization parity tripwire
+// (src/cli/**, src/runtime/** -- see F-a465383c's own note that render-time
+// humanization is cross-domain). The prompt text renders FROM this const, no
+// second hardcoded copy.
+describe('SOUND_EFFECT_IDS (Coordinator Brief contract #7)', () => {
+  it('exports exactly the 10 sound-effect ids the prompt has always advertised, each with a display gloss', () => {
+    expect(Object.keys(SOUND_EFFECT_IDS).sort()).toEqual(
+      ['alert_critical', 'alert_info', 'alert_warning', 'ui_attention', 'ui_click', 'ui_error', 'ui_notification', 'ui_pop', 'ui_success', 'ui_whoosh'].sort(),
+    );
+    for (const gloss of Object.values(SOUND_EFFECT_IDS)) {
+      expect(typeof gloss).toBe('string');
+      expect(gloss.length).toBeGreaterThan(0);
     }
   });
 });

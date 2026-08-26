@@ -114,23 +114,34 @@ export function getPackById(id: string): PackInfo | undefined {
   return allPacks.find((p) => p.meta.id === id);
 }
 
-/** Map legacy --world names to pack IDs. */
+/**
+ * F-ef4a283d (SLATE-4) / Coordinator Brief contract #3: hoisted from
+ * resolveWorldFlag's own inline map so cli-display (bin.ts) can build its
+ * "valid worlds are: ..." error copy from the SAME source this module
+ * resolves against, instead of hand-duplicating the list.
+ */
+export const WORLD_FLAG_MAP: Record<string, string> = {
+  fantasy: 'chapel-threshold',
+  gladiator: 'iron-colosseum',
+  ronin: 'jade-veil',
+  vampire: 'crimson-court',
+  cyberpunk: 'neon-lockbox',
+  detective: 'gaslight-detective',
+  pirate: 'black-flag-requiem',
+  'weird-west': 'dust-devils-bargain',
+  zombie: 'ashfall-dead',
+  colony: 'signal-loss',
+};
+
+/**
+ * Map legacy --world names to pack IDs.
+ *
+ * F-ef4a283d / Coordinator Brief ruling R1: unknown --world handling
+ * (structured error + exit 1) is decided pre-interactively in bin.ts
+ * (cli-display's half). This module stays QUIET on an unknown name — no
+ * console.warn here (removed; previously the only thing standing between
+ * "unknown" and the ordinary menu was an easy-to-miss warn line above it).
+ */
 export function resolveWorldFlag(worldName: string): string | undefined {
-  const map: Record<string, string> = {
-    fantasy: 'chapel-threshold',
-    gladiator: 'iron-colosseum',
-    ronin: 'jade-veil',
-    vampire: 'crimson-court',
-    cyberpunk: 'neon-lockbox',
-    detective: 'gaslight-detective',
-    pirate: 'black-flag-requiem',
-    'weird-west': 'dust-devils-bargain',
-    zombie: 'ashfall-dead',
-    colony: 'signal-loss',
-  };
-  const result = map[worldName];
-  if (!result) {
-    console.warn(`resolveWorldFlag: unknown world name "${worldName}"`);
-  }
-  return result;
+  return WORLD_FLAG_MAP[worldName];
 }

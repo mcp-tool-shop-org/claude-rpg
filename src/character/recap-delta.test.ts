@@ -30,6 +30,36 @@ describe('renderSessionDelta', () => {
     expect(result).toContain('guild');
   });
 
+  // F-4b8a3a39: recap-delta.ts:122 printed the raw factionId slug, the same
+  // shape F-bbcef54a already fixed for session-recap.ts's FACTION SHIFTS
+  // section. Mirrors that exact mechanism -- a caller-supplied factionNames
+  // dict, default {} so every pre-existing call site keeps compiling and
+  // keeps rendering the raw id exactly as before.
+  describe('faction display-name resolution (F-4b8a3a39)', () => {
+    it('resolves factionId to its display name when factionNames is supplied', () => {
+      const delta: SessionDelta = {
+        ...zeroDelta,
+        reputationChanges: [{ factionId: 'iron-covenant', before: 0, after: 10 }],
+      };
+
+      const result = renderSessionDelta(delta, { 'iron-covenant': 'Iron Covenant' });
+
+      expect(result).toContain('Iron Covenant');
+      expect(result).not.toContain('iron-covenant');
+    });
+
+    it('falls back to the raw factionId when factionNames omits an entry (default {})', () => {
+      const delta: SessionDelta = {
+        ...zeroDelta,
+        reputationChanges: [{ factionId: 'guild', before: 10, after: 15 }],
+      };
+
+      const result = renderSessionDelta(delta);
+
+      expect(result).toContain('guild');
+    });
+  });
+
   it('renders a non-empty summary when only newMilestones is populated', () => {
     const delta: SessionDelta = { ...zeroDelta, newMilestones: 1 };
 

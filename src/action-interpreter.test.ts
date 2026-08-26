@@ -669,4 +669,157 @@ describe('action-interpreter', () => {
       expect(result.parameters).toEqual({ subAction: 'disguise' });
     });
   });
+
+  describe('LeverageVerbMap trailing-literal word boundary sweep (F-4d102b74)', () => {
+    /** Same marker-client trick as the F-f57bbfd9 block above: proves input
+     * fell through to the LLM instead of fast-matching. */
+    function createLlmMarkerClient() {
+      return {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({
+          ok: true,
+          data: {
+            verb: 'llm-handled',
+            targetIds: null,
+            toolId: null,
+            parameters: null,
+            confidence: 'medium',
+            reasoning: 'routed to LLM',
+            alternatives: null,
+          },
+          raw: '',
+        }),
+      };
+    }
+
+    const allLeverageVerbs = ['social', 'rumor', 'diplomacy'];
+
+    it.each([
+      // SOCIAL_PATTERNS
+      'stake claiming the territory',
+      'call in a favorite ally',
+      // RUMOR_PATTERNS
+      'plant rumors everywhere',
+      'deny the accusations firmly',
+      'bury the scandalous affair',
+      'leak the truthful account',
+      'counter-rumors are spreading',
+      'claim creditable results',
+      // DIPLOMACY_PATTERNS
+      'broker a truce-breaker',
+      'trade a secretive letter',
+      'propose alliances with everyone',
+      'cash in milestones today',
+    ])('should NOT fast-match %j (falls through to LLM)', async (input) => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        input,
+        [...engine.getAvailableActions(), ...allLeverageVerbs],
+      );
+
+      expect(result.verb).toBe('llm-handled');
+    });
+
+    it('should still fast-match "stake claim to the territory" with a real word boundary', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'stake claim to the territory',
+        [...engine.getAvailableActions(), 'social'],
+      );
+
+      expect(result.verb).toBe('social');
+      expect(result.parameters).toEqual({ subAction: 'stake-claim' });
+    });
+
+    it('should still fast-match bare "deny the accusation" with a real word boundary', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'deny the accusation',
+        [...engine.getAvailableActions(), 'rumor'],
+      );
+
+      expect(result.verb).toBe('rumor');
+      expect(result.parameters).toEqual({ subAction: 'deny' });
+    });
+
+    it('should still fast-match "trade secret with the merchant" with a real word boundary', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'trade secret with the merchant',
+        [...engine.getAvailableActions(), 'diplomacy'],
+      );
+
+      expect(result.verb).toBe('diplomacy');
+      expect(result.parameters).toEqual({ subAction: 'trade-secret' });
+    });
+  });
+
+  describe('opportunity regex trailing-literal word boundary (F-4d102b74 sweep)', () => {
+    // Same missing-boundary shape found sweeping the rest of the file: the
+    // noun alternation (job|contract|...) is immediately followed by an
+    // *optional* trailing group, so nothing enforced a boundary right after
+    // the noun itself — "jobless" fast-matched as a bare prefix of "job".
+    it('should NOT fast-match "accept jobless benefits" as an opportunity verb (falls through to LLM)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({
+          ok: true,
+          data: {
+            verb: 'llm-handled',
+            targetIds: null,
+            toolId: null,
+            parameters: null,
+            confidence: 'medium',
+            reasoning: 'routed to LLM',
+            alternatives: null,
+          },
+          raw: '',
+        }),
+      };
+
+      const result = await interpretAction(
+        mockClient as any,
+        engine.world,
+        'accept jobless benefits',
+        engine.getAvailableActions(),
+      );
+
+      expect(result.verb).toBe('llm-handled');
+    });
+
+    it('should still fast-match "accept job escort" with a real word boundary (regression guard)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient as any, engine.world, 'accept job escort', engine.getAvailableActions());
+      expect(result.verb).toBe('opportunity');
+      expect(result.parameters?.subAction).toBe('accept');
+      expect(result.parameters?.opportunityName).toBe('escort');
+    });
+  });
 });

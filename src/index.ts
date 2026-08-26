@@ -4,7 +4,7 @@ export { GameSession, type GameConfig, type GameMode } from './game.js';
 export { createClaudeClient, type ClaudeClient, type ClaudeClientConfig, type StreamCallback } from './claude-client.js';
 export { createAdaptedClient } from './llm/claude-adapter.js';
 export { NarrationError, userMessage, type NarrationErrorKind } from './llm/claude-errors.js';
-export { executeTurn, type TurnResult, type ProfileUpdateHints, type ExecuteTurnOpts } from './turn-loop.js';
+export { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints, type ExecuteTurnOpts, type FatalTurnBookkeeping } from './turn-loop.js';
 export { interpretAction, type InterpretedAction } from './action-interpreter.js';
 export { narrateScene, type NarrateSceneOpts } from './narrator/narrator.js';
 export { buildSceneContext } from './narrator/scene-context.js';

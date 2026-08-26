@@ -16,6 +16,19 @@ export type CompactedChunk = {
   summary: string;
 };
 
+/**
+ * F-dfd125bb: hard ceiling on retained compacted chunks. Without this,
+ * _compactedChunks (and the _compactedSummary string derived from it — the
+ * exact text getChronicleHighlights() folds into *every* narration prompt
+ * for the rest of the session) grows by one entry per turn for the rest of
+ * a campaign, since record() evicts and compacts one turn per call once the
+ * rolling window is full. In a several-hundred-turn campaign — this
+ * studio's target production scale — that's an unbounded, ever-growing
+ * string with no ceiling. Oldest chunks are dropped first, mirroring the
+ * same rolling-window eviction record() already applies to `turns`.
+ */
+const MAX_COMPACTED_CHUNKS = 50;
+
 export class TurnHistory {
   private turns: TurnRecord[] = [];
   private maxTurns: number;
@@ -81,10 +94,7 @@ export class TurnHistory {
       summary: chunkSummary,
     });
 
-    // Rebuild the full compacted summary (keep it concise — merge adjacent chunks)
-    this._compactedSummary = this._compactedChunks
-      .map((c) => c.summary)
-      .join(' ');
+    this.trimCompactedChunks();
   }
 
   /** Batch-compact multiple evicted turns into a single chunk. */
@@ -115,6 +125,20 @@ export class TurnHistory {
       summary,
     });
 
+    this.trimCompactedChunks();
+  }
+
+  /**
+   * F-dfd125bb: bound _compactedChunks (and rebuild _compactedSummary from
+   * it) at MAX_COMPACTED_CHUNKS, dropping the oldest chunk(s) first. Shared
+   * by compactEvictedTurn(), compactBatch(), and fromJSON() so a save that
+   * predates this cap self-heals on load instead of carrying its unbounded
+   * growth forward.
+   */
+  private trimCompactedChunks(): void {
+    while (this._compactedChunks.length > MAX_COMPACTED_CHUNKS) {
+      this._compactedChunks.shift();
+    }
     this._compactedSummary = this._compactedChunks
       .map((c) => c.summary)
       .join(' ');
@@ -162,8 +186,16 @@ export class TurnHistory {
       history.turns = data.turns.length > maxTurns ? data.turns.slice(-maxTurns) : data.turns;
       if (data.compactedChunks) {
         history._compactedChunks = [...data.compactedChunks];
-      }
-      if (data.compactedSummary) {
+        // F-dfd125bb: apply the same cap on load as during live play, so a
+        // save from before this cap existed self-heals immediately instead
+        // of carrying its unbounded growth forward. Recomputes
+        // _compactedSummary from the (possibly trimmed) chunks — for any
+        // save produced by toJSON() that's the exact same string, since
+        // it's the same join this class already used to build it.
+        history.trimCompactedChunks();
+      } else if (data.compactedSummary) {
+        // No chunk breakdown to trim against (older/opaque format) —
+        // preserve as-is; future compaction bounds growth from here on.
         history._compactedSummary = data.compactedSummary;
       }
     }

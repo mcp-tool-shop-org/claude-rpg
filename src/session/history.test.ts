@@ -205,4 +205,61 @@ describe('TurnHistory compaction (FT-B-006)', () => {
     expect(history.compactedSummary).toBe('');
     expect(history.compactedChunks).toHaveLength(0);
   });
+
+  // F-dfd125bb: compactEvictedTurn() pushed one chunk per evicted turn and
+  // rebuilt compactedSummary by joining every chunk ever produced, with no
+  // cap — in a several-hundred-turn campaign (this studio's target
+  // production scale) that inflates the string sent on every single
+  // narration prompt for the rest of the playthrough. Prove it plateaus
+  // instead of growing linearly with turn count.
+  it('should keep compactedChunks and compactedSummary bounded across a several-hundred-turn campaign', () => {
+    const history = new TurnHistory(2); // small window so eviction (and compaction) starts quickly
+    for (let i = 1; i <= 200; i++) {
+      history.record({ tick: i, playerInput: `action ${i}`, verb: 'attack', narration: `n${i}` });
+    }
+    const chunksAt200 = history.compactedChunks.length;
+    const summaryLenAt200 = history.compactedSummary.length;
+
+    for (let i = 201; i <= 400; i++) {
+      history.record({ tick: i, playerInput: `action ${i}`, verb: 'attack', narration: `n${i}` });
+    }
+    const chunksAt400 = history.compactedChunks.length;
+    const summaryLenAt400 = history.compactedSummary.length;
+
+    // Without a cap, 200 more evicted turns would add ~200 more chunks and
+    // ~200 more sentences. With the cap in place, both plateau instead.
+    expect(chunksAt400).toBe(chunksAt200);
+    expect(summaryLenAt400).toBe(summaryLenAt200);
+
+    // The oldest chunks were dropped first (same eviction shape record()
+    // already applies to `turns`) — the earliest surviving chunk is no
+    // longer from tick 1.
+    expect(history.compactedChunks[0].fromTick).toBeGreaterThan(1);
+  });
+
+  it('should cap compactedChunks on fromJSON restore too, so a pre-cap save self-heals on load', () => {
+    // Simulate an old save serialized before this cap existed: far more
+    // chunks than any cap should allow, all sharing the same summary text
+    // (verb 'attack' never interpolates the tick), so length is easy to
+    // reason about.
+    const oversizedChunks = Array.from({ length: 500 }, (_, i) => ({
+      fromTick: i + 1,
+      toTick: i + 1,
+      summary: 'Fought in combat.',
+    }));
+    const data = {
+      turns: [{ tick: 501, playerInput: 'look', verb: 'look', narration: 'Calm.' }],
+      compactedChunks: oversizedChunks,
+      compactedSummary: oversizedChunks.map((c) => c.summary).join(' '),
+    };
+
+    const restored = TurnHistory.fromJSON(data, 50);
+
+    expect(restored.compactedChunks.length).toBeLessThan(500);
+    // The restored summary must actually match the (trimmed) chunks, not
+    // just be shorter — i.e. it was recomputed, not merely truncated blindly.
+    expect(restored.compactedSummary).toBe(
+      restored.compactedChunks.map((c) => c.summary).join(' '),
+    );
+  });
 });

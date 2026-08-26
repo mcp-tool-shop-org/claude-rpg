@@ -190,7 +190,7 @@ import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, rend
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
-import { executeTurn, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
+import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
 import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import type { StatusData } from './character/presence.js';
@@ -633,29 +633,66 @@ export class GameSession {
     const partyPresenceStr = this.getPartyPresence();
     const turnEconomyCtx = this.getEconomyContext();
     const turnCraftingCtx = this.getCraftingContext();
-    const turnResult = await executeTurn({
-      engine: this.engine,
-      client: this.client,
-      history: this.history,
-      playerInput: trimmed,
-      tone: this.tone,
-      immersion: this.immersion,
-      characterPresence: presence.narrator,
-      npcPlayerPresence: presence.npc,
-      playerProfile: this.profile,
-      playerRumors: this.playerRumors,
-      pressureContext: pressureCtx,
-      worldPressures: this.activePressures,
-      lastNpcActions: this.lastNpcActions,
-      districtDescriptor,
-      partyPresence: partyPresenceStr,
-      economyContext: turnEconomyCtx,
-      craftingContext: turnCraftingCtx,
-      opportunityContext: this.getOpportunityContext(),
-      arcContext: this.getArcContext(),
-      endgameContext: this.getEndgameContext(),
-      chronicleContext: this.getChronicleContext(),
-    });
+    let turnResult: TurnResult;
+    try {
+      turnResult = await executeTurn({
+        engine: this.engine,
+        client: this.client,
+        history: this.history,
+        playerInput: trimmed,
+        tone: this.tone,
+        immersion: this.immersion,
+        characterPresence: presence.narrator,
+        npcPlayerPresence: presence.npc,
+        playerProfile: this.profile,
+        playerRumors: this.playerRumors,
+        pressureContext: pressureCtx,
+        worldPressures: this.activePressures,
+        lastNpcActions: this.lastNpcActions,
+        districtDescriptor,
+        partyPresence: partyPresenceStr,
+        economyContext: turnEconomyCtx,
+        craftingContext: turnCraftingCtx,
+        opportunityContext: this.getOpportunityContext(),
+        arcContext: this.getArcContext(),
+        endgameContext: this.getEndgameContext(),
+        chronicleContext: this.getChronicleContext(),
+      });
+    } catch (err) {
+      // F-c4332895: executeTurn() rethrows once engine.submitAction() has
+      // already mutated world state for this turn — a fatal NarrationError
+      // (auth/bad-request) no longer means "nothing happened." When
+      // executeTurn() attached turn-bookkeeping to the error (see
+      // getFatalTurnBookkeeping() in turn-loop.ts), keep this session's own
+      // post-turn record in sync with the turn-history entry it already
+      // wrote, instead of silently skipping recordChronicleEvents/
+      // applyProfileHints/autosave because we never got a TurnResult back.
+      // A secondary failure while recovering must not swallow the original
+      // (actionable) error — it's logged and the original still rethrows.
+      const bookkeeping = getFatalTurnBookkeeping(err);
+      if (bookkeeping) {
+        try {
+          this.applyProfileHints(bookkeeping.profileHints);
+          this.recordChronicleEvents({
+            playerInput: trimmed,
+            interpreted: bookkeeping.interpreted,
+            events: bookkeeping.events,
+            narration: bookkeeping.narration,
+            narrationPlan: null,
+            dialogue: null,
+            audioCalls: [],
+            tick: bookkeeping.tick,
+            profileHints: bookkeeping.profileHints,
+          });
+          await this.checkAutosave();
+        } catch (bookkeepingErr) {
+          this.debugLog.error('subsystem', 'fatal-turn bookkeeping failed', {
+            error: bookkeepingErr instanceof Error ? bookkeepingErr.message : String(bookkeepingErr),
+          });
+        }
+      }
+      throw err;
+    }
 
     // PB-001: Post-turn subsystem ticks wrapped in error containment.
     // The critical path (executeTurn) already completed — subsystem failures

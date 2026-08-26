@@ -8,7 +8,7 @@ import type { NarrationPlan } from '@ai-rpg-engine/presentation';
 import { getEntityFaction, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
 import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
-import { narrateScene, type NarrationResult, type NarrateSceneOpts } from './narrator/narrator.js';
+import { narrateScene, type NarrationResult } from './narrator/narrator.js';
 import { generateDialogue, type DialogueResult } from './dialogue/dialogue-mind.js';
 import { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
@@ -33,6 +33,51 @@ export type TurnResult = {
   tick: number;
   profileHints: ProfileUpdateHints;
 };
+
+// F-c4332895: fallback narration recorded when narrateScene rethrows a fatal
+// NarrationError (auth/bad-request — non-retryable, per narrator.ts's
+// F-304fc328 contract). engine.submitAction() has already mutated world
+// state for this turn by the time narrateScene runs, so this text stands in
+// for the real narration that couldn't be generated — it is honest about
+// the gap rather than in-fiction flavor text, since it also becomes part of
+// the persisted turn history other narration prompts read as context.
+const FATAL_NARRATION_FALLBACK = '(The narrator could not describe what happened — your action was still resolved.)';
+
+/**
+ * F-c4332895: turn-bookkeeping data attached to an error rethrown by
+ * executeTurn() when narrateScene() fails after engine.submitAction() has
+ * already mutated world state for this turn. game.ts's processInput() reads
+ * this back (via getFatalTurnBookkeeping()) so it can keep
+ * recordChronicleEvents()/applyProfileHints() in sync with the turn
+ * history.record() already wrote, instead of silently skipping them because
+ * executeTurn() never returned a TurnResult.
+ */
+export type FatalTurnBookkeeping = {
+  events: ResolvedEvent[];
+  interpreted: InterpretedAction;
+  profileHints: ProfileUpdateHints;
+  tick: number;
+  /** The same fallback text executeTurn() already wrote via history.record(). */
+  narration: string;
+};
+
+const FATAL_TURN_BOOKKEEPING = Symbol('fatalTurnBookkeeping');
+
+type ErrorWithFatalTurnBookkeeping = Error & { [FATAL_TURN_BOOKKEEPING]?: FatalTurnBookkeeping };
+
+/**
+ * Read back the bookkeeping executeTurn()'s fatal-narration catch attached
+ * to a rethrown error, if any. The error reference is unchanged (not
+ * wrapped) so `instanceof NarrationError` checks elsewhere — e.g.
+ * error-presenter.ts's player-facing classification — keep working exactly
+ * as before.
+ */
+export function getFatalTurnBookkeeping(err: unknown): FatalTurnBookkeeping | undefined {
+  if (err instanceof Error) {
+    return (err as ErrorWithFatalTurnBookkeeping)[FATAL_TURN_BOOKKEEPING];
+  }
+  return undefined;
+}
 
 export type ExecuteTurnOpts = {
   engine: Engine;
@@ -126,31 +171,58 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // Step 3 + 4: Build scene context with perception filtering and narrate
   const recentNarration = history.getRecentNarration(3);
   const presentationState = immersion?.stateMachine.current;
-  const narrationResult: NarrationResult = await narrateScene({
-    client,
-    world: engine.world,
-    recentEvents: events,
-    tone,
-    recentNarration,
-    previousLocationId,
-    presentationState,
-    characterPresence,
-    activePressures: pressureContext,
-    districtDescriptor,
-    partyPresence,
-    economyContext,
-    craftingContext,
-    opportunityContext,
-    arcContext,
-    endgameContext,
-    onChunk: onNarrationChunk,
-    // F-7815df9e: narrator.ts (narrative-llm domain) is adding
-    // `chronicleContext` to NarrateSceneOpts and folding it into the prompt
-    // this same wave. Cast locally so this compiles whether or not that
-    // field has landed on NarrateSceneOpts yet — once it has, intersecting
-    // with a compatible optional field is a no-op.
-    chronicleContext,
-  } as NarrateSceneOpts & { chronicleContext?: string });
+  let narrationResult: NarrationResult;
+  try {
+    narrationResult = await narrateScene({
+      client,
+      world: engine.world,
+      recentEvents: events,
+      tone,
+      recentNarration,
+      previousLocationId,
+      presentationState,
+      characterPresence,
+      activePressures: pressureContext,
+      districtDescriptor,
+      partyPresence,
+      economyContext,
+      craftingContext,
+      opportunityContext,
+      arcContext,
+      endgameContext,
+      onChunk: onNarrationChunk,
+      chronicleContext,
+    });
+  } catch (err) {
+    // F-c4332895: engine.submitAction() above has already mutated world
+    // state (combat resolved, items taken, zones changed) by the time
+    // narrateScene runs. narrateScene only lets an error escape for fatal
+    // NarrationError kinds (auth/bad-request — see its own F-304fc328
+    // try/catch, which absorbs every other kind into a fallback
+    // NarrationResult instead of throwing), so that mutation must not be
+    // left unrecorded just because this function is about to throw too.
+    // Record the turn with fallback narration and extract profile hints
+    // from the events that already happened, attach that bookkeeping to the
+    // error for game.ts's processInput() to recover, then rethrow so the
+    // caller still surfaces the actionable message.
+    const profileHints = extractProfileHints(events, interpreted.verb, engine.world, worldPressures);
+    history.record({
+      tick: engine.tick,
+      playerInput,
+      verb: interpreted.verb,
+      narration: FATAL_NARRATION_FALLBACK,
+    });
+    if (err instanceof Error) {
+      (err as ErrorWithFatalTurnBookkeeping)[FATAL_TURN_BOOKKEEPING] = {
+        events,
+        interpreted,
+        profileHints,
+        tick: engine.tick,
+        narration: FATAL_NARRATION_FALLBACK,
+      };
+    }
+    throw err;
+  }
 
   // Step 4.5: Process through immersion runtime if available
   let audioCalls: McpToolCall[] = [];

@@ -246,3 +246,112 @@ describe('immersion-runtime: presentation state seeded on initialize (F-f13b58f3
     expect(combatStarts).toHaveLength(1);
   });
 });
+
+// ─── F-6ef6e5a0: death's fade-out uiEffect must actually reach the bridge, not
+// just be present on the hook's raw (unconsumed) return value ───
+
+describe('immersion-runtime: death uiEffects dispatch (F-6ef6e5a0)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('dispatches the death fade-out through bridge.applyUiEffect on a player death', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const applyUiEffectSpy = vi.spyOn(runtime.bridge, 'applyUiEffect');
+
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      'attack',
+    );
+
+    expect(applyUiEffectSpy).toHaveBeenCalledWith({ type: 'fade-out', durationMs: 2000, color: '#000' });
+  });
+});
+
+// ─── F-91f803b2: combat-end's victory cue must not fire on a player-death turn ───
+
+describe('immersion-runtime: combat-end suppressed on player death (F-91f803b2)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('does not play the ui_success victory chime when the player is the defeated entity', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      'attack',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).not.toContain('ui_success');
+    expect(effectIds).toContain('alert_critical');
+  });
+
+  it('still plays the ui_success victory chime when a non-player entity is defeated', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      minimalEngine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: 'goblin-1' } }] as any,
+      'attack',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).toContain('ui_success');
+    expect(effectIds).not.toContain('alert_critical');
+  });
+});
+
+// ─── F-e57d6a60: a hazard death (hp -> 0, zero matching events) must still reach
+// death presentation — the entire death-presentation system used to key exclusively
+// on combat.entity.defeated, which world-gen.ts's environment-hazard effect never
+// emits (it mutates hp by direct property assignment and returns no events). ───
+
+describe('immersion-runtime: hazard death with no defeat event (F-e57d6a60)', () => {
+  it('engages death presentation (state -> menu, critical alarm dispatched) when hp reaches zero with no defeat event', async () => {
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: { p1: { name: 'Hero', resources: { hp: 0 }, statuses: [] } },
+      zones: { z1: { name: 'Hazard Bog', neighbors: [] } },
+      factions: {},
+    } as any;
+    const engine = { world, store: { state: {} } } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'world.zone.entered', payload: {} }] as any,
+      'move',
+    );
+
+    expect(runtime.stateMachine.current).toBe('menu');
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).toContain('alert_critical');
+  });
+});

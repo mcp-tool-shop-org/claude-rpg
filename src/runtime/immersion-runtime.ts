@@ -12,6 +12,7 @@ import {
   HookManager,
   registerBuiltinHooks,
   isPlayerDefeatEvent,
+  isPlayerAtZeroHp,
   type HookContext,
   type HookResult,
 } from './hooks.js';
@@ -96,6 +97,7 @@ export class ImmersionRuntime {
       verb,
       engine.tick,
       engine.world.playerId,
+      engine.world,
     );
     if (inferredState !== priorState) {
       this.stateMachine.transition(inferredState, verb);
@@ -235,8 +237,14 @@ export class ImmersionRuntime {
     }
 
     // Death — entity-aware: only the PLAYER's defeat triggers the death presentation
-    // (F-adc0d512; shares isPlayerDefeatEvent with hooks.ts's deathHook).
-    if (isPlayerDefeatEvent(events, engine.world.playerId)) {
+    // (F-adc0d512; shares isPlayerDefeatEvent with hooks.ts's deathHook). Also
+    // dispatches for a hazard-style death that reaches hp <= 0 with no matching
+    // event at all (F-e57d6a60; shares isPlayerAtZeroHp with hooks.ts's deathHook,
+    // which independently re-checks the same condition — see its doc comment).
+    if (
+      isPlayerDefeatEvent(events, engine.world.playerId) ||
+      isPlayerAtZeroHp(engine.world, engine.world.playerId)
+    ) {
       const deathCtx: HookContext = {
         hookPoint: 'death',
         world: engine.world,
@@ -264,6 +272,15 @@ export class ImmersionRuntime {
     }
     if (merged.musicCue) {
       await this.bridge.setMusic(merged.musicCue);
+    }
+    // F-6ef6e5a0: uiEffects (e.g. deathHook's fade-to-black) were accumulated by
+    // HookManager.mergeResults but never dispatched here, so the only built-in hook
+    // that populates uiEffects had its cue silently discarded on every player death
+    // — VoiceSoundboardBridge.applyUiEffect had zero callers anywhere in the codebase.
+    if (merged.uiEffects) {
+      for (const effect of merged.uiEffects) {
+        await this.bridge.applyUiEffect(effect);
+      }
     }
     return this.bridge.flush();
   }

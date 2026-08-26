@@ -134,4 +134,46 @@ describe('PresentationStateMachine', () => {
     ] as any;
     expect(sm.inferFromEvents(defeatEvents, undefined, 1)).toBe('aftermath');
   });
+
+  it('infers menu from hp reaching zero even with no defeat event, when world is supplied (F-e57d6a60)', () => {
+    // Mirrors world-gen.ts's environment-hazard effect: hp mutated directly to 0,
+    // with only a world.zone.entered event (no combat.entity.defeated at all).
+    const sm = new PresentationStateMachine();
+    const world = {
+      entities: { player: { resources: { hp: 0 } } },
+    } as any;
+    const events = [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any;
+    expect(sm.inferFromEvents(events, undefined, 1, 'player', world)).toBe('menu');
+  });
+
+  it('does not infer menu from hp when no world is supplied, even if hp would be zero elsewhere', () => {
+    // world is optional — omitting it must fall back to the pure event-based check
+    // rather than throwing or silently matching.
+    const sm = new PresentationStateMachine();
+    const events = [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any;
+    expect(sm.inferFromEvents(events, undefined, 1, 'player')).toBe('exploration');
+  });
+
+  it('resets aftermathTurns and lastDecrementTick when a player death returns menu (F-eb2f7496)', () => {
+    const sm = new PresentationStateMachine();
+
+    // An earlier kill starts an aftermath countdown (aftermathTurns = 2).
+    const npcDefeat = [
+      { type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } },
+    ] as any;
+    expect(sm.inferFromEvents(npcDefeat, undefined, 1, 'player')).toBe('aftermath');
+
+    // Before the countdown finishes, the player dies -> 'menu'. Without a reset,
+    // aftermathTurns stays at 2 and lastDecrementTick stays wedged at its prior value.
+    const playerDefeat = [
+      { type: 'combat.entity.defeated', tick: 2, payload: { entityId: 'player' } },
+    ] as any;
+    expect(sm.inferFromEvents(playerDefeat, undefined, 2, 'player')).toBe('menu');
+
+    // If gameplay continues through this same instance afterward, a later turn with
+    // no combat/dialogue events must fall through to plain 'exploration', not resume
+    // a stale mid-countdown 'aftermath' left over from the kill that predated the
+    // player's own death.
+    expect(sm.inferFromEvents([], undefined, 3, 'player')).toBe('exploration');
+  });
 });

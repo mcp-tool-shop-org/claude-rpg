@@ -6,8 +6,23 @@ import type { ClaudeClient, GenerateResult, StreamCallback, StructuredResult } f
 import { NarrationError, type NarrationErrorKind } from '../../src/llm/claude-errors.js';
 
 export type FakeClientOptions = {
-  /** Canned narration text returned by generate(). Default: scene description from prompt echo. */
-  narration?: string;
+  /**
+   * Canned narration text returned by generate(). Default: scene description
+   * from prompt echo. A fixed string returns the same text for the client's
+   * whole lifetime (original behavior). A function is call-count-aware: it
+   * receives the 1-indexed call number for THIS client's generate() calls
+   * (log.generate, post-increment, matching generateFailure's own
+   * convention below) and returns the text that call should resolve with --
+   * e.g. `(n) => (n === 1 ? 'first exchange' : 'second exchange')` scripts
+   * two distinguishable turns so a test can assert which one's text reached
+   * a later prompt (F-a6575a94: conversation-memory round trip needs
+   * exchange 1 and exchange 2 to carry different text to prove the window
+   * boundary keeps only the most recent exchanges, which a single fixed
+   * narration string can't distinguish). generateStream() shares this
+   * option and scripts off its own independent call number
+   * (log.generateStream), mirroring generateFailure's split.
+   */
+  narration?: string | ((callNumber: number) => string);
   /**
    * If set, generate() throws a NarrationError of this kind. A fixed kind
    * fails every call identically (original behavior). A function is
@@ -60,6 +75,15 @@ function resolveGenerateFailure(
   return typeof failure === 'function' ? failure(callNumber) : failure;
 }
 
+/** Resolves a (possibly call-count-scripted) narration option to this call's text. */
+function resolveNarration(
+  narration: FakeClientOptions['narration'],
+  callNumber: number,
+): string {
+  if (narration === undefined) return 'The scene unfolds before you.';
+  return typeof narration === 'function' ? narration(callNumber) : narration;
+}
+
 export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
   const log = opts.callLog ?? createCallLog();
 
@@ -78,7 +102,7 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
         });
       }
 
-      const narration = opts.narration ?? `The scene unfolds before you.`;
+      const narration = resolveNarration(opts.narration, log.generate);
       return {
         ok: true,
         text: narration,
@@ -138,7 +162,7 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
         });
       }
 
-      const narration = opts.narration ?? `The scene unfolds before you.`;
+      const narration = resolveNarration(opts.narration, log.generateStream);
       // Split narration into word-sized chunks
       const words = narration.split(' ');
       let accumulated = '';

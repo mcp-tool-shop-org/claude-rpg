@@ -171,6 +171,67 @@ export function startMockAnthropicServer(succeedCount = 1): Promise<MockAnthropi
 }
 
 /**
+ * F-99dc64ac: like startMockAnthropicServer(), but the first `failCount`
+ * requests fail with a RETRYABLE status (429 -- claude-adapter.ts's
+ * classifyError() maps this to Anthropic.RateLimitError -> NarrationError
+ * kind 'rate-limit', which withRetry's `narrationErr.retryable` check
+ * actually retries, unlike startMockAnthropicServer's 401/auth which is
+ * fatal and never retried) before the (failCount + 1)th and every
+ * subsequent request succeeds with a normal 200. Exists because
+ * startMockAnthropicServer's only failure mode (401) can never exercise
+ * withRetry's backoff-and-onRetry path at all -- it always throws
+ * immediately as fatal. Real backoff delays apply (createAdaptedClient's
+ * withRetry call uses the real setTimeout-based delayFn, not an injectable
+ * one), so keep `failCount` small (1 is enough to prove one retry actually
+ * happened) -- DEFAULT_RETRY's initialDelayMs is 1000ms, doubling per
+ * attempt.
+ */
+export function startFlakyAnthropicServer(failCount = 1): Promise<MockAnthropicServer> {
+  let calls = 0;
+  const server: Server = createServer((req, res) => {
+    calls++;
+    req.resume();
+    req.on('end', () => {
+      if (calls > failCount) {
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          id: `msg_stub_${calls}`,
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-sonnet-4-20250514',
+          content: [{ type: 'text', text: 'The chapel holds its breath, waiting.' }],
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: { input_tokens: 12, output_tokens: 8 },
+        }));
+        return;
+      }
+      res.writeHead(429, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        type: 'error',
+        error: { type: 'rate_limit_error', message: 'rate limited (forced by test)' },
+      }));
+    });
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        reject(new Error('flaky Anthropic server: could not read bound address'));
+        return;
+      }
+      resolve({
+        url: `http://127.0.0.1:${addr.port}`,
+        callCount: () => calls,
+        close: () => new Promise<void>((res) => server.close(() => res())),
+      });
+    });
+  });
+}
+
+/**
  * Writes a real, loadable save (via the app's own saveSession(), the same
  * path test/integration/session-persistence.test.ts exercises) so bin.ts's
  * `load` command has a save to select. packId must resolve via

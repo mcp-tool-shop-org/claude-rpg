@@ -3,6 +3,7 @@ import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
 import { createTestLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
+import type { OpportunityState } from '@ai-rpg-engine/modules';
 
 describe('GameSession', () => {
   it('should create a session with a starter world', () => {
@@ -358,6 +359,168 @@ describe('GameSession', () => {
 
       // Announcements should be drained after processInput
       expect(h.session.pendingAnnouncements).toEqual([]);
+    });
+  });
+
+  describe('resolveOpportunity chronicle recording (F-b42790aa)', () => {
+    function makeOpportunity(overrides: Partial<OpportunityState> = {}): OpportunityState {
+      return {
+        id: 'opp-test-1',
+        kind: 'contract',
+        status: 'available',
+        title: 'Recover the Lost Ledger',
+        description: 'A merchant wants a stolen ledger recovered.',
+        objectiveDescription: 'Recover the ledger',
+        linkedRumorIds: [],
+        linkedNpcIds: [],
+        tags: [],
+        rewards: [],
+        risks: [],
+        visibility: 'known',
+        urgency: 0.5,
+        turnsRemaining: null,
+        createdAtTick: 0,
+        genre: 'dark fantasy',
+        ...overrides,
+      };
+    }
+
+    // Reach the private resolveOpportunity() directly — same white-box
+    // pattern as the PB-001 tests above, which poke at private engine state.
+    function resolve(session: GameSession, opp: OpportunityState, resolutionType: string): void {
+      (session as unknown as { resolveOpportunity: (o: OpportunityState, r: string) => void })
+        .resolveOpportunity(opp, resolutionType);
+    }
+
+    it('records a declined opportunity with a "Declined" description, not "Failed"', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        tone: 'dark fantasy',
+        clientConfig: { apiKey: 'test-key' },
+      });
+
+      const opp = makeOpportunity();
+      session.activeOpportunities.push(opp);
+      resolve(session, opp, 'declined');
+
+      const records = session.journal.serialize();
+      expect(records).toHaveLength(1);
+      expect(records[0].description).toContain('Declined');
+      expect(records[0].description).toContain(opp.title);
+      expect(records[0].description).not.toContain('Failed');
+    });
+
+    it('still records a failed opportunity as "Failed" (regression guard on the shared default branch)', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        tone: 'dark fantasy',
+        clientConfig: { apiKey: 'test-key' },
+      });
+
+      const opp = makeOpportunity({ id: 'opp-test-2', status: 'accepted', acceptedAtTick: 0 });
+      session.activeOpportunities.push(opp);
+      resolve(session, opp, 'failed');
+
+      const records = session.journal.serialize();
+      expect(records).toHaveLength(1);
+      expect(records[0].description).toContain('Failed');
+    });
+  });
+
+  // F-5b48354f: game.ts's leverage and opportunity subsystems (processLeverageAction/
+  // applyLeverageEffects, processOpportunityAction/matchOpportunity/resolveOpportunity)
+  // had zero direct test coverage despite mutating real economic/narrative state.
+  // These are the "highest-value targets" the finding names: at least one success
+  // path and one edge case per subsystem, driven through the public processInput()
+  // API via the game-harness pattern (not white-box casts), so processLeverageAction,
+  // applyLeverageEffects, processOpportunityAction, and matchOpportunity are all
+  // exercised for real, not just resolveOpportunity in isolation.
+  describe('leverage + opportunity subsystem coverage (F-5b48354f)', () => {
+    function makeLeverageProfile(customOverrides: Record<string, string | number | boolean> = {}) {
+      const profile = createProfile(
+        {
+          name: 'Rhea',
+          archetypeId: 'penitent-knight',
+          backgroundId: 'oath-breaker',
+          traitIds: ['iron-frame'],
+          disciplineId: 'occultist',
+          portraitRef: 'abc123',
+        },
+        { vigor: 7, instinct: 4, will: 1 },
+        { hp: 25, stamina: 8 },
+        ['martial'],
+        'fantasy',
+      );
+      return { ...profile, custom: { ...profile.custom, ...customOverrides } };
+    }
+
+    it('resolves a leverage action successfully and applies its currency effects (success path)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      // 'bribe' costs 15 favor (SOCIAL_REQUIREMENTS in @ai-rpg-engine/modules) — fund it.
+      const profile = makeLeverageProfile({ 'leverage.favor': 20 });
+      const h = createHarness({ gameOpts: { profile } });
+
+      await h.play('bribe guard');
+
+      expect(h.session.lastLeverageResolution?.success).toBe(true);
+      expect(h.session.lastLeverageResolution?.subAction).toBe('bribe');
+      // Cost deducted (20 - 15 = 5) and bribe's debt side-effect applied (+5).
+      expect(h.session.profile?.custom['leverage.favor']).toBe(5);
+      expect(h.session.profile?.custom['leverage.debt']).toBe(5);
+    });
+
+    it('blocks a leverage action for insufficient currency without mutating state (edge case)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const profile = makeLeverageProfile(); // no leverage.favor set — defaults to 0
+      const h = createHarness({ gameOpts: { profile } });
+
+      await h.play('bribe guard');
+
+      expect(h.session.lastLeverageResolution?.success).toBe(false);
+      expect(h.session.lastLeverageResolution?.failReason).toContain('Not enough');
+      expect(h.session.profile?.custom['leverage.favor'] ?? 0).toBe(0);
+      expect(h.session.profile?.custom['leverage.debt'] ?? 0).toBe(0);
+    });
+
+    it('resolves an opportunity end-to-end through accept -> complete (success path)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      const opp: OpportunityState = {
+        id: 'opp-coverage-1',
+        kind: 'contract',
+        status: 'available',
+        title: 'Recover the Lost Ledger',
+        description: 'A merchant wants a stolen ledger recovered.',
+        objectiveDescription: 'Recover the ledger',
+        linkedRumorIds: [],
+        linkedNpcIds: [],
+        tags: [],
+        rewards: [],
+        risks: [],
+        visibility: 'known',
+        urgency: 0.5,
+        turnsRemaining: null,
+        createdAtTick: 0,
+        genre: 'fantasy',
+      };
+      h.session.activeOpportunities.push(opp);
+
+      await h.play('accept contract');
+      expect(h.session.activeOpportunities.find((o) => o.id === opp.id)?.status).toBe('accepted');
+
+      await h.play('complete contract');
+
+      expect(h.session.activeOpportunities.find((o) => o.id === opp.id)).toBeUndefined();
+      expect(h.session.resolvedOpportunities).toHaveLength(1);
+
+      const records = h.session.journal.serialize();
+      expect(records.some((r) => r.description.includes('Accepted contract'))).toBe(true);
+      expect(records.some((r) => r.description.includes('Completed contract'))).toBe(true);
     });
   });
 });

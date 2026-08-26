@@ -201,8 +201,8 @@ function tryFastInterpret(
   }
 
   // Crafting verbs (craft, salvage, repair, modify)
-  if (/^(craft|salvage|repair|modify)\s*/.test(lower)) {
-    const craftMatch = lower.match(/^(craft|salvage|repair|modify)\s*(.*)/);
+  if (/^(craft|salvage|repair|modify)(\s|$)/.test(lower)) {
+    const craftMatch = lower.match(/^(craft|salvage|repair|modify)(?:\s+(.*))?$/);
     if (craftMatch) {
       const craftVerb = craftMatch[1];
       const craftArg = craftMatch[2]?.trim() || '';
@@ -328,7 +328,7 @@ const SOCIAL_PATTERNS: LeverageVerbMap[] = [
   { pattern: /^intimidate\s+(.+)/i, subAction: 'intimidate', extractTarget: true },
   { pattern: /^recruit\s+(.+)/i, subAction: 'recruit-ally', extractTarget: true },
   { pattern: /^petition\s+(.+)/i, subAction: 'petition-authority', extractTarget: true },
-  { pattern: /^(disguise|hide identity|conceal)/i, subAction: 'disguise', extractTarget: false },
+  { pattern: /^(disguise|hide identity|conceal)(\s|$)/i, subAction: 'disguise', extractTarget: false },
   { pattern: /^stake\s+claim/i, subAction: 'stake-claim', extractTarget: false },
   { pattern: /^call\s+in\s+(a\s+)?favor/i, subAction: 'call-in-favor', extractTarget: false },
 ];

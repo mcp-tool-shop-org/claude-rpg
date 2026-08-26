@@ -538,4 +538,135 @@ describe('action-interpreter', () => {
       expect(result.confidence).toBe('high');
     });
   });
+
+  describe('craft/salvage/repair/modify word boundary (F-f57bbfd9)', () => {
+    /** Mock client whose LLM fallback returns a recognizable marker verb, so
+     * we can prove input reached the slow path instead of the fast regex. */
+    function createLlmMarkerClient() {
+      return {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({
+          ok: true,
+          data: {
+            verb: 'llm-handled',
+            targetIds: null,
+            toolId: null,
+            parameters: null,
+            confidence: 'medium',
+            reasoning: 'routed to LLM',
+            alternatives: null,
+          },
+          raw: '',
+        }),
+      };
+    }
+
+    it.each([
+      'repairs',
+      'repairable armor',
+      'craftier plan',
+      'modifying the sword',
+      'salvageable wreck',
+    ])('should NOT fast-match %j as craft/salvage/repair/modify (falls through to LLM)', async (input) => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        input,
+        engine.getAvailableActions(),
+      );
+
+      expect(result.verb).not.toBe('craft');
+      expect(result.verb).toBe('llm-handled');
+    });
+
+    it('should still fast-match bare "craft" with no argument', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'craft',
+        engine.getAvailableActions(),
+      );
+
+      expect(result.verb).toBe('craft');
+      expect(result.parameters).toEqual({ subAction: 'craft', recipeOrItem: '' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should still fast-match "repair shield" with a real word boundary', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'repair shield',
+        engine.getAvailableActions(),
+      );
+
+      expect(result.verb).toBe('craft');
+      expect(result.parameters).toEqual({ subAction: 'repair', recipeOrItem: 'shield' });
+      expect(result.confidence).toBe('high');
+    });
+
+    // Sibling of the same missing-word-boundary pattern, found via the
+    // family-of-call-sites probe: SOCIAL_PATTERNS' disguise/conceal entry has
+    // no trailing boundary at all (worse than \s* — literally none), so any
+    // word merely starting with "conceal" fast-matches as the disguise action.
+    it.each([
+      'concealment options',
+      'concealed my tracks',
+      'disguised as a merchant',
+    ])('should NOT fast-match %j as disguise (sibling of F-f57bbfd9 in SOCIAL_PATTERNS)', async (input) => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        input,
+        [...engine.getAvailableActions(), 'social'],
+      );
+
+      expect(result.verb).not.toBe('social');
+      expect(result.verb).toBe('llm-handled');
+    });
+
+    it('should still fast-match bare "conceal" as the disguise social action', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'conceal',
+        [...engine.getAvailableActions(), 'social'],
+      );
+
+      expect(result.verb).toBe('social');
+      expect(result.parameters).toEqual({ subAction: 'disguise' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should still fast-match "disguise myself as a merchant" (verb + trailing text)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      const result = await interpretAction(
+        createLlmMarkerClient() as any,
+        engine.world,
+        'disguise myself as a merchant',
+        [...engine.getAvailableActions(), 'social'],
+      );
+
+      expect(result.verb).toBe('social');
+      expect(result.parameters).toEqual({ subAction: 'disguise' });
+    });
+  });
 });

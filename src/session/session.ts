@@ -198,15 +198,23 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     // Step 1: Write to temp file
     await writeFile(tmpPath, json, 'utf-8');
 
-    // Step 2: If a previous save exists, rename it to .bak
+    // Step 2: If a previous save exists, rename it to .bak.
+    // Only ENOENT means "no previous save — first write". Any other stat()
+    // failure, or a rename() failure once we know a previous save exists
+    // (hadPreviousSave), must NOT be silently treated as "no previous save":
+    // that would let step 3 overwrite the original save with no backup ever
+    // created, defeating the atomic-save/backup guarantee (PB-002).
     try {
       await stat(savePath);
       hadPreviousSave = true;
+    } catch (statErr) {
+      if ((statErr as NodeJS.ErrnoException).code !== 'ENOENT') throw statErr;
+    }
+
+    if (hadPreviousSave) {
       try { await unlink(bakPath); } catch { /* no previous backup */ }
       await rename(savePath, bakPath);
       hasBak = true;
-    } catch {
-      // No previous save — first write
     }
 
     // Step 3: Rename tmp → save

@@ -2,9 +2,10 @@
 // Uses a fake Claude client so no real API calls are made.
 // Validates state transitions, history, output structure, and failure behavior.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createHarness } from '../helpers/game-harness.js';
 import { NarrationError } from '../../src/llm/claude-errors.js';
+import type { McpToolCall } from '../../src/runtime/audio-bridge.js';
 
 // ─── Happy Path ───────────────────────────────────────────────
 
@@ -231,5 +232,97 @@ describe('turn pipeline — narration failure', () => {
     expect(h.callLog.generateStructured).toBe(0);
     // Generate was called for narration
     expect(h.callLog.generate).toBeGreaterThan(0);
+  });
+});
+
+// ─── Presentation Seam Integration (F-f9b5f874) ──────────────
+
+// F-79a25863 (presentation seam contract) is unit-tested in src/game.test.ts
+// against GameSession directly, but every one of those cases either passes
+// no onPresentation callback or mocks the adjacent boundary with
+// vi.spyOn(h.session.immersion, 'processPresentation') -- none of them drive
+// a real turn far enough to let the actual hook pipeline (hooks.ts's
+// combatStartHook -> ImmersionRuntime.fireEventHooks ->
+// VoiceSoundboardBridge) compute a genuine McpToolCall. These cases fill
+// that gap: real createHarness() turns, onPresentation wired through
+// gameOpts exactly like game-harness.ts's opts.gameOpts spread documents,
+// and no mock anywhere on the immersion/presentation path.
+describe('presentation seam — real turn integration (F-f9b5f874)', () => {
+  it('invokes onPresentation with an empty array after an ordinary turn that enters no new presentation state', async () => {
+    const onPresentation = vi.fn();
+    const h = createHarness({ gameOpts: { onPresentation } });
+
+    await h.play('look around');
+
+    expect(onPresentation).toHaveBeenCalledTimes(1);
+    expect(onPresentation).toHaveBeenCalledWith([]);
+  });
+
+  it('delivers the real hook-triggered combat-start cues to onPresentation from a genuine combat turn', async () => {
+    const onPresentation = vi.fn();
+    const h = createHarness({ gameOpts: { onPresentation } });
+
+    // Defensive fixture setup, not a mock of anything under test: a fresh
+    // createGame() world's player starts with only 8 stamina and "attack"
+    // costs 1, but @ai-rpg-engine/starter-fantasy's createGame() has been
+    // observed (empirically, against this exact dependency version) to
+    // share player.resources.stamina across separate createGame() calls
+    // within one process, so a run of many prior tests in this file can
+    // leave too little stamina left for "attack" to resolve as
+    // combat.contact.miss/hit and instead reject the action outright with
+    // no combat.* event at all. Pinning both combatants' resources directly
+    // on the real engine -- the same idiom src/action-interpreter.test.ts
+    // already uses against a real createGame() engine (`engine.world.entities[engine.world.playerId]`)
+    // -- makes this test's outcome depend only on the real presentation
+    // seam under test, not on stamina left over from execution order.
+    // Pilgrim's hp is pinned high too so the hit/miss roll can't coincidentally
+    // one-shot it into combat.entity.defeated, which would route this turn
+    // through combatEndHook (aftermath) instead of the combat-start seam
+    // this case exists to prove.
+    const world = h.session.engine.world;
+    world.entities[world.playerId].resources.stamina = 999;
+    const pilgrim = Object.values(world.entities).find((e) => e.id === 'pilgrim');
+    if (!pilgrim) throw new Error('fixture: "pilgrim" entity not found in the starting zone');
+    pilgrim.resources.hp = 999;
+
+    // First combat action of the session: the presentation state machine
+    // starts at 'exploration' (PresentationStateMachine's default), so this
+    // turn's combat.* event(s) flip it to 'combat' for the first time,
+    // which is exactly the justEnteredCombat gate hooks.ts's
+    // combatStartHook (and ImmersionRuntime.fireEventHooks's dispatch of
+    // it) requires to fire.
+    await h.play('attack pilgrim');
+
+    expect(onPresentation).toHaveBeenCalledTimes(1);
+    const [calls] = onPresentation.mock.calls[0] as [McpToolCall[]];
+    // combatStartHook's sfxCues + musicCue, executed for real through
+    // VoiceSoundboardBridge (audio-bridge.ts) -- not asserting the
+    // soundpack-core registry's effect-name mapping here, since that
+    // lookup table belongs to a separate dependency; intensity/action/fadeMs
+    // are this repo's own hooks.ts values.
+    expect(calls).toContainEqual({
+      tool: 'sound_effect',
+      params: expect.objectContaining({ intensity: 0.8 }),
+    });
+    expect(calls).toContainEqual({
+      tool: '__music_intent__',
+      params: expect.objectContaining({ action: 'intensify' }),
+    });
+  });
+
+  it('does not let a throwing onPresentation sink damage a real combat turn (mirrors PB-001 containment)', async () => {
+    const onPresentation = vi.fn(() => {
+      throw new Error('sink exploded');
+    });
+    const h = createHarness({ gameOpts: { onPresentation } });
+
+    const world = h.session.engine.world;
+    world.entities[world.playerId].resources.stamina = 999;
+
+    const output = await h.play('attack pilgrim');
+
+    expect(output).toBeTruthy();
+    expect(h.turnCount()).toBe(1);
+    expect(onPresentation).toHaveBeenCalledTimes(1);
   });
 });

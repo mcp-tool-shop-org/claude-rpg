@@ -152,6 +152,8 @@ export function coverageReportLine(filePath, statements, branches, threshold) {
     report += `${statements.toFixed(1)}% statements`;
     if (branches !== undefined) {
       report += `, ${branches.toFixed(1)}% branches`;
+    } else {
+      report += ' (branch data unavailable)';
     }
   }
 

@@ -30,6 +30,11 @@ import {
   coverageReportLine,
 } from './check-coverage-utils.mjs';
 
+// Respect NO_COLOR environment variable and terminal capability
+// See https://no-color.org/
+const useColor = !process.env.NO_COLOR && process.stdout.isTTY;
+const bold = (s) => (useColor ? `\x1b[1m${s}\x1b[0m` : s);
+
 // Single source of the per-path floors, shared with the test suite.
 const THRESHOLDS = getPerPathThresholds();
 
@@ -69,7 +74,7 @@ if (!existsSync(coveragePath)) {
 const coverage = JSON.parse(readFileSync(coveragePath, 'utf8'));
 let failures = 0;
 
-console.log('── Runtime-Critical Changed Files ──\n');
+console.log(`${bold('── Runtime-Critical Changed Files ──')}\n`);
 
 // Global branch coverage floor — extracted to check-coverage-utils.mjs to ensure
 // scripts and vitest.config.ts stay in sync. See getGlobalBranchThreshold().
@@ -132,11 +137,14 @@ for (const file of criticalChanged) {
 
 console.log('');
 if (failures > 0) {
-  console.log(`✗ ${failures} critical file(s) below threshold or not instrumented.`);
+  console.log(`✗ Critical-path coverage check failed: ${failures} file(s) below threshold or not instrumented.`);
   // Print unique failing files to reduce cognitive load for developers debugging CI failures
   const uniqueFailingFiles = [...new Set(failingFiles)];
   if (uniqueFailingFiles.length > 0) {
-    console.log(`  Failed files: [${uniqueFailingFiles.join(', ')}]`);
+    console.log('  Failed files:');
+    for (const file of uniqueFailingFiles) {
+      console.log(`    - ${file}`);
+    }
   }
   process.exit(1);
 } else {

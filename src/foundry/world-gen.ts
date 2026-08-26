@@ -100,6 +100,7 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
   if (!proposal.npcs?.length) errors.push('No NPCs generated');
   if (!proposal.factions?.length) errors.push('No factions generated');
   if (!proposal.player) errors.push('No player generated');
+  if (!proposal.ruleset) errors.push('No ruleset generated');
 
   // Validate NPC required fields
   if (proposal.npcs) {
@@ -118,6 +119,36 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
       if (!zone.id) errors.push('Zone missing required field: id');
       if (!zone.name) errors.push(`Zone "${zone.id ?? '?'}" missing required field: name`);
     }
+  }
+
+  // Validate faction required fields (F-dd5436c0). memberIds feeds
+  // createFactionCognition eagerly and synchronously while the Engine's `modules: [...]`
+  // array is being built, BEFORE `new Engine(...)` itself runs -- the compiled module
+  // factory does `[...faction.entityIds]` / `for (const id of faction.entityIds)` with no
+  // guard, so a faction whose memberIds is missing/non-array throws
+  // "entityIds is not iterable" before any zone, player, or NPC entity has been added.
+  // Empty memberIds is fine (a faction with no members yet); missing/non-array is not.
+  if (proposal.factions) {
+    for (const faction of proposal.factions) {
+      if (!faction.id) errors.push('Faction missing required field: id');
+      if (!Array.isArray(faction.memberIds)) {
+        errors.push(`Faction "${faction.id ?? '?'}" missing required field: memberIds`);
+      }
+    }
+  }
+
+  // Validate ruleset required fields (F-d68e103d). Immediately after this function
+  // returns zero errors, ruleset construction dereferences proposal.ruleset
+  // unconditionally (proposal.ruleset.id/.name/.stats.map(...)/.resources.map(...)) to
+  // build the Engine's RulesetDefinition -- generateStructured casts the LLM's JSON to
+  // WorldGenProposal with no runtime validation of its own, so a truncated/malformed
+  // proposal that omits ruleset (or omits its stats/resources) must be caught here
+  // instead of throwing a raw TypeError during Engine construction.
+  if (proposal.ruleset) {
+    if (!proposal.ruleset.id) errors.push('Ruleset missing required field: id');
+    if (!proposal.ruleset.name) errors.push('Ruleset missing required field: name');
+    if (!Array.isArray(proposal.ruleset.stats)) errors.push('Ruleset missing required field: stats');
+    if (!Array.isArray(proposal.ruleset.resources)) errors.push('Ruleset missing required field: resources');
   }
 
   // Validate player startZoneId references a real zone

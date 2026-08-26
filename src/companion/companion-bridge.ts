@@ -8,14 +8,9 @@ import {
   removeCompanion,
   getActiveCompanions,
   isCompanionRecruitable,
-  buildNpcProfile,
   type CompanionRole,
   type CompanionState,
   type PartyState,
-  type NpcProfile,
-  type PlayerRumor,
-  type WorldPressure,
-  type NpcObligationLedger,
 } from '@ai-rpg-engine/modules';
 
 // --- Types ---
@@ -166,35 +161,19 @@ export function syncCompanionMorale(engine: Engine, party: PartyState): void {
   }
 }
 
-// --- Profile Building ---
-
-/**
- * Build NPC profiles for all companions (for director views).
- */
-export function getCompanionProfiles(
-  engine: Engine,
-  party: PartyState,
-  activePressures: WorldPressure[],
-  playerRumors?: PlayerRumor[],
-  npcObligations?: Map<string, NpcObligationLedger>,
-): NpcProfile[] {
-  const profiles: NpcProfile[] = [];
-  for (const comp of party.companions) {
-    const obligations = npcObligations?.get(comp.npcId);
-    const profile = buildNpcProfile(
-      engine.world,
-      comp.npcId,
-      engine.world.playerId,
-      activePressures,
-      playerRumors,
-      obligations,
-    );
-    profiles.push(profile);
-  }
-  return profiles;
-}
-
 // --- Role Inference ---
+//
+// F-4ca425fd: this file previously also exported getCompanionProfiles, a companion-only
+// profile builder ("for director views" per its own doc comment). It was fully
+// implemented and unit-tested in isolation but had zero production callers -- the
+// director-mode companion-profile view it claimed to exist for is actually built by
+// buildNpcProfilesForDirector (src/npc/agency.ts, a different domain), whose
+// buildAllNpcProfiles call builds profiles for ALL named NPCs, companions included.
+// Confirmed by call-site audit: game.ts already gets a companion's profile by filtering
+// that all-NPC list (`this.lastNpcProfiles.find((p) => p.npcId === comp.npcId)`,
+// processCompanionReactions) rather than ever calling this function. Deleted as dead
+// code fully superseded by buildAllNpcProfiles, rather than left to drift as a second,
+// unwired "companion profile" path a future contributor could mistake for the live one.
 
 /**
  * Infer companion role from entity tags.

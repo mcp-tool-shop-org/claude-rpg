@@ -71,7 +71,7 @@ export class ImmersionRuntime {
       | { inCombat?: boolean }
       | undefined;
     if (combatCore?.inCombat) {
-      this.stateMachine.transition('combat', 'session-restore');
+      this.logTransition(this.stateMachine.transition('combat', 'session-restore'));
     }
   }
 
@@ -100,7 +100,10 @@ export class ImmersionRuntime {
       engine.world,
     );
     if (inferredState !== priorState) {
-      this.stateMachine.transition(inferredState, verb);
+      // F-aaaf50d9: transition() itself never logged anything, and this call site used
+      // to discard the returned StateTransition entirely, so no code path -- not even
+      // --debug -- could ever surface which state a turn transitioned to/from and why.
+      this.logTransition(this.stateMachine.transition(inferredState, verb));
     }
     // F-0acb03fe: whether combat was JUST entered this call, mirroring
     // PresentationStateMachine.transition()'s own `to === 'combat' && from !== 'combat'`
@@ -186,7 +189,19 @@ export class ImmersionRuntime {
         presentationState: this.stateMachine.current,
         narrationPlan,
       };
-      this.hookManager.fire(postContext);
+      // F-23bce472: capture the result the same way pre-narration's is captured into
+      // `preResults` above -- unlike pre-narration, nothing consumes post-narration
+      // results yet (registerBuiltinHooks never registers this point either), so there
+      // is genuinely nothing to do with it beyond surfacing that it exists. Without
+      // this, a future contributor who registers the first post-narration hook would
+      // have its return value silently discarded with no error or warning.
+      const postResults = this.hookManager.fire(postContext);
+      if (this.debugMode && postResults.length > 0) {
+        console.error(
+          '[immersion] post-narration hook produced results that nothing consumes yet:',
+          postResults,
+        );
+      }
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Post-narration hook error:', err);
@@ -194,6 +209,18 @@ export class ImmersionRuntime {
     }
 
     return [...specificCalls, ...audioCalls];
+  }
+
+  /**
+   * F-aaaf50d9: log a presentation-state transition under debugMode. Shared by both
+   * production call sites (processPresentation's per-turn inference and initialize()'s
+   * session-restore seed) so a player-reported "state seems stuck" bug has something to
+   * trace via the existing --debug mechanism instead of nothing at all.
+   */
+  private logTransition(t: StateTransition): void {
+    if (this.debugMode) {
+      console.error(`[immersion] state: ${t.from} -> ${t.to} (${t.trigger})`);
+    }
   }
 
   /** Get voice cast for an NPC. */
@@ -308,10 +335,21 @@ export class ImmersionRuntime {
     hookResults: HookResult[],
   ): NarrationPlan {
     const merged = HookManager.mergeResults(hookResults);
+    // F-52475879: sfx/ambientLayers are populated by the LLM narrator every turn
+    // (prompts/narrate-scene.ts's "choose sfx/ambient based on the scene mood ... use
+    // sparingly" guidance is prose, not a schema-enforced limit) -- the same per-turn
+    // trust boundary that motivated capping the sibling uiEffects field on this same
+    // NarrationPlan (MAX_UI_EFFECTS_PER_PLAN, F-4ece453e/F-6ef6e5a0, in
+    // processPresentation above). AudioDirector's per-resource cooldown only suppresses
+    // repeats of the *same* effectId, not a plan carrying many *distinct* cues, so a
+    // malformed narrator response must be capped here before it reaches
+    // audioDirector.schedule()/bridge.executeCommands().
+    const MAX_SFX_PER_PLAN = 5;
+    const MAX_AMBIENT_PER_PLAN = 3;
     return {
       ...plan,
-      sfx: [...plan.sfx, ...(merged.sfxCues ?? [])],
-      ambientLayers: [...plan.ambientLayers, ...(merged.ambientCues ?? [])],
+      sfx: [...plan.sfx, ...(merged.sfxCues ?? [])].slice(0, MAX_SFX_PER_PLAN),
+      ambientLayers: [...plan.ambientLayers, ...(merged.ambientCues ?? [])].slice(0, MAX_AMBIENT_PER_PLAN),
       uiEffects: [...plan.uiEffects, ...(merged.uiEffects ?? [])],
       musicCue: merged.musicCue ?? plan.musicCue,
     };

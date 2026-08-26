@@ -3,6 +3,17 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createAdaptedClient, classifyError, withRetry } from './claude-adapter.js';
 import { NarrationError } from './claude-errors.js';
 
+// F-18fe36fc: Anthropic.TextBlock.citations is a required field in the
+// installed SDK (`citations: Array<TextCitation> | null`, no `?` —
+// node_modules/@anthropic-ai/sdk/resources/messages/messages.d.ts). A bare
+// `{ type: 'text', text }` literal is missing it; this helper builds a
+// conformant TextBlock so fixtures below don't have to repeat the field (or
+// paper over its absence with an `as Anthropic.ContentBlock[]` cast) at every
+// call site.
+function fakeTextBlock(text: string): Anthropic.TextBlock {
+  return { type: 'text', text, citations: null };
+}
+
 function fakeMessage(overrides: Partial<Anthropic.Message> = {}): Anthropic.Message {
   return {
     id: 'msg_test',
@@ -12,7 +23,7 @@ function fakeMessage(overrides: Partial<Anthropic.Message> = {}): Anthropic.Mess
     stop_reason: 'end_turn',
     stop_sequence: null,
     usage: { input_tokens: 10, output_tokens: 20, ...(overrides.usage ?? {}) },
-    content: overrides.content ?? [{ type: 'text', text: 'Hello world' }],
+    content: overrides.content ?? [fakeTextBlock('Hello world')],
     ...overrides,
   } as Anthropic.Message;
 }
@@ -61,7 +72,7 @@ describe('createAdaptedClient', () => {
 
     it('concatenates multiple text blocks', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: 'part1' }, { type: 'text', text: 'part2' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('part1'), fakeTextBlock('part2')] }),
       );
       const client = createAdaptedClient();
       const result = await client.generate({ system: 's', prompt: 'p' });
@@ -73,8 +84,8 @@ describe('createAdaptedClient', () => {
         fakeMessage({
           content: [
             { type: 'tool_use', id: 'x', name: 'f', input: {} } as unknown as Anthropic.ContentBlock,
-            { type: 'text', text: 'only-text' },
-          ] as Anthropic.ContentBlock[],
+            fakeTextBlock('only-text'),
+          ],
         }),
       );
       const client = createAdaptedClient();
@@ -133,7 +144,7 @@ describe('createAdaptedClient', () => {
   describe('generateStructured', () => {
     it('parses JSON from fenced block', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: 'Here:\n```json\n{"a":1}\n```' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('Here:\n```json\n{"a":1}\n```')] }),
       );
       const client = createAdaptedClient();
       const result = await client.generateStructured<{ a: number }>({ system: 's', prompt: 'p' });
@@ -143,7 +154,7 @@ describe('createAdaptedClient', () => {
 
     it('parses raw JSON object when no fence', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: 'result: {"b":2}' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('result: {"b":2}')] }),
       );
       const client = createAdaptedClient();
       const result = await client.generateStructured<{ b: number }>({ system: 's', prompt: 'p' });
@@ -153,7 +164,7 @@ describe('createAdaptedClient', () => {
 
     it('returns ok:false when no JSON found', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: 'no json here' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('no json here')] }),
       );
       const client = createAdaptedClient();
       const result = await client.generateStructured({ system: 's', prompt: 'p' });
@@ -163,7 +174,7 @@ describe('createAdaptedClient', () => {
 
     it('returns ok:false on malformed JSON', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: '```json\n{broken}\n```' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('```json\n{broken}\n```')] }),
       );
       const client = createAdaptedClient();
       const result = await client.generateStructured({ system: 's', prompt: 'p' });
@@ -176,7 +187,7 @@ describe('createAdaptedClient', () => {
     // generateStructured must honor it exactly like the legacy createClaudeClient does.
     it('rejects bad shapes early when a validator throws (PFE-003)', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: '{"a":1}' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('{"a":1}')] }),
       );
       const client = createAdaptedClient();
       const validator = (_data: unknown) => {
@@ -190,7 +201,7 @@ describe('createAdaptedClient', () => {
 
     it('calls the validator and returns ok:true when it passes', async () => {
       createSpy.mockResolvedValue(
-        fakeMessage({ content: [{ type: 'text', text: '{"a":1}' }] as Anthropic.ContentBlock[] }),
+        fakeMessage({ content: [fakeTextBlock('{"a":1}')] }),
       );
       const client = createAdaptedClient();
       const validator = vi.fn();
@@ -350,7 +361,7 @@ describe('withRetry', () => {
         stop_reason: 'end_turn',
         stop_sequence: null,
         usage: { input_tokens: 5, output_tokens: 10 },
-        content: [{ type: 'text', text: 'retried ok' }],
+        content: [fakeTextBlock('retried ok')],
       } as Anthropic.Message;
     });
 

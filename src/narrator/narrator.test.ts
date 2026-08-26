@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { narrateScene, narrateSceneLegacy, FALLBACK_NARRATION, type NarrateSceneOpts } from './narrator.js';
+import {
+  narrateScene,
+  narrateSceneLegacy,
+  FALLBACK_NARRATION,
+  FATAL_NARRATION_FALLBACK_MIRROR,
+  type NarrateSceneOpts,
+} from './narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
@@ -9,9 +15,14 @@ function makeGenerateResult(text: string): GenerateResult {
   return { ok: true, text, inputTokens: 10, outputTokens: 20 };
 }
 
+// F-38b692c2: ClaudeClient (claude-client.ts:27-58) requires generateStructured
+// and model too, not just generate/generateStream. Stub both so every literal
+// built from this factory actually satisfies the interface it's typed as.
 function makeClient(text: string, streamText?: string): ClaudeClient {
   const client: ClaudeClient = {
     generate: vi.fn().mockResolvedValue(makeGenerateResult(text)),
+    generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+    model: 'test-model',
   };
   if (streamText !== undefined) {
     client.generateStream = vi.fn().mockResolvedValue(makeGenerateResult(streamText));
@@ -284,6 +295,8 @@ describe('narrateScene F-304fc328: LLM failure fallback', () => {
   it('should return a fallback NarrationResult instead of throwing when generate() rejects', async () => {
     const client: ClaudeClient = {
       generate: vi.fn().mockRejectedValue(new Error('API timeout')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
     };
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const opts = makeOpts({ client });
@@ -307,6 +320,8 @@ describe('narrateScene F-304fc328: LLM failure fallback', () => {
     const client: ClaudeClient = {
       generate: vi.fn(),
       generateStream: vi.fn().mockRejectedValue(new Error('stream disconnected')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
     };
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const opts = makeOpts({ client, onChunk: (c) => chunks.push(c) });
@@ -327,6 +342,8 @@ describe('narrateSceneLegacy F-304fc328: LLM failure fallback', () => {
   it('should return a fallback NarrationResult instead of throwing when generate() rejects', async () => {
     const client: ClaudeClient = {
       generate: vi.fn().mockRejectedValue(new Error('API down')),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
     };
     const engine = createGame();
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -404,5 +421,61 @@ describe('narrateScene streaming with LEGACY prompt (FT-BR-004)', () => {
 
     expect(result.plan).not.toBeNull();
     expect(result.plan!.sceneText).toBe('You enter a dimly lit chamber.');
+  });
+});
+
+// === F-e8630a73 / F-18f4dd88: fallback sentinels must never be echoed back
+// into the LLM-facing prompt as if they were real 'previous narration' — a
+// non-fatal NarrationError on a recent turn stores FALLBACK_NARRATION (or the
+// mirrored turn-loop.ts FATAL_NARRATION_FALLBACK sentinel) via history.record(),
+// and buildNarratePrompt's 'Previous narration (for continuity)' section
+// (prompts/narrate-scene.ts:114) used to quote it back verbatim on every
+// following turn, indistinguishable from authored prose. ===
+describe('narrateScene F-e8630a73: fallback sentinels are filtered from the prompt', () => {
+  it('should not interpolate FALLBACK_NARRATION into the prompt when it appears in recentNarration', async () => {
+    const client = makeClient('A cool breeze greets you.');
+    const opts = makeOpts({
+      client,
+      recentNarration: ['A real narrated turn.', FALLBACK_NARRATION],
+    });
+
+    await narrateScene(opts);
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain(FALLBACK_NARRATION);
+    expect(call.prompt).toContain('A real narrated turn.');
+  });
+
+  it('should not interpolate the mirrored turn-loop.ts fallback sentinel into the prompt', async () => {
+    const client = makeClient('A cool breeze greets you.');
+    const opts = makeOpts({
+      client,
+      recentNarration: ['A real narrated turn.', FATAL_NARRATION_FALLBACK_MIRROR],
+    });
+
+    await narrateScene(opts);
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain(FATAL_NARRATION_FALLBACK_MIRROR);
+    expect(call.prompt).toContain('A real narrated turn.');
+  });
+});
+
+describe('narrateSceneLegacy F-e8630a73: fallback sentinels are filtered from the prompt', () => {
+  it('should not interpolate FALLBACK_NARRATION into the legacy prompt when it appears in recentNarration', async () => {
+    const client = makeClient('You arrive.');
+    const engine = createGame();
+
+    await narrateSceneLegacy(
+      client,
+      engine.world,
+      [],
+      'dark fantasy',
+      ['A real narrated turn.', FALLBACK_NARRATION],
+    );
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain(FALLBACK_NARRATION);
+    expect(call.prompt).toContain('A real narrated turn.');
   });
 });

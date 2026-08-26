@@ -18,6 +18,16 @@ export type TurnRecord = {
    * values for those.
    */
   isFallback?: boolean;
+  /**
+   * F-fb9e78af: true when this turn is a low-confidence interpretation
+   * clarification ("I'm not sure what you mean...") rather than a resolved
+   * action or a narration/dialogue fallback — both of which also set
+   * isFallback. Lets turn-loop.ts's Step 1 find "was the immediately
+   * preceding turn a clarification?" without conflating it with the other
+   * isFallback cases, so a short follow-up reply can be given recentContext
+   * built specifically from that clarification.
+   */
+  isClarification?: boolean;
 };
 
 /** Compressed summary of evicted turns for long-term memory. */

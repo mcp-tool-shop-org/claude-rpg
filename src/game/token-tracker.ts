@@ -1,5 +1,7 @@
 // FT-B-004: Token/cost tracking per LLM call type
 
+import type { ClaudeClient } from '../claude-client.js';
+
 export type CallType = 'interpretation' | 'narration' | 'dialogue' | 'other';
 
 export type TokenRecord = {
@@ -86,4 +88,54 @@ export class SessionTokenTracker {
   reset(): void {
     this.records.clear();
   }
+}
+
+/**
+ * F-b4b16d0a: wrap a ClaudeClient so every generate()/generateStream() call
+ * made *through the wrapper* is recorded into `tracker` under `callType`.
+ * Callers pass a differently-tagged wrap of the same underlying client to
+ * each logical call site (interpretation/narration/dialogue) so
+ * GameSession.getCostSummary() can report per-call-type cost — see
+ * turn-loop.ts's executeTurn() and game.ts's getOpeningNarration()/
+ * handleConclude().
+ *
+ * generateStructured() calls are passed through unmodified and NOT
+ * token-recorded: StructuredResult (claude-client.ts, narrative-llm domain)
+ * doesn't carry inputTokens/outputTokens through from the underlying SDK
+ * response the way GenerateResult does — extending it is a cross-domain
+ * change outside this wave's game-core scope (see the COST COMMAND
+ * cross-domain contract's "documented local cast if the other half's type
+ * is absent" allowance). Interpretation-call cost is therefore under-counted
+ * today (call count isn't tracked either, to avoid a misleading 0-token
+ * line); narration and dialogue (both generate()/generateStream()-based)
+ * are fully counted.
+ */
+export function withTokenTracking(
+  client: ClaudeClient,
+  tracker: SessionTokenTracker,
+  callType: CallType,
+): ClaudeClient {
+  const wrapped: ClaudeClient = {
+    model: client.model,
+    async generate(opts) {
+      const result = await client.generate(opts);
+      tracker.record(callType, result.inputTokens, result.outputTokens);
+      return result;
+    },
+    generateStructured(opts) {
+      return client.generateStructured(opts);
+    },
+  };
+  if (client.generateStream) {
+    // Bound so a real implementation relying on `this` internally (unlike
+    // this codebase's own factories, which close over state instead) still
+    // works correctly once detached from `client` onto `wrapped`.
+    const generateStream = client.generateStream.bind(client);
+    wrapped.generateStream = async (opts) => {
+      const result = await generateStream(opts);
+      tracker.record(callType, result.inputTokens, result.outputTokens);
+      return result;
+    };
+  }
+  return wrapped;
 }

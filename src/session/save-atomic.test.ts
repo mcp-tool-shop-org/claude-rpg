@@ -65,6 +65,41 @@ describe('saveSession with SaveSessionInput (PB-005)', () => {
     expect(data.packId).toBe('test-pack');
     expect(data.campaignStatus).toBe('completed');
   });
+
+  // F-8c3e32b7: state-persistence expectation — the save file must carry
+  // enough to restore the presentation context (combat/dialogue/aftermath/
+  // menu/exploration) the player was actually in, not just world/profile
+  // state.
+  it('includes presentationState when provided (F-8c3e32b7)', async () => {
+    const savePath = join(testDir, 'save3.json');
+    const input: SaveSessionInput = {
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      presentationState: 'combat',
+    };
+    await saveSession(input);
+
+    const raw = await readFile(savePath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.presentationState).toBe('combat');
+  });
+
+  it('omits presentationState when not provided', async () => {
+    const savePath = join(testDir, 'save4.json');
+    const input: SaveSessionInput = {
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+    };
+    await saveSession(input);
+
+    const raw = await readFile(savePath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.presentationState).toBeUndefined();
+  });
 });
 
 describe('atomic save race-condition protection (PB-002)', () => {

@@ -5,6 +5,7 @@ import {
   loadConsequenceChainsFromSession,
   loadArcSnapshotFromSession,
   loadNpcAgencyFromSession,
+  loadPresentationStateFromSession,
   type SavedSession,
 } from './session.js';
 import { createPartyState } from '@ai-rpg-engine/modules';
@@ -499,5 +500,24 @@ describe('loadNpcAgencyFromSession (F-0b05c26c)', () => {
       npcAgencySnapshot: JSON.stringify({ profiles: [validProfile], actions: [validAction] }),
     });
     expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [validProfile], actions: [validAction] });
+  });
+});
+
+// F-8c3e32b7: SavedSession previously carried no field describing
+// presentation state (combat/dialogue/aftermath/menu/exploration), so a
+// reload always resumed narrateScene's presentationState hint at
+// 'exploration' regardless of what the player actually just experienced
+// before saving/autosaving. This loader is the read side of that fix — see
+// GameConfig.restoredPresentationState (game.ts) for how a caller applies
+// the returned label to a freshly-constructed ImmersionRuntime.
+describe('loadPresentationStateFromSession (F-8c3e32b7)', () => {
+  it('returns undefined when the save predates this field', () => {
+    const session = makeSession();
+    expect(loadPresentationStateFromSession(session)).toBeUndefined();
+  });
+
+  it('returns the persisted presentation-state label', () => {
+    const session = makeSession({ presentationState: 'combat' });
+    expect(loadPresentationStateFromSession(session)).toBe('combat');
   });
 });

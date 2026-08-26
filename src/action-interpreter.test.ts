@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import { NarrationError } from './llm/claude-errors.js';
 
 // Test the fast keyword-based interpreter by importing the module
 // and testing via the public interpretAction with a mock client
@@ -189,6 +190,61 @@ describe('action-interpreter', () => {
       // PB-007: API failure gets a player-friendly transient message
       expect(result.reasoning).toContain('hazy');
       expect(result.reasoning).toContain('try again');
+    });
+
+    it('should fall back to look with hazy message when generateStructured throws instead of resolving ok:false (F-d026f78d)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+
+      // claude-adapter.ts's callApi()/withRetry throws a NarrationError for
+      // auth/bad-request (immediately) or after retries are exhausted for
+      // rate-limit/timeout/transport/unexpected — this must degrade to the
+      // same PB-007 fallback as a resolved { ok: false }, not propagate.
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => {
+          throw new NarrationError({ kind: 'timeout', message: 'took too long' });
+        },
+      };
+
+      const result = await interpretAction(
+        mockClient,
+        engine.world,
+        'ponder the meaning of existence',
+        engine.getAvailableActions(),
+      );
+
+      expect(result.verb).toBe('look');
+      expect(result.confidence).toBe('low');
+      expect(result.reasoning).toContain('hazy');
+      expect(result.reasoning).toContain('try again');
+    });
+
+    it('should include recentContext in the prompt sent to Claude when provided (F-fb9e78af)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      let capturedPrompt = '';
+
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async (opts: { prompt: string }) => {
+          capturedPrompt = opts.prompt;
+          return { ok: false, data: null, raw: '', error: 'mock' };
+        },
+      };
+
+      await interpretAction(
+        mockClient,
+        engine.world,
+        'ponder the meaning of existence',
+        engine.getAvailableActions(),
+        'Player said "attack" and was asked to clarify: "Did you want to attack or flee?"',
+      );
+
+      expect(capturedPrompt).toContain('Recent context');
+      expect(capturedPrompt).toContain('Did you want to attack or flee?');
     });
   });
 

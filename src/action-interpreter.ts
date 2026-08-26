@@ -1,7 +1,7 @@
 // Interpret freeform player input into a structured ActionIntent
 
 import type { WorldState, EntityState } from '@ai-rpg-engine/core';
-import type { ClaudeClient } from './claude-client.js';
+import type { ClaudeClient, StructuredResult } from './claude-client.js';
 import { INTERPRET_SYSTEM, buildInterpretPrompt } from './prompts/interpret-action.js';
 
 export type InterpretedAction = {
@@ -20,6 +20,15 @@ export async function interpretAction(
   world: WorldState,
   playerInput: string,
   availableVerbs: string[],
+  /**
+   * F-fb9e78af: short continuity note for the interpreter, e.g. "the
+   * previous turn asked the player to clarify an ambiguous action." Threaded
+   * into buildInterpretPrompt's existing recentContext parameter (already
+   * supported there, just never populated by this call site) so a short
+   * follow-up reply to a clarification isn't interpreted from scratch with
+   * no memory the clarification ever happened.
+   */
+  recentContext?: string,
 ): Promise<InterpretedAction> {
   // Fast path: direct keyword matching
   const fast = tryFastInterpret(playerInput, world, availableVerbs);
@@ -40,13 +49,32 @@ export async function interpretAction(
     availableVerbs,
     visibleEntities: entities.map((e) => ({ id: e.id, name: e.name, type: e.type })),
     zoneExits: exits,
+    recentContext,
   });
 
-  const result = await client.generateStructured<InterpretedAction>({
-    system: INTERPRET_SYSTEM,
-    prompt,
-    maxTokens: 256,
-  });
+  // F-d026f78d: client.generateStructured() doesn't only *resolve* with
+  // { ok: false } for a bad/unparseable response (handled below by PB-007) —
+  // per claude-adapter.ts's callApi()/withRetry, it also *throws* a
+  // NarrationError for auth/bad-request (immediately) or after retries are
+  // exhausted for rate-limit/timeout/transport/unexpected. That throw used
+  // to propagate straight out of interpretAction(), past executeTurn()'s
+  // Step 1 (no try/catch of its own) and past game.ts's fatal-bookkeeping
+  // recovery (which only engages for errors Step 2/3/5 explicitly attach
+  // bookkeeping to) — surfacing a jarring system error box for what the
+  // player experiences as simply "I typed something and the game didn't get
+  // it." Treat a thrown error exactly like a resolved { ok: false }: both
+  // are API-layer failures, not genuinely ambiguous input, so PB-007's
+  // transient-vs-ambiguous distinction below still applies correctly.
+  let result: StructuredResult<InterpretedAction>;
+  try {
+    result = await client.generateStructured<InterpretedAction>({
+      system: INTERPRET_SYSTEM,
+      prompt,
+      maxTokens: 256,
+    });
+  } catch {
+    result = { ok: false, data: null, raw: '', error: 'interpretation request failed' };
+  }
 
   if (result.ok && result.data) {
     return result.data;

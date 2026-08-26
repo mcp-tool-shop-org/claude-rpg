@@ -21,6 +21,9 @@ function makeOutline(overrides: Partial<FinaleOutline> = {}): FinaleOutline {
   };
 }
 
+// F-a9fb247d: ClaudeClient (claude-client.ts:27-58) requires generateStructured
+// and model too, not just generate. Stub both so these literals actually
+// satisfy the interface they're typed as.
 function makeClient(text: string): ClaudeClient {
   return {
     generate: vi.fn().mockResolvedValue({
@@ -29,12 +32,16 @@ function makeClient(text: string): ClaudeClient {
       inputTokens: 10,
       outputTokens: 20,
     } satisfies GenerateResult),
+    generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+    model: 'test-model',
   };
 }
 
 function makeFailingClient(error: Error): ClaudeClient {
   return {
     generate: vi.fn().mockRejectedValue(error),
+    generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+    model: 'test-model',
   };
 }
 

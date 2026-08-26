@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderRecap } from './recap.js';
-import { TurnHistory } from '../session/history.js';
-import { FALLBACK_NARRATION } from '../narrator/narrator.js';
+import { TurnHistory, type TurnRecord } from '../session/history.js';
+import { FALLBACK_NARRATION, FATAL_NARRATION_FALLBACK_MIRROR } from '../narrator/narrator.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 
 function makeHistory(narrations: string[]): TurnHistory {
@@ -79,5 +79,52 @@ describe('renderRecap F-b6915850: fallback sentinel is never quoted as real narr
     const history = makeHistory([FALLBACK_NARRATION, FALLBACK_NARRATION, FALLBACK_NARRATION]);
     const result = renderRecap(null, history);
     expect(result).not.toContain(FALLBACK_NARRATION);
+  });
+});
+
+// F-18f4dd88 (seam contract, wave 6): the fallback-sentinel filter above only
+// ever checked FALLBACK_NARRATION, but a second, differently-worded sentinel
+// exists on the game-core side of this wave's split worktrees —
+// turn-loop.ts's FATAL_NARRATION_FALLBACK, mirrored here as
+// FATAL_NARRATION_FALLBACK_MIRROR (see narrator.ts's
+// KNOWN_FALLBACK_NARRATION_SENTINELS). A save recorded via that path used to
+// get quoted verbatim on the next load. Separately, once game-core wires
+// NarrationResult.isFallback through TurnRecord (this same wave, in its own
+// worktree), a record can carry the flag directly instead of relying on a
+// sentinel-text match at all — renderRecap must prefer that flag when present.
+describe('renderRecap F-18f4dd88: seam contract — second sentinel + isFallback flag', () => {
+  it('should not quote a turn whose narration matches the mirrored turn-loop.ts fallback sentinel', () => {
+    const history = makeHistory([
+      'A real narrated turn.',
+      FATAL_NARRATION_FALLBACK_MIRROR,
+      'Another real turn.',
+    ]);
+    const result = renderRecap(null, history);
+    expect(result).not.toContain(`"${FATAL_NARRATION_FALLBACK_MIRROR}"`);
+    expect(result).toContain('A real narrated turn.');
+    expect(result).toContain('Another real turn.');
+  });
+
+  it('should not quote a turn whose isFallback flag is true even when its narration text is not a known sentinel', () => {
+    const history = new TurnHistory();
+    history.record({ tick: 0, playerInput: 'look', verb: 'look', narration: 'A real narrated turn.' });
+    // Simulates a post-merge TurnRecord carrying the isFallback flag
+    // game-core adds this same wave (turn-loop.ts passing
+    // narrationResult.isFallback into history.record()). TurnRecord doesn't
+    // declare the field in this worktree, so the literal is asserted through
+    // it — see recap.ts's MaybeFallback for the read side of this contract.
+    history.record({
+      tick: 1,
+      playerInput: 'act',
+      verb: 'act',
+      narration: 'This reads like normal prose but is flagged as a fallback.',
+      isFallback: true,
+    } as TurnRecord);
+    history.record({ tick: 2, playerInput: 'look', verb: 'look', narration: 'Another real turn.' });
+
+    const result = renderRecap(null, history);
+    expect(result).not.toContain('This reads like normal prose but is flagged as a fallback.');
+    expect(result).toContain('A real narrated turn.');
+    expect(result).toContain('Another real turn.');
   });
 });

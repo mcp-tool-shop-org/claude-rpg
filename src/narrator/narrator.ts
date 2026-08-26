@@ -29,6 +29,34 @@ export type NarrationResult = {
 // (e.g. TurnRecord in session/history.ts, which only stores narration text).
 export const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
 
+// F-e8630a73 / F-18f4dd88 (seam contract, wave 6): a second, differently-worded
+// fallback sentinel already exists on the game-core side of this wave's split
+// worktrees — turn-loop.ts's FATAL_NARRATION_FALLBACK (turn-loop.ts:44),
+// recorded via history.record() when narrateScene()/narrateSceneLegacy() rethrow
+// a fatal NarrationError after engine.submitAction() has already mutated world
+// state for the turn (F-c4332895). narrator.ts can't import it directly this
+// wave: turn-loop.ts and narrator.ts sit in separate worktrees, and
+// turn-loop.ts already imports narrateScene from narrator.ts, so importing the
+// other way would create a cycle even once the worktrees are merged. Its value
+// is mirrored here by literal instead, so this becomes the shared home both
+// domains' fallback-sentinel-matching code can read from — game-core can
+// re-point turn-loop.ts's own constant at this export on merge without
+// creating that cycle.
+export const FATAL_NARRATION_FALLBACK_MIRROR =
+  '(The narrator could not describe what happened — your action was still resolved.)';
+
+/**
+ * Every known fallback-narration sentinel, old and new (see the two constants
+ * above). Consumers that need to recognize placeholder narration — the
+ * LLM-facing recentNarration filter below, and recap.ts's save-load recap
+ * screen — compare against this list rather than FALLBACK_NARRATION alone, so
+ * a turn recorded via either fallback path is treated consistently.
+ */
+export const KNOWN_FALLBACK_NARRATION_SENTINELS: readonly string[] = [
+  FALLBACK_NARRATION,
+  FATAL_NARRATION_FALLBACK_MIRROR,
+];
+
 export type NarrateSceneOpts = {
   client: ClaudeClient;
   world: WorldState;
@@ -64,11 +92,25 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onChunk,
   } = opts;
+
+  // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
+  // into the LLM-facing prompt as if it were real authored prose. Filtered
+  // once here, before recentNarration flows into buildSceneContext ->
+  // narrationInput.recentNarration -> buildNarratePrompt's 'Previous
+  // narration (for continuity)' section (prompts/narrate-scene.ts:114) —
+  // shared by narrateScene and narrateSceneLegacy below, so scene-context.ts
+  // and prompts/narrate-scene.ts don't need to import from this module (both
+  // are already imported BY this module; importing back would cycle).
+  // Mirrors recap.ts:45's sentinel-comparison filter on the save-load path.
+  const filteredRecentNarration = recentNarration.filter(
+    (n) => !KNOWN_FALLBACK_NARRATION_SENTINELS.includes(n),
+  );
+
   const sceneContext = buildSceneContext(
     world,
     recentEvents,
     tone,
-    recentNarration,
+    filteredRecentNarration,
     previousLocationId,
     characterPresence,
     activePressures,
@@ -161,11 +203,16 @@ export async function narrateSceneLegacy(
   recentNarration: string[],
   previousLocationId?: string,
 ): Promise<NarrationResult> {
+  // F-e8630a73: same filter as narrateScene above.
+  const filteredRecentNarration = recentNarration.filter(
+    (n) => !KNOWN_FALLBACK_NARRATION_SENTINELS.includes(n),
+  );
+
   const sceneContext = buildSceneContext(
     world,
     recentEvents,
     tone,
-    recentNarration,
+    filteredRecentNarration,
     previousLocationId,
   );
 

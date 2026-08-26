@@ -37,13 +37,15 @@ describe('computeFactionDeltas', () => {
     const rumors: PlayerRumor[] = [{
       id: 'r1',
       claim: 'Hero stole gold',
+      subjectDescriptor: 'the hero',
+      sourceEvent: 'milestone',
       originFactionId: 'thieves',
       originTick: 5,
       spreadTo: ['guild'],
       mutationCount: 0,
-      valence: 'negative' as const,
-      decayTick: 100,
-      tags: [],
+      confidence: 1,
+      distortion: 0,
+      valence: 'fearsome' as const,
     }];
     // Session started at tick 0, rumor origin at tick 5 means it appeared during session
     const result = computeFactionDeltas(before, after, rumors, [], 0);
@@ -136,13 +138,15 @@ describe('computeRumorDelta', () => {
     const rumors: PlayerRumor[] = [{
       id: 'r1',
       claim: 'Hero arrived',
+      subjectDescriptor: 'the hero',
+      sourceEvent: 'milestone',
       originFactionId: 'guild',
       originTick: 1,
       spreadTo: ['guild'],
       mutationCount: 0,
-      valence: 'positive' as const,
-      decayTick: 50,
-      tags: [],
+      confidence: 1,
+      distortion: 0,
+      valence: 'heroic' as const,
     }];
     const result = computeRumorDelta(0, rumors);
     expect(result.spawned).toBe(1);
@@ -152,12 +156,12 @@ describe('computeRumorDelta', () => {
   it('identifies most widespread rumor', () => {
     const rumors: PlayerRumor[] = [
       {
-        id: 'r1', claim: 'Small rumor', originFactionId: 'a', originTick: 1,
-        spreadTo: ['a'], mutationCount: 0, valence: 'neutral' as const, decayTick: 50, tags: [],
+        id: 'r1', claim: 'Small rumor', subjectDescriptor: 'the hero', sourceEvent: 'milestone', originFactionId: 'a', originTick: 1,
+        spreadTo: ['a'], mutationCount: 0, confidence: 1, distortion: 0, valence: 'mysterious' as const,
       },
       {
-        id: 'r2', claim: 'Big rumor', originFactionId: 'a', originTick: 1,
-        spreadTo: ['a', 'b', 'c'], mutationCount: 2, valence: 'negative' as const, decayTick: 50, tags: [],
+        id: 'r2', claim: 'Big rumor', subjectDescriptor: 'the hero', sourceEvent: 'milestone', originFactionId: 'a', originTick: 1,
+        spreadTo: ['a', 'b', 'c'], mutationCount: 2, confidence: 1, distortion: 0, valence: 'fearsome' as const,
       },
     ];
     const result = computeRumorDelta(0, rumors);
@@ -168,8 +172,8 @@ describe('computeRumorDelta', () => {
 
   it('handles negative spawned count when rumors were removed', () => {
     const rumors: PlayerRumor[] = [{
-      id: 'r1', claim: 'Only one left', originFactionId: 'a', originTick: 1,
-      spreadTo: ['a'], mutationCount: 0, valence: 'neutral' as const, decayTick: 50, tags: [],
+      id: 'r1', claim: 'Only one left', subjectDescriptor: 'the hero', sourceEvent: 'milestone', originFactionId: 'a', originTick: 1,
+      spreadTo: ['a'], mutationCount: 0, confidence: 1, distortion: 0, valence: 'mysterious' as const,
     }];
     const result = computeRumorDelta(3, rumors);
     expect(result.spawned).toBe(-2);

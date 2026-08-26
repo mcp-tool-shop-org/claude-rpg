@@ -54,6 +54,16 @@ export class PresentationStateMachine {
    * world-gen.ts's environment-hazard effect (F-e57d6a60). Omitting it falls back to
    * the pure event-based check only, so existing callers that don't have a world
    * handle keep their prior behavior exactly.
+   *
+   * F-5a0021c9: PresentationState (@ai-rpg-engine/presentation) defines 8 values, but
+   * this method only ever returns 6 of them — 'menu', 'aftermath', 'combat',
+   * 'dialogue', 'exploration', 'director' — plus whatever `this._state` already holds
+   * when no branch below applies. 'tension' and 'dream' are intentionally unreached
+   * today: nothing in the engine emits a signal this method could key off of for
+   * either, and nothing calls `.transition('tension' | 'dream', ...)` elsewhere either.
+   * Reserved for future content (tension-building / dream-sequence), not an oversight.
+   * Safe to leave unreachable unless that content lands, at which point this method
+   * needs a branch producing the relevant value.
    */
   inferFromEvents(
     events: ResolvedEvent[],

@@ -159,6 +159,18 @@ export const combatEndHook: Hook = (ctx) => {
   // via combat played a victory chime and a "soften" music cue immediately alongside
   // the death alarm.
   if (isPlayerDefeatEvent(ctx.events, ctx.world.playerId)) return null;
+  // F-f1e475f0: also skip when the player's hp is independently at zero (e.g. a
+  // hazard reapplication zeroed it the same turn a *different*, non-player entity's
+  // combat.entity.defeated satisfies hasDefeat above). deathHook,
+  // ImmersionRuntime.fireEventHooks' death dispatch gate, and
+  // PresentationStateMachine.inferFromEvents all OR isPlayerAtZeroHp in alongside
+  // isPlayerDefeatEvent per its doc comment's call-sites-with-world contract; this
+  // was the one sibling call site with ctx.world in hand that didn't, so a
+  // multi-enemy hazard-arena turn (player hazard-zeroed to 0, a separate enemy
+  // defeated in combat that same turn) could still fire the victory chime + soften
+  // cue immediately alongside deathHook's alarm — the exact composition F-91f803b2
+  // closed, reopened through this one path.
+  if (isPlayerAtZeroHp(ctx.world, ctx.world.playerId)) return null;
   return {
     sfxCues: [{ effectId: 'ui_success', timing: 'immediate', intensity: 0.7 }],
     musicCue: { action: 'soften', fadeMs: 1000 },

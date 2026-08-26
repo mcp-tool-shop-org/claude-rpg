@@ -1,0 +1,127 @@
+// F-256bb64a (SLATE-5c, wave 18 tests domain): per-site regression tests
+// proving player-visible output resolves catalog archetype/discipline/
+// background ids to their display names instead of the raw kebab-case id.
+//
+// Confirmed live bug: src/character/recap.ts:53 renders
+// `${profile.build.name}, level ${level} ${profile.build.archetypeId}`
+// verbatim -- 'penitent-knight' instead of 'Penitent Knight'. The
+// Coordinator Brief pins the fix's landing signature as
+// `renderRecap(profile, history, catalog?)` (a new 3rd optional param,
+// added by another domain this same wave; src/character/recap.ts is
+// out of this domain's edit scope -- see "Do NOT edit src/**" in the
+// brief). This worktree's recap.ts is still the OLD 2-arg version, so
+// calling it with a 3rd argument is a harmless no-op at runtime (JS
+// ignores extra args) -- these tests are RED in-worktree for exactly that
+// reason and are expected to go GREEN once the other domain's catalog-
+// threading lands and this wave's branches merge.
+//
+// The unit-level fixture rebuild the routed finding also describes for
+// src/character/recap.test.ts is a co-located src/**.test.ts file --
+// cross-domain, owned by whichever domain owns src/character/** content,
+// not this "tests" domain (test/** + vitest.config.ts only). This file is
+// this domain's in-scope contribution: the shared expectNoRawCatalogIds()
+// helper (test/helpers/catalog-assertions.ts) plus the per-site regression
+// lock applied through the real integration surface.
+
+import { describe, it, expect } from 'vitest';
+import { createProfile } from '@ai-rpg-engine/character-profile';
+import { getPackById } from '../../src/character/packs.js';
+import { renderRecap } from '../../src/character/recap.js';
+import { renderSessionDelta, computeSessionDelta, captureSnapshot, type SessionSnapshot } from '../../src/character/recap-delta.js';
+import { TurnHistory } from '../../src/session/history.js';
+import { createHarness } from '../helpers/game-harness.js';
+import { expectNoRawCatalogIds } from '../helpers/catalog-assertions.js';
+
+const pack = getPackById('chapel-threshold')!;
+const catalog = pack.buildCatalog;
+
+function makeProfile(archetypeId: string, backgroundId = 'oath-breaker') {
+  return createProfile(
+    { name: 'Kael Ashwood', archetypeId, backgroundId, traitIds: [] },
+    { vigor: 5, instinct: 5, will: 5 },
+    { hp: 20, stamina: 8 },
+    [],
+    'chapel-threshold',
+  );
+}
+
+// ─── recap.ts: the confirmed live bug ─────────────────────────
+
+describe('renderRecap resolves catalog display names (F-256bb64a)', () => {
+  it('red in-worktree, green expected at merge: resolves archetypeId to its catalog display name instead of the raw id', () => {
+    const profile = makeProfile('penitent-knight');
+    const history = new TurnHistory();
+    // 3rd arg is the pinned-but-not-yet-wired `catalog` param -- see file
+    // header. Cast through `any` so this worktree's 2-arg .d.ts (if tsc
+    // were run) doesn't block the call; vitest itself doesn't type-check.
+    const output = (renderRecap as (p: typeof profile, h: TurnHistory, c?: typeof catalog) => string)(
+      profile,
+      history,
+      catalog,
+    );
+    expect(output).toContain('Penitent Knight');
+    expect(output).not.toContain('penitent-knight');
+  });
+
+  it('fallback contract (already correct today): no catalog supplied -> raw id passes through unchanged, matching catalog-names.ts', () => {
+    const profile = makeProfile('penitent-knight');
+    const history = new TurnHistory();
+    const output = renderRecap(profile, history);
+    expect(output).toContain('penitent-knight');
+  });
+
+  it('fallback contract: an archetypeId absent from the supplied catalog (stale save / hand-edited profile / pack swap) passes through unchanged rather than throwing or printing "undefined"', () => {
+    const profile = makeProfile('a-stale-archetype-from-a-removed-pack');
+    const history = new TurnHistory();
+    expect(() => {
+      const output = (renderRecap as (p: typeof profile, h: TurnHistory, c?: typeof catalog) => string)(
+        profile,
+        history,
+        catalog,
+      );
+      expect(output).toContain('a-stale-archetype-from-a-removed-pack');
+      expect(output).not.toContain('undefined');
+    }).not.toThrow();
+  });
+});
+
+// ─── bin.ts / game-state.ts / recap-delta.ts: regression locks ────
+//
+// None of these three currently render a catalog archetype/discipline/
+// background id at all (verified: bin.ts only ever reads
+// session.profile.build.name for autosave filenames, never archetypeId/
+// disciplineId/backgroundId; game-state.ts is pure state-derivation with no
+// catalog-id rendering; recap-delta.ts's renderSessionDelta renders faction
+// ids and titles, never a build id). These are therefore not currently
+// reproducible bugs -- they're the "run the same helper now as a regression
+// lock" half of the routed finding, so a future site introduced by any
+// domain's own audit is caught by the same assertion shape instead of
+// needing a new one invented from scratch.
+
+describe('recap-delta.ts renderSessionDelta never leaks a catalog id (regression lock, F-256bb64a)', () => {
+  it('a session delta with reputation/milestone/title changes renders with no raw catalog ids present', () => {
+    const before: SessionSnapshot = { xp: 0, level: 1, reputation: [{ factionId: 'guardians', value: 0 }], milestoneCount: 0, injuryCount: 0, totalTurns: 0 };
+    const after: SessionSnapshot = { xp: 40, level: 2, reputation: [{ factionId: 'guardians', value: 15 }], milestoneCount: 1, injuryCount: 0, totalTurns: 5, title: 'the Penitent' };
+    const delta = computeSessionDelta(before, after);
+    const output = renderSessionDelta(delta);
+    expectNoRawCatalogIds(output, catalog);
+  });
+});
+
+describe('full-session regression sweep: no raw catalog id ever reaches player-facing output (F-256bb64a)', () => {
+  it('a catalog-backed profile whose archetype/background id differ from their display names never leaks a raw id across several real turns (covers bin.ts/game-state.ts-derived rendering paths end-to-end)', async () => {
+    const profile = makeProfile('penitent-knight', 'oath-breaker');
+    const h = createHarness({
+      gameOpts: { profile, itemCatalog: pack.itemCatalog },
+      clientOpts: { narration: 'Dust motes drift through broken glass.' },
+    });
+
+    const outputs: string[] = [];
+    outputs.push(await h.play('look around'));
+    outputs.push(await h.play('go to chapel-nave'));
+    outputs.push(h.session.getWelcome());
+    outputs.push(await h.play('/status'));
+
+    expectNoRawCatalogIds(outputs.join('\n'), catalog);
+  });
+});

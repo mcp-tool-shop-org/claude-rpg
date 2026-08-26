@@ -103,4 +103,35 @@ describe('PresentationStateMachine', () => {
     const state = sm.inferFromEvents(zoneEvents);
     expect(state).toBe('exploration');
   });
+
+  it('should infer menu from a player-entity defeat but not a non-player defeat (F-277b5eca)', () => {
+    // Non-player defeat (e.g. a goblin dying) must fall through to the general
+    // combat/aftermath branch — it must NOT be mistaken for player death.
+    const sm = new PresentationStateMachine();
+    const nonPlayerDefeat = [
+      { type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } },
+    ] as any;
+    expect(sm.inferFromEvents(nonPlayerDefeat, undefined, 1, 'player')).toBe('aftermath');
+
+    // Player defeat — entityId matches the real playerId ('player', per
+    // world-gen.ts's `engine.store.state.playerId = 'player'`), never the old
+    // '__player__' sentinel that is never assigned anywhere in production — must
+    // return 'menu'.
+    const sm2 = new PresentationStateMachine();
+    const playerDefeat = [
+      { type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'player' } },
+    ] as any;
+    expect(sm2.inferFromEvents(playerDefeat, undefined, 1, 'player')).toBe('menu');
+  });
+
+  it('should not infer menu from a defeat event when no playerId is supplied', () => {
+    // Callers that don't pass playerId (e.g. this file's other unit tests, which only
+    // exercise combat/aftermath) must not accidentally match a defeat event whose
+    // payload also omits entityId — hasDeath must require an actual playerId.
+    const sm = new PresentationStateMachine();
+    const defeatEvents = [
+      { type: 'combat.entity.defeated', tick: 1, payload: {} },
+    ] as any;
+    expect(sm.inferFromEvents(defeatEvents, undefined, 1)).toBe('aftermath');
+  });
 });

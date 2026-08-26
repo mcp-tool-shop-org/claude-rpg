@@ -52,9 +52,26 @@ export class ImmersionRuntime {
     registerBuiltinHooks(this.hookManager);
   }
 
-  /** Initialize voice casting for all entities in the world. */
+  /**
+   * Initialize voice casting for all entities in the world, and seed presentation state
+   * from any persisted combat-core module state (F-f13b58f3).
+   *
+   * ImmersionRuntime — and therefore its PresentationStateMachine — is constructed fresh
+   * exactly once per session (Game's constructor) with no restore path of its own, so
+   * loading a save made mid-combat would otherwise start back at 'exploration'. The
+   * player's next action would then re-derive 'combat' from that turn's fresh events,
+   * making justEnteredCombat true again and replaying combatStartHook's one-time SFX/music
+   * cues for a fight that was already in progress before the save.
+   */
   initialize(engine: Engine): void {
     this.voiceCaster.autoCast(engine.world);
+
+    const combatCore = engine.world.modules['combat-core'] as
+      | { inCombat?: boolean }
+      | undefined;
+    if (combatCore?.inCombat) {
+      this.stateMachine.transition('combat', 'session-restore');
+    }
   }
 
   /** Whether debug logging is enabled. Set externally if needed. */
@@ -69,7 +86,17 @@ export class ImmersionRuntime {
   ): Promise<McpToolCall[]> {
     // 1. Infer and transition presentation state
     const priorState = this.stateMachine.current;
-    const inferredState = this.stateMachine.inferFromEvents(events, verb);
+    // F-277b5eca / F-ed267860: pass the real playerId (so player death resolves to
+    // 'menu' instead of the dead '__player__' sentinel) and the real engine tick (so the
+    // aftermath countdown guard's tick ?? -2 fallback doesn't wedge at a constant value
+    // forever). These two args were both silently missing from the sole production call
+    // site.
+    const inferredState = this.stateMachine.inferFromEvents(
+      events,
+      verb,
+      engine.tick,
+      engine.world.playerId,
+    );
     if (inferredState !== priorState) {
       this.stateMachine.transition(inferredState, verb);
     }

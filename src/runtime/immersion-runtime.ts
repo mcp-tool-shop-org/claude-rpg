@@ -11,8 +11,6 @@ import {
 import {
   HookManager,
   registerBuiltinHooks,
-  isPlayerDefeatEvent,
-  isPlayerAtZeroHp,
   hasLivingHostiles,
   type HookContext,
   type HookResult,
@@ -202,11 +200,28 @@ export class ImmersionRuntime {
    * cannot do this without either losing those two fixes or this class caching its own
    * `engine` reference (which it deliberately doesn't do — every other method takes
    * `engine` fresh per call rather than assuming session-lifetime affinity).
+   *
+   * F-f3781f2a/SLATE-6: broadened to return the full {from, to, trigger}
+   * StateTransition (presentation-state.ts) rather than the bare `to` state. `.to` is
+   * exactly what callers previously got back directly (no behavior change for them);
+   * `.from` is new, and lets a death-framing consumer derive
+   * `justDied = to === 'menu' && from !== 'menu'` from the SAME state-machine read
+   * this method's caller already performs for narration, instead of a second
+   * independent signal. Two alternatives were considered and rejected: a one-shot
+   * transition listener/event (this exact shape existed in this file before
+   * F-81abb66a deleted it — see PresentationStateMachine.transition()'s doc comment
+   * above for why "wire a listener nobody currently subscribes to" was rejected once
+   * already); and a HookResult-shaped death signal threaded back through
+   * fireEventHooks' return type, which would be a THIRD independent computation of a
+   * fact inferFromEvents's hasDeath check already establishes (the first is
+   * inferFromEvents itself; the second is deathHook's own internal recheck in
+   * hooks.ts) — seeing fireEventHooks' justEnteredMenu gate below reuse the one
+   * from/to pair already in hand avoids adding a fourth.
    */
-  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): PresentationState {
+  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): StateTransition {
     const { from, to } = this.runInference(engine, events, verb);
     this.pendingTurnInference = { tick: engine.tick, from, to };
-    return to;
+    return { from, to, trigger: verb };
   }
 
   /** Process events through the presentation pipeline, returning MCP tool calls. */
@@ -234,6 +249,19 @@ export class ImmersionRuntime {
     // dispatch on the raw event shape (as fireEventHooks used to) fired it every turn
     // instead of once per fight.
     const justEnteredCombat = inferredState === 'combat' && priorState !== 'combat';
+    // F-f3781f2a/SLATE-6: whether death was JUST entered this call, mirroring
+    // justEnteredCombat immediately above -- both derive an edge from the same
+    // {priorState, inferredState} pair runInference() already produced this turn.
+    // Replaces fireEventHooks' own death gate's previous raw
+    // isPlayerDefeatEvent(...) || isPlayerAtZeroHp(...) OR-check, which was
+    // LEVEL-triggered off current world state: it silently re-fired the death
+    // hookPoint every subsequent turn the player's hp remained at/below zero instead
+    // of once per death episode. Coverage is unchanged: inferredState === 'menu' is
+    // exclusively reached via inferFromEvents's hasDeath check (presentation-state.ts),
+    // which already ORs both isPlayerDefeatEvent and isPlayerAtZeroHp, so both death
+    // paths (a combat defeat event and a hazard death with no matching event at all,
+    // F-e57d6a60) still resolve to this gate.
+    const justEnteredMenu = inferredState === 'menu' && priorState !== 'menu';
 
     // PFE-008: Wrap audio/hook pipeline in try/catch so failures degrade to silence
     // rather than killing the turn. The player should never lose gameplay to an audio glitch.
@@ -277,7 +305,7 @@ export class ImmersionRuntime {
 
     try {
       // 3. Fire specific hooks based on events
-      specificCalls = await this.fireEventHooks(engine, events, justEnteredCombat);
+      specificCalls = await this.fireEventHooks(engine, events, justEnteredCombat, justEnteredMenu);
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Hook error (degrading to silence):', err);
@@ -383,6 +411,7 @@ export class ImmersionRuntime {
     engine: Engine,
     events: ResolvedEvent[],
     justEnteredCombat: boolean,
+    justEnteredMenu: boolean,
   ): Promise<McpToolCall[]> {
     const calls: McpToolCall[] = [];
     const state = this.stateMachine.current;
@@ -434,15 +463,23 @@ export class ImmersionRuntime {
       calls.push(...(await this.executeMergedHookResult(merged)));
     }
 
-    // Death — entity-aware: only the PLAYER's defeat triggers the death presentation
-    // (F-adc0d512; shares isPlayerDefeatEvent with hooks.ts's deathHook). Also
-    // dispatches for a hazard-style death that reaches hp <= 0 with no matching
-    // event at all (F-e57d6a60; shares isPlayerAtZeroHp with hooks.ts's deathHook,
-    // which independently re-checks the same condition — see its doc comment).
-    if (
-      isPlayerDefeatEvent(events, engine.world.playerId) ||
-      isPlayerAtZeroHp(engine.world, engine.world.playerId)
-    ) {
+    // Death — edge-triggered (F-f3781f2a/SLATE-6): gated on justEnteredMenu, computed
+    // once in processPresentation from the state machine's own from/to transition
+    // (mirrors the justEnteredCombat gate immediately above, F-0acb03fe). Previously
+    // gated on a raw isPlayerDefeatEvent(...) || isPlayerAtZeroHp(...) OR-check
+    // (F-adc0d512; F-e57d6a60 for the hazard-death OR-arm), which is LEVEL-triggered
+    // off current world state rather than an edge, so it silently re-fired this
+    // hookPoint every subsequent turn the player's hp stayed at/below zero instead of
+    // once per death episode. Coverage is unchanged, not narrowed: inferredState ===
+    // 'menu' is exclusively reached via inferFromEvents's hasDeath check
+    // (presentation-state.ts), which already ORs both isPlayerDefeatEvent and
+    // isPlayerAtZeroHp, so both death paths (a combat defeat event and a hazard death
+    // with no matching event at all) still reach this gate. deathHook itself
+    // (hooks.ts) still independently re-checks the same condition to decide what to
+    // render, not whether to fire — that duplication is pre-existing and intentionally
+    // left alone (see inferAndTransition's doc comment above for why a third
+    // computation of this fact was rejected instead of reused).
+    if (justEnteredMenu) {
       const deathCtx: HookContext = {
         hookPoint: 'death',
         world: engine.world,

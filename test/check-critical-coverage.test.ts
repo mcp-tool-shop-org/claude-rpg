@@ -121,7 +121,7 @@ describe('getApplicableThreshold', () => {
 
 describe('branchesPercent', () => {
   it('returns undefined when b is missing', () => {
-    expect(branchesPercent({ s: {} })).toBeUndefined();
+    expect(branchesPercent({})).toBeUndefined();
   });
 
   it('returns 0 when branches exist but none are covered', () => {

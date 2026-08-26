@@ -45,9 +45,9 @@ export function createHarness(opts: HarnessOptions = {}): GameHarness {
     callLog,
     play: (input: string) => session.processInput(input),
     tick: () => session.engine.tick,
-    turnCount: () => session.history.turns.length,
+    turnCount: () => session.history.getAll().length,
     lastVerb: () => {
-      const turns = session.history.turns;
+      const turns = session.history.getAll();
       return turns.length > 0 ? turns[turns.length - 1].verb : undefined;
     },
   };

@@ -259,3 +259,52 @@ describe('combatEndHook player-death suppression (F-91f803b2)', () => {
     expect(results[0].sfxCues![0].effectId).toBe('ui_success');
   });
 });
+
+// ─── F-f1e475f0: combatEndHook must also suppress the victory cue when the player's hp
+// is independently zeroed (e.g. by a hazard reapplication) the same turn a *different*,
+// non-player entity's combat.entity.defeated satisfies hasDefeat/isPlayerDefeatEvent's
+// entity check. Without this, a non-player kill sharing a turn with a hazard-zeroed
+// player hp plays the victory chime + soften cue immediately alongside deathHook's
+// alarm — the exact composition F-91f803b2 closed, reopened through the one dispatch
+// path (combatEndHook) that only checked isPlayerDefeatEvent, never isPlayerAtZeroHp. ───
+
+describe('combatEndHook hazard-zeroed-hp suppression (F-f1e475f0)', () => {
+  it('does not fire the victory cue when a non-player defeat coincides with the player already at zero hp', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      world: {
+        zones: {},
+        entities: { player: { resources: { hp: 0 } } },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(0);
+  });
+
+  it('still fires the victory cue when a non-player entity is defeated and the player has positive hp', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      world: {
+        zones: {},
+        entities: { player: { resources: { hp: 5 } } },
+        playerId: 'player',
+        locationId: 'zone1',
+      } as any,
+      events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('ui_success');
+  });
+});

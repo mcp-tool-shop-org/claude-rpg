@@ -73,7 +73,35 @@ describe('enriched save listing', () => {
     };
 
     const details = formatSaveDetails(summary);
+    // 'starter-cyberpunk' isn't a real registered pack id (the real ids are
+    // packs.ts's meta.id values, e.g. 'neon-lockbox') -- this fixture
+    // exercises the graceful ?? s.packId fallback below, unchanged.
     expect(details).toEqual(['pack: starter-cyberpunk', 'zone: Neon Alley']);
+  });
+
+  /**
+   * F-b7638c63: formatSaveDetails printed the raw kebab-case pack id
+   * ('pack: chapel-threshold') instead of the resolved pack title on every
+   * save-slot row of the /load screen -- the one raw-id-reaching-player site
+   * left in cli-display after a systematic sweep, since display/** already
+   * resolves names correctly everywhere else this pattern could recur. The
+   * fixtures above ('starter-fantasy', 'starter-cyberpunk') don't match any
+   * real registered pack, so they accidentally never exercised the
+   * resolution path -- only the fallback. This uses a real, registered pack
+   * id ('chapel-threshold', @ai-rpg-engine/starter-fantasy's packMeta.id) to
+   * prove the title actually resolves.
+   */
+  it('resolves a real registered pack id to its display title, not the raw slug', () => {
+    const summary: SaveSlotSummary = {
+      filename: 'real-pack.json',
+      savedAt: '2026-03-31T12:00:00.000Z',
+      tone: 'dark',
+      packId: 'chapel-threshold',
+    };
+
+    const details = formatSaveDetails(summary);
+    expect(details).toContain('pack: The Chapel Threshold');
+    expect(details.join(' ')).not.toContain('chapel-threshold');
   });
 });
 

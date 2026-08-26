@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderPresentationCues, insertCuesBeforePrompt } from './presentation-renderer.js';
 import type { McpToolCall } from '../runtime/audio-bridge.js';
+import { CORE_SOUND_PACK, SoundRegistry } from '@ai-rpg-engine/soundpack-core';
 
 // F-08f594de: terminal-renderer half of the presentation seam contract
 // (wave-8/cli-display.md). VoiceSoundboardBridge.flush() (runtime/audio-bridge.ts,
@@ -38,7 +39,16 @@ describe('renderPresentationCues', () => {
       { tool: 'sound_effect', params: { effect: 'ambient_rain', volume: 0.4 } },
     ];
     const text = renderPresentationCues(calls);
-    expect(text).toContain('ambient_rain');
+    // F-7eb33249: 'ambient_rain' isn't a registered voiceSoundboardEffect
+    // token (the registry's real ambient ids are rain/white_noise/drone --
+    // see core-pack.js -- 'ambient_rain' is a narrate-scene.ts-level id, one
+    // layer up), so it falls through to the generic underscore-strip
+    // fallback rather than the curated label map. Either way the raw
+    // underscored token must never reach the screen -- that's this finding's
+    // whole point, so this test now asserts the humanized form, not the
+    // pre-fix raw one.
+    expect(text).toContain('ambient rain');
+    expect(text).not.toContain('ambient_rain');
     expect(text).toContain('ambient');
     // Must be visibly distinct from the sfx phrasing, since both share the
     // same 'sound_effect' tool name and are only told apart by which params
@@ -251,5 +261,134 @@ describe('insertCuesBeforePrompt (F-135b1970 / F-e78d68c1)', () => {
     const cues = '  · alert sounds';
     const result = insertCuesBeforePrompt(noPrompt, cues);
     expect(result).toBe(`${noPrompt}\n${cues}`);
+  });
+});
+
+// F-7eb33249: renderSfxLine/renderAmbientLine printed the raw
+// voiceSoundboardEffect token straight from the sound bridge with zero
+// humanization -- e.g. '  · ambient: white_noise' with the underscore
+// intact -- reachable 100% of the time the LLM or a built-in hook selects
+// that cue, no variance required.
+describe('cue label humanization (F-7eb33249)', () => {
+  const SFX_CASES: Array<[token: string, expectedPhrase: string]> = [
+    ['chime_notification', 'a notification chime'],
+    ['chime_success', 'a success chime'],
+    ['chime_error', 'an error chime'],
+    ['chime_attention', 'an attention chime'],
+    ['click', 'a click'],
+    ['pop', 'a light pop'],
+    ['whoosh', 'a whoosh'],
+    ['warning', 'a warning tone'],
+    ['critical', 'a critical alarm'],
+    ['info', 'an info tone'],
+  ];
+
+  it.each(SFX_CASES)('humanizes sfx token "%s" to "%s"', (token, expectedPhrase) => {
+    const text = renderPresentationCues([
+      { tool: 'sound_effect', params: { effect: token, intensity: 0.5 } },
+    ]);
+    expect(text).toContain(expectedPhrase);
+    expect(text).not.toContain('_');
+  });
+
+  const AMBIENT_CASES: Array<[token: string, expectedPhrase: string]> = [
+    ['rain', 'rain'],
+    ['white_noise', 'white noise'],
+    ['drone', 'a low, tense drone'],
+  ];
+
+  it.each(AMBIENT_CASES)('humanizes ambient token "%s" to "%s"', (token, expectedPhrase) => {
+    const text = renderPresentationCues([
+      { tool: 'sound_effect', params: { effect: token, volume: 0.5 } },
+    ]);
+    expect(text).toContain(expectedPhrase);
+    expect(text).not.toContain('_');
+  });
+
+  it('falls through an unrecognized sfx token to the generic delimiter-strip transform', () => {
+    const text = renderPresentationCues([
+      { tool: 'sound_effect', params: { effect: 'some_future_id', intensity: 0.5 } },
+    ]);
+    expect(text).toContain('some future id');
+    expect(text).not.toContain('_');
+  });
+
+  it('strips hyphens too, not only underscores, in the generic fallback', () => {
+    const text = renderPresentationCues([
+      { tool: 'sound_effect', params: { effect: 'far-off-thunder', volume: 0.5 } },
+    ]);
+    expect(text).toContain('far off thunder');
+    expect(text).not.toContain('-');
+  });
+});
+
+// F-7eb33249 vocabulary-drift tripwire: guards against a future registry
+// entry (or a future LLM-facing sound id) shipping with no curated label,
+// silently leaking a raw underscored token to players again.
+describe('cue label vocabulary-drift tripwire (F-7eb33249)', () => {
+  it('every CORE_SOUND_PACK entry (the real structural source of truth, not app code) humanizes with no underscore reaching the screen', () => {
+    // Sanity: the probe itself isn't vacuous -- if this ever reads 0, the
+    // import above broke silently and every assertion below would trivially
+    // "pass" over an empty loop.
+    expect(CORE_SOUND_PACK.entries.length).toBeGreaterThan(0);
+
+    for (const entry of CORE_SOUND_PACK.entries) {
+      const token = entry.voiceSoundboardEffect;
+      const params = entry.domain === 'ambient'
+        ? { effect: token, volume: 0.5 }
+        : { effect: token, intensity: 0.5 };
+      const text = renderPresentationCues([{ tool: 'sound_effect', params }]);
+      expect(text, `entry "${entry.id}" (token "${token}") leaked an underscore`).not.toContain('_');
+    }
+  });
+
+  // Coordinator brief (wave-18/cli-display.md, item 5): parity-check against
+  // the LLM-facing id list (narrate-scene.ts's SOUND_EFFECT_IDS, hoisted
+  // this wave from what's today an inline prose list at narrate-scene.ts:40)
+  // resolved through the SAME registry path (SoundRegistry.get) audio-
+  // bridge.ts itself uses, instead of hand-copying that 10-id list into this
+  // test file.
+  //
+  // Isolation discipline: SOUND_EFFECT_IDS does not exist in this worktree
+  // yet (narrative-llm's export, same wave). Mocked here with the exact 10
+  // ids already live in narrate-scene.ts's NARRATE_SYSTEM prompt text at
+  // this worktree's HEAD (the "Available sound effects" line). Proven
+  // end-to-end against the real hoisted export at the coordinator's
+  // merge-time serial verify.
+  it('every id the LLM is told is valid (narrate-scene.ts SOUND_EFFECT_IDS) resolves through the registry to a humanized, underscore-free label', async () => {
+    vi.doMock('../prompts/narrate-scene.js', () => ({
+      SOUND_EFFECT_IDS: [
+        'ui_notification', 'ui_success', 'ui_error', 'ui_attention',
+        'ui_click', 'ui_pop', 'ui_whoosh',
+        'alert_warning', 'alert_critical', 'alert_info',
+      ],
+    }));
+    vi.resetModules();
+    try {
+      // SOUND_EFFECT_IDS doesn't exist in narrate-scene.ts's real type yet in
+      // this worktree (isolation discipline) -- this local cast documents
+      // the pinned contract instead of widening to `any`, mirroring bin.ts's
+      // own `/cost` command precedent for the identical situation. Drop the
+      // cast once narrative-llm's real export lands.
+      const mod = await import('../prompts/narrate-scene.js') as unknown as { SOUND_EFFECT_IDS: string[] };
+      const { SOUND_EFFECT_IDS } = mod;
+      expect(SOUND_EFFECT_IDS.length).toBeGreaterThan(0);
+
+      const registry = new SoundRegistry();
+      registry.load(CORE_SOUND_PACK);
+
+      for (const id of SOUND_EFFECT_IDS) {
+        const entry = registry.get(id);
+        expect(entry, `narrate-scene.ts offers "${id}" but it is not registered in CORE_SOUND_PACK`).toBeDefined();
+        const token = entry!.voiceSoundboardEffect;
+        const text = renderPresentationCues([
+          { tool: 'sound_effect', params: { effect: token, intensity: 0.5 } },
+        ]);
+        expect(text, `"${id}" -> "${token}" leaked an underscore`).not.toContain('_');
+      }
+    } finally {
+      vi.doUnmock('../prompts/narrate-scene.js');
+      vi.resetModules();
+    }
   });
 });

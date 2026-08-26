@@ -6,6 +6,7 @@
 // of parseSaveSelection for the same reason).
 
 import type { SaveSlotSummary } from '../session/session.js';
+import { getPackById } from '../character/packs.js';
 
 /**
  * Build the "pack: X | 2 companions | zone: Y | ..." detail fragments for
@@ -15,7 +16,15 @@ import type { SaveSlotSummary } from '../session/session.js';
 export function formatSaveDetails(s: SaveSlotSummary): string[] {
   const details: string[] = [];
   if (s.packId) {
-    details.push(`pack: ${s.packId}`);
+    // F-b7638c63: resolve the raw kebab-case pack id ('chapel-threshold') to
+    // its display title ('The Chapel Threshold') -- the one raw-id-reaching-
+    // player site left in cli-display after a systematic sweep, since
+    // display/** already resolves names correctly everywhere else this
+    // pattern could recur. Falls back to the raw id (today's behavior,
+    // unchanged) when the pack isn't registered in this build -- a real,
+    // already-precedented scenario (see F-c8dd84fe's "unknown pack"
+    // handling one level up in the same runLoad() flow).
+    details.push(`pack: ${getPackById(s.packId)?.meta.name ?? s.packId}`);
   }
   if (s.companionCount != null && s.companionCount > 0) {
     details.push(`${s.companionCount} companion${s.companionCount > 1 ? 's' : ''}`);

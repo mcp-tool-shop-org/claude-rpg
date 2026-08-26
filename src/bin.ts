@@ -35,15 +35,16 @@ import {
   loadArcSnapshotFromSession,
   loadEndgameTriggersFromSession,
   loadFinaleFromSession,
+  loadNpcConversationsFromSession,
   listSaves,
   listArchivedCampaigns,
   getSavePath,
   getDefaultSaveDir,
 } from './session/session.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
-import { presentError } from './cli/error-presenter.js';
+import { presentError, renderError, type ErrorPresentation } from './cli/error-presenter.js';
 import { slashCompleter } from './cli/slash-completer.js';
-import { createSpinner } from './cli/spinner.js';
+import { createSpinner, formatRetryLabel, type Spinner } from './cli/spinner.js';
 import { createStreamPresenter } from './cli/stream-presenter.js';
 import { renderPresentationCues, insertCuesBeforePrompt } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
@@ -52,9 +53,10 @@ import { formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent } from '.
 import { isPathInside } from './cli/path-guard.js';
 import { attemptExitAutosave } from './cli/exit-autosave.js';
 import { renderUsage } from './cli/usage.js';
+import { parseWorldFlag, formatValidWorlds } from './cli/world-flag.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
-import { getPackById, resolveWorldFlag } from './character/packs.js';
+import { getPackById, type PackInfo } from './character/packs.js';
 import { renderCharacterSheet } from './character/sheet.js';
 import { renderRecap } from './character/recap.js';
 import {
@@ -102,6 +104,12 @@ function buildSaveInput(session: GameSession, savePath: string, packId?: string)
     worldPrompt: session.worldPrompt,
     profile: session.profile,
     packId,
+    // Conversation memory (coordinator brief item 4c, wave-18/cli-display.md,
+    // director ruling R4: conversation memory IS PERSISTED): every
+    // saveSession call site in this file funnels through this one function,
+    // so this single edit covers all of them (the SIGINT autosave, the
+    // stdin-closed autosave, and the in-game "save" command).
+    npcConversations: session.npcConversations,
     playerRumors: session.playerRumors,
     activePressures: session.activePressures,
     genre: session.genre,
@@ -197,6 +205,25 @@ async function main(): Promise<void> {
 }
 
 async function runPlay(args: string[]): Promise<void> {
+  // F-7862c05d: --world <name> resolved fully pre-interactive (before
+  // buildCharacter/readline start), matching this file's own top-of-main()
+  // convention for --version/--help/missing-API-key. Director ruling R1
+  // (wave-18/cli-display.md coordinator brief): an unknown --world is a
+  // structured error + exit 1 -- never a silent fall-through to the
+  // interactive world-selection menu.
+  const { packInfo, errorMessage } = parseWorldFlag(args);
+  if (errorMessage) {
+    const presentation: ErrorPresentation = {
+      headline: 'Unknown world',
+      explanation: errorMessage,
+      preserved: 'No session was started.',
+      nextAction: `Valid worlds: ${formatValidWorlds()}`,
+      exitCode: 1,
+    };
+    process.stderr.write(renderError(presentation, debugMode));
+    process.exit(1);
+  }
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -204,20 +231,35 @@ async function runPlay(args: string[]): Promise<void> {
     historySize: 100,
   });
 
-  // Character creation flow (includes pack selection)
-  const result = await buildCharacter(rl);
+  // Character creation flow (includes pack selection). Director ruling R2:
+  // a --world selection stays LOCKED through the character retry loop --
+  // packInfo is a function-scope parameter builder.ts's own retry loop
+  // can't reopen (see world-flag.ts's doc comment / builder.ts's
+  // presetPack, narrative-llm's half).
+  const result = await buildCharacter(rl, packInfo);
   const engine = result.pack.createGame();
 
   const fastMode = args.includes('--fast');
   const presentationBox: PresentationBox = { calls: [] };
   const streamBox: StreamBox = { current: null };
+  // F-d890d23d: spinnerBox + onRetry wiring -- see the SpinnerBox doc
+  // comment below for the race-safety argument. Threaded through the
+  // EXISTING GameConfig.client field (bypasses createAdaptedClient's own
+  // default construction inside GameSession's constructor).
+  const spinnerBox: SpinnerBox = { current: null };
+  const client = createAdaptedClient(undefined, {
+    onRetry: (info) => spinnerBox.current?.setLabel(formatRetryLabel('thinking', info)),
+  });
   const session = new GameSession(withStreamingHook(withPresentationHook({
     engine,
+    client,
     title: result.pack.meta.name,
     tone: result.pack.meta.narratorTone,
     profile: result.profile,
     itemCatalog: result.pack.itemCatalog,
+    buildCatalog: result.pack.buildCatalog,
     genre: result.pack.meta.genres[0] ?? 'fantasy',
+    packId: result.pack.meta.id,
     fastMode,
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
@@ -232,7 +274,7 @@ async function runPlay(args: string[]): Promise<void> {
   const initialCustom = structuredClone(result.profile.custom);
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop({
-    session, rl, packId: result.pack.meta.id, presentationBox, streamBox,
+    session, rl, packId: result.pack.meta.id, presentationBox, streamBox, spinnerBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
     initialPartyState: initialParty, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -312,8 +354,12 @@ async function runLoad(): Promise<void> {
   // Restore engine from pack (recreate with modules, then swap world state)
   let engine;
   let itemCatalog = null;
+  // F-7484bd2e/coordinator brief item 4a: hoisted out of the if-block below
+  // (mirrors itemCatalog's own existing hoist) so pack?.buildCatalog is
+  // still in scope at the renderRecap() call site further down.
+  let pack: PackInfo | undefined;
   if (savedSession.packId) {
-    const pack = getPackById(savedSession.packId);
+    pack = getPackById(savedSession.packId);
     if (pack) {
       engine = pack.createGame();
       itemCatalog = pack.itemCatalog;
@@ -386,11 +432,22 @@ async function runLoad(): Promise<void> {
   const restoredArcSnapshot = loadArcSnapshotFromSession(savedSession);
   const restoredEndgameTriggers = loadEndgameTriggersFromSession(savedSession);
   const restoredFinale = loadFinaleFromSession(savedSession);
+  // Conversation memory (coordinator brief item 4c, wave-18/cli-display.md,
+  // director ruling R4: conversation memory IS PERSISTED).
+  const restoredNpcConversations = loadNpcConversationsFromSession(savedSession);
 
   const presentationBox: PresentationBox = { calls: [] };
   const streamBox: StreamBox = { current: null };
+  // F-d890d23d: spinnerBox + onRetry wiring -- see runPlay/the SpinnerBox
+  // doc comment for the race-safety argument. Threaded through the EXISTING
+  // GameConfig.client field.
+  const spinnerBox: SpinnerBox = { current: null };
+  const client = createAdaptedClient(undefined, {
+    onRetry: (info) => spinnerBox.current?.setLabel(formatRetryLabel('thinking', info)),
+  });
   const session = new GameSession(withStreamingHook(withPresentationHook({
     engine,
+    client,
     tone: savedSession.tone,
     title: savedSession.characterName ?? 'claude-rpg',
     worldPrompt: savedSession.worldPrompt,
@@ -402,6 +459,7 @@ async function runLoad(): Promise<void> {
     // and their concluded-ness — both were computed from the save and dropped.
     history,
     packId: savedSession.packId,
+    npcConversations: restoredNpcConversations,
     campaignStatus: savedSession.campaignStatus ?? 'active',
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
@@ -422,7 +480,9 @@ async function runLoad(): Promise<void> {
   if (restoredFinale) session.finaleOutline = restoredFinale;
 
   // Show recap
-  console.log(renderRecap(profile, history));
+  // Coordinator brief item 4a (narrative-llm's recap half): pack?.buildCatalog
+  // as renderRecap's new third arg.
+  console.log(renderRecap(profile, history, pack?.buildCatalog));
 
   const snapshot = profile ? captureSnapshot(profile) : undefined;
   const worldSnap = captureWorldSnapshot(
@@ -435,7 +495,7 @@ async function runLoad(): Promise<void> {
   const initialCustom = profile ? structuredClone(profile.custom) : {};
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop({
-    session, rl, packId: savedSession.packId, presentationBox, streamBox,
+    session, rl, packId: savedSession.packId, presentationBox, streamBox, spinnerBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
     initialPartyState: initialParty, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -450,7 +510,6 @@ async function runArchive(): Promise<void> {
 async function runNew(worldPrompt: string): Promise<void> {
   console.log('\n  Generating world...\n');
 
-  const client = createAdaptedClient();
   // F-b1c363e3: generateWorld's single generateStructured call carries the
   // largest LLM token budget anywhere in this app (title, theme, tone
   // guide, ruleset, zones, factions, npcs, player, and quests all at once)
@@ -458,7 +517,16 @@ async function runNew(worldPrompt: string): Promise<void> {
   // per-turn narration call in runGameLoop. A brand-new player's very first
   // command sat at a motionless terminal with no indication the process
   // hadn't hung.
+  //
+  // F-d890d23d: spinner created before its client so the client's onRetry
+  // callback can close over it directly -- this one-shot world-gen call has
+  // no per-turn boundary to key a SpinnerBox off of (unlike the ongoing
+  // gameplay session constructed below), so the simpler direct closure is
+  // enough.
   const spinner = createSpinner('thinking');
+  const client = createAdaptedClient(undefined, {
+    onRetry: (info) => spinner.setLabel(formatRetryLabel('thinking', info)),
+  });
   spinner.start();
   let result: WorldGenResult;
   try {
@@ -480,8 +548,17 @@ async function runNew(worldPrompt: string): Promise<void> {
 
   const presentationBox: PresentationBox = { calls: [] };
   const streamBox: StreamBox = { current: null };
+  // Separate box + client for the ONGOING gameplay session -- distinct from
+  // the one-shot world-gen spinner/client above, since runGameLoop's
+  // per-turn spinner is shared code that needs the box treatment (see
+  // runPlay/runLoad's identical pattern).
+  const spinnerBox: SpinnerBox = { current: null };
+  const gameplayClient = createAdaptedClient(undefined, {
+    onRetry: (info) => spinnerBox.current?.setLabel(formatRetryLabel('thinking', info)),
+  });
   const session = new GameSession(withStreamingHook(withPresentationHook({
     engine: result.engine,
+    client: gameplayClient,
     title,
     tone: result.tone,
     worldPrompt,
@@ -494,7 +571,7 @@ async function runNew(worldPrompt: string): Promise<void> {
     historySize: 100,
   });
 
-  await runGameLoop({ session, rl, presentationBox, streamBox });
+  await runGameLoop({ session, rl, presentationBox, streamBox, spinnerBox });
 }
 
 type DistrictMoodSnapshot = {
@@ -586,6 +663,20 @@ function withStreamingHook(config: GameConfig, box: StreamBox): GameConfig {
   return { ...config, onNarrationChunk };
 }
 
+/**
+ * F-d890d23d (retry-visibility contract, wave-18/cli-display.md): holds the
+ * in-flight turn's spinner, if one is active, so the session's client's
+ * onRetry hook (armed once per client, closing over this box) can update
+ * its label mid-retry without needing a fresh client constructed per turn.
+ * Same "plain mutable box" shape as PresentationBox/StreamBox above.
+ *
+ * Race safety: onRetry only ever fires synchronously inside the awaited
+ * session.processInput() chain (withRetry, llm/claude-adapter.ts), so
+ * spinnerBox.current is guaranteed to be the current turn's own spinner for
+ * the entire window it could fire, cleared only after that await resolves.
+ */
+type SpinnerBox = { current: Spinner | null };
+
 /** Print any presentation cues queued during the just-completed turn (or the
  *  opening narration), then clear the box so a failed turn never leaks
  *  stale cues into the next successful one's output. */
@@ -602,6 +693,7 @@ type GameLoopOptions = {
   rl: ReturnType<typeof createInterface>;
   presentationBox: PresentationBox;
   streamBox: StreamBox;
+  spinnerBox: SpinnerBox;
   packId?: string;
   initialSnapshot?: SessionSnapshot;
   initialWorldSnapshot?: WorldSnapshot;
@@ -615,7 +707,7 @@ type GameLoopOptions = {
 
 async function runGameLoop(opts: GameLoopOptions): Promise<void> {
   const {
-    session, rl, packId, presentationBox, streamBox,
+    session, rl, packId, presentationBox, streamBox, spinnerBox,
     initialSnapshot, initialWorldSnapshot, initialDistrictMoods,
     initialPartyState, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -771,6 +863,9 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
     const stream = createStreamPresenter();
     try {
       const spinner = createSpinner('thinking');
+      // F-d890d23d: armed for the entire window this turn's client could
+      // fire onRetry, cleared in the same finally block that stops it below.
+      spinnerBox.current = spinner;
       spinner.start();
       if (process.stdout.isTTY) {
         // Arm the box only while this call is in flight, and stop the
@@ -792,6 +887,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       } finally {
         spinner.stop();
         streamBox.current = null;
+        spinnerBox.current = null;
       }
 
       if (output === '__QUIT__') {

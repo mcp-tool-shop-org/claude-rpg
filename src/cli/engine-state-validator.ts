@@ -30,9 +30,14 @@ export function validateEngineState(raw: string): EngineStateValidation {
   const world = (saved as Record<string, unknown>).world;
   const state = world && typeof world === 'object' ? (world as Record<string, unknown>).state : undefined;
 
-  // Explicit null check: typeof null === 'object', so a bare
-  // `typeof state !== 'object'` check would accept `state: null`.
-  if (state === null || typeof state !== 'object') {
+  // Explicit null and array checks: typeof null === 'object' AND
+  // Array.isArray([]) is also typeof 'object' in JS, so a bare
+  // `typeof state !== 'object'` check would accept both `state: null`
+  // (F-1b8be73f) and an array-shaped state (F-911bf1ee) — e.g.
+  // {"world":{"state":[1,2,3]}} — which Object.assign(engine.store.state, ...)
+  // would then merge in by its enumerable index keys ('0','1','2') instead
+  // of being rejected outright.
+  if (state === null || Array.isArray(state) || typeof state !== 'object') {
     return { valid: false, error: 'missing world.state' };
   }
 

@@ -40,6 +40,18 @@ export type HookResult = {
 
 export type Hook = (context: HookContext) => HookResult | null;
 
+/**
+ * Whether `events` contains a defeat event for the PLAYER specifically, not any entity.
+ * Mirrors PresentationStateMachine.inferFromEvents's entity-aware death check. Shared by
+ * deathHook and ImmersionRuntime's death dispatch gate so the two predicates can't drift
+ * apart again (F-adc0d512 — both previously matched on any entity's hp reaching 0).
+ */
+export function isPlayerDefeatEvent(events: ResolvedEvent[], playerId: string): boolean {
+  return events.some(
+    (e) => e.type === 'combat.entity.defeated' && e.payload.entityId === playerId,
+  );
+}
+
 /** Manages hook registration and firing. */
 export class HookManager {
   private hooks = new Map<HookPoint, Hook[]>();
@@ -131,10 +143,7 @@ export const npcSpeakingHook: Hook = (ctx) => {
 
 /** Play critical alert on death. */
 export const deathHook: Hook = (ctx) => {
-  const playerDeath = ctx.events.some(
-    (e) => e.type === 'resource.changed' && e.payload.resourceId === 'hp' && (e.payload.newValue as number) <= 0,
-  );
-  if (!playerDeath) return null;
+  if (!isPlayerDefeatEvent(ctx.events, ctx.world.playerId)) return null;
   return {
     sfxCues: [{ effectId: 'alert_critical', timing: 'immediate', intensity: 1.0 }],
     ambientCues: [

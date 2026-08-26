@@ -1,7 +1,7 @@
 // Presentation state machine — tracks game presentation context
 
 import type { ResolvedEvent } from '@ai-rpg-engine/core';
-import type { PresentationState, AmbientCue, MusicCue } from '@ai-rpg-engine/presentation';
+import type { PresentationState } from '@ai-rpg-engine/presentation';
 
 export type { PresentationState } from '@ai-rpg-engine/presentation';
 
@@ -9,16 +9,11 @@ export type StateTransition = {
   from: PresentationState;
   to: PresentationState;
   trigger: string;
-  ambientShift?: AmbientCue[];
-  musicShift?: MusicCue;
 };
-
-type TransitionListener = (t: StateTransition) => void;
 
 /** Tracks the game's presentation context and drives audio layer selection. */
 export class PresentationStateMachine {
   private _state: PresentationState = 'exploration';
-  private listeners: TransitionListener[] = [];
   private aftermathTurns = 0;
   /** Tracks the last tick at which inferFromEvents decremented aftermathTurns to prevent double-decrement in the same turn. */
   private lastDecrementTick = -1;
@@ -27,31 +22,21 @@ export class PresentationStateMachine {
     return this._state;
   }
 
-  /** Transition to a new state, emitting audio shift cues. */
+  /**
+   * Transition to a new state.
+   *
+   * F-81abb66a: this previously also computed ambientShift/musicShift cues per-transition
+   * and delivered them through an onTransition listener mechanism, but nothing in this
+   * domain ever wired that listener up — the hook system (combatStartHook, combatEndHook,
+   * deathHook, enterRoomHook in hooks.ts) is the actual, sole source of audio cues that
+   * reach players. Removed the dead computation and the onTransition machinery rather than
+   * wiring a second, currently-inert cue path that could double-fire cues alongside the
+   * hooks if someone activated it later.
+   */
   transition(to: PresentationState, trigger: string): StateTransition {
     const from = this._state;
-    const t: StateTransition = { from, to, trigger };
-
-    // Add ambient/music shifts based on transition
-    if (to === 'combat' && from !== 'combat') {
-      t.ambientShift = [
-        { layerId: 'ambient_drone', action: 'start', volume: 0.4, fadeMs: 500 },
-      ];
-      t.musicShift = { action: 'intensify', fadeMs: 300 };
-    } else if (to === 'aftermath') {
-      t.ambientShift = [
-        { layerId: 'ambient_drone', action: 'stop', volume: 0, fadeMs: 1000 },
-      ];
-      t.musicShift = { action: 'soften', fadeMs: 1000 };
-    } else if (to === 'dialogue' && from !== 'dialogue') {
-      t.musicShift = { action: 'soften', fadeMs: 500 };
-    } else if (to === 'exploration' && from === 'dialogue') {
-      t.musicShift = { action: 'intensify', fadeMs: 500 };
-    }
-
     this._state = to;
-    for (const cb of this.listeners) cb(t);
-    return t;
+    return { from, to, trigger };
   }
 
   /**
@@ -99,10 +84,5 @@ export class PresentationStateMachine {
     if (hasZoneChange) return 'exploration';
 
     return this._state === 'director' ? 'director' : 'exploration';
-  }
-
-  /** Listen for state changes. */
-  onTransition(cb: TransitionListener): void {
-    this.listeners.push(cb);
   }
 }

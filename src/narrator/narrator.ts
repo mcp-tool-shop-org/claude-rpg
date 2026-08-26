@@ -14,6 +14,10 @@ export type NarrationResult = {
   sceneContext: SceneContext;
 };
 
+// F-304fc328: safe fallback narration used when the LLM call fails outright,
+// mirroring dialogue-mind.ts's PBR-002 in-character fallback pattern.
+const FALLBACK_NARRATION = 'The scene holds its breath, waiting for the story to catch up.';
+
 export type NarrateSceneOpts = {
   client: ClaudeClient;
   world: WorldState;
@@ -31,6 +35,12 @@ export type NarrateSceneOpts = {
   opportunityContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  /**
+   * F-7815df9e (game-core seam contract): compact, pre-condensed long-term-memory
+   * summary drawn from the campaign chronicle. Folded into the narration prompt
+   * as its own section when present.
+   */
+  chronicleContext?: string;
   onChunk?: StreamCallback;
 };
 
@@ -41,7 +51,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     previousLocationId, presentationState, characterPresence,
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
-    arcContext, endgameContext, onChunk,
+    arcContext, endgameContext, chronicleContext, onChunk,
   } = opts;
   const sceneContext = buildSceneContext(
     world,
@@ -60,50 +70,66 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     endgameContext,
   );
 
-  // Add presentation state to the narration input
+  // Add presentation state and long-term chronicle context to the narration input
   const enrichedInput = {
     ...sceneContext.narrationInput,
     presentationState,
+    chronicleContext,
   };
 
   const prompt = buildNarratePrompt(enrichedInput);
 
-  // FT-BR-004: When streaming with onChunk, use LEGACY plain-text prompt so prose
-  // streams naturally to the player (no JSON fragments). Reserve NarrationPlan JSON
-  // mode for non-streaming calls.
-  if (onChunk && client.generateStream) {
-    const result = await client.generateStream({
-      system: NARRATE_SYSTEM_LEGACY,
-      prompt,
-      maxTokens: 300,
-      onChunk,
-    });
+  // F-304fc328: Wrap both call paths in try/catch — client.generate/generateStream
+  // can throw a NarrationError (fatal kinds immediately, retryable kinds after
+  // withRetry exhausts its budget). Mirrors dialogue-mind.ts's PBR-002 pattern:
+  // log and return a safe fallback NarrationResult instead of throwing uncaught.
+  try {
+    // FT-BR-004: When streaming with onChunk, use LEGACY plain-text prompt so prose
+    // streams naturally to the player (no JSON fragments). Reserve NarrationPlan JSON
+    // mode for non-streaming calls.
+    if (onChunk && client.generateStream) {
+      const result = await client.generateStream({
+        system: NARRATE_SYSTEM_LEGACY,
+        prompt,
+        maxTokens: 300,
+        onChunk,
+      });
+      return {
+        narration: result.text.trim(),
+        plan: null,
+        sceneContext,
+      };
+    }
+
+    const result = await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
+
+    // Try to parse as NarrationPlan JSON
+    const plan = parseNarrationPlan(result.text);
+
+    if (plan) {
+      return {
+        narration: plan.sceneText,
+        plan,
+        sceneContext,
+      };
+    }
+
+    // Fallback: treat as plain text narration
     return {
       narration: result.text.trim(),
       plan: null,
       sceneContext,
     };
-  }
-
-  const result = await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
-
-  // Try to parse as NarrationPlan JSON
-  const plan = parseNarrationPlan(result.text);
-
-  if (plan) {
+  } catch (err) {
+    console.warn(
+      `[narrator] narrateScene: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
+    );
     return {
-      narration: plan.sceneText,
-      plan,
+      narration: FALLBACK_NARRATION,
+      plan: null,
       sceneContext,
     };
   }
-
-  // Fallback: treat as plain text narration
-  return {
-    narration: result.text.trim(),
-    plan: null,
-    sceneContext,
-  };
 }
 
 /** Narrate using legacy plain-text mode (for tests or fallback). */
@@ -125,17 +151,29 @@ export async function narrateSceneLegacy(
 
   const prompt = buildNarratePrompt(sceneContext.narrationInput);
 
-  const result = await client.generate({
-    system: NARRATE_SYSTEM_LEGACY,
-    prompt,
-    maxTokens: 300,
-  });
+  // F-304fc328: same try/catch fallback as narrateScene above.
+  try {
+    const result = await client.generate({
+      system: NARRATE_SYSTEM_LEGACY,
+      prompt,
+      maxTokens: 300,
+    });
 
-  return {
-    narration: result.text.trim(),
-    plan: null,
-    sceneContext,
-  };
+    return {
+      narration: result.text.trim(),
+      plan: null,
+      sceneContext,
+    };
+  } catch (err) {
+    console.warn(
+      `[narrator] narrateSceneLegacy: LLM generation failed: ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
+    );
+    return {
+      narration: FALLBACK_NARRATION,
+      plan: null,
+      sceneContext,
+    };
+  }
 }
 
 /** Try to parse Claude's response as a NarrationPlan JSON. */

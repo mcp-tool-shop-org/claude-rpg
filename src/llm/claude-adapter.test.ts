@@ -170,6 +170,35 @@ describe('createAdaptedClient', () => {
       expect(result.ok).toBe(false);
       expect(result.error).toContain('JSON parse error');
     });
+
+    // F-853904a0: the ClaudeClient interface documents an optional `validator`
+    // callback (PFE-003) to reject bad shapes early. The adapted client's
+    // generateStructured must honor it exactly like the legacy createClaudeClient does.
+    it('rejects bad shapes early when a validator throws (PFE-003)', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: '{"a":1}' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const validator = (_data: unknown) => {
+        throw new Error('shape mismatch: expected {b}');
+      };
+      const result = await client.generateStructured<{ a: number }>({ system: 's', prompt: 'p', validator });
+      expect(result.ok).toBe(false);
+      expect(result.data).toBeNull();
+      expect(result.error).toBe('shape mismatch: expected {b}');
+    });
+
+    it('calls the validator and returns ok:true when it passes', async () => {
+      createSpy.mockResolvedValue(
+        fakeMessage({ content: [{ type: 'text', text: '{"a":1}' }] as Anthropic.ContentBlock[] }),
+      );
+      const client = createAdaptedClient();
+      const validator = vi.fn();
+      const result = await client.generateStructured<{ a: number }>({ system: 's', prompt: 'p', validator });
+      expect(validator).toHaveBeenCalledWith({ a: 1 });
+      expect(result.ok).toBe(true);
+      expect(result.data).toEqual({ a: 1 });
+    });
   });
 });
 

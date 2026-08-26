@@ -98,9 +98,11 @@ export function computeFactionDeltas(
     const after = afterReputation.find((r) => r.factionId === factionId)?.value ?? 0;
 
     // Count pressures from this faction resolved this session
+    // F-5ddf0503: removed a dead `resolvedPressures.indexOf(f) >= 0` clause —
+    // f is drawn from resolvedPressures by this very .filter(), so indexOf(f)
+    // (reference equality) always found it; the clause had no effect on output.
     const pressuresFrom = resolvedPressures.filter(
-      (f) => f.resolution.resolvedBy !== 'expiry' &&
-        resolvedPressures.indexOf(f) >= 0,
+      (f) => f.resolution.resolvedBy !== 'expiry',
     ).filter((f) => {
       // Check fallout effects for this faction
       return f.effects.some(
@@ -504,13 +506,37 @@ export function renderFullRecap(
   opportunityRecapEntries?: OpportunityRecapEntry[],
   arcRecapData?: ArcRecapData,
 ): string {
-  // Nothing to show if nothing happened
-  if (
-    characterDelta.turnsPlayed === 0 &&
-    characterDelta.xpGained === 0 &&
-    worldDelta.pressuresSpawned === 0 &&
-    worldDelta.pressuresResolved === 0
-  ) {
+  // F-579e70a8: hoisted so the "nothing happened" gate below can reuse the exact
+  // same conditions that gate each individual section, instead of a hand-maintained
+  // field subset that silently drops sections it doesn't know about (e.g. a session
+  // with only a companion departure or an item loss used to render as fully empty).
+  const changedDistricts = districtDeltas?.filter((d) => d.changed) ?? [];
+  const hasCraftingData = !!craftingData &&
+    (craftingData.entries.length > 0 || craftingData.materialChanges.length > 0);
+
+  const hasAnyContent =
+    characterDelta.turnsPlayed > 0 ||
+    characterDelta.xpGained > 0 ||
+    (!!characterDelta.titleAfter && characterDelta.titleAfter !== characterDelta.titleBefore) ||
+    characterDelta.newMilestones > 0 ||
+    characterDelta.newInjuries > 0 ||
+    worldDelta.pressuresSpawned > 0 ||
+    worldDelta.pressuresResolved > 0 ||
+    changedDistricts.length > 0 ||
+    (economyRecapEntries?.length ?? 0) > 0 ||
+    factionDeltas.length > 0 ||
+    rumorDelta.spawned > 0 ||
+    rumorDelta.totalSpread > 0 ||
+    whatPeopleAreSaying.length > 0 ||
+    (npcRecapEntries?.length ?? 0) > 0 ||
+    (companionRecapEntries?.length ?? 0) > 0 ||
+    (itemRecapEntries?.length ?? 0) > 0 ||
+    hasCraftingData ||
+    (opportunityRecapEntries?.length ?? 0) > 0 ||
+    !!(arcRecapData && (arcRecapData.dominantArc || arcRecapData.endgameTriggers.length > 0));
+
+  // Nothing to show if no section would actually render.
+  if (!hasAnyContent) {
     return '';
   }
 
@@ -570,7 +596,6 @@ export function renderFullRecap(
   }
 
   // Section 3: District Changes
-  const changedDistricts = districtDeltas?.filter((d) => d.changed) ?? [];
   if (changedDistricts.length > 0) {
     lines.push('');
     lines.push(`  ${DIVIDER}`);
@@ -721,8 +746,6 @@ export function renderFullRecap(
   }
 
   // Section: Crafting Activity (v1.8)
-  const hasCraftingData = craftingData &&
-    (craftingData.entries.length > 0 || craftingData.materialChanges.length > 0);
   if (hasCraftingData) {
     lines.push('');
     lines.push(`  ${DIVIDER}`);

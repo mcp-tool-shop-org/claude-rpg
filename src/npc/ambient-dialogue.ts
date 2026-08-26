@@ -94,14 +94,17 @@ export function generateAmbientLine(npc: AmbientNpcInfo, seed?: number): string 
   const pool = PERSONALITY_TEMPLATES[personality] ?? PERSONALITY_TEMPLATES.default;
 
   // Select base line
-  const baseIndex = effectiveSeed % pool.length;
+  // F-20ec59de: JS `%` preserves the dividend's sign, so a negative effectiveSeed
+  // (e.g. a caller-supplied negative seed) would otherwise produce a negative
+  // index and pool[negativeIndex] === undefined.
+  const baseIndex = ((effectiveSeed % pool.length) + pool.length) % pool.length;
   let line = pool[baseIndex].replace('{name}', npc.name);
 
   // Check belief overlays
   for (const overlay of BELIEF_OVERLAYS) {
     for (const [key, value] of Object.entries(npc.beliefs)) {
       if (overlay.keyPattern.test(key) && overlay.valuePredicate(value)) {
-        const overlayIndex = effectiveSeed % overlay.templates.length;
+        const overlayIndex = ((effectiveSeed % overlay.templates.length) + overlay.templates.length) % overlay.templates.length;
         const extra = overlay.templates[overlayIndex].replace('{name}', npc.name);
         line += ' ' + extra;
         // Only one overlay per line

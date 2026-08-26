@@ -6,6 +6,8 @@ import type { PlayerRumor, WorldPressure, NpcActionResult } from '@ai-rpg-engine
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
+import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { classifyError } from '../llm/claude-adapter.js';
 
 export type DialogueResult = {
   speakerId: string;
@@ -67,14 +69,18 @@ export async function generateDialogue(
     });
     resultText = result.text.trim();
   } catch (err) {
+    // F-afb978de: classify to a NarrationError so fatal (auth/bad-request) errors
+    // can surface userMessage()'s actionable guidance instead of being indistinguishable
+    // from a transient in-fiction hiccup. Non-fatal kinds keep the in-character stall.
+    const narrationErr = err instanceof NarrationError ? err : classifyError(err);
     console.warn(
-      `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${err instanceof Error ? err.message : String(err)}. Using fallback.`,
+      `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${narrationErr.message}. Using fallback.`,
     );
     const npc = world.entities[npcId];
     return {
       speakerId: npcId,
       speakerName: npc?.name ?? npcId,
-      text: 'The NPC pauses, gathering their thoughts...',
+      text: narrationErr.fatal ? userMessage(narrationErr) : 'The NPC pauses, gathering their thoughts...',
       grounding: {
         beliefCount: context.beliefs.length,
         memoryCount: context.recentMemories.length,

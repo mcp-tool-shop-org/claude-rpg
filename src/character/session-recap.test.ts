@@ -3,7 +3,12 @@ import {
   computeFactionDeltas,
   computeRumorDelta,
   computeDistrictDeltas,
+  renderFullRecap,
+  type CompanionRecapEntry,
+  type ItemRecapEntry,
 } from './session-recap.js';
+import type { SessionDelta } from './recap-delta.js';
+import type { WorldDelta } from './world-delta.js';
 import type { PlayerRumor, PressureFallout } from '@ai-rpg-engine/modules';
 
 // --- computeFactionDeltas ---
@@ -68,6 +73,51 @@ describe('computeFactionDeltas', () => {
     expect(result).toHaveLength(1);
     expect(result[0].reputationBefore).toBe(0);
     expect(result[0].reputationAfter).toBe(20);
+  });
+
+  // F-5ddf0503: pressuresFrom's filter had a dead second clause
+  // (`resolvedPressures.indexOf(f) >= 0`) that is always true by construction
+  // (f is drawn from resolvedPressures by the very .filter() it's inside). These
+  // tests pin down the INTENDED behavior driven solely by the first clause
+  // (resolvedBy !== 'expiry') and the second .filter()'s per-faction effect check.
+  describe('pressuresFrom', () => {
+    const guildRepFallout = {
+      resolution: { resolvedBy: 'player-action', resolvedAtTick: 5, resolutionVisibility: 'known' },
+      effects: [{ type: 'reputation', factionId: 'guild', delta: 10 }],
+      summary: 'Resolved by the player',
+    } as any;
+
+    it('counts a resolved-by-non-expiry pressure whose fallout effects target the faction', () => {
+      const before = [{ factionId: 'guild', value: 0 }];
+      const after = [{ factionId: 'guild', value: 0 }];
+      const result = computeFactionDeltas(before, after, [], [guildRepFallout], 0);
+      expect(result).toHaveLength(1);
+      expect(result[0].pressuresFrom).toBe(1);
+    });
+
+    it('does not count a pressure resolved by expiry', () => {
+      const before = [{ factionId: 'guild', value: 0 }];
+      const after = [{ factionId: 'guild', value: 0 }];
+      const expiredFallout = { ...guildRepFallout, resolution: { ...guildRepFallout.resolution, resolvedBy: 'expiry' } };
+      const result = computeFactionDeltas(before, after, [], [expiredFallout], 0);
+      // No reputation change, no pressuresFrom, no rumor change — faction is dropped entirely
+      expect(result.find((d) => d.factionId === 'guild')).toBeUndefined();
+    });
+
+    it('does not count a resolved pressure whose fallout effects target a different faction', () => {
+      const before = [{ factionId: 'guild', value: 0 }];
+      const after = [{ factionId: 'guild', value: 0 }];
+      const otherFactionFallout = { ...guildRepFallout, effects: [{ type: 'reputation', factionId: 'thieves', delta: 10 }] };
+      const result = computeFactionDeltas(before, after, [], [otherFactionFallout], 0);
+      expect(result.find((d) => d.factionId === 'guild')).toBeUndefined();
+    });
+
+    it('counts multiple qualifying resolved pressures for the same faction', () => {
+      const before = [{ factionId: 'guild', value: 0 }];
+      const after = [{ factionId: 'guild', value: 0 }];
+      const result = computeFactionDeltas(before, after, [], [guildRepFallout, guildRepFallout], 0);
+      expect(result[0].pressuresFrom).toBe(2);
+    });
   });
 });
 
@@ -176,5 +226,101 @@ describe('computeDistrictDeltas', () => {
     const result = computeDistrictDeltas(before, after);
     expect(result).toHaveLength(1);
     expect(result[0].districtId).toBe('d1');
+  });
+});
+
+// --- renderFullRecap (F-579e70a8) ---
+
+describe('renderFullRecap', () => {
+  const zeroCharacterDelta: SessionDelta = {
+    xpGained: 0,
+    levelBefore: 1,
+    levelAfter: 1,
+    reputationChanges: [],
+    newMilestones: 0,
+    newInjuries: 0,
+    turnsPlayed: 0,
+  };
+
+  const zeroWorldDelta: WorldDelta = {
+    pressuresSpawned: 0,
+    pressuresResolved: 0,
+    resolutionSummaries: [],
+    chainReactions: 0,
+    rumorsDelta: 0,
+  };
+
+  const zeroRumorDelta = { spawned: 0, mutated: 0, totalSpread: 0 };
+
+  it('returns empty string when truly nothing happened', () => {
+    const result = renderFullRecap(
+      zeroCharacterDelta,
+      zeroWorldDelta,
+      [],
+      zeroRumorDelta,
+      [],
+    );
+    expect(result).toBe('');
+  });
+
+  it('renders a non-empty recap when only companionRecapEntries is populated (all four legacy gate counters stay zero)', () => {
+    const companionRecapEntries: CompanionRecapEntry[] = [
+      { npcId: 'c1', name: 'Mira', role: 'scout', event: 'departed', detail: 'left at the docks' },
+    ];
+
+    const result = renderFullRecap(
+      zeroCharacterDelta,
+      zeroWorldDelta,
+      [],
+      zeroRumorDelta,
+      [],
+      undefined, // npcRecapEntries
+      undefined, // districtDeltas
+      companionRecapEntries,
+    );
+
+    expect(result).not.toBe('');
+    expect(result).toContain('COMPANION CHANGES');
+    expect(result).toContain('Mira');
+  });
+
+  it('renders a non-empty recap when only itemRecapEntries is populated (all four legacy gate counters stay zero)', () => {
+    const itemRecapEntries: ItemRecapEntry[] = [
+      { itemId: 'i1', name: 'Old Locket', event: 'lost', detail: 'dropped in the river' },
+    ];
+
+    const result = renderFullRecap(
+      zeroCharacterDelta,
+      zeroWorldDelta,
+      [],
+      zeroRumorDelta,
+      [],
+      undefined, // npcRecapEntries
+      undefined, // districtDeltas
+      undefined, // companionRecapEntries
+      itemRecapEntries,
+    );
+
+    expect(result).not.toBe('');
+    expect(result).toContain('EQUIPMENT CHANGES');
+    expect(result).toContain('Old Locket');
+  });
+
+  it('renders a non-empty recap when only factionDeltas is populated (passive/NPC-agency reputation shift)', () => {
+    const factionDeltas = [
+      { factionId: 'guild', reputationBefore: 10, reputationAfter: 15, pressuresFrom: 0, rumorsKnownBefore: 0, rumorsKnownAfter: 0 },
+    ];
+
+    const result = renderFullRecap(
+      zeroCharacterDelta,
+      zeroWorldDelta,
+      factionDeltas,
+      zeroRumorDelta,
+      [],
+    );
+
+    expect(result).not.toBe('');
+    expect(result).toContain('FACTION SHIFTS');
+    expect(result).toContain('guild');
   });
 });

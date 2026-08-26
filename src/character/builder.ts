@@ -68,6 +68,13 @@ export async function buildCharacter(rl: ReadlineInterface): Promise<BuildResult
   const background = backgrounds[bgIdx];
 
   // Step 5: Traits
+  // F-67f0cf3d investigated: this second argument is `selectedTraitIds` (traits
+  // already picked, used to exclude them + their `incompatibleWith` set — see
+  // getAvailableTraits's own doc comment) — NOT an archetype/background tags
+  // array like getAvailableDisciplines's `currentTags` below. `[]` is correct
+  // here: no traits have been selected yet at this point in the flow (traitIds
+  // is declared on the next line). Passing currentTags here would be wrong —
+  // it would filter traits against an unrelated tag/incompatibility model.
   const availableTraits = getAvailableTraits(catalog, []);
   let traitIds: string[] = [];
   if (availableTraits.length > 0) {

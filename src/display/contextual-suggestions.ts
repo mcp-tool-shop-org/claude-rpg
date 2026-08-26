@@ -156,7 +156,7 @@ export function generateSuggestions(opts: {
       s.trigger === 'supply-crisis' || s.trigger === 'black-market' ||
       s.trigger === 'crafting-shortage' || s.trigger === 'crafting-hint' ||
       s.trigger === 'new-opportunity' || s.trigger === 'expiring-opportunity' ||
-      s.trigger === 'stale-opportunity' || s.trigger === 'endgame-detected');
+      s.trigger === 'stale-opportunity' || s.trigger === 'endgame-detected').slice(0, 2);
   }
 
   return suggestions.slice(0, 2);

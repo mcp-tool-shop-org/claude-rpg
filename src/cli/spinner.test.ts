@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSpinner } from './spinner.js';
 
 // Mock writable stream for testing
-function mockStream(isTTY: boolean): NodeJS.WriteStream {
+function mockStream(isTTY: boolean): NodeJS.WriteStream & { output: string[] } {
   const chunks: string[] = [];
   return {
     isTTY,

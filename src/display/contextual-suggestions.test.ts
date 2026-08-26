@@ -117,4 +117,25 @@ describe('generateSuggestions', () => {
     const crisis = result.find((s) => s.trigger === 'supply-crisis');
     expect(crisis).toBeTruthy();
   });
+
+  // F-5a22c206: crisis-pressure, action-failed, and milestone-cash are all
+  // pushed unconditionally — none is gated behind the `suggestions.length < 2`
+  // check every rule from #5 onward uses, and none is gated on turnCount
+  // either. All three are also on the post-turn-10 filter's whitelist. When
+  // all three co-occur on the same turn past turn 10, the filter used to
+  // return them unsliced — a 3rd hint line beyond the documented "max 2 per
+  // turn" contract enforced everywhere else (including the <=10 path).
+  it('still caps at 2 after turn 10 when 3 unconditional triggers co-occur (regression)', () => {
+    const result = generateSuggestions(defaults({
+      turnCount: 15,
+      hasUsedLeverage: false,
+      recentMilestone: true,
+      recommendation: {
+        situationTag: 'crisis',
+        top3: [{ reason: 'Run away!', urgency: 0.9 }],
+      },
+      lastLeverageResolution: { success: false, failReason: 'Not enough influence' },
+    }));
+    expect(result.length).toBeLessThanOrEqual(2);
+  });
 });

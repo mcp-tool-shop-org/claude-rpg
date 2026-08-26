@@ -44,6 +44,7 @@ import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError } from './cli/error-presenter.js';
 import { slashCompleter } from './cli/slash-completer.js';
 import { createSpinner } from './cli/spinner.js';
+import { createStreamPresenter } from './cli/stream-presenter.js';
 import { renderPresentationCues } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
 import { parseSaveSelection } from './cli/save-selection.js';
@@ -233,7 +234,8 @@ async function runPlay(args: string[]): Promise<void> {
 
   const fastMode = args.includes('--fast');
   const presentationBox: PresentationBox = { calls: [] };
-  const session = new GameSession(withPresentationHook({
+  const streamBox: StreamBox = { current: null };
+  const session = new GameSession(withStreamingHook(withPresentationHook({
     engine,
     title: result.pack.meta.name,
     tone: result.pack.meta.narratorTone,
@@ -241,7 +243,7 @@ async function runPlay(args: string[]): Promise<void> {
     itemCatalog: result.pack.itemCatalog,
     genre: result.pack.meta.genres[0] ?? 'fantasy',
     fastMode,
-  }, (calls) => { presentationBox.calls = calls; }));
+  }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   const snapshot = captureSnapshot(result.profile);
   const worldSnap = captureWorldSnapshot(
@@ -254,7 +256,7 @@ async function runPlay(args: string[]): Promise<void> {
   const initialCustom = structuredClone(result.profile.custom);
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop({
-    session, rl, packId: result.pack.meta.id, presentationBox,
+    session, rl, packId: result.pack.meta.id, presentationBox, streamBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
     initialPartyState: initialParty, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -376,7 +378,8 @@ async function runLoad(): Promise<void> {
   const restoredFinale = loadFinaleFromSession(savedSession);
 
   const presentationBox: PresentationBox = { calls: [] };
-  const session = new GameSession(withPresentationHook({
+  const streamBox: StreamBox = { current: null };
+  const session = new GameSession(withStreamingHook(withPresentationHook({
     engine,
     tone: savedSession.tone,
     title: savedSession.characterName ?? 'claude-rpg',
@@ -385,7 +388,7 @@ async function runLoad(): Promise<void> {
     itemCatalog: itemCatalog ?? undefined,
     genre: savedSession.genre ?? 'fantasy',
     journal: restoredJournal,
-  }, (calls) => { presentationBox.calls = calls; }));
+  }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   // Restore rumors, pressures, and fallout history into session
   session.playerRumors = restoredRumors;
@@ -417,7 +420,7 @@ async function runLoad(): Promise<void> {
   const initialCustom = profile ? structuredClone(profile.custom) : {};
   const initialOpportunities = structuredClone(session.activeOpportunities);
   await runGameLoop({
-    session, rl, packId: savedSession.packId, presentationBox,
+    session, rl, packId: savedSession.packId, presentationBox, streamBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
     initialPartyState: initialParty, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -447,12 +450,13 @@ async function runNew(worldPrompt: string): Promise<void> {
   console.log(`  World "${title}" created!\n`);
 
   const presentationBox: PresentationBox = { calls: [] };
-  const session = new GameSession(withPresentationHook({
+  const streamBox: StreamBox = { current: null };
+  const session = new GameSession(withStreamingHook(withPresentationHook({
     engine: result.engine,
     title,
     tone: result.tone,
     worldPrompt,
-  }, (calls) => { presentationBox.calls = calls; }));
+  }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   const rl = createInterface({
     input: process.stdin,
@@ -461,7 +465,7 @@ async function runNew(worldPrompt: string): Promise<void> {
     historySize: 100,
   });
 
-  await runGameLoop({ session, rl, presentationBox });
+  await runGameLoop({ session, rl, presentationBox, streamBox });
 }
 
 type DistrictMoodSnapshot = {
@@ -524,6 +528,36 @@ function withPresentationHook(
   return { ...config, onPresentation } as GameConfig;
 }
 
+// F-c94fa782 (streaming seam contract, wave-10/cli-display.md): holds the
+// in-flight turn's chunk sink, if streaming is armed for this turn. Same
+// "plain mutable box" shape as PresentationBox above, but for a per-call
+// callback instead of an accumulator: runGameLoop arms it immediately
+// before each processInput() call and disarms it right after, since a
+// fresh StreamSession is created per turn while GameConfig itself (and the
+// onNarrationChunk closure below) is only built once per session.
+type StreamBox = { current: ((chunk: string) => void) | null };
+
+/**
+ * game.ts (game-core domain, not owned here) adds `onNarrationChunk` to
+ * GameConfig in a worktree that lands separately this wave, so it is not
+ * yet on the GameConfig type checked in THIS worktree -- same documented-
+ * cast seam as withPresentationHook above. Once both halves merge,
+ * `config.onNarrationChunk` is a real, typed field on GameConfig and this
+ * function becomes a harmless no-op wrapper. The forwarding callback is
+ * guarded: a throwing chunk sink (e.g. a write to a closed stream) must
+ * never damage turn processing.
+ */
+function withStreamingHook(config: GameConfig, box: StreamBox): GameConfig {
+  const onNarrationChunk = (chunk: string) => {
+    try {
+      box.current?.(chunk);
+    } catch {
+      // Display-only failure -- narration generation must continue.
+    }
+  };
+  return { ...config, onNarrationChunk } as GameConfig;
+}
+
 /** Print any presentation cues queued during the just-completed turn (or the
  *  opening narration), then clear the box so a failed turn never leaks
  *  stale cues into the next successful one's output. */
@@ -539,6 +573,7 @@ type GameLoopOptions = {
   session: GameSession;
   rl: ReturnType<typeof createInterface>;
   presentationBox: PresentationBox;
+  streamBox: StreamBox;
   packId?: string;
   initialSnapshot?: SessionSnapshot;
   initialWorldSnapshot?: WorldSnapshot;
@@ -552,7 +587,7 @@ type GameLoopOptions = {
 
 async function runGameLoop(opts: GameLoopOptions): Promise<void> {
   const {
-    session, rl, packId, presentationBox,
+    session, rl, packId, presentationBox, streamBox,
     initialSnapshot, initialWorldSnapshot, initialDistrictMoods,
     initialPartyState, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
@@ -676,14 +711,33 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       continue;
     }
 
+    // F-c94fa782 (streaming seam contract): one presenter per turn, created
+    // outside the try so the catch block below can still read chunkCount
+    // (whether anything streamed) even when the turn itself throws.
+    const stream = createStreamPresenter();
     try {
       const spinner = createSpinner('thinking');
       spinner.start();
+      if (process.stdout.isTTY) {
+        // Arm the box only while this call is in flight, and stop the
+        // spinner the instant the first chunk arrives -- its animation
+        // writes to the same line streaming now owns, and would otherwise
+        // interleave with (and corrupt) the streamed text.
+        let spinnerLive = true;
+        streamBox.current = (chunk: string) => {
+          if (spinnerLive) {
+            spinner.stop();
+            spinnerLive = false;
+          }
+          stream.onChunk(chunk);
+        };
+      }
       let output: string;
       try {
         output = await session.processInput(input.trim());
       } finally {
         spinner.stop();
+        streamBox.current = null;
       }
 
       if (output === '__QUIT__') {
@@ -697,9 +751,17 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
         process.exit(0);
       }
 
+      // Narration already reached the player incrementally while it was
+      // generated -- erase the streamed copy so `output` below (which bakes
+      // the same narration back in via renderPlayScreen) doesn't show it
+      // twice.
+      if (stream.chunkCount > 0) stream.clear();
       console.log(output);
       flushPresentationCues(presentationBox);
     } catch (err) {
+      // A partial stream is still real narration the player already saw --
+      // mark it interrupted (visual break) rather than erasing it.
+      if (stream.chunkCount > 0) stream.markInterrupted();
       presentError(err, 'turn', debugMode);
       // Discard any cues queued before the turn failed — they describe a
       // turn that never finished printing and would otherwise leak into the

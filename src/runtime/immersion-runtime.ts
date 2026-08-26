@@ -1,7 +1,7 @@
 // Immersion Runtime — wires presentation state, hooks, audio director, and voice caster
 
 import type { Engine, ResolvedEvent } from '@ai-rpg-engine/core';
-import type { NarrationPlan, AmbientCue, MusicCue } from '@ai-rpg-engine/presentation';
+import type { NarrationPlan, AmbientCue, MusicCue, PresentationState } from '@ai-rpg-engine/presentation';
 import { AudioDirector } from '@ai-rpg-engine/audio-director';
 import { SoundRegistry, CORE_SOUND_PACK } from '@ai-rpg-engine/soundpack-core';
 import {
@@ -80,6 +80,20 @@ export class ImmersionRuntime {
   debugMode = false;
 
   /**
+   * F-4ec3609b / F-961f14aa: memoizes the from/to of the last inferAndTransition() call,
+   * keyed by engine.tick, so a same-turn processPresentation() call can detect that
+   * this turn's inference+transition already ran and reuse the result instead of
+   * re-inferring/re-transitioning. Keyed on tick (not just "the last call") so a stale
+   * value from a turn whose caller never followed up with processPresentation() can't
+   * be mistaken for the current turn's -- mirrors PresentationStateMachine.
+   * inferFromEvents's own lastDecrementTick guard, which solves the identical class of
+   * same-turn-vs-stale-call problem one layer down. Consumed (reset to undefined) the
+   * moment processPresentation() reads it, so it never survives past the turn it was
+   * computed for.
+   */
+  private pendingTurnInference?: { tick: number; from: PresentationState; to: PresentationState };
+
+  /**
    * F-d8d1f51d: ImmersionRuntime's own ambient/music de-dup, independent of
    * AudioDirector.schedule()'s cooldown map. That cooldown (verified against the
    * installed @ai-rpg-engine/audio-director package, dist/director.js's schedule())
@@ -128,6 +142,73 @@ export class ImmersionRuntime {
     return cue;
   }
 
+  /**
+   * Run this turn's presentation-state inference and, if it changed, the transition —
+   * shared by inferAndTransition() and processPresentation()'s own fallback (used when
+   * nothing called inferAndTransition() first this turn). Factoring this out keeps
+   * stateMachine.transition() reachable from exactly one place, so "at most once per
+   * turn" is trivially true regardless of which caller ends up running it.
+   */
+  private runInference(
+    engine: Engine,
+    events: ResolvedEvent[],
+    verb: string,
+  ): { from: PresentationState; to: PresentationState } {
+    const from = this.stateMachine.current;
+    // F-277b5eca / F-ed267860: pass the real playerId (so player death resolves to
+    // 'menu' instead of the dead '__player__' sentinel) and the real engine tick (so the
+    // aftermath countdown guard's tick ?? -2 fallback doesn't wedge at a constant value
+    // forever). These two args were both silently missing from the original sole
+    // production call site.
+    const to = this.stateMachine.inferFromEvents(
+      events,
+      verb,
+      engine.tick,
+      engine.world.playerId,
+      engine.world,
+    );
+    if (to !== from) {
+      // F-aaaf50d9: transition() itself never logged anything, and this call site used
+      // to discard the returned StateTransition entirely, so no code path -- not even
+      // --debug -- could ever surface which state a turn transitioned to/from and why.
+      this.logTransition(this.stateMachine.transition(to, verb));
+    }
+    return { from, to };
+  }
+
+  /**
+   * F-4ec3609b / F-961f14aa (runtime-foundry's half of the cross-domain presentation-
+   * state ordering contract; game-core lands the caller half): run this turn's
+   * presentation-state inference + transition in isolation, so a caller building
+   * narration context (turn-loop.ts's executeTurn) can read the CURRENT, post-transition
+   * state for THIS turn instead of the previous turn's stale one. Before this method
+   * existed, the only way to read presentation state ahead of narration was a bare
+   * `stateMachine.current` get performed BEFORE processPresentation() ran its own
+   * inference later in the same pipeline -- so a combat-entry turn's narration prompt
+   * saw 'exploration' (the prior turn's state) instead of 'combat'.
+   *
+   * Idempotent-safe with processPresentation(): this call's result is cached
+   * (pendingTurnInference) and reused by processPresentation()'s own step 1 below
+   * instead of it re-transitioning, so stateMachine.transition() still runs at most
+   * once per turn and justEnteredCombat-gated hooks (combat-start) still fire exactly
+   * once per fight, not twice, even though two methods can now touch presentation
+   * state in the same turn.
+   *
+   * Signature note for the coordinator stitching this against game-core's caller half:
+   * takes `engine` as its first argument, matching processPresentation()'s own
+   * convention. inferFromEvents() needs engine.tick and engine.world.playerId/world
+   * (see runInference() above and F-277b5eca/F-ed267860) to reproduce
+   * processPresentation's existing inference exactly, so a bare (events, verb) form
+   * cannot do this without either losing those two fixes or this class caching its own
+   * `engine` reference (which it deliberately doesn't do — every other method takes
+   * `engine` fresh per call rather than assuming session-lifetime affinity).
+   */
+  inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): PresentationState {
+    const { from, to } = this.runInference(engine, events, verb);
+    this.pendingTurnInference = { tick: engine.tick, from, to };
+    return to;
+  }
+
   /** Process events through the presentation pipeline, returning MCP tool calls. */
   async processPresentation(
     engine: Engine,
@@ -135,26 +216,18 @@ export class ImmersionRuntime {
     verb: string,
     narrationPlan?: NarrationPlan,
   ): Promise<McpToolCall[]> {
-    // 1. Infer and transition presentation state
-    const priorState = this.stateMachine.current;
-    // F-277b5eca / F-ed267860: pass the real playerId (so player death resolves to
-    // 'menu' instead of the dead '__player__' sentinel) and the real engine tick (so the
-    // aftermath countdown guard's tick ?? -2 fallback doesn't wedge at a constant value
-    // forever). These two args were both silently missing from the sole production call
-    // site.
-    const inferredState = this.stateMachine.inferFromEvents(
-      events,
-      verb,
-      engine.tick,
-      engine.world.playerId,
-      engine.world,
-    );
-    if (inferredState !== priorState) {
-      // F-aaaf50d9: transition() itself never logged anything, and this call site used
-      // to discard the returned StateTransition entirely, so no code path -- not even
-      // --debug -- could ever surface which state a turn transitioned to/from and why.
-      this.logTransition(this.stateMachine.transition(inferredState, verb));
-    }
+    // 1. Infer and transition presentation state -- unless inferAndTransition() already
+    // did this for the current turn (F-4ec3609b/F-961f14aa contract), in which case
+    // reuse its from/to instead of re-inferring. Re-running inferFromEvents here would
+    // be safe in isolation (it's idempotent within a tick — see its own
+    // lastDecrementTick guard), but reading priorState fresh from `stateMachine.current`
+    // at THIS point would return the state inferAndTransition() already transitioned it
+    // to, not the state the turn actually started in — silently breaking
+    // justEnteredCombat below every time a caller uses the new two-call ordering.
+    const pending = this.pendingTurnInference;
+    this.pendingTurnInference = undefined; // one-shot: never reused past this call
+    const { from: priorState, to: inferredState } =
+      pending && pending.tick === engine.tick ? pending : this.runInference(engine, events, verb);
     // F-0acb03fe: whether combat was JUST entered this call, mirroring
     // PresentationStateMachine.transition()'s own `to === 'combat' && from !== 'combat'`
     // guard. Combat.* events recur every turn of an ongoing fight, so gating combat-start

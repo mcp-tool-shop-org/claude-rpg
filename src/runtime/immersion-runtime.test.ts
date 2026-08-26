@@ -599,6 +599,134 @@ describe('immersion-runtime: presentation state seeded on initialize (F-f13b58f3
   });
 });
 
+// ─── F-4ec3609b / F-961f14aa: presentation-state ordering contract. executeTurn used
+// to read stateMachine.current for narration BEFORE processPresentation() inferred and
+// transitioned this turn's state, so narration saw the PREVIOUS turn's presentation
+// state (e.g. still 'exploration' on the very turn combat began). ImmersionRuntime's
+// half of the fix: inferAndTransition() lets a caller run this turn's inference +
+// transition in isolation and read back the NEW state immediately, while
+// processPresentation() must stay idempotent-safe if called afterward for the same
+// turn -- reusing that already-computed transition instead of re-inferring, so
+// justEnteredCombat-gated hooks (combat-start) still fire exactly once per fight. ───
+
+describe('immersion-runtime: inferAndTransition / processPresentation ordering contract (F-4ec3609b)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+    tick: 1,
+  } as any;
+
+  it('returns the NEW state immediately on a combat-entry turn, before processPresentation runs', () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    expect(runtime.stateMachine.current).toBe('exploration');
+
+    const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
+    const result = runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+
+    // The caller (turn-loop.ts's executeTurn) reads this return value -- and
+    // stateMachine.current, which must already agree -- to build narration context.
+    // Before this method existed, a bare `stateMachine.current` read at this point in
+    // the turn would still say 'exploration'.
+    expect(result).toBe('combat');
+    expect(runtime.stateMachine.current).toBe('combat');
+  });
+
+  it('does not double-fire combat-start when inferAndTransition runs before processPresentation for the same turn', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+    const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
+
+    // Mirrors the fixed call order: the caller infers+transitions first (for
+    // narration), THEN processPresentation runs with the same engine/events/verb.
+    const inferred = runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+    expect(inferred).toBe('combat');
+
+    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+
+    const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
+    // Exactly one dispatch for the fight's actual start -- zero would mean
+    // processPresentation lost track of the transition that already happened; two
+    // would mean it re-inferred and transitioned a second time.
+    expect(combatStarts).toHaveLength(1);
+  });
+
+  it('does not re-fire combat-start on a second mid-fight turn when both calls precede processPresentation each turn', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+    const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
+
+    // Turn 1: combat begins.
+    runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    fireSpy.mockClear();
+
+    // Turn 2: still mid-fight, same ordered pair of calls as turn 1.
+    runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+
+    const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
+    expect(combatStarts).toHaveLength(0);
+  });
+
+  it('calls stateMachine.transition at most once per turn when inferAndTransition precedes processPresentation', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const transitionSpy = vi.spyOn(runtime.stateMachine, 'transition');
+    const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
+
+    runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+
+    expect(transitionSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the mid-combat restore skip when inferAndTransition precedes processPresentation (F-f13b58f3 non-regression)', async () => {
+    const world = {
+      playerId: 'p1',
+      locationId: 'z1',
+      entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+      zones: { z1: { name: 'Town', neighbors: [] } },
+      factions: {},
+      modules: { 'combat-core': { inCombat: true, combatants: ['goblin-1'] } },
+    } as any;
+    const engine = { world, store: { state: {} }, tick: 1 } as any;
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.initialize(engine); // seeds stateMachine.current = 'combat' via session-restore
+
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+    const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
+
+    // Same ordered pair as production: the caller infers+transitions before building
+    // narration context, then processPresentation runs.
+    const inferred = runtime.inferAndTransition(engine, combatEvents, 'attack');
+    expect(inferred).toBe('combat');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
+
+    const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
+    expect(combatStarts).toHaveLength(0);
+  });
+
+  it('falls back to its own inference + transition when processPresentation runs without a preceding inferAndTransition (backward compatibility)', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+    const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
+
+    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+
+    expect(runtime.stateMachine.current).toBe('combat');
+    const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
+    expect(combatStarts).toHaveLength(1);
+  });
+});
+
 // ─── F-6ef6e5a0: death's fade-out uiEffect must actually reach the bridge, not
 // just be present on the hook's raw (unconsumed) return value ───
 

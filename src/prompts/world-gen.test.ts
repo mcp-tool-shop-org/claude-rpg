@@ -35,4 +35,19 @@ describe('world-gen prompt (BR-001)', () => {
     expect(openTagCount).toBe(1);
     expect(closeTagCount).toBe(1);
   });
+
+  // F-b2326fec: sanitizePlayerUtterance's default 500-char cap was tuned for a
+  // spoken dialogue line. `claude-rpg new "<prompt>"` takes a one-time,
+  // foundational creative-world-concept — plausible to run well past 500 chars
+  // for this game's JRPG-enthusiast audience — and the whole campaign is
+  // generated from it, so it needs a much higher cap before truncating.
+  it('F-b2326fec: should allow world concept prompts up to 4000 chars before truncating', () => {
+    const atCap = 'A'.repeat(4000);
+    const result = buildWorldGenPrompt(atCap);
+    expect(result).not.toContain('...[truncated]');
+
+    const overCap = 'A'.repeat(4001);
+    const overResult = buildWorldGenPrompt(overCap);
+    expect(overResult).toContain('...[truncated]');
+  });
 });

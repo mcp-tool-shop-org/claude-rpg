@@ -113,6 +113,30 @@ describe('sanitizePlayerUtterance PBR-008', () => {
     expect(result).not.toContain('...[truncated]');
     expect(result).not.toContain('<');
   });
+
+  // F-b2326fec: MAX_LEN=500 was tuned for a spoken dialogue line, but the same
+  // helper is reused for call surfaces with much longer legitimate inputs
+  // (interpret-action playerInput, world-gen concept text). An optional maxLen
+  // parameter lets each call surface pick its own cap while dialogue keeps the
+  // default 500 unchanged.
+  it('F-b2326fec: should accept a custom maxLen and truncate at that boundary instead of 500', () => {
+    const long = 'Y'.repeat(2500);
+    const result = sanitizePlayerUtterance(long, 2000);
+    expect(result).toBe('Y'.repeat(2000) + '...[truncated]');
+  });
+
+  it('F-b2326fec: should not truncate text under the custom maxLen even past the old 500 default', () => {
+    const text = 'Z'.repeat(600);
+    const result = sanitizePlayerUtterance(text, 2000);
+    expect(result).toBe(text);
+    expect(result).not.toContain('...[truncated]');
+  });
+
+  it('F-b2326fec: should still default to 500 when maxLen is omitted (dialogue call surface unchanged)', () => {
+    const long = 'W'.repeat(501);
+    const result = sanitizePlayerUtterance(long);
+    expect(result).toBe('W'.repeat(500) + '...[truncated]');
+  });
 });
 
 // === FT-BR-002: Conditional dialogue system prompt ===

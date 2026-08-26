@@ -42,4 +42,18 @@ describe('interpret-action prompt (BR-002)', () => {
     expect(openTagCount).toBe(1);
     expect(closeTagCount).toBe(1);
   });
+
+  // F-b2326fec: sanitizePlayerUtterance's default 500-char cap was tuned for a
+  // spoken dialogue line. A freeform action description ("attack the goblin
+  // guarding the north gate with my enchanted blade...") is a different call
+  // surface and needs more room before truncating.
+  it('F-b2326fec: should allow player input up to 2000 chars (interpret-action cap) before truncating', () => {
+    const atCap = 'A'.repeat(2000);
+    const result = buildInterpretPrompt({ ...baseOpts, playerInput: atCap });
+    expect(result).not.toContain('...[truncated]');
+
+    const overCap = 'A'.repeat(2001);
+    const overResult = buildInterpretPrompt({ ...baseOpts, playerInput: overCap });
+    expect(overResult).toContain('...[truncated]');
+  });
 });

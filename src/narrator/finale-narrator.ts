@@ -5,7 +5,7 @@ import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import { formatFinaleForTerminal } from '@ai-rpg-engine/campaign-memory';
 import type { ClaudeClient } from '../claude-client.js';
 import { FINALE_SYSTEM, buildFinalePrompt } from '../prompts/finale-prompt.js';
-import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { NarrationError } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
 
 export type FinaleNarrationResult = {
@@ -33,14 +33,19 @@ export async function narrateFinale(
     });
     epilogue = result.text.trim();
   } catch (err) {
-    // F-afb978de: classify to a NarrationError so fatal (auth/bad-request) errors
-    // can surface userMessage()'s actionable guidance instead of a silently blank
-    // epilogue with no explanation. Non-fatal kinds keep the deterministic-only fallback.
+    // F-6480985e: domain-wide fatal-error contract (documented in claude-errors.ts
+    // near NarrationError.fatal) — fatal (auth/bad-request) errors rethrow so
+    // bin.ts's presentError renders the structured system-level box, matching
+    // narrator.ts's narrateScene/narrateSceneLegacy. Surfacing userMessage() as
+    // the epilogue text (the old behavior) made a bad API key indistinguishable
+    // from authored campaign prose. Non-fatal kinds keep the deterministic-only
+    // fallback (blank epilogue; the real summary/world-after still render).
     const narrationErr = err instanceof NarrationError ? err : classifyError(err);
+    if (narrationErr.fatal) throw narrationErr;
     console.warn(
       `[finale-narrator] LLM epilogue generation failed: ${narrationErr.message}. Falling back to deterministic summary only.`,
     );
-    epilogue = narrationErr.fatal ? userMessage(narrationErr) : '';
+    epilogue = '';
   }
 
   const worldAfter = buildWorldAfter(outline);

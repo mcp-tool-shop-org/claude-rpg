@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { narrateFinale } from './finale-narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
-import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { NarrationError } from '../llm/claude-errors.js';
 
 function makeOutline(overrides: Partial<FinaleOutline> = {}): FinaleOutline {
   return {
@@ -49,32 +49,30 @@ describe('narrateFinale', () => {
   });
 });
 
-// F-afb978de: fatal NarrationErrors (auth/bad-request) must surface an actionable
-// userMessage() instead of silently returning an unexplained blank epilogue.
-describe('narrateFinale F-afb978de: actionable fatal-error messages', () => {
-  it('should surface the auth userMessage as the epilogue when the client throws a fatal auth NarrationError', async () => {
+// F-6480985e: the domain-wide fatal-error contract (documented in
+// claude-errors.ts near NarrationError.fatal) is "rethrow, don't swallow into
+// in-fiction text" — matching narrator.ts's narrateScene/narrateSceneLegacy.
+// narrateFinale previously swallowed fatal errors into FinaleNarrationResult's
+// epilogue field, so a bad API key would be rendered as campaign epilogue
+// prose. It must now rethrow so bin.ts's presentError renders the structured
+// system-level box instead.
+describe('narrateFinale F-6480985e: fatal errors rethrow instead of swallowing into epilogue text', () => {
+  it('should rethrow a fatal auth NarrationError instead of returning it as the epilogue', async () => {
     const authErr = new NarrationError({ kind: 'auth', message: 'invalid x-api-key' });
     const client = makeFailingClient(authErr);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
-
-    expect(result.epilogue).toBe(userMessage(authErr));
-    expect(result.epilogue).toContain('ANTHROPIC_API_KEY');
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('epilogue'));
-    warnSpy.mockRestore();
+    await expect(
+      narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael'),
+    ).rejects.toThrow(authErr);
   });
 
-  it('should still return a usable deterministicSummary and worldAfter when the epilogue call fails', async () => {
-    const authErr = new NarrationError({ kind: 'auth', message: 'invalid x-api-key' });
-    const client = makeFailingClient(authErr);
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('should rethrow a fatal bad-request NarrationError the same way', async () => {
+    const badRequestErr = new NarrationError({ kind: 'bad-request', message: 'malformed request' });
+    const client = makeFailingClient(badRequestErr);
 
-    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
-
-    expect(result.deterministicSummary).toEqual(expect.any(String));
-    expect(result.worldAfter).toContain('WORLD AFTER');
-    vi.restoreAllMocks();
+    await expect(
+      narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael'),
+    ).rejects.toThrow(badRequestErr);
   });
 
   it('should keep the blank-epilogue fallback (deterministic-summary-only) for non-fatal errors, but still log', async () => {
@@ -85,6 +83,8 @@ describe('narrateFinale F-afb978de: actionable fatal-error messages', () => {
     const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
 
     expect(result.epilogue).toBe('');
+    expect(result.deterministicSummary).toEqual(expect.any(String));
+    expect(result.worldAfter).toContain('WORLD AFTER');
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });

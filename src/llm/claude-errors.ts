@@ -14,6 +14,25 @@ export class NarrationError extends Error {
   readonly kind: NarrationErrorKind;
   readonly requestId: string | undefined;
   readonly retryable: boolean;
+  /**
+   * F-6480985e: domain-wide fatal-error contract. `fatal` is true for kinds
+   * that retrying can never fix (auth/bad-request). Every narrative-llm LLM
+   * call site — narrateScene/narrateSceneLegacy (narrator.ts), generateDialogue
+   * (dialogue-mind.ts), narrateFinale (finale-narrator.ts) — MUST rethrow a
+   * fatal NarrationError rather than swallow it into in-fiction text (scene
+   * narration, NPC dialogue, campaign epilogue). bin.ts's presentError() is the
+   * only place a fatal error's userMessage() is shown to the player, rendered
+   * as a clearly system-level box instead of narrative content — otherwise a
+   * bad API key becomes indistinguishable from authored prose.
+   *
+   * Non-fatal kinds (rate-limit, timeout, transport, unexpected) are safe to
+   * swallow into each call site's own fallback (FALLBACK_NARRATION, the
+   * in-character stall, the blank-epilogue deterministic-only result) since
+   * retrying may succeed and the failure isn't diagnostic-worthy.
+   *
+   * Future call sites must follow this contract rather than inventing a third
+   * variant.
+   */
   readonly fatal: boolean;
 
   constructor(opts: {

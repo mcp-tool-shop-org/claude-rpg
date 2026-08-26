@@ -3,6 +3,7 @@
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { computeLevel, getActiveInjuries } from '@ai-rpg-engine/character-profile';
 import { TurnHistory } from '../session/history.js';
+import { FALLBACK_NARRATION } from '../narrator/narrator.js';
 
 const DIVIDER = '═'.repeat(60);
 
@@ -35,7 +36,13 @@ export function renderRecap(
   }
 
   // Show last few narration snippets
-  const recentNarration = history.getRecentNarration(3);
+  // F-b6915850: TurnRecord (session/history.ts) has no isFallback flag — that
+  // would require threading NarrationResult.isFallback through history.record()
+  // call sites, which live outside this domain. As the narrower in-domain
+  // mitigation, filter out any turn whose narration is exactly narrator.ts's
+  // FALLBACK_NARRATION sentinel so a non-fatal LLM failure on a recent turn
+  // never gets quoted here as if it were real authored narrative.
+  const recentNarration = history.getRecentNarration(3).filter((n) => n !== FALLBACK_NARRATION);
   if (recentNarration.length > 0) {
     for (const narration of recentNarration) {
       // Truncate long narration

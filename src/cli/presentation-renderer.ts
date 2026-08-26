@@ -64,6 +64,54 @@ function isAmbientCue(params: Record<string, unknown>): boolean {
 }
 
 /**
+ * F-7eb33249: renderSfxLine/renderAmbientLine used to print the raw
+ * voiceSoundboardEffect token straight from the sound bridge with zero
+ * humanization -- e.g. '  · ambient: white_noise' with the underscore
+ * intact -- reachable 100% of the time the LLM or a built-in hook selects
+ * that cue, no variance required. Keyed by voiceSoundboardEffect (the
+ * literal value renderSfxLine/renderAmbientLine receive via params.effect --
+ * see audio-bridge.ts's playSfx/setAmbient, which resolve
+ * `entry?.voiceSoundboardEffect ?? cue.effectId`/`cue.layerId` before
+ * queuing the McpToolCall). Wording drawn from narrate-scene.ts's own
+ * parenthetical descriptions of the same ids (the "Available sound effects"
+ * / "Available ambient layers" lines in NARRATE_SYSTEM) so player-facing
+ * phrasing agrees with what the LLM was told the sound is.
+ *
+ * Covers all 13 tokens @ai-rpg-engine/soundpack-core's CORE_SOUND_PACK
+ * currently defines (10 sfx + 3 ambient) -- see the vocabulary-drift
+ * tripwire in presentation-renderer.test.ts, which imports CORE_SOUND_PACK
+ * directly so a future 14th entry gets exercised automatically.
+ */
+const SFX_LABELS: Record<string, string> = {
+  chime_notification: 'a notification chime',
+  chime_success: 'a success chime',
+  chime_error: 'an error chime',
+  chime_attention: 'an attention chime',
+  click: 'a click',
+  pop: 'a light pop',
+  whoosh: 'a whoosh',
+  warning: 'a warning tone',
+  critical: 'a critical alarm',
+  info: 'an info tone',
+};
+
+const AMBIENT_LABELS: Record<string, string> = {
+  rain: 'rain',
+  white_noise: 'white noise',
+  drone: 'a low, tense drone',
+};
+
+/**
+ * Fallback for a token with no curated label above: a generic
+ * delimiter-strip rather than the raw id. Less polished, but guarantees no
+ * raw underscore/hyphen ever reaches the screen even for an id nobody has
+ * written copy for yet (e.g. a future registry entry).
+ */
+function humanizeToken(token: string): string {
+  return token.replace(/[_-]+/g, ' ');
+}
+
+/**
  * F-06e3bd9e: this was the only one of the four cue-line renderers wrapped
  * in italic() on top of dim() -- renderAmbientLine, renderMusicLine, and
  * renderUiEffectLine's flash/shake/border-pulse fallback all use plain
@@ -73,12 +121,14 @@ function isAmbientCue(params: Record<string, unknown>): boolean {
  */
 function renderSfxLine(params: Record<string, unknown>): string {
   const effect = stringParam(params, 'effect') ?? 'effect';
-  return dim(`  · ${effect} sounds`);
+  const label = SFX_LABELS[effect] ?? humanizeToken(effect);
+  return dim(`  · ${label} sounds`);
 }
 
 function renderAmbientLine(params: Record<string, unknown>): string {
   const effect = stringParam(params, 'effect') ?? 'ambience';
-  return dim(`  · ambient: ${effect}`);
+  const label = AMBIENT_LABELS[effect] ?? humanizeToken(effect);
+  return dim(`  · ambient: ${label}`);
 }
 
 function renderMusicLine(params: Record<string, unknown>): string {

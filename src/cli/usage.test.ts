@@ -1,4 +1,34 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+
+/**
+ * F-7862c05d (wave-18/cli-display.md): WORLD_FLAG_MAP is narrative-llm's
+ * hoist of packs.ts's inline resolveWorldFlag map (packs.ts:119-130),
+ * landing the same wave -- it does not exist in this worktree yet
+ * (isolation discipline). Mocked here with the EXACT content of the inline
+ * map it replaces, so getPackById/allPacks stay real and renderUsage's new
+ * Worlds section resolves real pack titles, not a fully mocked stand-in.
+ * Proven end-to-end against the real hoisted export at the coordinator's
+ * merge-time serial verify.
+ */
+vi.mock('../character/packs.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../character/packs.js')>();
+  return {
+    ...actual,
+    WORLD_FLAG_MAP: {
+      fantasy: 'chapel-threshold',
+      gladiator: 'iron-colosseum',
+      ronin: 'jade-veil',
+      vampire: 'crimson-court',
+      cyberpunk: 'neon-lockbox',
+      detective: 'gaslight-detective',
+      pirate: 'black-flag-requiem',
+      'weird-west': 'dust-devils-bargain',
+      zombie: 'ashfall-dead',
+      colony: 'signal-loss',
+    },
+  };
+});
+
 import { renderUsage } from './usage.js';
 
 /**
@@ -90,5 +120,55 @@ describe('renderUsage (F-d36903d0)', () => {
     const firstCol = lines[firstLineIdx].indexOf('Play a starter world');
     const continuationCol = lines[continuationIdx].indexOf('from 10 worlds interactively)');
     expect(continuationCol).toBe(firstCol);
+  });
+});
+
+/**
+ * F-7862c05d: --world <name> was imported (resolveWorldFlag) but never
+ * wired to a real flag -- a player had no way to discover the 10 valid
+ * values short of reading source. Reuses help-system.ts's already-exported,
+ * already-tested renderNameDescriptionRow/wrapWords instead of hand-padding
+ * a new column (this exact drift class has been fixed 3+ times already --
+ * F-a17315ac, F-d36903d0, F-1367afd9).
+ */
+describe('renderUsage Worlds section (F-7862c05d)', () => {
+  it('lists --world flag values against their real pack titles, not raw pack ids', () => {
+    const usage = renderUsage();
+    expect(usage).toContain('Worlds');
+    expect(usage).toContain('--world');
+    // Flag name -> real title (character/packs.ts's resolveWorldFlag map /
+    // its hoisted WORLD_FLAG_MAP).
+    expect(usage).toContain('fantasy');
+    expect(usage).toContain('The Chapel Threshold');
+    expect(usage).not.toContain('chapel-threshold');
+    expect(usage).toContain('cyberpunk');
+    expect(usage).toContain('Neon Lockbox');
+  });
+
+  it('lists all 10 WORLD_FLAG_MAP short names', () => {
+    const usage = renderUsage();
+    for (const name of [
+      'fantasy', 'gladiator', 'ronin', 'vampire', 'cyberpunk',
+      'detective', 'pirate', 'weird-west', 'zombie', 'colony',
+    ]) {
+      expect(usage).toContain(name);
+    }
+  });
+
+  it('renders the Worlds section rows within getTerminalWidth() at a narrow terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 50, writable: true });
+    const usage = renderUsage();
+    const lines = usage.split('\n');
+    const worldsIdx = lines.findIndex((l) => l.includes('Worlds ('));
+    expect(worldsIdx).toBeGreaterThan(-1);
+    // The Worlds section runs from its header to the next blank line.
+    let i = worldsIdx + 1;
+    let rowCount = 0;
+    while (i < lines.length && lines[i].trim() !== '') {
+      expect(lines[i].length).toBeLessThanOrEqual(50);
+      rowCount++;
+      i++;
+    }
+    expect(rowCount).toBeGreaterThan(0);
   });
 });

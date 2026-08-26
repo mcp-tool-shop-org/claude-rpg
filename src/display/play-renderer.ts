@@ -60,6 +60,15 @@ export function isCriticalHp(hp: number, maxHp?: number): boolean {
   return maxHp !== undefined && maxHp > 0 && hp / maxHp <= CRITICAL_HP_RATIO;
 }
 
+/**
+ * F-61e67d85: src/npc/ambient-dialogue.ts's generateZoneAmbience can return
+ * up to 3 lines for a busy multi-NPC zone -- showing all 3 every single turn
+ * would compete with and drown out the status footer below. A defensive
+ * display-layer ceiling, independent of whatever cadence/throttle game-core
+ * designs upstream for how often ambience fires at all.
+ */
+const MAX_AMBIENT_LINES_SHOWN = 1;
+
 // Exported for testing
 export { getTerminalWidth };
 
@@ -75,6 +84,15 @@ export function renderPlayScreen(opts: {
   suggestions?: ContextualSuggestion[];
   hasEndgameTriggers?: boolean;
   turnNumber?: number;
+  /**
+   * F-61e67d85: template-generated ambient NPC flavor lines (see
+   * src/npc/ambient-dialogue.ts's generateZoneAmbience -- zero-API-cost,
+   * fully unit-tested, but had no rendering surface anywhere in cli-display
+   * until now). Optional so every existing caller that doesn't pass one
+   * keeps rendering unchanged. Capped at MAX_AMBIENT_LINES_SHOWN regardless
+   * of how many the channel supplies.
+   */
+  ambientLines?: string[];
 }): string {
   const parts: string[] = [];
 
@@ -99,6 +117,20 @@ export function renderPlayScreen(opts: {
   if (opts.dialogue) {
     parts.push(makeThinDivider());
     parts.push(`  ${speaker(opts.dialogue.speakerName)}: "${opts.dialogue.text}"`);
+    parts.push('');
+  }
+
+  // Ambient NPC flavor lines (F-61e67d85) -- peripheral, non-primary
+  // texture, subordinate to both plain narration (unstyled) and direct
+  // dialogue (speaker()+bold) above. Styled dim() with the same '  · '
+  // bullet convention presentation-renderer.ts's cue lines already use, for
+  // one visual language across every "peripheral, non-primary" text block
+  // in the app. Capped at MAX_AMBIENT_LINES_SHOWN regardless of how many the
+  // channel supplies -- see that const's own doc comment.
+  if (opts.ambientLines && opts.ambientLines.length > 0) {
+    for (const line of opts.ambientLines.slice(0, MAX_AMBIENT_LINES_SHOWN)) {
+      parts.push(dim(`  · ${line}`));
+    }
     parts.push('');
   }
 
@@ -195,6 +227,56 @@ export function renderWelcome(title: string, tone?: string): string {
   // character sheet -- never at the one command that surfaces everything
   // else the game supports.
   parts.push(hint('  Type "/help" for the full command reference.'));
+  parts.push('');
+  return parts.join('\n');
+}
+
+/**
+ * F-7484bd2e (SLATE-6): nothing rendered a distinct on-screen consequence
+ * when the presentation state machine reached 'menu' (player death) -- the
+ * screen fell straight back to the ordinary "What do you do?" prompt as if
+ * nothing happened, even though the fade-to-black cue itself already
+ * rendered correctly (presentation-renderer.ts's renderScreenPause).
+ *
+ * Colocated with the other full-screen composers (renderPlayScreen/
+ * renderWelcome above), not with presentation-renderer.ts's narrower
+ * cue-line-mapping concern. Layout deliberately matches renderScreenPause's
+ * critical()+'═' signature (NOT game-presenter.ts's renderConcludeOutput,
+ * which uses bare uncolored dividers -- campaign conclusion is a neutral/
+ * celebratory closure across many possible endings; death is a narrower,
+ * always-dramatic beat that keeps its own signature).
+ *
+ * Director ruling R3 (wave-18/cli-display.md coordinator brief): death is a
+ * SETBACK, not an ending. The headline may still read '<name> HAS FALLEN',
+ * but the affordance line is continue-first ("rise"), not a farewell --
+ * save/quit are noted as still available, not offered as the primary next
+ * step. Whether "continue" needs special turn-loop dispatch, or gating so
+ * an ordinary verb doesn't silently resume play, is game-core's/
+ * turn-loop.ts's decision (F-961f14aa's territory) -- outside what a
+ * screen-rendering function can enforce.
+ *
+ * Deliberately drops everything renderPlayScreen normally carries (status
+ * bar, zone/exits, leverage/party lines, suggestions), mirroring
+ * renderConcludeOutput's own minimalism -- this is a full-screen interrupt,
+ * not a variant of the ordinary turn screen.
+ *
+ * All copy below is DRAFT, pending coordinator/director review.
+ */
+export function renderDeathScreen(opts: { narration: string; characterName?: string }): string {
+  const rule = critical('═'.repeat(getTerminalWidth()));
+  const headline = opts.characterName ? `${opts.characterName} HAS FALLEN` : 'YOUR STORY ENDS HERE';
+
+  const parts: string[] = [];
+  parts.push('');
+  parts.push(rule);
+  parts.push(`  ${critical(headline)}`);
+  parts.push(rule);
+  parts.push('');
+  parts.push(opts.narration);
+  parts.push('');
+  parts.push(dim('─'.repeat(getTerminalWidth())));
+  parts.push(hint('  Type "continue" when you are ready to rise.'));
+  parts.push(hint('  "save" and "quit" are still available.'));
   parts.push('');
   return parts.join('\n');
 }

@@ -10,6 +10,8 @@
 
 import { bold, dim } from './colors.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
+import { getPackById, WORLD_FLAG_MAP } from '../character/packs.js';
+import { renderNameDescriptionRow } from '../display/help-system.js';
 
 /**
  * F-d36903d0: USAGE — shown on bare `claude-rpg`, `--help`/`-h`, and any
@@ -30,6 +32,24 @@ import { getTerminalWidth } from '../display/play-renderer.js';
  * starts — the same off-by-one hand-typed-spacing pattern this wave's
  * help-system.ts and director-renderer.ts findings hit in two other files.
  */
+/**
+ * F-7862c05d: --world <name> was imported (resolveWorldFlag, character/
+ * packs.ts) but never wired to a real flag -- a player had no way to
+ * discover the 10 valid values short of reading source. Reuses help-
+ * system.ts's already-exported, already-tested renderNameDescriptionRow (so
+ * this table wraps/aligns the same way every other reference table in this
+ * app does -- this exact hand-padded-column drift class has been fixed 3+
+ * times already: F-a17315ac, F-d36903d0, F-1367afd9). WORLD_FLAG_MAP
+ * (character/packs.ts) is the single source for the flag-name list, so this
+ * can't independently drift from cli/world-flag.ts's own resolution path.
+ */
+function renderWorldsSection(): string {
+  const rows = Object.entries(WORLD_FLAG_MAP)
+    .map(([flag, packId]) => renderNameDescriptionRow(flag, getPackById(packId)?.meta.name ?? packId, 13))
+    .join('\n');
+  return `Worlds (claude-rpg play --world <name>):\n${rows}`;
+}
+
 export function renderUsage(): string {
   const rule = dim('─'.repeat(getTerminalWidth()));
   return `
@@ -46,6 +66,8 @@ Usage:
   claude-rpg archive                            Browse completed campaigns
   claude-rpg --version                          Show version
   claude-rpg --help                             Show this help
+
+${renderWorldsSection()}
 
 Commands in-game:
   save           Save the current game

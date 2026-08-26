@@ -278,6 +278,74 @@ describe('immersion-runtime: death uiEffects dispatch (F-6ef6e5a0)', () => {
   });
 });
 
+// ─── F-4ece453e: narrator-authored uiEffects (the NarrationPlan path, not the
+// hook path) must actually reach the bridge. Unlike F-6ef6e5a0's hook-sourced
+// uiEffects, these are populated by the LLM narrator every turn (see the live
+// NARRATE_SYSTEM prompt's uiEffects schema, prompts/narrate-scene.ts) and were
+// routed exclusively through audioDirector.schedule()/executeCommands() —
+// @ai-rpg-engine/audio-director's AudioDomain type has no 'ui' member and
+// scheduleAll() never reads plan.uiEffects, so they were silently dropped. ───
+
+describe('immersion-runtime: narrationPlan uiEffects dispatch (F-4ece453e)', () => {
+  const minimalWorld = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  const minimalEngine = {
+    world: minimalWorld,
+    store: { state: {} },
+  } as any;
+
+  it('dispatches a narrator-authored flash effect through bridge.applyUiEffect and into the returned McpToolCall[]', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const applyUiEffectSpy = vi.spyOn(runtime.bridge, 'applyUiEffect');
+
+    const narrationPlan = {
+      sceneText: '',
+      sfx: [],
+      ambientLayers: [],
+      uiEffects: [{ type: 'flash', durationMs: 200 }],
+      musicCue: undefined,
+    } as any;
+
+    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    expect(applyUiEffectSpy).toHaveBeenCalledWith({ type: 'flash', durationMs: 200 });
+    const uiEffectCalls = calls.filter((c) => c.tool === '__ui_effect_intent__');
+    expect(uiEffectCalls).toHaveLength(1);
+    expect(uiEffectCalls[0].params).toMatchObject({ type: 'flash', durationMs: 200 });
+  });
+
+  it('caps dispatched uiEffects per plan so a malformed LLM plan cannot flood the terminal', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const applyUiEffectSpy = vi.spyOn(runtime.bridge, 'applyUiEffect');
+
+    const narrationPlan = {
+      sceneText: '',
+      sfx: [],
+      ambientLayers: [],
+      uiEffects: [
+        { type: 'flash', durationMs: 100 },
+        { type: 'shake', durationMs: 100 },
+        { type: 'border-pulse', durationMs: 100 },
+        { type: 'flash', durationMs: 100 },
+        { type: 'shake', durationMs: 100 },
+      ],
+      musicCue: undefined,
+    } as any;
+
+    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+
+    expect(applyUiEffectSpy).toHaveBeenCalledTimes(3);
+    const uiEffectCalls = calls.filter((c) => c.tool === '__ui_effect_intent__');
+    expect(uiEffectCalls).toHaveLength(3);
+  });
+});
+
 // ─── F-91f803b2: combat-end's victory cue must not fire on a player-death turn ───
 
 describe('immersion-runtime: combat-end suppressed on player death (F-91f803b2)', () => {

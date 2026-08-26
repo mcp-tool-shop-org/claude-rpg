@@ -152,6 +152,24 @@ export class ImmersionRuntime {
 
         // Execute through bridge
         audioCalls = await this.bridge.executeCommands(commands);
+
+        // F-4ece453e: mergedPlan.uiEffects (narrator-authored flash/shake/fade-in/
+        // fade-out/border-pulse cues from NarrationPlan.uiEffects, plus any
+        // pre-narration-hook uiEffects mergeHookResults folded in above) never
+        // reach the player through audioDirector.schedule()/executeCommands():
+        // @ai-rpg-engine/audio-director's AudioDomain type has no 'ui' member and
+        // scheduleAll() never reads plan.uiEffects at all (verified against
+        // dist/scheduler.js), so they were computed correctly and then silently
+        // dropped. Dispatch them straight to the bridge instead, the same way
+        // executeMergedHookResult already does for hook-sourced uiEffects below.
+        // Capped defensively — uiEffects is populated by the LLM narrator every
+        // turn (prompts/narrate-scene.ts), so a malformed plan must not be able
+        // to flood the terminal with effect intents in a single turn.
+        const MAX_UI_EFFECTS_PER_PLAN = 3;
+        for (const effect of mergedPlan.uiEffects.slice(0, MAX_UI_EFFECTS_PER_PLAN)) {
+          await this.bridge.applyUiEffect(effect);
+        }
+        audioCalls = [...audioCalls, ...this.bridge.flush()];
       }
     } catch (err) {
       if (this.debugMode) {

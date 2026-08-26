@@ -82,6 +82,43 @@ describe('executeDirectorCommand', () => {
     expect(result).toContain('No status data available');
   });
 
+  // F-9141a74b: /status silently dropped materialsSummary, arcIndicator, and
+  // endgameIndicator even though this same function already has the source
+  // data for all three (profileCustom, arcSnapshot, endgameTriggers), used
+  // two cases later at /craft, /arcs, and /endgame respectively.
+  it('should include arc, materials, and endgame content in the compact snapshot when the data is present', () => {
+    const statusData = {
+      name: 'Aldric', level: 3, archetypeName: 'Warrior',
+      hp: 20, injuryTags: [], statuses: [],
+    } as any;
+    const leverageState = {
+      favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0,
+    } as any;
+    const arcSnapshot = {
+      signals: [{ kind: 'rising-power', strength: 0.8, momentum: 'building', primaryDrivers: [], turnsActive: 3 }],
+      dominantArc: 'rising-power',
+      tick: 5,
+    } as any;
+    const endgameTriggers = [
+      { id: 'e1', resolutionClass: 'victory', detectedAtTick: 10, reason: '', evidence: {}, dominantArc: null, acknowledged: false },
+    ] as any;
+    const profileCustom = { 'materials.components': 5 };
+
+    const result = executeDirectorCommand({
+      command: '/status',
+      world: makeWorld(),
+      statusData,
+      leverageState,
+      arcSnapshot,
+      endgameTriggers,
+      profileCustom,
+    });
+
+    expect(result).toContain('rising-power');
+    expect(result).toContain('components');
+    expect(result).toContain('victory');
+  });
+
   // --- /chronicle output ---
 
   it('should return "No chronicle events" when journal is empty', () => {

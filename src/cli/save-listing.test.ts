@@ -1,32 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import type { SaveSlotSummary } from '../session/session.js';
+import { formatSaveDetails } from './save-listing.js';
 
 /**
  * FT-FE-007: Enriched save listing tests.
  * Validates that pack name, companion count, and last zone name
  * are surfaced in the save listing display output.
+ *
+ * F-bd2fef5a: this used to test a hand-copied fork of bin.ts runLoad()'s
+ * detail-line logic, so the test could pass against stale logic that had
+ * silently diverged from what bin.ts actually renders. It now imports and
+ * exercises the real formatSaveDetails (extracted to save-listing.ts),
+ * which bin.ts's runLoad() also calls — see bin.ts.
  */
-
-/** Mirrors the display logic in bin.ts runLoad() for testability. */
-function formatSaveDetails(s: SaveSlotSummary): string[] {
-  const details: string[] = [];
-  if (s.packId) {
-    details.push(`pack: ${s.packId}`);
-  }
-  if (s.companionCount != null && s.companionCount > 0) {
-    details.push(`${s.companionCount} companion${s.companionCount > 1 ? 's' : ''}`);
-  }
-  if (s.lastZoneName) {
-    details.push(`zone: ${s.lastZoneName}`);
-  }
-  if (s.chronicleEvents != null && s.chronicleEvents > 0) {
-    details.push(`${s.chronicleEvents} chronicle events`);
-  }
-  if (s.campaignAge != null && s.campaignAge > 0) {
-    details.push(`${s.campaignAge} ticks`);
-  }
-  return details;
-}
 
 describe('enriched save listing', () => {
   it('should include pack, companions, and zone in details', () => {

@@ -37,6 +37,7 @@ import {
   getAvailableRecipes,
   formatAvailableRecipesForDirector,
   formatMaterialsForDirector,
+  formatMaterialsCompact,
   salvageItem,
   formatSalvagePreview,
   // Opportunities (v1.9)
@@ -412,6 +413,19 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
         if (availableCount > 0) parts.push(`${availableCount} available`);
         opportunitySummary = parts.join(', ');
       }
+      // Materials summary (mirrors /materials, /craft)
+      const materialsSummary = profileCustom
+        ? formatMaterialsCompact(getMaterialInventory(profileCustom))
+        : undefined;
+      // Arc indicator (mirrors /arcs)
+      const arcIndicator = arcSnapshot?.dominantArc
+        ? `${arcSnapshot.dominantArc} (${arcSnapshot.signals.find((s) => s.kind === arcSnapshot.dominantArc)?.momentum ?? 'steady'})`
+        : undefined;
+      // Endgame indicator (mirrors /endgame) — only unacknowledged triggers
+      const unacknowledgedTriggers = (endgameTriggers ?? []).filter((t) => !t.acknowledged);
+      const endgameIndicator = unacknowledgedTriggers.length > 0
+        ? unacknowledgedTriggers.map((t) => `${t.resolutionClass} (turn ${t.detectedAtTick})`).join(', ')
+        : undefined;
       return renderCompactStatus({
         statusData,
         leverageState,
@@ -419,7 +433,10 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
         suggestedMove: suggestedMove ?? null,
         situationTag: situationTag ?? 'safe',
         economySummary,
+        materialsSummary,
         opportunitySummary,
+        arcIndicator,
+        endgameIndicator,
       });
     }
 

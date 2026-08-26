@@ -1,6 +1,8 @@
 // help-system — consolidated help rendering + pack onboarding
 // v1.1: Campaign UX & Product Hardening
 
+import type { ResolutionClass } from '@ai-rpg-engine/modules';
+
 const DIVIDER = '\u2500'.repeat(60);
 const THIN = '\u00b7'.repeat(60);
 
@@ -338,7 +340,30 @@ ${DIVIDER}
 
 // --- Conclude Help ---
 
+/**
+ * One-line description per resolution class, typed against the engine's
+ * real enum (@ai-rpg-engine/modules ResolutionClass) — the same source
+ * archive-browser.ts's RESOLUTION_CLASS_LABELS is typed against — so this
+ * list can't drift from what /conclude actually produces the way the old
+ * hand-typed prose did (F-545cb684: it named corruption/revelation/
+ * stalemate/exodus, none of which the engine has ever produced).
+ */
+const RESOLUTION_CLASS_HELP: Record<ResolutionClass, string> = {
+  'victory': 'Dominant faction control with high stability',
+  'exile': 'Expelled from all territories, no allies',
+  'martyrdom': 'Death in service of a cause, legacy intact',
+  'collapse': 'Districts and factions splinter beyond repair',
+  'overthrow': 'Faction leadership change driven by you',
+  'puppet-master': 'Hidden influence — you pull strings unseen',
+  'quiet-retirement': 'Threats resolved, legitimacy earned, peace holds',
+  'tragic-stabilization': 'Stability at great cost, forgotten by history',
+};
+
 export function renderConcludeHelp(): string {
+  const classLines = Object.entries(RESOLUTION_CLASS_HELP)
+    .map(([cls, desc]) => `    ${cls.padEnd(23)}${desc}`)
+    .join('\n');
+
   return `
 ${DIVIDER}
   CAMPAIGN CONCLUSIONS
@@ -347,14 +372,7 @@ ${DIVIDER}
   When your story reaches critical mass, endgame triggers fire.
   These are one-shot pivotal moments based on 8 resolution classes:
 
-    victory            Dominant faction control with high stability
-    exile              Expelled from all territories, no allies
-    overthrow          Faction leadership change driven by you
-    martyrdom          Sacrifice for a cause (high influence spent)
-    corruption         Power gained through betrayal and manipulation
-    revelation         Major hidden truth exposed to all factions
-    stalemate          All factions locked in unresolvable tension
-    exodus             Abandoning the setting entirely
+${classLines}
 
   When triggers appear, you'll see contextual hints.
   Type /conclude to render your campaign epilogue.

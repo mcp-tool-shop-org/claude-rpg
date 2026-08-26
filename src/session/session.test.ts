@@ -4,6 +4,7 @@ import {
   loadObligationsFromSession,
   loadConsequenceChainsFromSession,
   loadArcSnapshotFromSession,
+  loadNpcAgencyFromSession,
   type SavedSession,
 } from './session.js';
 import { createPartyState } from '@ai-rpg-engine/modules';
@@ -51,6 +52,53 @@ describe('loadPartyFromSession', () => {
   it('returns createPartyState() when partyState is absent', () => {
     const session = makeSession();
     expect(loadPartyFromSession(session)).toEqual(createPartyState());
+  });
+
+  // F-c2d4ba19: sibling gap one level deeper than F-1357a6e0's own top-level
+  // fix above — isValidPartyState checked Array.isArray(p.companions) but
+  // never validated each companion's own shape, the same gap already found
+  // and fixed on isValidArcSnapshot (F-1c412093) and isValidConsequenceChain
+  // (F-dd2851cb). The compiled @ai-rpg-engine/modules companion-core.js
+  // dereferences `.npcId` unguarded in addCompanion/getCompanion/
+  // isCompanion/setCompanionActive/adjustCompanionMorale, `.active`
+  // unguarded in getActiveCompanions/computePartyCohesion, and `.morale`
+  // unguarded in computePartyCohesion/adjustCompanionMorale — a companions
+  // array containing a malformed element (e.g. null, or missing npcId)
+  // passed this validator unchanged and reached game.ts's
+  // `this.partyState.companions.some((c) => c.npcId === effect.npcId)`
+  // (game.ts:1458) and every companion-core call gated behind
+  // `this.partyState.companions.length > 0` (game.ts:873) unexamined.
+  const validCompanion = { npcId: 'npc-1', role: 'fighter', joinedAtTick: 0, abilityTags: [], morale: 50, active: true };
+
+  it('falls back to createPartyState() when companions contains a malformed element (null), even though the array itself and every top-level field are well-typed', () => {
+    const session = makeSession({
+      partyState: JSON.stringify({ companions: [null], maxSize: 4, cohesion: 0.5 }),
+    });
+    expect(loadPartyFromSession(session)).toEqual(createPartyState());
+  });
+
+  it('falls back to createPartyState() when a companion element is missing required fields (wrong shape, not null)', () => {
+    const session = makeSession({
+      partyState: JSON.stringify({ companions: [{ npcId: 'npc-1' }], maxSize: 4, cohesion: 0.5 }),
+    });
+    expect(loadPartyFromSession(session)).toEqual(createPartyState());
+  });
+
+  it('falls back to createPartyState() when a companion element has wrong-typed active/morale fields', () => {
+    const session = makeSession({
+      partyState: JSON.stringify({
+        companions: [{ ...validCompanion, active: 'yes', morale: '50' }],
+        maxSize: 4,
+        cohesion: 0.5,
+      }),
+    });
+    expect(loadPartyFromSession(session)).toEqual(createPartyState());
+  });
+
+  it('returns the parsed party state when every companion matches the CompanionState shape', () => {
+    const party = { companions: [validCompanion], maxSize: 4, cohesion: 0.5 };
+    const session = makeSession({ partyState: JSON.stringify(party) });
+    expect(loadPartyFromSession(session)).toEqual(party);
   });
 });
 
@@ -366,5 +414,90 @@ describe('loadArcSnapshotFromSession (F-d521bb19)', () => {
       }),
     });
     expect(loadArcSnapshotFromSession(session)).toBeNull();
+  });
+});
+
+// F-0b05c26c: loadNpcAgencyFromSession's `{ profiles: data.profiles ?? [],
+// actions: data.actions ?? [] }` pattern only substitutes defaults for
+// null/undefined — it never checked that data.profiles/data.actions are
+// arrays, let alone validated element shape, unlike every sibling loader in
+// this file (each guarded by its own isValidX() type predicate). A
+// syntactically-valid but wrong-shaped snapshot (e.g.
+// `{"profiles":[],"actions":42}`) passed straight through, reaching
+// formatNpcAgencyForNarrator's `results.slice(0, 2)` (throws on a non-array)
+// and generateNpcTextures' `for (const profile of profiles)` (compiled
+// @ai-rpg-engine/modules) with no guard — and unlike every other loader in
+// this file, this call sits in game.ts's processInput() with no enclosing
+// try/catch, so the crash aborted the entire turn on the first ordinary
+// action after loading the bad save, repeating identically forever.
+describe('loadNpcAgencyFromSession (F-0b05c26c)', () => {
+  const validProfile = {
+    npcId: 'npc-1',
+    name: 'Old Man Winters',
+    factionId: null,
+    goals: [{ id: 'g1', label: 'survive', priority: 1, verb: 'flee', reason: 'scared' }],
+    relationship: { trust: 0, fear: 0, greed: 0, loyalty: 0 },
+    breakpoint: 'wavering',
+    dominantAxis: 'fear',
+    leverageAngle: 'appeal to fear',
+    knownRumors: [],
+    underPressure: false,
+  };
+  const validAction = {
+    action: { npcId: 'npc-1', verb: 'flee', description: 'flees' },
+    effects: [],
+    narratorHint: 'Winters bolts for the door.',
+  };
+
+  it('returns empty profiles/actions when npcAgencySnapshot is absent', () => {
+    const session = makeSession();
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  it('falls back to empty profiles/actions when npcAgencySnapshot is not valid JSON', () => {
+    const session = makeSession({ npcAgencySnapshot: 'NOT VALID JSON!!' });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  it('falls back to empty profiles/actions when the parsed value is not an object at all (e.g. a bare number)', () => {
+    const session = makeSession({ npcAgencySnapshot: '42' });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  // The finding's own documented trigger shape: actions present but the
+  // wrong type entirely — `??` alone lets this straight through unexamined.
+  it('falls back to an empty actions array when actions is syntactically valid JSON but not an array (e.g. a bare number)', () => {
+    const session = makeSession({
+      npcAgencySnapshot: JSON.stringify({ profiles: [], actions: 42 }),
+    });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  it('falls back to an empty profiles array when profiles is syntactically valid JSON but not an array', () => {
+    const session = makeSession({
+      npcAgencySnapshot: JSON.stringify({ profiles: { not: 'an array' }, actions: [] }),
+    });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  it('falls back to an empty profiles array when it contains a malformed element (null), even though the array itself is well-typed', () => {
+    const session = makeSession({
+      npcAgencySnapshot: JSON.stringify({ profiles: [validProfile, null], actions: [] }),
+    });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  it('falls back to an empty actions array when it contains an element missing required fields (wrong shape, not null)', () => {
+    const session = makeSession({
+      npcAgencySnapshot: JSON.stringify({ profiles: [], actions: [{ action: validAction.action }] }),
+    });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [], actions: [] });
+  });
+
+  it('returns the parsed profiles/actions when both match shape', () => {
+    const session = makeSession({
+      npcAgencySnapshot: JSON.stringify({ profiles: [validProfile], actions: [validAction] }),
+    });
+    expect(loadNpcAgencyFromSession(session)).toEqual({ profiles: [validProfile], actions: [validAction] });
   });
 });

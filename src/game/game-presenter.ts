@@ -36,6 +36,14 @@ export function renderPlayOutput(input: {
   partyStatusLine?: string;
   suggestions?: ContextualSuggestion[];
   hasEndgameTriggers?: boolean;
+  /**
+   * Cross-domain contract (game-core half): the current turn number, passed
+   * straight through to renderPlayScreen — cli-display's play-renderer
+   * already consumes this via makeTurnDivider when present (see
+   * src/display/play-renderer.ts / turn-divider.test.ts). Optional so every
+   * existing caller that doesn't pass one keeps rendering the plain divider.
+   */
+  turnNumber?: number;
 }): string {
   return renderPlayScreen(input);
 }

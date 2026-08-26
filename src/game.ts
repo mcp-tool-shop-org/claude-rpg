@@ -240,6 +240,44 @@ export type AutosaveConfig = {
 
 const DEFAULT_AUTOSAVE: AutosaveConfig = { enabled: true, intervalTurns: 5 };
 
+/**
+ * F-af8f1048: checkAutosave()'s previous `Promise<string | null>` contract
+ * let three semantically distinct outcomes — disabled, not yet due, and a
+ * genuine failure caught by the try/catch — collapse into the same `null`.
+ * processInput() rendered output byte-for-byte identical to "not due yet"
+ * for a failed autosave attempt, forever, with zero player-facing signal.
+ * Discriminated so the caller (and therefore the player, via
+ * formatAutosaveNotice below) can actually tell these apart.
+ */
+export type AutosaveOutcome =
+  | { status: 'skipped' }
+  | { status: 'saved'; message: string }
+  | { status: 'failed'; error: string };
+
+/**
+ * F-51e110b9: caps mirroring TurnHistory's MAX_COMPACTED_CHUNKS precedent
+ * (F-dfd125bb, session/history.ts) — this.journal, this.resolvedPressures,
+ * this.resolvedOpportunities, and this.endgameTriggers previously grew
+ * without any ceiling across a campaign's lifetime and are all serialized
+ * in full on every save (session.ts), trending every sufficiently-long
+ * campaign toward loadSession()'s hard 10 MB rejection (session.ts's
+ * MAX_SAVE_FILE_BYTES) with nothing upstream to prevent it. Journal records
+ * one significant event at a time and is the dominant per-turn contributor
+ * (recordChronicleEvents() runs unconditionally every turn); the other
+ * three record comparatively rare resolution/trigger events, so a smaller
+ * cap suffices.
+ */
+const MAX_JOURNAL_RECORDS = 500;
+const MAX_RESOLVED_FALLOUT_ENTRIES = 200;
+const MAX_ENDGAME_TRIGGERS = 200;
+
+/**
+ * F-f13ca236: ring-buffer cap for GameSession.subsystemFailures — a
+ * pathological run of repeated post-turn subsystem failures shouldn't grow
+ * that record unbounded either (same discipline as the caps above).
+ */
+const MAX_SUBSYSTEM_FAILURE_RECORDS = 20;
+
 export type GameConfig = {
   engine: Engine;
   clientConfig?: ClaudeClientConfig;
@@ -302,7 +340,11 @@ export class GameSession {
   playerRumors: PlayerRumor[] = [];
   activePressures: WorldPressure[] = [];
   resolvedPressures: PressureFallout[] = [];
-  readonly journal: CampaignJournal;
+  // F-51e110b9: not readonly — trimJournalIfNeeded() below rebuilds this
+  // from CampaignJournal's own public serialize()/deserialize() pair (the
+  // compiled @ai-rpg-engine/campaign-memory class exposes no delete/evict
+  // API), mirroring TurnHistory's MAX_COMPACTED_CHUNKS eviction discipline.
+  journal: CampaignJournal;
   readonly genre: string;
   mode: GameMode = 'play';
   lastFactionActions: FactionActionResult[] = [];
@@ -329,6 +371,23 @@ export class GameSession {
   private turnsSinceLastAutosave = 0;
   /** Last autosave message (appended to output when triggered). */
   private lastAutosaveMessage: string | null = null;
+  /**
+   * F-af8f1048: true once the player has been shown the one-time
+   * autosave-failure notice this session — formatAutosaveNotice() checks
+   * this so a persistent failure condition (full disk, permissions,
+   * antivirus lock) doesn't repeat the notice every subsequent turn,
+   * honoring the original "don't disrupt gameplay" intent while still
+   * telling the player once that their safety net stopped working.
+   */
+  private autosaveFailureWarned = false;
+  /**
+   * F-f13ca236: post-turn subsystem-tick failure count + a bounded ring
+   * buffer of the most recent ones, tracked independent of the --debug gate
+   * (see the PB-001 catch block below and debug-logger.ts's NoopLogger).
+   * Surfaced via getSubsystemFailureCount()/getRecentSubsystemFailures().
+   */
+  private subsystemFailureCount = 0;
+  private readonly subsystemFailures: { tick: number; error: string }[] = [];
   /** Structured announcements from subsystem processing (level-ups, title changes, etc.). */
   pendingAnnouncements: string[] = [];
   /** Structured debug logger — gated behind --debug flag. */
@@ -354,6 +413,16 @@ export class GameSession {
     this.fastMode = config.fastMode ?? false;
     this.autosaveConfig = { ...DEFAULT_AUTOSAVE, ...config.autosave };
     this.debugLog = config.debugLogger ?? createDebugLogger();
+    // Contract B (debug mode): thread GameConfig's existing debug flag —
+    // realized here as debugLog.enabled, resolved above from either an
+    // explicit config.debugLogger or createDebugLogger()'s auto-detection of
+    // --debug / CLAUDE_RPG_DEBUG (the same plumbing bin.ts's own local
+    // `debugMode` variable reads) — into ImmersionRuntime.debugMode, which
+    // was previously only ever set directly by tests
+    // (immersion-runtime.test.ts), never by any real construction path. No
+    // new GameConfig field: this reuses the debug signal that already
+    // reaches GameSession.
+    this.immersion.debugMode = this.debugLog.enabled;
     this.onPresentation = config.onPresentation;
     this.onNarrationChunk = config.onNarrationChunk;
 
@@ -377,6 +446,24 @@ export class GameSession {
   /** Get status data for enhanced status bar. */
   getStatusData(): StatusData | null {
     return getStatusDataFromProfile(this.profile, this.itemCatalog);
+  }
+
+  /**
+   * F-f13ca236: number of post-turn subsystem-tick failures this session
+   * (see the PB-001 catch block in processInput) — tracked independent of
+   * the --debug gate, since debugLog is a true NoopLogger by default.
+   */
+  getSubsystemFailureCount(): number {
+    return this.subsystemFailureCount;
+  }
+
+  /**
+   * F-f13ca236: the most recent post-turn subsystem-tick failures (bounded
+   * ring buffer, oldest evicted first — see MAX_SUBSYSTEM_FAILURE_RECORDS),
+   * each with the full error stack, independent of the --debug gate.
+   */
+  getRecentSubsystemFailures(): readonly { tick: number; error: string }[] {
+    return this.subsystemFailures;
   }
 
   /** Apply profile update hints from a turn result. */
@@ -917,7 +1004,20 @@ export class GameSession {
     } catch (err) {
       // Subsystem failure — the turn itself was processed safely.
       const errMsg = err instanceof Error ? err.message : String(err);
-      this.debugLog.error('subsystem', 'post-turn tick failed', { error: errMsg });
+      // F-f13ca236: a bare .message can't distinguish which of the ~17
+      // structurally-similar post-turn subsystem calls actually threw when
+      // several throw near-identical generic TypeErrors — capture the full
+      // stack too.
+      const errStack = err instanceof Error && err.stack ? err.stack : errMsg;
+      this.debugLog.error('subsystem', 'post-turn tick failed', { error: errMsg, stack: errStack });
+      // F-f13ca236: recorded independent of the --debug gate — debugLog is a
+      // true NoopLogger by default (debug-logger.ts), whose .error() doesn't
+      // even append to getEntries(), so without this, a subsystem failure in
+      // the overwhelming majority of real play sessions left zero trace
+      // anywhere beyond the generic player-facing bracket message below.
+      this.subsystemFailureCount++;
+      this.subsystemFailures.push({ tick: this.engine.tick, error: errStack });
+      this.capOldestFirst(this.subsystemFailures, MAX_SUBSYSTEM_FAILURE_RECORDS);
       subsystemWarning = '\n  [A subsystem hiccupped — your turn was processed safely]';
     }
     this.debugLog.info('turn', 'turn-end', { tick: this.engine.tick });
@@ -957,7 +1057,12 @@ export class GameSession {
     }
 
     // Autosave check after turn processing
-    const autosaveMsg = await this.checkAutosave();
+    // F-af8f1048: checkAutosave() now returns a discriminated AutosaveOutcome
+    // (skipped/saved/failed) instead of a bare string|null — translate it to
+    // player-facing text via formatAutosaveNotice, which also owns the
+    // one-time-only failure-notice throttling.
+    const autosaveOutcome = await this.checkAutosave();
+    const autosaveMsg = this.formatAutosaveNotice(autosaveOutcome);
 
     const output = renderPlayOutput({
       narration: turnResult.narration,
@@ -969,6 +1074,15 @@ export class GameSession {
       partyStatusLine: buildPartyStatusLine(this.partyState, this.engine.world),
       suggestions,
       hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
+      // Contract A (turn divider): cli-display's play-renderer consumes this
+      // via makeTurnDivider when present. history.getAll().length is this
+      // codebase's own established "how many turns has the player
+      // experienced" counter (matches the test harness's turnCount() and
+      // the sibling turn-count assertions in test/integration/
+      // game-turn-loop.test.ts) — executeTurn() has already recorded this
+      // turn in history by this point, so it already reflects the turn just
+      // completed.
+      turnNumber: this.history.getAll().length,
     });
     let finalOutput = output;
     // Drain structured announcements into the output
@@ -986,12 +1100,18 @@ export class GameSession {
 
   /**
    * Check if autosave should trigger and perform it silently.
-   * Returns a brief message if autosave fired, null otherwise.
+   *
+   * F-af8f1048: returns a discriminated AutosaveOutcome instead of a bare
+   * `string | null` — 'skipped' covers both "disabled" and "not yet due"
+   * (parity with the old silent no-op for those two cases), 'saved' carries
+   * the same success message as before, and 'failed' is now distinguishable
+   * from both so the caller can surface it instead of treating it like
+   * nothing happened.
    */
-  async checkAutosave(): Promise<string | null> {
-    if (!this.autosaveConfig.enabled) return null;
+  async checkAutosave(): Promise<AutosaveOutcome> {
+    if (!this.autosaveConfig.enabled) return { status: 'skipped' };
     this.turnsSinceLastAutosave++;
-    if (this.turnsSinceLastAutosave < this.autosaveConfig.intervalTurns) return null;
+    if (this.turnsSinceLastAutosave < this.autosaveConfig.intervalTurns) return { status: 'skipped' };
 
     // Reset counter
     this.turnsSinceLastAutosave = 0;
@@ -1031,12 +1151,67 @@ export class GameSession {
       };
       await saveSession(input);
       this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
-      return '\n  [autosaved]';
+      return { status: 'saved', message: '\n  [autosaved]' };
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this.debugLog.error('autosave', 'autosave-failed', { error: errMsg });
-      return null; // Silent failure — don't disrupt gameplay
+      return { status: 'failed', error: errMsg };
     }
+  }
+
+  /**
+   * F-af8f1048: translate an AutosaveOutcome into player-facing output text.
+   * 'skipped' (disabled or not yet due) never produces output — parity with
+   * the original silent no-op. 'failed' produces a low-noise, one-time-only
+   * notice per session (see autosaveFailureWarned) so the player learns
+   * their safety net stopped working without every subsequent turn nagging
+   * them about a persistent condition (full disk, permissions, an
+   * antivirus/indexing lock on the save directory) — honoring the original
+   * "don't disrupt gameplay" intent while no longer treating a genuine
+   * failure identically to nothing having happened.
+   */
+  private formatAutosaveNotice(outcome: AutosaveOutcome): string | null {
+    if (outcome.status === 'saved') return outcome.message;
+    if (outcome.status === 'failed') {
+      if (this.autosaveFailureWarned) return null;
+      this.autosaveFailureWarned = true;
+      return '\n  [autosave failed — your last save may be out of date; use /export to back up your progress]';
+    }
+    return null;
+  }
+
+  /**
+   * F-51e110b9: evict the oldest elements of `arr` once its length exceeds
+   * `max`, mirroring TurnHistory.trimCompactedChunks()'s
+   * (session/history.ts) oldest-first-eviction discipline exactly (a
+   * while-loop of shift() calls). Shared by resolvePressure(),
+   * resolveOpportunity(), and evaluateEndgameTrigger() below to cap
+   * resolvedPressures/resolvedOpportunities/endgameTriggers.
+   */
+  private capOldestFirst<T>(arr: T[], max: number): void {
+    while (arr.length > max) {
+      arr.shift();
+    }
+  }
+
+  /**
+   * F-51e110b9: evict the oldest journal records once the retained count
+   * exceeds MAX_JOURNAL_RECORDS. CampaignJournal (compiled
+   * @ai-rpg-engine/campaign-memory) exposes no delete/evict API, so eviction
+   * rebuilds the journal from its own public serialize()/deserialize() pair
+   * instead — serialize() already returns records sorted oldest-first by
+   * tick (journal.js's `.sort((a, b) => a.tick - b.tick)`), so slicing the
+   * last MAX_JOURNAL_RECORDS keeps the most recent ones and drops the rest.
+   * Called once per ordinary turn from recordChronicleEvents() — the
+   * unconditional every-turn call site (game.ts's PB-001 block) this
+   * finding anchors on, and the dominant driver of journal growth relative
+   * to the many rarer per-event journal.record() call sites elsewhere in
+   * this file.
+   */
+  private trimJournalIfNeeded(): void {
+    if (this.journal.size() <= MAX_JOURNAL_RECORDS) return;
+    const trimmed = this.journal.serialize().slice(-MAX_JOURNAL_RECORDS);
+    this.journal = CampaignJournal.deserialize(trimmed);
   }
 
   /** Universal title evolutions based on milestone tags. */
@@ -1153,6 +1328,7 @@ export class GameSession {
 
     this.applyFalloutEffects(fallout);
     this.resolvedPressures.push(fallout);
+    this.capOldestFirst(this.resolvedPressures, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
 
     // Companion reactions to pressure resolution
     if (this.partyState.companions.length > 0) {
@@ -1379,6 +1555,7 @@ export class GameSession {
     // Apply fallout effects
     this.applyOpportunityFalloutEffects(fallout);
     this.resolvedOpportunities.push(fallout);
+    this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
   }
 
   /** Apply structured opportunity fallout effects to session state. */
@@ -1543,6 +1720,7 @@ export class GameSession {
     const trigger = evaluateEndgame(inputs);
     if (trigger) {
       this.endgameTriggers.push(trigger);
+      this.capOldestFirst(this.endgameTriggers, MAX_ENDGAME_TRIGGERS); // F-51e110b9
       // Record in chronicle
       this.journal.record({
         tick: this.engine.tick,
@@ -1786,6 +1964,11 @@ export class GameSession {
         }
       }
     }
+
+    // F-51e110b9: bound journal growth once per ordinary turn — this is the
+    // unconditional every-turn call site (game.ts's PB-001 block calls this
+    // method at every turn) the finding anchors on.
+    this.trimJournalIfNeeded();
   }
 
   // --- v1.7: Economy ---

@@ -362,12 +362,110 @@ export function loadChronicleFromSession(session: SavedSession): CampaignJournal
   }
 }
 
-/** Load NPC agency state from a saved session. */
+/**
+ * F-0b05c26c: shape guard for a single NpcRelationship record and a single
+ * NpcGoal entry — together back isValidNpcProfile below. Mirrors
+ * isValidNpcObligation's per-field validation depth for the same class of
+ * problem: a bare `??` fallback only substitutes for null/undefined, never
+ * validates shape.
+ */
+function isValidNpcRelationship(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const r = value as Record<string, unknown>;
+  return (
+    typeof r.trust === 'number' &&
+    typeof r.fear === 'number' &&
+    typeof r.greed === 'number' &&
+    typeof r.loyalty === 'number'
+  );
+}
+
+function isValidNpcGoal(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const g = value as Record<string, unknown>;
+  return (
+    typeof g.id === 'string' &&
+    typeof g.label === 'string' &&
+    typeof g.priority === 'number' &&
+    typeof g.verb === 'string' &&
+    typeof g.reason === 'string'
+  );
+}
+
+/**
+ * F-0b05c26c: shape guard for a single NpcProfile entry within a parsed
+ * npcAgencySnapshot's `.profiles` array. Mirrors isValidNpcObligation/
+ * isValidConsequenceStep/isValidArcSignal's per-element validation depth.
+ * The compiled @ai-rpg-engine/modules generateNpcTextures() dereferences
+ * `profile.npcId`, `profile.relationship.{fear,trust,greed}`, and
+ * `profile.goals[0].verb` unguarded for every profile in the array.
+ */
+function isValidNpcProfile(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.npcId === 'string' &&
+    typeof p.name === 'string' &&
+    (p.factionId === null || typeof p.factionId === 'string') &&
+    Array.isArray(p.goals) && p.goals.every(isValidNpcGoal) &&
+    isValidNpcRelationship(p.relationship) &&
+    typeof p.breakpoint === 'string' &&
+    typeof p.dominantAxis === 'string' &&
+    typeof p.leverageAngle === 'string' &&
+    Array.isArray(p.knownRumors) &&
+    typeof p.underPressure === 'boolean'
+  );
+}
+
+/**
+ * F-0b05c26c: shape guard for a single NpcActionResult entry within a parsed
+ * npcAgencySnapshot's `.actions` array. The compiled @ai-rpg-engine/modules
+ * formatNpcAgencyForNarrator() reads `.narratorHint` off every element
+ * unguarded (`results.slice(0, 2).map((r) => r.narratorHint)`).
+ */
+function isValidNpcActionResult(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const a = value as Record<string, unknown>;
+  return (
+    a.action != null && typeof a.action === 'object' &&
+    Array.isArray(a.effects) &&
+    typeof a.narratorHint === 'string'
+  );
+}
+
+/**
+ * Load NPC agency state from a saved session.
+ *
+ * F-0b05c26c: the previous `{ profiles: data.profiles ?? [], actions:
+ * data.actions ?? [] }` pattern only substituted defaults for
+ * null/undefined — a syntactically valid but wrong-shaped snapshot (e.g.
+ * `{"profiles":[],"actions":42}`) passed straight through unexamined into
+ * game.ts's processInput() -> getVisiblePressureContext() ->
+ * formatNpcAgencyForNarrator()/generateNpcTextures() (compiled
+ * @ai-rpg-engine/modules), which throw on a non-array actions/profiles
+ * field or a malformed element. Unlike every sibling loader in this file,
+ * that call site sits in processInput() with no enclosing try/catch, so the
+ * crash aborted the entire turn and repeated identically on every
+ * subsequent turn for the rest of the session. Now validated per-field and
+ * per-element, mirroring loadObligationsFromSession/
+ * loadConsequenceChainsFromSession/loadPartyFromSession/
+ * loadArcSnapshotFromSession's shape-guard pattern: a field that isn't an
+ * array, or whose elements don't validate, falls back to the empty default
+ * for that field alone rather than trusting either unexamined.
+ */
 export function loadNpcAgencyFromSession(session: SavedSession): { profiles: NpcProfile[]; actions: NpcActionResult[] } {
   if (!session.npcAgencySnapshot) return { profiles: [], actions: [] };
   try {
-    const data = JSON.parse(session.npcAgencySnapshot) as { profiles: NpcProfile[]; actions: NpcActionResult[] };
-    return { profiles: data.profiles ?? [], actions: data.actions ?? [] };
+    const parsed: unknown = JSON.parse(session.npcAgencySnapshot);
+    if (parsed == null || typeof parsed !== 'object') return { profiles: [], actions: [] };
+    const data = parsed as Record<string, unknown>;
+    const profiles = Array.isArray(data.profiles) && data.profiles.every(isValidNpcProfile)
+      ? (data.profiles as NpcProfile[])
+      : [];
+    const actions = Array.isArray(data.actions) && data.actions.every(isValidNpcActionResult)
+      ? (data.actions as NpcActionResult[])
+      : [];
+    return { profiles, actions };
   } catch {
     return { profiles: [], actions: [] };
   }
@@ -526,18 +624,52 @@ export function loadConsequenceChainsFromSession(
 }
 
 /**
+ * F-c2d4ba19: shape guard for a single CompanionState entry within a parsed
+ * PartyState's `.companions` array. Mirrors isValidNpcObligation/
+ * isValidConsequenceStep/isValidArcSignal's per-element validation depth for
+ * the same class of problem: Array.isArray(p.companions) alone proves the
+ * field is an array but never validates what's inside it. The compiled
+ * @ai-rpg-engine/modules companion-core.js dereferences `.npcId` unguarded in
+ * addCompanion/getCompanion/isCompanion/setCompanionActive/
+ * adjustCompanionMorale, `.active` unguarded in getActiveCompanions/
+ * computePartyCohesion, and `.morale` unguarded in computePartyCohesion/
+ * adjustCompanionMorale — validated at minimum here, matching the fields
+ * actually dereferenced unguarded across those 8 of ~10 companion-core
+ * exports.
+ */
+function isValidCompanion(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return (
+    typeof c.npcId === 'string' &&
+    typeof c.active === 'boolean' &&
+    typeof c.morale === 'number'
+  );
+}
+
+/**
  * F-1357a6e0: shape guard for PartyState. JSON.parse can succeed
  * *syntactically* on a value that is the wrong shape entirely (e.g. the bare
  * number 42) — that only throws if the string isn't valid JSON at all, so a
  * bare `JSON.parse(x) as PartyState` cast trusts it unexamined. Mirrors the
  * isValidPlayerRumor/isValidWorldPressure shape-guard pattern in migrate.ts
  * for this exact class of problem.
+ *
+ * F-c2d4ba19: Array.isArray(p.companions) alone only proves `.companions` is
+ * an array — it does not prove each element is a well-shaped CompanionState.
+ * A party whose companions array contained a malformed element (e.g. null)
+ * passed this validator unchanged and reached
+ * `this.partyState.companions.some((c) => c.npcId === effect.npcId)`
+ * (game.ts:1458) and every companion-core call gated behind
+ * `this.partyState.companions.length > 0` (game.ts:873) unexamined. Each
+ * companion is now validated individually via isValidCompanion.
  */
 function isValidPartyState(value: unknown): value is PartyState {
   if (value == null || typeof value !== 'object') return false;
   const p = value as Record<string, unknown>;
   return (
     Array.isArray(p.companions) &&
+    p.companions.every(isValidCompanion) &&
     typeof p.maxSize === 'number' &&
     typeof p.cohesion === 'number'
   );

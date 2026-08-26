@@ -296,6 +296,25 @@ describe('TurnHistory compaction (FT-B-006)', () => {
     restored.record({ tick: 502, playerInput: 'x', verb: 'attack', narration: 'Fight!' });
     expect(restored.compactedSummary).toContain(legacySummary);
   });
+
+  // F-f0276ea0: fromJSON's object-format branch trusted `data.turns` was
+  // already an array (TypeScript's static type says so) without any runtime
+  // check. But data reaching this method already flowed through an
+  // unchecked `JSON.parse(...) as SavedSession` cast upstream (session.ts's
+  // validateSaveShape only checks `typeof obj.turnHistory === 'object'`,
+  // which a hand-edited turnHistory.turns field of the wrong type — e.g. a
+  // bare string — still satisfies at the object level). `data.turns.length`/
+  // `.slice(-maxTurns)` both "succeed" on a string too (strings have both),
+  // silently assigning a wrong-typed value where TurnRecord[] is expected,
+  // surfacing only later wherever a TurnRecord[]-only method
+  // (getRecentNarration()'s .filter(), etc.) is first called against it.
+  it('falls back to an empty turn list when data.turns is present but not an array (hand-edited/schema-drifted save)', () => {
+    const data = { turns: 'not-an-array' } as unknown as Parameters<typeof TurnHistory.fromJSON>[0];
+
+    const restored = TurnHistory.fromJSON(data, 50);
+
+    expect(restored.getAll()).toEqual([]);
+  });
 });
 
 // F-8da2e6f7: turn-loop.ts defines its own fallback sentinel

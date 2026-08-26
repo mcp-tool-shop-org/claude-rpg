@@ -217,7 +217,17 @@ export class TurnHistory {
     if (Array.isArray(data)) {
       history.turns = data.length > maxTurns ? data.slice(-maxTurns) : data;
     } else {
-      history.turns = data.turns.length > maxTurns ? data.turns.slice(-maxTurns) : data.turns;
+      // F-f0276ea0: data.turns must itself be an array before use — a
+      // hand-edited/schema-drifted save's turnHistory.turns field being e.g.
+      // a string would otherwise pass `data.turns.length`/
+      // `.slice(-maxTurns)` (both exist on strings too) and silently assign
+      // a wrong-typed value where TurnRecord[] is expected. Falls back to an
+      // empty turn list, consistent with how the other loaders in this
+      // codebase (session.ts's sibling loaders) degrade on a malformed
+      // field instead of trusting it unexamined.
+      history.turns = Array.isArray(data.turns)
+        ? (data.turns.length > maxTurns ? data.turns.slice(-maxTurns) : data.turns)
+        : [];
       if (data.compactedChunks) {
         history._compactedChunks = [...data.compactedChunks];
         // F-dfd125bb: apply the same cap on load as during live play, so a

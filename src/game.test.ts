@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
-import { createTestLogger } from './game/debug-logger.js';
+import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
 import type { OpportunityState } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
+import { loadNpcAgencyFromSession, type SavedSession } from './session/session.js';
 
 describe('GameSession', () => {
   it('should create a session with a starter world', () => {
@@ -89,13 +90,20 @@ describe('GameSession', () => {
     const { createHarness } = await import('../test/helpers/game-harness.js');
     const h = createHarness();
 
-    // Record a turn so the snapshot has data
+    // Switch to director mode and inspect an entity — /director itself is
+    // turn-count-neutral (F-58e75016's fixed sibling in
+    // test/integration/game-turn-loop.test.ts: 'slash commands do not
+    // consume turns').
     await h.play('/director');
     const inspectOut = await h.play('/inspect pilgrim');
     expect(inspectOut).toContain('pilgrim');
 
-    // Switch back to play mode — /export is a play-mode command
+    // Switch back to play mode — /export is a play-mode command. /back is
+    // what actually records the turn the snapshot below depends on: it
+    // triggers getOpeningNarration(), which unconditionally records a turn
+    // in history (game.ts, F-8da2e6f7), unlike /director above.
     await h.play('/back');
+    expect(h.turnCount()).toBe(1);
 
     // Export json exercises buildSavedSessionSnapshot → writeExport
     const exportResult = await h.session.processInput('/export json');
@@ -131,6 +139,43 @@ describe('GameSession', () => {
     // Verify a turn was recorded in history
     expect(h.turnCount()).toBeGreaterThanOrEqual(1);
     expect(h.lastVerb()).toBe('look');
+  });
+
+  // F-0b05c26c: loadNpcAgencyFromSession's previous `{ profiles: data.profiles
+  // ?? [], actions: data.actions ?? [] }` pattern trusted a syntactically
+  // valid but wrong-shaped npcAgencySnapshot unexamined. bin.ts:397-398
+  // assigns loadNpcAgencyFromSession()'s result directly onto
+  // session.lastNpcActions/session.lastNpcProfiles — mirrored here to prove
+  // the *full* pipeline (malformed save field -> loader -> GameSession
+  // fields -> processInput -> getVisiblePressureContext ->
+  // formatNpcAgencyForNarrator/generateNpcTextures) survives end-to-end, not
+  // just that the loader itself degrades gracefully in isolation
+  // (session.test.ts's loadNpcAgencyFromSession suite covers that half).
+  // Before the fix, formatNpcAgencyForNarrator's `results.slice(0, 2)` threw
+  // on the non-array `actions` field, and processInput() has no enclosing
+  // try/catch around this call site (game.ts:732, before the nearest try at
+  // line 744) — so the crash aborted the whole turn.
+  it('processInput survives a malformed npcAgencySnapshot loaded via loadNpcAgencyFromSession (F-0b05c26c)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    const fixtureSession: SavedSession = {
+      schemaVersion: 14,
+      version: '1.4.0',
+      engineState: '{}',
+      turnHistory: { turns: [] },
+      tone: 'dramatic',
+      savedAt: new Date().toISOString(),
+      // The finding's own documented trigger shape.
+      npcAgencySnapshot: JSON.stringify({ profiles: [], actions: 42 }),
+    };
+    const { profiles, actions } = loadNpcAgencyFromSession(fixtureSession);
+    h.session.lastNpcProfiles = profiles;
+    h.session.lastNpcActions = actions;
+
+    const output = await h.play('look around');
+    expect(output).toBeTruthy();
+    expect(typeof output).toBe('string');
   });
 
   it('should contain subsystem warning when a post-turn tick throws (PB-001)', async () => {
@@ -191,6 +236,10 @@ describe('GameSession', () => {
     expect(errorEntry).toBeDefined();
     expect(errorEntry!.subsystem).toBe('subsystem');
     expect(errorEntry!.data?.error).toContain('boom');
+    // F-f13ca236: a bare .message can't distinguish which of the ~17
+    // structurally-similar post-turn subsystem calls actually threw — the
+    // full stack must be captured too, not just the message.
+    expect(errorEntry!.data?.stack).toContain('boom');
 
     // Restore
     Object.defineProperty(h.session.engine.world, 'factions', {
@@ -198,6 +247,57 @@ describe('GameSession', () => {
       configurable: true,
       writable: true,
     });
+  });
+
+  // F-f13ca236: debugLog is a true NoopLogger by default (debug-logger.ts) —
+  // NoopLogger.error() doesn't even append to getEntries(), so for the
+  // overwhelming majority of real play sessions a post-turn subsystem
+  // failure left zero trace anywhere beyond the generic bracket message.
+  // subsystemFailureCount/getRecentSubsystemFailures() must be tracked
+  // independent of that gate.
+  it('records post-turn subsystem failures independent of the --debug gate (F-f13ca236)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    // Explicit disabled logger (not createDebugLogger()'s auto-detection,
+    // which could pick up a real --debug/CLAUDE_RPG_DEBUG env in this
+    // process) — deterministic proof the count survives a true no-op sink.
+    const disabledLogger: DebugLogger = {
+      enabled: false,
+      debug() {}, info() {}, warn() {}, error() {}, setTick() {}, getEntries: () => [],
+    };
+    const h = createHarness({ gameOpts: { debugLogger: disabledLogger } });
+
+    expect(h.session.getSubsystemFailureCount()).toBe(0);
+
+    const originalFactions = h.session.engine.world.factions;
+    Object.defineProperty(h.session.engine.world, 'factions', {
+      get() { throw new Error('boom'); },
+      configurable: true,
+    });
+
+    await h.play('look around');
+
+    expect(h.session.getSubsystemFailureCount()).toBe(1);
+    const recent = h.session.getRecentSubsystemFailures();
+    expect(recent).toHaveLength(1);
+    expect(recent[0].error).toContain('boom');
+    expect(recent[0].tick).toBe(h.session.engine.tick);
+
+    // Restore
+    Object.defineProperty(h.session.engine.world, 'factions', {
+      value: originalFactions,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  it('does not count a normal turn as a subsystem failure (F-f13ca236)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.play('look around');
+
+    expect(h.session.getSubsystemFailureCount()).toBe(0);
+    expect(h.session.getRecentSubsystemFailures()).toHaveLength(0);
   });
 
   describe('autosave (FT-B-002)', () => {
@@ -254,7 +354,14 @@ describe('GameSession', () => {
       saveSpy.mockRestore();
     });
 
-    it('should silently handle autosave failures', async () => {
+    // F-af8f1048: checkAutosave()'s old `Returns a brief message if autosave
+    // fired, null otherwise` contract let a genuine save failure render
+    // byte-for-byte identical to "not due yet" — the player had zero signal
+    // that their safety net stopped working. A failure must not vanish into
+    // null silently forever; it surfaces a one-time, low-noise notice on the
+    // *first* failure this session (never every turn — that would defeat the
+    // original "don't disrupt gameplay" intent).
+    it('surfaces a one-time notice on the first autosave failure, not silence (F-af8f1048)', async () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
       const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
         .mockRejectedValue(new Error('disk full'));
@@ -265,16 +372,42 @@ describe('GameSession', () => {
         },
       });
 
-      // Should not throw, and should not show [autosaved]
+      // Should not throw, and should not show the success message
       const out = await h.play('look around');
       expect(out).not.toContain('[autosaved]');
-      // But the output should still be valid turn output
+      // But the player must see *some* signal the safety net just failed.
+      expect(out).toContain('autosave failed');
+      // And the output should still be valid turn output
       expect(out.length).toBeGreaterThan(0);
 
       saveSpy.mockRestore();
     });
 
-    it('checkAutosave returns null when not yet time', async () => {
+    it('does not repeat the autosave-failure notice on every subsequent turn (F-af8f1048)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockRejectedValue(new Error('disk full'));
+
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: true, intervalTurns: 1 },
+        },
+      });
+
+      const out1 = await h.play('look around');
+      expect(out1).toContain('autosave failed');
+
+      // Second consecutive failure this session — the original "don't
+      // disrupt gameplay" intent means this should stay quiet now that the
+      // player has already been told once.
+      const out2 = await h.play('look around');
+      expect(out2).not.toContain('autosave failed');
+      expect(out2).not.toContain('[autosaved]');
+
+      saveSpy.mockRestore();
+    });
+
+    it('checkAutosave returns {status: "skipped"} when not yet time (F-af8f1048)', async () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
       const h = createHarness({
         gameOpts: {
@@ -284,7 +417,55 @@ describe('GameSession', () => {
 
       const result = await h.session.checkAutosave();
       // turnsSinceLastAutosave is 1 after this call, but intervalTurns is 5
-      expect(result).toBe(null);
+      expect(result).toEqual({ status: 'skipped' });
+    });
+
+    it('checkAutosave returns {status: "skipped"} when disabled (F-af8f1048)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: false, intervalTurns: 1 },
+        },
+      });
+
+      const result = await h.session.checkAutosave();
+      expect(result).toEqual({ status: 'skipped' });
+    });
+
+    it('checkAutosave returns {status: "saved", message} on success, distinct from "skipped" (F-af8f1048)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockImplementation(async () => {});
+
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: true, intervalTurns: 1 },
+        },
+      });
+
+      const result = await h.session.checkAutosave();
+      expect(result.status).toBe('saved');
+      expect(result).toMatchObject({ status: 'saved', message: expect.stringContaining('autosaved') });
+
+      saveSpy.mockRestore();
+    });
+
+    it('checkAutosave returns {status: "failed", error} on a genuine save failure, distinct from "skipped" (F-af8f1048)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
+        .mockRejectedValue(new Error('disk full'));
+
+      const h = createHarness({
+        gameOpts: {
+          autosave: { enabled: true, intervalTurns: 1 },
+        },
+      });
+
+      const result = await h.session.checkAutosave();
+      expect(result.status).toBe('failed');
+      expect(result).toMatchObject({ status: 'failed', error: expect.stringContaining('disk full') });
+
+      saveSpy.mockRestore();
     });
   });
 
@@ -429,6 +610,76 @@ describe('GameSession', () => {
       const records = session.journal.serialize();
       expect(records).toHaveLength(1);
       expect(records[0].description).toContain('Failed');
+    });
+  });
+
+  // F-51e110b9: TurnHistory's compacted-summary growth was capped
+  // (F-dfd125bb, MAX_COMPACTED_CHUNKS, session/history.ts) because an
+  // unbounded per-campaign string has no ceiling in a several-hundred-turn
+  // campaign — this studio's target production scale. Four other
+  // per-campaign structures (journal, resolvedPressures,
+  // resolvedOpportunities, endgameTriggers) never received an equivalent
+  // cap, and all four are serialized in full on every save. Mirrors
+  // trimCompactedChunks()'s oldest-first-eviction discipline.
+  describe('capped campaign-growth structures (F-51e110b9)', () => {
+    it('capOldestFirst evicts the oldest elements first once length exceeds max', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine, title: 'Test Game', clientConfig: { apiKey: 'test-key' },
+      }) as unknown as { capOldestFirst: <T>(arr: T[], max: number) => void };
+
+      const arr = [1, 2, 3, 4, 5];
+      session.capOldestFirst(arr, 3);
+      expect(arr).toEqual([3, 4, 5]);
+
+      // No-op once already within the cap.
+      session.capOldestFirst(arr, 3);
+      expect(arr).toEqual([3, 4, 5]);
+    });
+
+    it('trimJournalIfNeeded evicts the oldest journal records once retained count exceeds MAX_JOURNAL_RECORDS', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine, title: 'Test Game', clientConfig: { apiKey: 'test-key' },
+      });
+
+      for (let i = 0; i < 510; i++) {
+        session.journal.record({
+          tick: i, category: 'action', actorId: 'world',
+          description: `event ${i}`, significance: 0.1, witnesses: [], data: {},
+        });
+      }
+      expect(session.journal.size()).toBe(510);
+
+      (session as unknown as { trimJournalIfNeeded: () => void }).trimJournalIfNeeded();
+
+      expect(session.journal.size()).toBeLessThan(510);
+      // Oldest-first: the earliest ticks are the ones evicted.
+      const remainingTicks = session.journal.serialize().map((r) => r.tick);
+      expect(Math.min(...remainingTicks)).toBeGreaterThan(0);
+      expect(Math.max(...remainingTicks)).toBe(509);
+    });
+
+    it('recordChronicleEvents keeps the journal bounded across many ordinary turns', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      // Seed the journal past the cap directly (cheaper than playing
+      // hundreds of real turns) so a single ordinary turn's
+      // recordChronicleEvents() call — the unconditional every-turn call
+      // site this finding anchors on (game.ts, PB-001 block) — is proven to
+      // enforce the cap, not just the private helper in isolation above.
+      for (let i = 0; i < 510; i++) {
+        h.session.journal.record({
+          tick: i, category: 'action', actorId: 'world',
+          description: `event ${i}`, significance: 0.1, witnesses: [], data: {},
+        });
+      }
+      expect(h.session.journal.size()).toBe(510);
+
+      await h.play('look around');
+
+      expect(h.session.journal.size()).toBeLessThan(510);
     });
   });
 
@@ -773,6 +1024,65 @@ describe('GameSession', () => {
       const h = createHarness();
 
       await expect(h.play('look around')).resolves.toBeTruthy();
+    });
+  });
+
+  // Wave 12 cross-domain contracts. This domain (game-core) owns the halves
+  // exercised here; the sibling halves (cli-display's play-renderer turn
+  // divider, runtime-foundry's ImmersionRuntime diagnostics) land in their
+  // own domains' test files this same wave.
+  describe('cross-domain contracts (wave 12)', () => {
+    // Contract A (turn divider): game-presenter.ts's renderPlayOutput input
+    // now carries `turnNumber?: number`, passed straight through to
+    // cli-display's renderPlayScreen/makeTurnDivider (src/display/
+    // play-renderer.ts), which already renders a "Turn N" divider when
+    // turnNumber is present (turn-divider.test.ts). This proves game.ts's
+    // half: the value actually flows from history into that divider.
+    it('passes the current turn number through to the rendered turn divider (contract A)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      const out1 = await h.play('look around');
+      expect(h.turnCount()).toBe(1);
+      expect(out1).toContain('Turn 1');
+
+      const out2 = await h.play('look around');
+      expect(h.turnCount()).toBe(2);
+      expect(out2).toContain('Turn 2');
+    });
+
+    // Contract B (debug mode): GameConfig's existing debug signal —
+    // debugLog.enabled, resolved from config.debugLogger or
+    // createDebugLogger()'s --debug/CLAUDE_RPG_DEBUG auto-detection — now
+    // threads into immersion.debugMode where the runtime is constructed, so
+    // runtime-foundry's ImmersionRuntime diagnostics (immersion-runtime.ts)
+    // actually fire under --debug instead of always defaulting to false.
+    it('threads an enabled debug logger into ImmersionRuntime.debugMode (contract B)', () => {
+      const engine = createGame();
+      const enabledLogger: DebugLogger = {
+        enabled: true,
+        debug() {}, info() {}, warn() {}, error() {}, setTick() {}, getEntries: () => [],
+      };
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        debugLogger: enabledLogger,
+      });
+
+      expect(session.immersion.debugMode).toBe(true);
+    });
+
+    it('leaves ImmersionRuntime.debugMode false when the debug logger is disabled (contract B)', () => {
+      const engine = createGame();
+      const session = new GameSession({
+        engine,
+        title: 'Test Game',
+        clientConfig: { apiKey: 'test-key' },
+        debugLogger: createTestLogger(), // enabled: false
+      });
+
+      expect(session.immersion.debugMode).toBe(false);
     });
   });
 });

@@ -51,7 +51,7 @@ set ANTHROPIC_API_KEY=sk-ant-...
 **Step 2: Launch the game**
 
 ```bash
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 ```
 
 This downloads and runs Claude RPG without a permanent install. You'll see a world selection menu.

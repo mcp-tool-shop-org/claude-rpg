@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://www.npmjs.com/package/claude-rpg"><img src="https://img.shields.io/npm/v/claude-rpg.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@mcptoolshop/claude-rpg"><img src="https://img.shields.io/npm/v/%40mcptoolshop%2Fclaude-rpg.svg" alt="npm version"></a>
   <a href="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg"><img src="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
@@ -40,8 +40,8 @@ NPCはスクリプトを暗唱しない。彼らは信念、記憶、派閥へ�
 
 | 次のようなことをしたいですか？ | 使用する： |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play`（インタラクティブな世界とキャラクターの選択） |
-| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Play right now** | `npx @mcptoolshop/claude-rpg play`（インタラクティブな世界とキャラクターの選択） |
+| **Create a new world** | `npx @mcptoolshop/claude-rpg new "your world concept"` |
 | **Author worlds visually** | [ワールドフォージ](https://github.com/mcp-tool-shop-org/world-forge) — マップエディター、NPCビルダー、および検証機能を備えた2Dオーサリングスタジオ。 |
 | **Validate world data** | [キャノンアーカイブ](https://github.com/mcp-tool-shop-org/cannon-archive) — スキーマ検証、ストーリーボードテスト、およびエクスポートパイプライン。 |
 | **Build a custom runtime** | [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine)パッケージを直接インポートする—クロードを任意のLLMに置き換えたり、独自のUIを追加したりできる。 |
@@ -52,29 +52,29 @@ NPCはスクリプトを暗唱しない。彼らは信念、記憶、派閥へ�
 ## インストール
 
 ```bash
-npm install claude-rpg
+npm install @mcptoolshop/claude-rpg
 ```
 
 または、直接実行する：
 
 ```bash
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 ```
 
 ## クイックスタート
 
 ```bash
 # Play — interactive world and character selection (ten worlds, grouped by difficulty)
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
-npx claude-rpg play --world gladiator
+npx @mcptoolshop/claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
-npx claude-rpg play --fast
+npx @mcptoolshop/claude-rpg play --fast
 
 # Generate a new world from a prompt
-npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+npx @mcptoolshop/claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
 
 # Use the engine in your own project
 npm install @ai-rpg-engine/core @ai-rpg-engine/modules
@@ -93,7 +93,7 @@ v1.6では、10個の世界が実際に利用可能になり、敗北に真の�
 | 機能 | その意味 |
 |---------|--------------|
 | **Ten playable worlds** | グラディエーターの「アイアンコロシアム」、浪人の「ジェイドベール」、ヴァンパイアの「クリムゾンコート」がロースターに参加。10個の世界を、選択画面で難易度別にグループ化。 |
-| **`--world`フラグ** | `npx claude-rpg play --world gladiator`を指定すると、メニューをスキップして指定された世界に直接移動する。10個のエイリアスがあり、すべては`--help`にリストされている。 |
+| **`--world`フラグ** | `npx @mcptoolshop/claude-rpg play --world gladiator`を指定すると、メニューをスキップして指定された世界に直接移動する。10個のエイリアスがあり、すべては`--help`にリストされている。 |
 | **Death is a setback** | 戦闘で敗北すると、明確なゲームオーバー画面が表示され、勝利するまでアクションが制限される。キャンペーンは、悪い戦いによって終わるのではなく、意図的に`/conclude`によって終了する。 |
 | **Streaming narration** | 文章はナレーターが書いている間にレンダリングされ、後でレンダリングされることはない。 |
 | **オンデマンドの`/cost`** | セッショントークンの使用量と推定費用を、実際に消費することなく確認できる。 |
@@ -246,7 +246,7 @@ Claude RPGは、Anthropicに対して外部API呼び出しを行うローカル�
 
 ## ライセンス
 
-MIT
+マサチューセッツ工科大学
 
 ---
 

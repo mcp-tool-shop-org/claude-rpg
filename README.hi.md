@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://www.npmjs.com/package/claude-rpg"><img src="https://img.shields.io/npm/v/claude-rpg.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@mcptoolshop/claude-rpg"><img src="https://img.shields.io/npm/v/%40mcptoolshop%2Fclaude-rpg.svg" alt="npm version"></a>
   <a href="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg"><img src="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
@@ -40,8 +40,8 @@
 
 | क्या आप... | उपयोग करना चाहते हैं |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play` (इंटरैक्टिव दुनिया और चरित्र चयन) |
-| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Play right now** | `npx @mcptoolshop/claude-rpg play` (इंटरैक्टिव दुनिया और चरित्र चयन) |
+| **Create a new world** | `npx @mcptoolshop/claude-rpg new "your world concept"` |
 | **Author worlds visually** | [वर्ल्ड फोर्ज](https://github.com/mcp-tool-shop-org/world-forge) - 2डी ऑथरिंग स्टूडियो जिसमें मानचित्र संपादक, एनपीसी बिल्डर और सत्यापन शामिल है। |
 | **Validate world data** | [कैनन आर्काइव](https://github.com/mcp-tool-shop-org/cannon-archive) - स्कीमा सत्यापन, स्टोरीबोर्ड परीक्षण, निर्यात पाइपलाइन। |
 | **Build a custom runtime** | [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) पैकेज सीधे आयात करें - क्लाउड को किसी भी एलएलएम से बदलें, अपना स्वयं का यूआई जोड़ें। |
@@ -52,29 +52,29 @@
 ## स्थापित करें
 
 ```bash
-npm install claude-rpg
+npm install @mcptoolshop/claude-rpg
 ```
 
 या सीधे चलाएं:
 
 ```bash
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 ```
 
 ## त्वरित शुरुआत
 
 ```bash
 # Play — interactive world and character selection (ten worlds, grouped by difficulty)
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
-npx claude-rpg play --world gladiator
+npx @mcptoolshop/claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
-npx claude-rpg play --fast
+npx @mcptoolshop/claude-rpg play --fast
 
 # Generate a new world from a prompt
-npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+npx @mcptoolshop/claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
 
 # Use the engine in your own project
 npm install @ai-rpg-engine/core @ai-rpg-engine/modules
@@ -93,7 +93,7 @@ v1.6 दस-दुनिया की सूची को वास्तवि�
 | सुविधा | इसका क्या मतलब है |
 |---------|--------------|
 | **Ten playable worlds** | आयरन कोलोसियम (ग्लैडिएटर), जेड वेल (रोनीन) और क्रिमसन कोर्ट (वैम्पायर) सूची में शामिल होते हैं - दस दुनिया, चयनकर्ता में कठिनाई के अनुसार समूहीकृत। |
-| **`--world` ध्वज** | `npx claude-rpg play --world gladiator` सीधे एक नामित दुनिया में मेनू को छोड़ देता है। दस उपनाम, सभी `--help` में सूचीबद्ध हैं। |
+| **`--world` ध्वज** | `npx @mcptoolshop/claude-rpg play --world gladiator` सीधे एक नामित दुनिया में मेनू को छोड़ देता है। दस उपनाम, सभी `--help` में सूचीबद्ध हैं। |
 | **Death is a setback** | युद्ध में गिरने से एक विशिष्ट मृत्यु स्क्रीन पर फीका पड़ जाता है और जब तक आप नहीं उठते तब तक आपकी क्रियाएं सीमित हो जाती हैं - अभियान जानबूझकर `/conclude` के माध्यम से समाप्त होते हैं, कभी भी किसी खराब लड़ाई से नहीं। |
 | **Streaming narration** | गद्य इस रूप में प्रस्तुत किया जाता है जैसे कथाकार इसे लिखता है, बाद में नहीं। |
 | **मांग पर `/cost`** | सत्र टोकन उपयोग और अनुमानित व्यय, बिना कुछ खर्च किए पूछें। |

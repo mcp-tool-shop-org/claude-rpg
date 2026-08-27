@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write       # for GitHub Release creation
+  id-token: write       # for npm provenance via Sigstore OIDC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Publish to npm + GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm >=11.5 in sandbox for OIDC trusted-publishing auth
+        run: |
+          # The in-place 'npm install -g npm@latest' on Node 22's bundled npm
+          # 10.9 races on its own arborist rebuild and breaks irrecoverably
+          # (MODULE_NOT_FOUND: promise-retry). Workaround: install npm@latest
+          # as a regular dependency into a sandbox directory and prepend its
+          # bin to PATH. The system npm is left untouched; we just shadow it.
+          SANDBOX="$HOME/.npm-cli-sandbox"
+          mkdir -p "$SANDBOX"
+          pushd "$SANDBOX" >/dev/null
+          echo '{"name":"npm-cli-sandbox","version":"0.0.0","private":true}' > package.json
+          npm install --no-save --no-audit --no-fund --silent npm@latest
+          popd >/dev/null
+          echo "$SANDBOX/node_modules/.bin" >> "$GITHUB_PATH"
+          "$SANDBOX/node_modules/.bin/npm" --version
+
+      - name: Verify tag matches package.json version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag: ${GITHUB_REF_NAME} → ${TAG_VERSION}"
+          echo "Package: ${PKG_VERSION}"
+          if [ "${PKG_VERSION}" != "${TAG_VERSION}" ]; then
+            echo "::error::Tag ${TAG_VERSION} does not match package.json version ${PKG_VERSION}"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: npm pack dry-run (verify shape)
+        run: npm pack --dry-run
+
+      - name: Publish to npm with provenance (OIDC trusted publisher)
+        run: npm publish --provenance --access public
+
+      - name: Extract CHANGELOG section for release notes
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$TAG_VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { grab=1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG section for ${TAG_VERSION}; falling back to tag name." > release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "claude-rpg ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            --verify-tag

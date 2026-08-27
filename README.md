@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://www.npmjs.com/package/claude-rpg"><img src="https://img.shields.io/npm/v/claude-rpg.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@mcptoolshop/claude-rpg"><img src="https://img.shields.io/npm/v/%40mcptoolshop%2Fclaude-rpg.svg" alt="npm version"></a>
   <a href="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg"><img src="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
@@ -40,8 +40,8 @@ Claude RPG isn't just a game — it's a reference implementation for the AI RPG 
 
 | Want to... | Use |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play` (interactive world and character selection) |
-| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Play right now** | `npx @mcptoolshop/claude-rpg play` (interactive world and character selection) |
+| **Create a new world** | `npx @mcptoolshop/claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — 2D authoring studio with map editor, NPC builder, and validation |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — schema validation, storyboard testing, export pipelines |
 | **Build a custom runtime** | Import [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) packages directly — swap Claude for any LLM, add your own UI |
@@ -52,29 +52,29 @@ The engine is LLM-agnostic. Claude RPG uses Anthropic models, but the core engin
 ## Install
 
 ```bash
-npm install claude-rpg
+npm install @mcptoolshop/claude-rpg
 ```
 
 Or run directly:
 
 ```bash
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 ```
 
 ## Quick Start
 
 ```bash
 # Play — interactive world and character selection (ten worlds, grouped by difficulty)
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
-npx claude-rpg play --world gladiator
+npx @mcptoolshop/claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
-npx claude-rpg play --fast
+npx @mcptoolshop/claude-rpg play --fast
 
 # Generate a new world from a prompt
-npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+npx @mcptoolshop/claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
 
 # Use the engine in your own project
 npm install @ai-rpg-engine/core @ai-rpg-engine/modules
@@ -93,7 +93,7 @@ v1.6 makes the ten-world roster real, gives defeat real weight, and makes the na
 | Feature | What it means |
 |---------|--------------|
 | **Ten playable worlds** | Iron Colosseum (gladiator), Jade Veil (ronin), and Crimson Court (vampire) join the roster — ten worlds, grouped by difficulty in the chooser. |
-| **`--world` flag** | `npx claude-rpg play --world gladiator` skips the menu straight into a named world. Ten aliases, all listed in `--help`. |
+| **`--world` flag** | `npx @mcptoolshop/claude-rpg play --world gladiator` skips the menu straight into a named world. Ten aliases, all listed in `--help`. |
 | **Death is a setback** | Falling in combat fades to a distinct death screen and gates your actions until you rise — campaigns end deliberately through `/conclude`, never by one bad fight. |
 | **Streaming narration** | Prose renders as the narrator writes it, not after. |
 | **`/cost` on demand** | Session token usage and estimated spend, without spending anything to ask. |

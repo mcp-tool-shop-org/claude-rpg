@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://www.npmjs.com/package/claude-rpg"><img src="https://img.shields.io/npm/v/claude-rpg.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@mcptoolshop/claude-rpg"><img src="https://img.shields.io/npm/v/%40mcptoolshop%2Fclaude-rpg.svg" alt="npm version"></a>
   <a href="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg"><img src="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
@@ -40,8 +40,8 @@ Claude RPG não é apenas um jogo — é uma implementação de referência para
 
 | Quer... | Usar |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play` (seleção interativa de mundo e personagem) |
-| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Play right now** | `npx @mcptoolshop/claude-rpg play` (seleção interativa de mundo e personagem) |
+| **Create a new world** | `npx @mcptoolshop/claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — estúdio de criação 2D com editor de mapas, criador de NPCs e validação |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — validação de esquema, teste de storyboard, pipelines de exportação |
 | **Build a custom runtime** | Importe pacotes [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) diretamente — substitua Claude por qualquer LLM, adicione sua própria interface de usuário |
@@ -52,29 +52,29 @@ O motor é agnóstico em relação a LLMs. Claude RPG usa modelos Anthropic, mas
 ## Instale
 
 ```bash
-npm install claude-rpg
+npm install @mcptoolshop/claude-rpg
 ```
 
 Ou execute diretamente:
 
 ```bash
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 ```
 
 ## Começo Rápido
 
 ```bash
 # Play — interactive world and character selection (ten worlds, grouped by difficulty)
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
-npx claude-rpg play --world gladiator
+npx @mcptoolshop/claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
-npx claude-rpg play --fast
+npx @mcptoolshop/claude-rpg play --fast
 
 # Generate a new world from a prompt
-npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+npx @mcptoolshop/claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
 
 # Use the engine in your own project
 npm install @ai-rpg-engine/core @ai-rpg-engine/modules
@@ -93,7 +93,7 @@ A v1.6 torna o conjunto de dez mundos real, dá peso real à derrota e torna o n
 | Recurso | O que significa |
 |---------|--------------|
 | **Ten playable worlds** | Coliseu de Ferro (gladiador), Véu de Jade (ronin) e Corte Carmesim (vampiro) se juntam ao elenco — dez mundos, agrupados por dificuldade no seletor. |
-| **Flag `--world`** | `npx claude-rpg play --world gladiator` ignora o menu e vai direto para um mundo específico. Dez aliases, todos listados em `--help`. |
+| **Flag `--world`** | `npx @mcptoolshop/claude-rpg play --world gladiator` ignora o menu e vai direto para um mundo específico. Dez aliases, todos listados em `--help`. |
 | **Death is a setback** | Cair em combate leva a uma tela de morte distinta e limita suas ações até que você se levante — as campanhas terminam deliberadamente através de `/conclude`, nunca por causa de uma única luta ruim. |
 | **Streaming narration** | A prosa é renderizada enquanto o narrador a escreve, não depois. |
 | **`/cost` sob demanda** | Uso do token da sessão e gasto estimado, sem gastar nada para perguntar. |

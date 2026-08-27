@@ -1,6 +1,6 @@
 {
-  "name": "claude-rpg",
-  "version": "1.6.0",
+  "name": "@mcptoolshop/claude-rpg",
+  "version": "1.6.1",
   "description": "Simulation-grounded narrative RPG where worlds are generated live, but truth remains coherent",
   "type": "module",
   "main": "./dist/index.js",
@@ -81,5 +81,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

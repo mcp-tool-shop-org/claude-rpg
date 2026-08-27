@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.1] - 2026-08-26
+
+### Changed
+- **Package renamed to `@mcptoolshop/claude-rpg`.** The unscoped npm name
+  `claude-rpg` belongs to an unrelated third-party project and was never
+  this repo — earlier READMEs pointed install commands at it in error. The
+  CLI command is unchanged (`claude-rpg`) once installed; one-shot usage is
+  `npx @mcptoolshop/claude-rpg play`. First npm publish of this project
+  lands at this version, with provenance via trusted publishing.
+- README, handbook, and release notes corrected to the scoped name.
+
 ## [1.6.0] - 2026-08-26
 
 A dogfood-swarm release: four health passes (correctness, proactive hardening,

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://www.npmjs.com/package/claude-rpg"><img src="https://img.shields.io/npm/v/claude-rpg.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@mcptoolshop/claude-rpg"><img src="https://img.shields.io/npm/v/%40mcptoolshop%2Fclaude-rpg.svg" alt="npm version"></a>
   <a href="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg"><img src="https://codecov.io/gh/mcp-tool-shop-org/claude-rpg/branch/main/graph/badge.svg" alt="codecov"></a>
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://mcp-tool-shop-org.github.io/claude-rpg/"><img src="https://img.shields.io/badge/Landing_Page-live-blue" alt="Landing Page"></a>
@@ -40,8 +40,8 @@ Claude RPG n’est pas seulement un jeu, c’est aussi une implémentation de r�
 
 | Vous voulez… | Utiliser |
 |------------|-----|
-| **Play right now** | `npx claude-rpg play` (sélection interactive du monde et du personnage) |
-| **Create a new world** | `npx claude-rpg new "your world concept"` |
+| **Play right now** | `npx @mcptoolshop/claude-rpg play` (sélection interactive du monde et du personnage) |
+| **Create a new world** | `npx @mcptoolshop/claude-rpg new "your world concept"` |
 | **Author worlds visually** | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) — studio de création 2D avec éditeur de cartes, créateur de PNJ et validation |
 | **Validate world data** | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) — validation du schéma, tests de storyboard, pipelines d’exportation |
 | **Build a custom runtime** | Importez directement les packages [@ai-rpg-engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — remplacez Claude par n’importe quel LLM, ajoutez votre propre interface utilisateur |
@@ -52,29 +52,29 @@ Le moteur est indépendant du LLM. Claude RPG utilise les modèles Anthropic, ma
 ## Installer
 
 ```bash
-npm install claude-rpg
+npm install @mcptoolshop/claude-rpg
 ```
 
 Ou exécutez-le directement :
 
 ```bash
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 ```
 
 ## Démarrage rapide
 
 ```bash
 # Play — interactive world and character selection (ten worlds, grouped by difficulty)
-npx claude-rpg play
+npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
-npx claude-rpg play --world gladiator
+npx @mcptoolshop/claude-rpg play --world gladiator
 
 # Accelerated campaign pacing
-npx claude-rpg play --fast
+npx @mcptoolshop/claude-rpg play --fast
 
 # Generate a new world from a prompt
-npx claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
+npx @mcptoolshop/claude-rpg new "A flooded gothic trade city ruled by three merchant houses"
 
 # Use the engine in your own project
 npm install @ai-rpg-engine/core @ai-rpg-engine/modules
@@ -93,7 +93,7 @@ La version 1.6 rend les dix mondes réels, donne un poids réel à la défaite e
 | Fonctionnalité | Ce que cela signifie |
 |---------|--------------|
 | **Ten playable worlds** | L’Arène de fer (gladiateur), le Voile de jade (ronin) et la Cour cramoisie (vampire) rejoignent la liste — dix mondes, regroupés par difficulté dans le sélecteur. |
-| **Indicateur `--world`** | `npx claude-rpg play --world gladiator` permet de passer directement au menu et d’accéder à un monde spécifique. Dix alias, tous répertoriés dans `--help`. |
+| **Indicateur `--world`** | `npx @mcptoolshop/claude-rpg play --world gladiator` permet de passer directement au menu et d’accéder à un monde spécifique. Dix alias, tous répertoriés dans `--help`. |
 | **Death is a setback** | Tomber au combat fait apparaître un écran de mort distinct et limite vos actions jusqu’à ce que vous vous releviez — les campagnes se terminent délibérément grâce à `/conclude`, jamais à cause d’un seul mauvais combat. |
 | **Streaming narration** | Le texte est rendu au moment où le narrateur l’écrit, et non après. |
 | **Utilisation de `/cost` à la demande** | Utilisation du jeton de session et dépenses estimées, sans avoir à dépenser quoi que ce soit pour demander. |

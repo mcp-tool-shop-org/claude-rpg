@@ -21,7 +21,7 @@ npm install -g claude-rpg
 Or run directly without installing:
 
 ```bash
-npx claude-rpg play --world fantasy
+npx @mcptoolshop/claude-rpg play --world fantasy
 ```
 
 ## Set your API key

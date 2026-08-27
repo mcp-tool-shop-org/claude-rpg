@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.2] - 2026-08-27
+
+### Changed
+- README header: the Ten Gates banner replaces the logo across all eight
+  language editions.
+
 ## [1.6.1] - 2026-08-26
 
 ### Changed

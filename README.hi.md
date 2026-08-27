@@ -3,8 +3,10 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/claude-rpg/readme.png" width="500" alt="Claude RPG">
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
 </p>
+
+<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -18,11 +20,6 @@
 
 एक सिमुलेशन-आधारित अभियान आरपीजी जहां क्लाउड कहानी प्रस्तुत करता है, इंजन सच्चाई को बनाए रखता है, और दुनिया अफवाहों, दबाव, गुटों, संबंधों, अर्थव्यवस्था और आर्क सिस्टम के माध्यम से सार्थक निष्कर्षों की ओर विकसित होती हैं। इसे खेलें या इस पर निर्माण करें।
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
-</p>
-
-<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
 
 ## क्लाउड आरपीजी क्या है?
 

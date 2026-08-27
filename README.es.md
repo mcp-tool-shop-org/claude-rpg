@@ -3,8 +3,10 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/brand/main/logos/claude-rpg/readme.png" width="500" alt="Claude RPG">
+  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
 </p>
+
+<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -18,11 +20,6 @@
 
 Un juego de rol de campaña basado en simulaciones, donde Claude crea la historia, el motor preserva la verdad y los mundos evolucionan a través de rumores, presiones, facciones, relaciones, economía y sistemas de arcos narrativos, para llegar a conclusiones significativas. Juega o construye sobre él.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
-</p>
-
-<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
 
 ## ¿Qué es Claude RPG?
 

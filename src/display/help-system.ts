@@ -331,6 +331,16 @@ export function renderPlayHelp(): string {
   // used) so long descriptions wrap with a hanging indent instead, matching
   // renderArcHelp/renderConcludeHelp's already-solved version of this
   // exact problem.
+  // F-92c348e1: this screen documented BASIC ACTIONS and LEVERAGE ACTIONS
+  // but never mentioned 'craft', even though it's a real, directly-typeable
+  // verb (crafting-recipes.ts's createCraftingCore registers it) that this
+  // domain's own contextual-suggestions.ts already nudges players to type
+  // mid-play. Adding 'craft' ONLY here, not salvage/repair/modify --
+  // per this wave's cross-domain coherence rule (F-4fc952ae suppresses
+  // those three plus individual leverage verbs from the interpreter's
+  // visible verb list until the Director rules on the feature; a help
+  // screen must not advertise a verb another fix is suppressing). Revisit
+  // this line alongside F-4fc952ae once that ruling lands.
   const commandRows = PLAY_COMMANDS
     .filter((c) => c.cmd !== '/help')
     .map((c) => renderNameDescriptionRow(c.cmd, c.description, 30))
@@ -357,6 +367,9 @@ ${divider()}
     deny rumor                    Counter a harmful rumor (Legitimacy)
     negotiate access <faction>    Open restricted doors (Favor + Legitimacy)
     sabotage <target>             Destabilize infrastructure (Blackmail + Heat)
+
+  CRAFTING
+    craft <recipe>                Craft an item from gathered materials
 
   COMMANDS
     /help                         This reference

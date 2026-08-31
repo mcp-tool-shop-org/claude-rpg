@@ -188,6 +188,31 @@ describe('renderPlayHelp COMMANDS section (F-1036ff43)', () => {
 });
 
 /**
+ * F-92c348e1: renderPlayHelp() hand-lists BASIC ACTIONS and LEVERAGE
+ * ACTIONS but never mentioned 'craft', 'salvage', 'repair', or 'modify' --
+ * real, directly-typeable verbs engine 3.9's crafting-recipes.ts registers.
+ * Fixed by adding a CRAFTING line naming 'craft' only: this wave's
+ * cross-domain coherence rule has F-4fc952ae suppressing the other three
+ * (plus individual leverage verbs) from the interpreter's visible verb list
+ * until the Director rules on the feature, so the help screen must not
+ * advertise a verb another fix is actively suppressing.
+ */
+describe('renderPlayHelp CRAFTING section (F-92c348e1)', () => {
+  it('documents craft as a typeable verb', () => {
+    const help = renderPlayHelp();
+    expect(help).toContain('CRAFTING');
+    expect(help).toContain('craft <recipe>');
+  });
+
+  it('does not document salvage, repair, or modify as typeable verbs (suppressed this wave, coherence rule with F-4fc952ae)', () => {
+    const help = renderPlayHelp();
+    expect(help).not.toContain('salvage');
+    expect(help).not.toContain('repair');
+    expect(help).not.toContain('modify');
+  });
+});
+
+/**
  * F-d66603e9: renderArcHelp()/renderConcludeHelp() built their two-column
  * tables with a fixed name.padEnd(N) plus an unbounded description on the
  * same line. The surrounding dividers already adapt to getTerminalWidth()

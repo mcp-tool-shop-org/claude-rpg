@@ -74,6 +74,39 @@ describe('renderPresentationCues', () => {
     expect(text).toContain('soften');
   });
 
+  // F-53ca7db8: renderMusicLine's switch had no case for 'sting' -- engine
+  // 3.9's AudioDirector.scheduleSting() (COMBAT_STING_MAP's
+  // music_victory_sting/music_defeat_sting) isn't wired to fire yet
+  // (F-7ea45830, deferred), but audio-bridge.ts's executeCommands() already
+  // force-casts the runtime string 'sting' past MusicCue's narrower action
+  // type via an `as` cast, so this renderer -- not audio-bridge.ts -- is
+  // what actually receives that value once the upstream gap closes. Before
+  // this fix it fell through to the generic 'play' default and silently
+  // rendered as '  · music starts', indistinguishable from an ordinary
+  // track starting.
+  it('maps a __music_intent__ sting call to distinct phrasing, not the generic "music starts" default (F-53ca7db8)', () => {
+    const calls: McpToolCall[] = [
+      { tool: '__music_intent__', params: { action: 'sting' } },
+    ];
+    const text = renderPresentationCues(calls);
+    expect(text).toContain('music');
+    expect(text).toContain('sting');
+    expect(text).not.toContain('starts');
+  });
+
+  // F-53ca7db8 (part 2): an action value that is neither a known cue nor
+  // 'play' must not claim the specific "starts" phrasing either -- that
+  // claim is only true for an explicit 'play'. A still-unrecognized future
+  // value falls to a neutral default instead.
+  it('does not claim "music starts" for an unrecognized action value that is not "play"', () => {
+    const calls: McpToolCall[] = [
+      { tool: '__music_intent__', params: { action: 'some-future-action' } },
+    ];
+    const text = renderPresentationCues(calls);
+    expect(text).toContain('music');
+    expect(text).not.toContain('starts');
+  });
+
   it('maps the __ui_effect_intent__ fade-out (deathHook fade-to-black) to a blank-screen sequence: newlines + a rule distinct from the routine divider, not ANSI art', () => {
     const calls: McpToolCall[] = [
       { tool: '__ui_effect_intent__', params: { type: 'fade-out', durationMs: 2000, color: '#000' } },

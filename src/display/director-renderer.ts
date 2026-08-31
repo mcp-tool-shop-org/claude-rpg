@@ -559,7 +559,23 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
 
     case '/craft': {
       if (!profileCustom) return '  No profile loaded.';
-      const recipes = getAvailableRecipes(genre ?? 'fantasy');
+      // F-6b72db54: previously called with no tag context at all.
+      // getAvailableRecipes's requiredTags filter (crafting-recipes.ts)
+      // treats ANY recipe carrying .requiredTags as unavailable whenever no
+      // tags are passed, silently dropping it from this preview entirely --
+      // not even shown as "missing requirements." That made two real
+      // recipes (requiredTags:['sacred'], requiredTags:['black-market'])
+      // impossible to ever see here, in any world, regardless of whether
+      // the player had actually unlocked that access. districtTags now
+      // mirrors the '/district' case above (getDistrictDefinition(world,
+      // districtId).tags), read for the player's CURRENT district
+      // (world.locationId) -- this command has no district-id argument of
+      // its own. No playerTags source is reachable from
+      // ExecuteDirectorCommandOptions today (see its type above); threading
+      // one through would be a plumbing refactor out of scope this wave, so
+      // only districtTags is passed.
+      const currentDistrict = getDistrictDefinition(world, world.locationId);
+      const recipes = getAvailableRecipes(genre ?? 'fantasy', undefined, currentDistrict?.tags);
       const materials = getMaterialInventory(profileCustom);
       return formatAvailableRecipesForDirector(recipes, materials);
     }

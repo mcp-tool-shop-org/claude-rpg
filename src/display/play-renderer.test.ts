@@ -15,6 +15,24 @@ describe('play-renderer', () => {
     expect(output).toContain('What do you do?');
   });
 
+  // F-fa6524ec: availableActions was a REQUIRED opts field but this
+  // function's body never read it -- every caller had to compute the full
+  // available-actions list purely to satisfy the type, for a value thrown
+  // away unconditionally. Now optional, so a caller with nothing to compute
+  // can omit it entirely instead of passing a throwaway []. This is
+  // primarily a type-level change (verified by tsc, since plain vitest
+  // execution doesn't enforce a missing-required-property error either way)
+  // -- this test pins the omitted-field call as a real, working usage.
+  it('should render a play screen when availableActions is omitted entirely', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'Test narration.',
+      world: engine.world,
+    });
+
+    expect(output).toContain('Test narration.');
+  });
+
   it('should include player status', () => {
     const engine = createGame();
     const output = renderPlayScreen({

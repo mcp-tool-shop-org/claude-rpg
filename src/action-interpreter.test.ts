@@ -497,7 +497,17 @@ describe('action-interpreter', () => {
       expect(result.confidence).toBe('high');
     });
 
-    it('should interpret "equip armor" as equip verb', async () => {
+    // F-b9a844dc: @ai-rpg-engine/equipment's itemRefOf() never reads
+    // parameters.item -- these five pins used to codify that wrong field
+    // name (the exact bug this finding fixes) instead of catching it.
+    // Inverted to the correct contract: a typed name that matches nothing
+    // the player carries/has equipped (a fresh createGame() player carries
+    // and wears nothing) resolves to `parameters: null` (itemId left
+    // unset, not a best-effort guess), letting the engine's own guided
+    // rejection fire. The positive-resolution path (2+ eligible items,
+    // correct one selected) is covered below and by turn-loop.test.ts's
+    // end-to-end integration test.
+    it('should interpret "equip armor" as equip verb with no resolvable item', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();
       const mockClient = {
@@ -508,11 +518,11 @@ describe('action-interpreter', () => {
 
       const result = await interpretAction(mockClient, engine.world, 'equip armor', engine.getAvailableActions());
       expect(result.verb).toBe('equip');
-      expect(result.parameters).toEqual({ item: 'armor' });
+      expect(result.parameters).toBeNull();
       expect(result.confidence).toBe('high');
     });
 
-    it('should interpret "wear helmet" as equip verb', async () => {
+    it('should interpret "wear helmet" as equip verb with no resolvable item', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();
       const mockClient = {
@@ -523,11 +533,11 @@ describe('action-interpreter', () => {
 
       const result = await interpretAction(mockClient, engine.world, 'wear helmet', engine.getAvailableActions());
       expect(result.verb).toBe('equip');
-      expect(result.parameters).toEqual({ item: 'helmet' });
+      expect(result.parameters).toBeNull();
       expect(result.confidence).toBe('high');
     });
 
-    it('should interpret "wield staff" as equip verb', async () => {
+    it('should interpret "wield staff" as equip verb with no resolvable item', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();
       const mockClient = {
@@ -538,11 +548,11 @@ describe('action-interpreter', () => {
 
       const result = await interpretAction(mockClient, engine.world, 'wield staff', engine.getAvailableActions());
       expect(result.verb).toBe('equip');
-      expect(result.parameters).toEqual({ item: 'staff' });
+      expect(result.parameters).toBeNull();
       expect(result.confidence).toBe('high');
     });
 
-    it('should interpret "unequip ring" as unequip verb', async () => {
+    it('should interpret "unequip ring" as unequip verb with no resolvable item', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();
       const mockClient = {
@@ -553,11 +563,11 @@ describe('action-interpreter', () => {
 
       const result = await interpretAction(mockClient, engine.world, 'unequip ring', engine.getAvailableActions());
       expect(result.verb).toBe('unequip');
-      expect(result.parameters).toEqual({ item: 'ring' });
+      expect(result.parameters).toBeNull();
       expect(result.confidence).toBe('high');
     });
 
-    it('should interpret "remove gauntlets" as unequip verb', async () => {
+    it('should interpret "remove gauntlets" as unequip verb with no resolvable item', async () => {
       const { interpretAction } = await import('./action-interpreter.js');
       const engine = createGame();
       const mockClient = {
@@ -568,7 +578,45 @@ describe('action-interpreter', () => {
 
       const result = await interpretAction(mockClient, engine.world, 'remove gauntlets', engine.getAvailableActions());
       expect(result.verb).toBe('unequip');
-      expect(result.parameters).toEqual({ item: 'gauntlets' });
+      expect(result.parameters).toBeNull();
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should resolve the specifically named item when 2+ eligible items are carried (F-b9a844dc)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const player = engine.world.entities[engine.world.playerId];
+      if (player) {
+        player.inventory = ['rusted-mace', 'gravedigger-spade'];
+      }
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'equip spade', engine.getAvailableActions());
+      expect(result.verb).toBe('equip');
+      expect(result.parameters).toEqual({ itemId: 'gravedigger-spade' });
+      expect(result.confidence).toBe('high');
+    });
+
+    it('should resolve the specifically named item when 2+ items are equipped, for unequip (F-b9a844dc)', async () => {
+      const { interpretAction } = await import('./action-interpreter.js');
+      const engine = createGame();
+      const player = engine.world.entities[engine.world.playerId];
+      if (player) {
+        player.equipment = { weapon: 'rusted-mace', accessory: 'sigil-ring' };
+      }
+      const mockClient = {
+        model: 'mock',
+        generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+        generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+      };
+
+      const result = await interpretAction(mockClient, engine.world, 'unequip ring', engine.getAvailableActions());
+      expect(result.verb).toBe('unequip');
+      expect(result.parameters).toEqual({ itemId: 'sigil-ring' });
       expect(result.confidence).toBe('high');
     });
 

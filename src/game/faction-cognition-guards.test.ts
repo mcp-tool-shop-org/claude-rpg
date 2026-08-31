@@ -1,25 +1,20 @@
 // PB-003: Tests for safe faction cognition access pattern.
 // Verifies that typeof guards prevent crashes when cognition data is
 // missing, null, or has unexpected types.
+//
+// F-faf37249: this file used to re-declare its own local copy of the guard
+// (safeFactionState) instead of importing anything -- meaning it protected a
+// hand-maintained mirror, not production code, and any of game.ts's/
+// game-state.ts's real inline copies could drift from it with zero signal.
+// It now imports and exercises the real exported
+// readFactionCognitionScalars() (game-state.ts) that every real call site
+// (game.ts:1661, 2388, 3054; game-state.ts's buildPressureInputs,
+// buildArcInputs, buildFinaleFromState) was consolidated onto this same
+// wave. Test bodies are unchanged -- this is a refactor-extract with
+// byte-identical guard logic, not a behavior change.
 
 import { describe, it, expect } from 'vitest';
-
-/**
- * Extracted guard pattern used across game.ts for faction cognition access.
- * This mirrors the pattern applied in PB-003 to validate without unsafe casts.
- */
-function safeFactionState(fcog: unknown): { alertLevel: number; cohesion: number } {
-  if (fcog && typeof fcog === 'object') {
-    const state = fcog as Record<string, unknown>;
-    const rawAlert = state.alertLevel;
-    const rawCohesion = state.cohesion;
-    return {
-      alertLevel: typeof rawAlert === 'number' ? rawAlert : 0,
-      cohesion: typeof rawCohesion === 'number' ? rawCohesion : 1,
-    };
-  }
-  return { alertLevel: 0, cohesion: 1 };
-}
+import { readFactionCognitionScalars as safeFactionState } from './game-state.js';
 
 describe('faction cognition typeof guards (PB-003)', () => {
   it('handles valid cognition object', () => {

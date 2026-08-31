@@ -300,31 +300,48 @@ function tryFastInterpret(
   }
 
   // Equip / wear / wield
+  // F-b9a844dc: @ai-rpg-engine/equipment's itemRefOf() reads ONLY
+  // action.parameters.itemId, then action.toolId, then action.targetIds[0]
+  // -- never action.parameters.item, and zone entities (findEntityByName's
+  // usual target) are never a valid item ref either. Resolve the typed name
+  // against the PLAYER'S OWN carried items instead, and send the resolved
+  // id as parameters.itemId. An unresolvable name leaves itemId unset (not
+  // a best-effort guess) so the engine's own guided rejection fires --
+  // 'equip what? carrying: <ids>' -- exactly the miss UX today.
   if (/^(equip|wear|wield)\s+/.test(lower)) {
     const targetName = lower.replace(/^(equip|wear|wield)\s+(the\s+)?/i, '');
-    const target = findEntityByName(targetName, entities);
+    const player = world.entities[world.playerId];
+    const itemId = findCarriedItemId(targetName, player?.inventory ?? []);
     return {
       verb: 'equip',
-      targetIds: target ? [target.id] : null,
+      targetIds: null,
       toolId: null,
-      parameters: { item: targetName },
+      parameters: itemId ? { itemId } : null,
       confidence: 'high',
-      reasoning: target ? `Equip ${target.name}` : `Equip ${targetName}`,
+      reasoning: itemId ? `Equip ${itemId}` : `Equip ${targetName}`,
       alternatives: null,
     };
   }
 
   // Unequip / remove
+  // F-b9a844dc: same itemRefOf contract as equip above -- resolve against
+  // the player's currently EQUIPPED item ids (the slot-value side of
+  // EntityState.equipment), not a zone entity or the discarded
+  // parameters.item field.
   if (/^(unequip|remove)\s+/.test(lower)) {
     const targetName = lower.replace(/^(unequip|remove)\s+(the\s+)?/i, '');
-    const target = findEntityByName(targetName, entities);
+    const player = world.entities[world.playerId];
+    const equippedIds = Object.values(player?.equipment ?? {}).filter(
+      (id): id is string => typeof id === 'string',
+    );
+    const itemId = findCarriedItemId(targetName, equippedIds);
     return {
       verb: 'unequip',
-      targetIds: target ? [target.id] : null,
+      targetIds: null,
       toolId: null,
-      parameters: { item: targetName },
+      parameters: itemId ? { itemId } : null,
       confidence: 'high',
-      reasoning: target ? `Unequip ${target.name}` : `Unequip ${targetName}`,
+      reasoning: itemId ? `Unequip ${itemId}` : `Unequip ${targetName}`,
       alternatives: null,
     };
   }
@@ -452,6 +469,31 @@ function findEntityByName(name: string, entities: EntityState[]): EntityState | 
     entities.find((e) => e.name.toLowerCase() === lower) ??
     entities.find((e) => e.name.toLowerCase().includes(lower)) ??
     entities.find((e) => e.id.toLowerCase().includes(lower)) ??
+    null
+  );
+}
+
+/**
+ * F-b9a844dc: resolve a player-typed item reference against a list of the
+ * player's own item ids (carried inventory for equip, equipped slot values
+ * for unequip). WorldState carries no item display name the interpreter can
+ * read -- items are catalog-defined (game.ts's separate ItemCatalog, never
+ * passed to this function), so the only text available here is the id
+ * itself (e.g. 'rusted-mace', 'gravedigger-spade'). Mirrors findEntityByName's
+ * tiered case-insensitive/substring discipline against that id text: exact
+ * id match first (typed spaces normalized to the id's own hyphen
+ * convention), then substring either direction, so "equip spade" finds
+ * 'gravedigger-spade' even when a second carried item ('rusted-mace') is
+ * also eligible.
+ */
+function findCarriedItemId(name: string, itemIds: string[]): string | null {
+  const lower = name.toLowerCase().trim();
+  if (!lower) return null;
+  const hyphenated = lower.replace(/\s+/g, '-');
+  return (
+    itemIds.find((id) => id.toLowerCase() === hyphenated) ??
+    itemIds.find((id) => id.toLowerCase().includes(hyphenated)) ??
+    itemIds.find((id) => id.toLowerCase().replace(/-/g, ' ').includes(lower)) ??
     null
   );
 }

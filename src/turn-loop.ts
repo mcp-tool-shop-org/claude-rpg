@@ -243,6 +243,93 @@ export type ExecuteTurnOpts = {
   packId?: string;
 };
 
+/**
+ * F-4fc952ae (coordinator-locked design, wave-4 addendum): the curated verb
+ * surface claude-rpg's interpreter is allowed to offer the player, restoring
+ * the pre-3.9 curated product surface. 3.9 registered a large batch of new
+ * top-level engine verbs (individual leverage verbs, standalone
+ * salvage/repair/modify, tactical-combat/commerce/dialogue verbs) that this
+ * product has never wired up anywhere (zero references outside
+ * node_modules) -- left unfiltered, they leak into the LLM slow path's
+ * available-verbs prompt (inviting e.g. "bribe the guard" to resolve to the
+ * engine's bare `bribe` verb, which claude-rpg's own leverage system never
+ * reads) even though the interpreter's own fast-paths and the help screen
+ * never advertise them.
+ *
+ * Two families:
+ * - claude-rpg's own five aggregate categories: `social`/`rumor`/
+ *   `diplomacy`/`sabotage` (game.ts's registerLeverageVerbs() thin
+ *   `${verb}.action.attempted` handlers, `override: true` for `sabotage`
+ *   since 3.9's player-leverage module already claims that name) and
+ *   `craft` (same registerLeverageVerbs() override, superseding 3.9's
+ *   crafting module's own `craft`). Each dispatches via
+ *   parameters.subAction -- action-interpreter.ts's tryLeverageVerb() and
+ *   the craft/salvage/repair/modify fast-path both already target this
+ *   pattern, not a bare top-level verb.
+ * - the core verbs action-interpreter.ts's own fast-paths, the help
+ *   screen's BASIC ACTIONS block, and game.ts/session/history already
+ *   handle end to end: move, look/inspect, attack, speak, use, equip,
+ *   unequip, take, drop, inventory, opportunity.
+ *
+ * Deliberately excludes every other 3.9 verb (see KNOWN_EXCLUDED_VERBS) --
+ * Director-gated feature candidates, not yet a product decision. Do not add
+ * to this set without a corresponding fast-path/help/test surface backing
+ * it up (the same "do NOT guess beyond what the product already surfaces"
+ * discipline this set was built with).
+ */
+export const SUPPORTED_VERBS: ReadonlySet<string> = new Set([
+  // claude-rpg's own five aggregate leverage/craft categories
+  'social', 'rumor', 'diplomacy', 'sabotage', 'craft',
+  // core verbs action-interpreter's fast-paths + help screen + game.ts/
+  // session/history already handle end to end
+  'move', 'look', 'inspect', 'attack', 'speak', 'use',
+  'equip', 'unequip', 'take', 'drop', 'inventory', 'opportunity',
+]);
+
+/**
+ * 3.9-new verbs consciously excluded this wave (Director-gated feature
+ * candidates), pinned so the drift test in turn-loop.test.ts can tell
+ * "known and deliberately not shipped yet" apart from "genuinely new,
+ * never reviewed." Every entry here is a real verb the installed engine
+ * registers today (see turn-loop.test.ts's drift test) that has zero
+ * reference anywhere in this product's own source. Add to SUPPORTED_VERBS
+ * instead, once a verb actually ships -- this is not a dumping ground.
+ */
+export const KNOWN_EXCLUDED_VERBS: ReadonlySet<string> = new Set([
+  // Individual leverage verbs -- superseded by the social/rumor/diplomacy/
+  // sabotage aggregate + parameters.subAction pattern above.
+  'bribe', 'intimidate', 'recruit', 'petition', 'call-in-favor',
+  'recruit-ally', 'disguise', 'stake-claim',
+  'seed', 'deny', 'frame', 'claim-false-credit', 'bury-scandal',
+  'leak-truth', 'spread-counter-rumor',
+  'request-meeting', 'improve-standing', 'cash-milestone',
+  'negotiate-access', 'trade-secret', 'temporary-alliance', 'broker-truce',
+  'plant-evidence', 'blackmail-target', 'incite-riot',
+  // Standalone crafting-adjacent verbs -- superseded by the existing craft
+  // + parameters.subAction pattern above.
+  'salvage', 'repair', 'modify',
+  // Tactical-combat / commerce / dialogue / system verbs this product has
+  // never wired up (no fast-path, no help text, no game.ts/session
+  // reference of any kind).
+  'guard', 'brace', 'disengage', 'reposition',
+  'buy', 'sell', 'give', 'unlock', 'choose', 'use-ability',
+  'resolve-pressure', 'cognition-tick', 'environment-tick',
+  'faction-tick', 'district-tick',
+]);
+
+/**
+ * Filter the engine's raw available-verbs list down to SUPPORTED_VERBS
+ * before it reaches interpretAction() -- see SUPPORTED_VERBS' doc comment
+ * for why. A verb absent from both SUPPORTED_VERBS and KNOWN_EXCLUDED_VERBS
+ * is never silently dropped un-reviewed in production: turn-loop.test.ts's
+ * drift test fails loudly against the real installed engine so a future
+ * verb becomes a conscious allow/exclude decision instead of a silent
+ * pass-through.
+ */
+export function filterSupportedVerbs(rawVerbs: string[]): string[] {
+  return rawVerbs.filter((v) => SUPPORTED_VERBS.has(v));
+}
+
 /** Execute one full turn of the game loop. */
 export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   const {
@@ -263,7 +350,9 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   const dialogueClient = tokenTracker ? withTokenTracking(client, tokenTracker, 'dialogue') : client;
 
   // Step 1: Interpret player input into an action
-  const availableVerbs = engine.getAvailableActions();
+  // F-4fc952ae: filter through the curated allowlist BEFORE this list
+  // reaches interpretAction() -- see SUPPORTED_VERBS' doc comment above.
+  const availableVerbs = filterSupportedVerbs(engine.getAvailableActions());
   // F-fb9e78af: if the turn immediately before this one was itself a
   // clarification request, hand the interpreter that context so a short
   // follow-up reply (e.g. just "attack") isn't interpreted from scratch

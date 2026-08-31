@@ -51,7 +51,14 @@ vi.mock('./npc/ambient-dialogue.js', () => ({
   generateZoneAmbience: vi.fn((npcs: { name: string }[]) => npcs.map((n) => `${n.name} does something ambient.`)),
 }));
 
-import { executeTurn, getFatalTurnBookkeeping, type ExecuteTurnOpts } from './turn-loop.js';
+import {
+  executeTurn,
+  getFatalTurnBookkeeping,
+  SUPPORTED_VERBS,
+  KNOWN_EXCLUDED_VERBS,
+  filterSupportedVerbs,
+  type ExecuteTurnOpts,
+} from './turn-loop.js';
 import { narrateScene } from './narrator/narrator.js';
 import { generateDialogue } from './dialogue/dialogue-mind.js';
 import { generateAmbientLine, generateZoneAmbience } from './npc/ambient-dialogue.js';
@@ -1045,5 +1052,99 @@ describe('ambient NPC dialogue (F-6e75fa93)', () => {
     expect(mockedGenerateAmbientLine).not.toHaveBeenCalled();
     expect(mockedGenerateZoneAmbience).not.toHaveBeenCalled();
     expect(result.ambientLines).toBeUndefined();
+  });
+});
+
+describe('equip fast-path resolves the typed item to itemId (F-b9a844dc)', () => {
+  it('equips the specifically named item -- not the other eligible one -- when 2+ items are carried', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+    const player = engine.world.entities[engine.world.playerId];
+    // Two real starter-fantasy weapon-slot items so a bare "equip" (no
+    // resolvable name) would be genuinely ambiguous -- this is the case
+    // that silently broke: parameters.item was never read by
+    // @ai-rpg-engine/equipment's itemRefOf(), so the typed name was
+    // discarded and the engine fell back to its own "equip what?"
+    // rejection instead of equipping the item the player asked for.
+    player.inventory = ['rusted-mace', 'gravedigger-spade'];
+
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'equip spade', tone: 'dark fantasy',
+    });
+
+    expect(result.interpreted.verb).toBe('equip');
+    expect(result.interpreted.parameters).toEqual({ itemId: 'gravedigger-spade' });
+    // The real engine handler actually resolved and equipped it -- not a
+    // rejection, and not the OTHER eligible item.
+    expect(engine.world.entities[engine.world.playerId]?.equipment?.weapon).toBe('gravedigger-spade');
+    expect(
+      result.events.some((e) => e.type === 'item.equipped' && e.payload.itemId === 'gravedigger-spade'),
+    ).toBe(true);
+    expect(result.events.some((e) => e.type === 'action.rejected')).toBe(false);
+  });
+});
+
+describe('verb allowlist (F-4fc952ae)', () => {
+  it('every verb the real installed engine registers is either supported or a pinned known exclusion', () => {
+    // Full catalog, not the context-filtered getAvailableActions() --
+    // broader coverage: a verb that merely is not legal in THIS fresh
+    // game's starting state must still be a reviewed decision, not just
+    // accidentally never observed.
+    const engine = createGame();
+    const registered = engine.getRegisteredVerbs();
+    const unreviewed = registered.filter((v) => !SUPPORTED_VERBS.has(v) && !KNOWN_EXCLUDED_VERBS.has(v));
+    expect(unreviewed).toEqual([]);
+  });
+
+  it('flags a verb that is neither allowlisted nor pinned-excluded -- proves the gate is provably RED, not a silent pass-through', () => {
+    // A fake verb dropped into a mock list, exactly as the addendum
+    // requires: this must go red if the check logic (or SUPPORTED_VERBS/
+    // KNOWN_EXCLUDED_VERBS) is ever weakened into a silent pass-through.
+    const mockVerbs = ['move', 'attack', 'totally-new-verb-nobody-reviewed'];
+    const unreviewed = mockVerbs.filter((v) => !SUPPORTED_VERBS.has(v) && !KNOWN_EXCLUDED_VERBS.has(v));
+    expect(unreviewed).toEqual(['totally-new-verb-nobody-reviewed']);
+  });
+
+  it('filterSupportedVerbs keeps the curated surface and drops every 3.9-new individual verb', () => {
+    const raw = [...SUPPORTED_VERBS, ...KNOWN_EXCLUDED_VERBS, 'some-unreviewed-verb'];
+    const filtered = filterSupportedVerbs(raw);
+    expect(filtered.sort()).toEqual([...SUPPORTED_VERBS].sort());
+    for (const excluded of KNOWN_EXCLUDED_VERBS) {
+      expect(filtered).not.toContain(excluded);
+    }
+    expect(filtered).not.toContain('some-unreviewed-verb');
+    // The aggregate categories claude-rpg owns survive the filter.
+    expect(filtered).toEqual(expect.arrayContaining(['social', 'rumor', 'diplomacy', 'sabotage', 'craft']));
+  });
+
+  it('executeTurn filters the engine verb list before it reaches the interpreter prompt', async () => {
+    const engine = createGame();
+    const history = new TurnHistory();
+    let capturedPrompt = '';
+    const client: ClaudeClient = {
+      model: 'mock',
+      async generate() {
+        return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+      },
+      async generateStructured(genOpts) {
+        capturedPrompt = genOpts.prompt;
+        return { ok: false, data: null, raw: '', error: 'mock' };
+      },
+    };
+
+    // "xyzzy" matches none of action-interpreter's fast-path keyword
+    // patterns, so this is guaranteed to fall through to the slow path and
+    // actually build a prompt from (filtered) availableVerbs --
+    // buildInterpretPrompt embeds it verbatim as "Available verbs: ...".
+    await executeTurn({ engine, client, history, playerInput: 'xyzzy', tone: 'dark fantasy' });
+
+    expect(capturedPrompt).toContain('Available verbs:');
+    // KNOWN_EXCLUDED_VERBS entries never reach the prompt...
+    expect(capturedPrompt).not.toContain('bribe');
+    expect(capturedPrompt).not.toContain('salvage');
+    expect(capturedPrompt).not.toContain('incite-riot');
+    // ...while the curated surface does.
+    expect(capturedPrompt).toContain('craft');
   });
 });

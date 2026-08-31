@@ -189,7 +189,13 @@ describe('bin.ts `load` against a corrupted or future-version save (F-95569ed3)'
     // migrate.ts's detectSchemaVersion (already proven thrown by
     // migration.test.ts's 'no-version is rejected' case) reaches real
     // stderr verbatim, structured rather than a raw stack trace.
-    expect(cli.stderr()).toContain('no recognizable version');
+    // Coordinator stitch (wave 8), pin INVERTED with the routing fix this
+    // file's own header traced: runLoad now wraps loadSession, so the
+    // rejection reaches presentLoadError's dedicated presentation
+    // ("Unrecognized save format" + what-survived + next step) instead of
+    // the generic startup catch echoing the raw error message.
+    expect(cli.stderr()).toContain('Unrecognized save format');
+    expect(cli.stderr()).toContain('no version metadata');
     expect(cli.stderr()).toContain('Exiting.');
     expect(cli.stderr()).not.toMatch(/at Object\.|at async |node:internal/);
   }, 15000);

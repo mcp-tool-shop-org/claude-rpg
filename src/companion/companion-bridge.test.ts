@@ -60,8 +60,10 @@ describe('recruitCompanion', () => {
 
     expect(result.ok).toBe(false);
     // F-bdfa6640: appends a concrete next step instead of a bare reason.
+    // Coordinator stitch (wave 8): text unified with game.ts handleRecruit's
+    // copy — pin follows the shared sentence.
     if (!result.ok) {
-      expect(result.error).toContain('not found');
+      expect(result.error).toContain('is here to recruit');
       expect(result.error).toContain('look');
     }
   });

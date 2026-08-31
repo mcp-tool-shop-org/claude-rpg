@@ -457,7 +457,20 @@ async function runLoad(): Promise<void> {
   }
 
   const savePath = join(getDefaultSaveDir(), visibleSaves[idx].filename);
-  const loadResult = await loadSession(savePath);
+  // F-e58b49ed follow-through (coordinator stitch, traced by the wave-8
+  // tests agent): loadSession throws SaveValidationError for
+  // version-rejected/corrupt saves, and without this wrap the error fell
+  // through to main()'s generic 'startup' catch — a bare "Unexpected error"
+  // headline instead of the dedicated load presentation (headline +
+  // what-survived + next step) this same wave shipped.
+  let loadResult;
+  try {
+    loadResult = await loadSession(savePath);
+  } catch (err) {
+    const exitCode = presentError(err, 'load', debugMode);
+    rl.close();
+    process.exit(exitCode ?? 1);
+  }
   const savedSession = loadResult.session;
   if (loadResult.migrated) {
     console.log(`\n  Save upgraded from older format (schema v${loadResult.sourceVersion} → v${loadResult.stepsApplied + loadResult.sourceVersion}).`);
@@ -670,7 +683,17 @@ async function runNew(worldPrompt: string): Promise<void> {
   spinner.start();
   let result: WorldGenResult;
   try {
-    result = await generateWorld(client, worldPrompt);
+    // F-9da15f24 (coordinator stitch): consume world-gen's onAttempt so the
+    // shape-retry loop is visible — generateWorld silently re-prompts the
+    // LLM when a proposal comes back malformed, and the spinner used to sit
+    // on a plain 'thinking' through every restart.
+    result = await generateWorld(client, worldPrompt, undefined, {
+      onAttempt: (info) => {
+        if (info.attempt > 1) {
+          spinner.setLabel(`thinking — the world didn't take shape, regenerating (attempt ${info.attempt}/${info.maxAttempts})`);
+        }
+      },
+    });
   } finally {
     spinner.stop();
   }

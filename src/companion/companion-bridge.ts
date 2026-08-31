@@ -44,7 +44,11 @@ export function recruitCompanion(
   // /packages/modules/src/companion-core.ts:638-699) instead of a bare reason
   // sentence with nothing telling the player what to do next.
   const entity = engine.world.entities[npcId];
-  if (!entity) return { ok: false, error: `Entity "${npcId}" not found. Type "look" to see who's here.` };
+  // Coordinator stitch (wave 8): unified with game.ts handleRecruit's copy —
+  // game.ts surfaces this error verbatim for the recruit path, and the two
+  // layers had drifted into two different sentences for the same player
+  // mistake (each wave-8 agent fixed its own layer without seeing the other).
+  if (!entity) return { ok: false, error: `No one named "${npcId}" is here to recruit — type "look" to see who's nearby.` };
 
   const hp = entity.resources.hp ?? entity.resources.health;
   if (hp !== undefined && hp <= 0) return { ok: false, error: `${entity.name} is not alive. Find another ally to recruit.` };
@@ -59,7 +63,9 @@ export function recruitCompanion(
     // falling back to the raw zoneId when no zone record exists to name it
     // (mirrors play-renderer.ts/scene-context.ts's established
     // `zones[id]?.name ?? id` display-name fallback).
-    const zoneName = engine.world.zones?.[entity.zoneId]?.name ?? entity.zoneId;
+    // Coordinator stitch: entity.zoneId is string | undefined — guard the
+    // index (tsc seam the no-node_modules worktree couldn't catch).
+    const zoneName = (entity.zoneId ? engine.world.zones?.[entity.zoneId]?.name : undefined) ?? entity.zoneId ?? 'another zone';
     return { ok: false, error: `${entity.name} is not in the same zone. They're in ${zoneName} — stand with them first.` };
   }
 

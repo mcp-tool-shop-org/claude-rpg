@@ -373,3 +373,21 @@ describe('renderDirectorHelp command table (F-1367afd9)', () => {
     }
   });
 });
+
+/**
+ * F-05e061ec (wave-6 amend): '/aftermath' is a working alias for '/world'
+ * in executeDirectorCommand's switch (`case '/world': case '/aftermath':`),
+ * but had no corresponding row in DIRECTOR_COMMANDS / renderDirectorHelp(),
+ * unlike the structurally identical '/contracts' alias for '/jobs', which
+ * DOES get its own documented row. A director-mode player would only
+ * discover '/aftermath' by reading source, not by typing /help.
+ */
+describe('renderDirectorHelp documents the /aftermath alias (F-05e061ec)', () => {
+  it('documents /aftermath as an alias for /world, the same way /contracts documents its alias for /jobs', () => {
+    const help = renderDirectorHelp();
+    const lines = help.split('\n');
+    const aftermathLine = lines.find((l) => l.trim().startsWith('/aftermath'));
+    expect(aftermathLine).toBeDefined();
+    expect(aftermathLine).toContain('Alias for /world');
+  });
+});

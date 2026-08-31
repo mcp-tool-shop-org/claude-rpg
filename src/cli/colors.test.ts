@@ -154,5 +154,21 @@ describe('colors', () => {
       expect(result).toBe('test');
       expect(colors.isColorEnabled()).toBe(false);
     });
+
+    // F-c722a5ab: https://no-color.org/ disables color "when present,
+    // regardless of its value." NO_COLOR='' (present but empty) must still
+    // disable color -- a bare `!process.env.NO_COLOR` truthiness check gets
+    // this wrong, since an empty string is falsy. Only non-empty values
+    // (e.g. '1') happened to work before this fix.
+    it('bold returns plain text when NO_COLOR is set to the empty string, even on a TTY', async () => {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+      process.env.NO_COLOR = '';
+      vi.resetModules();
+      const colors = await import('./colors.js');
+      const result = colors.bold('test');
+      expect(result).not.toContain('\x1b[');
+      expect(result).toBe('test');
+      expect(colors.isColorEnabled()).toBe(false);
+    });
   });
 });

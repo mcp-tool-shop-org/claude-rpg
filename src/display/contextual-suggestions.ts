@@ -148,16 +148,27 @@ export function generateSuggestions(opts: {
     suggestions.push({ text, trigger: 'endgame-detected' });
   }
 
-  // After turn 10, only show on notable events (already handled by crisis/milestone/failed checks)
-  if (turnCount > 10) {
-    return suggestions.filter((s) =>
-      s.trigger === 'crisis-pressure' || s.trigger === 'action-failed' ||
-      s.trigger === 'milestone-cash' || s.trigger === 'pressure-hint' ||
-      s.trigger === 'supply-crisis' || s.trigger === 'black-market' ||
-      s.trigger === 'crafting-shortage' || s.trigger === 'crafting-hint' ||
-      s.trigger === 'new-opportunity' || s.trigger === 'expiring-opportunity' ||
-      s.trigger === 'stale-opportunity' || s.trigger === 'endgame-detected').slice(0, 2);
-  }
-
+  // F-ecf4e179: past turn 10, this used to filter `suggestions` down to a
+  // hardcoded allowlist of 12 trigger string literals, hand-kept in sync
+  // with the 14 distinct `trigger:` values the rules above actually push --
+  // the same "two independently maintained lists" shape this codebase has
+  // already fixed 7+ times elsewhere (see world-flag.ts's own comment:
+  // F-223de079/F-8da2e6f7/F-f1eb58cb/F-5cc4d0d9/F-623e763f/F-c5ff2a5c/
+  // F-aaaa105f). A future 15th rule whose trigger a contributor forgot to
+  // add to that allowlist would have silently stopped firing for every
+  // player past turn 10 -- the bulk of actual campaign playtime -- with no
+  // test failure, since nothing reconciled trigger literals against it.
+  //
+  // The only two triggers that allowlist ever excluded ('early-intro',
+  // 'leverage-discovery') are already unreachable here on their own: rule 2
+  // above guards on `turnCount <= 3` and rule 6 guards on `turnCount <= 10`,
+  // so neither can ever be present in `suggestions` once turnCount > 10,
+  // with or without a filter. "Deriving the post-10 behavior from the rules
+  // themselves" therefore means there is nothing left TO filter -- removing
+  // the redundant, driftable allowlist is the fix, not replacing it with a
+  // differently-shaped list that could drift the same way. See this file's
+  // test suite for the end-to-end regression coverage (every non-early
+  // trigger verified to survive turnCount > 10 by actually calling this
+  // function, not by comparing two hardcoded lists against each other).
   return suggestions.slice(0, 2);
 }

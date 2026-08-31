@@ -3,7 +3,14 @@
 // terminals — output redirected to a file or piped to a non-TTY consumer
 // gets plain text, matching spinner.ts's stream.isTTY branch (F-622bfe0a).
 
-const enabled = (process.stdout.isTTY ?? false) && !process.env.NO_COLOR;
+// F-c722a5ab: NO_COLOR's spec (https://no-color.org/) disables color "when
+// present, regardless of its value." A bare truthiness check (`!process.env.NO_COLOR`)
+// gets this wrong for `NO_COLOR=` (present but set to the empty string) --
+// an empty string is falsy, so `!''` is true and color stays enabled, even
+// though the var IS present. Presence, not truthiness, is what the spec
+// gates on -- this happened to work by coincidence for every non-empty
+// value (e.g. '0' or '1'), which is why it went unnoticed.
+const enabled = (process.stdout.isTTY ?? false) && process.env.NO_COLOR === undefined;
 
 const ESC = '\x1b[';
 const RESET = `${ESC}0m`;

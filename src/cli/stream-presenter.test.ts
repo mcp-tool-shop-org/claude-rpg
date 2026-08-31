@@ -160,4 +160,34 @@ describe('stream-presenter: clear', () => {
 
     expect(writeSpy).not.toHaveBeenCalled();
   });
+
+  // F-5880e27f: `written` accumulates over the whole streaming window
+  // (which can span several seconds), but clear() used to recompute row
+  // count against process.stdout.columns read LIVE at clear()-time. If the
+  // player resized their terminal mid-stream, the already-printed text's
+  // real on-screen wrap points don't retroactively change -- recomputing
+  // against the new width produces wrong cursor-movement math. Fixed by
+  // snapshotting columns once when streaming starts and reusing that
+  // snapshot in clear().
+  it('uses the terminal width captured when streaming started, not a live width read at clear()-time', () => {
+    process.stdout.isTTY = true;
+    process.stdout.columns = 80;
+    const session = createStreamPresenter();
+    session.onChunk('x'.repeat(100)); // wraps to ceil(100/80) = 2 rows at the 80-column width in effect when streaming started
+
+    // Simulate the player resizing their terminal mid-stream, AFTER
+    // streaming started but BEFORE clear() runs.
+    process.stdout.columns = 20;
+    writeSpy.mockClear();
+
+    session.clear();
+
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    // node:readline's moveCursor(stream, 0, -N) writes '\x1b[<N>A'. Row math
+    // must reflect the 80-column width captured at stream start (2 rows),
+    // not the resized 20-column live width (which would wrongly compute
+    // ceil(100/20) = 5 rows).
+    expect(output).toContain('\x1b[2A');
+    expect(output).not.toContain('\x1b[5A');
+  });
 });

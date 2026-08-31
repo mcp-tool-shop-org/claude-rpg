@@ -214,8 +214,22 @@ function renderUiEffectLine(params: Record<string, unknown>): string | null {
  * output) to compact terminal cue lines. `speak` calls are intentionally
  * skipped: narration/dialogue text is already printed by play-renderer.ts,
  * so echoing the TTS intent here would duplicate it on screen.
+ *
+ * F-386bb9b2: `call.tool` is a bare `string` (audio-bridge.ts), not a closed
+ * union, so there is no compile-time exhaustiveness check tying this switch
+ * to every tool VoiceSoundboardBridge can actually queue -- a genuinely new
+ * tool value added upstream in the future would otherwise fall through to
+ * the default branch with zero player-visible feedback and zero diagnostic
+ * signal, the same failure shape that has already hit this file twice
+ * (F-53ca7db8's 'sting' action, F-08f594de's original ui-effect gap). Passing
+ * `debugMode` (bin.ts's existing --debug flag, threaded the same way it
+ * already reaches presentError) surfaces anything landing in the default
+ * branch OTHER than the one documented, intentional case ('speak') as a
+ * dim diagnostic line instead of staying silent -- the raw tool value is run
+ * through humanizeToken() first, matching this file's existing "no raw
+ * token ever reaches the screen" rule for sfx/ambient ids.
  */
-export function renderPresentationCues(calls: McpToolCall[]): string {
+export function renderPresentationCues(calls: McpToolCall[], debugMode = false): string {
   const lines: string[] = [];
   for (const call of calls) {
     const params = call.params ?? {};
@@ -232,7 +246,13 @@ export function renderPresentationCues(calls: McpToolCall[]): string {
         break;
       }
       default:
-        // 'speak' and any other/unknown tool: no terminal cue.
+        // 'speak' is intentionally silent (see doc comment above). Any
+        // other/unknown tool is a vocabulary drift this switch hasn't been
+        // taught yet -- surface it under --debug rather than dropping it
+        // with no signal at all.
+        if (debugMode && call.tool !== 'speak') {
+          lines.push(dim(`  · [unrecognized presentation cue: ${humanizeToken(call.tool).trim()}]`));
+        }
         break;
     }
   }

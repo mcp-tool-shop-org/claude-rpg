@@ -193,8 +193,17 @@ export function classifyForPresentation(err: unknown, context: ErrorContext): Er
     presentation = presentUnknownError(err);
   }
 
-  // Opening narration failures are fatal — can't start game without narration
-  if (context === 'opening' && presentation.exitCode === null) {
+  // Opening narration failures are fatal — can't start game without narration.
+  // F-cdbe6d09: 'startup' joins this branch too — every call site that
+  // passes 'startup' (bin.ts's process-lifetime unhandledRejection handler)
+  // unconditionally calls process.exit() right after presentError() returns,
+  // so presentUnknownError's default exitCode: null (a "try again" reprompt)
+  // rendered a non-fatal yellow warning encouraging the player to keep
+  // playing or save, immediately followed by the process force-exiting —
+  // contradicting the message it just printed. Forcing exitCode: 1 here
+  // makes renderError's fatal styling (red + "Exiting.") match what
+  // actually happens next, the same way it already does for 'opening'.
+  if ((context === 'opening' || context === 'startup') && presentation.exitCode === null) {
     presentation = { ...presentation, exitCode: 1 };
   }
 

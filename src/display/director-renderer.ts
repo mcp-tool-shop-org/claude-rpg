@@ -116,6 +116,7 @@ const DIRECTOR_COMMANDS: { cmd: string; desc: string }[] = [
   { cmd: '/rumors [faction-id]', desc: 'Show player rumors (optionally filtered)' },
   { cmd: '/pressures', desc: 'Show active world pressures' },
   { cmd: '/world', desc: 'Show resolved pressures and fallout' },
+  { cmd: '/aftermath', desc: 'Alias for /world' },
   { cmd: '/factions', desc: 'Show faction agency (goals, actions, profiles)' },
   { cmd: '/people [zone]', desc: 'Show named NPCs (goals, stance, last action)' },
   { cmd: '/npc <npc-id>', desc: 'Inspect individual NPC agency state' },

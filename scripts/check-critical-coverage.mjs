@@ -12,10 +12,12 @@
 //     statementMap, branchMap, fnMap: location metadata
 //   }
 //
-// Per-path Thresholds (matching vitest.config.ts):
-//   src/llm/**: 70% statements (LLM integration — highest risk)
-//   src/session/**: 40% statements (session management)
-//   src/game/**: 25% statements (game logic)
+// Per-path Thresholds (matching vitest.config.ts and check-coverage-utils.mjs):
+//   src/llm/: 82% statements (LLM integration — highest risk)
+//   src/session/: 58% statements (session management)
+//   src/game.ts: 30% statements (game.ts specific file floor)
+//   src/game/: 55% statements (game directory floor)
+//   src/display/: 55% statements (display directory floor)
 
 import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';

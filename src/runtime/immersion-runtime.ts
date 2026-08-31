@@ -111,6 +111,41 @@ export class ImmersionRuntime {
   private lastAmbientAction = new Map<string, AmbientCue['action']>();
   private lastMusicState: { action: MusicCue['action']; trackId?: string } | undefined;
 
+  /**
+   * F-251bd7d7: consecutive-failure streak per processPresentation pipeline stage
+   * ('pre-narration' | 'event-hooks' | 'audio' | 'post-narration'), backing
+   * noteStageFailure()/noteStageSuccess() below. All four stages already degrade to
+   * silence on their own exception (PFE-008) with a diagnostic ONLY behind
+   * `if (this.debugMode) console.error(...)` -- a non-debug (default) session had no
+   * way to ever learn a stage was silently degrading, turn after turn, for the rest
+   * of the session. This streak drives an UNCONDITIONAL (non-debug-gated) log on a
+   * stage's first failure and again every STAGE_ESCALATION_INTERVAL consecutive
+   * turns it keeps failing, so a recurring problem stays visible without a line
+   * every single turn.
+   */
+  private stageFailureStreak = new Map<string, number>();
+  private static readonly STAGE_ESCALATION_INTERVAL = 20;
+
+  /** F-251bd7d7: unconditional first-occurrence + escalating failure log for a stage. */
+  private noteStageFailure(stage: string, err: unknown): void {
+    const streak = (this.stageFailureStreak.get(stage) ?? 0) + 1;
+    this.stageFailureStreak.set(stage, streak);
+    if (streak === 1) {
+      console.error(`[immersion] presentation stage "${stage}" degraded to silence:`, err);
+    } else if (streak % ImmersionRuntime.STAGE_ESCALATION_INTERVAL === 0) {
+      console.error(
+        `[immersion] presentation stage "${stage}" still degrading to silence ` +
+        `(${streak} consecutive turns):`,
+        err,
+      );
+    }
+  }
+
+  /** F-251bd7d7: resets a stage's consecutive-failure streak once it succeeds again. */
+  private noteStageSuccess(stage: string): void {
+    this.stageFailureStreak.set(stage, 0);
+  }
+
   /** Drop ambient cues that just repeat a layer's already-active action (F-d8d1f51d). */
   private dedupeAmbientCues(cues: AmbientCue[]): AmbientCue[] {
     const kept: AmbientCue[] = [];
@@ -119,7 +154,41 @@ export class ImmersionRuntime {
       this.lastAmbientAction.set(cue.layerId, cue.action);
       kept.push(cue);
     }
+    this.capLastAmbientAction();
     return kept;
+  }
+
+  /** F-8986d316: whether capLastAmbientAction's one-time debug warning has already fired. */
+  private hasWarnedAmbientActionCapDrop = false;
+
+  /**
+   * F-8986d316: lastAmbientAction is keyed on narrator-proposed AmbientCue.layerId, a
+   * bare string (not a closed enum -- verified against @ai-rpg-engine/presentation's
+   * types.ts) populated by free-text LLM scene generation every turn
+   * (prompts/narrate-scene.ts, out of this domain). A narrator that is not perfectly
+   * consistent in naming ambient layers across a long campaign session would
+   * otherwise add one Map entry per distinct layerId it ever proposes, with no
+   * eviction, for the lifetime of the ImmersionRuntime instance (one per session).
+   * Evict-oldest (Map preserves insertion order) once the bound is exceeded --
+   * matches this file's other per-turn LLM-input caps (MAX_SFX_PER_PLAN /
+   * MAX_AMBIENT_PER_PLAN in mergeHookResults, MAX_UI_EFFECTS_PER_PLAN in
+   * processPresentation) rather than introducing a differently-shaped cap.
+   */
+  private capLastAmbientAction(): void {
+    const MAX_AMBIENT_ACTION_LAYERS = 32;
+    while (this.lastAmbientAction.size > MAX_AMBIENT_ACTION_LAYERS) {
+      const oldestKey = this.lastAmbientAction.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.lastAmbientAction.delete(oldestKey);
+      if (this.debugMode && !this.hasWarnedAmbientActionCapDrop) {
+        this.hasWarnedAmbientActionCapDrop = true;
+        console.error(
+          `[immersion] lastAmbientAction exceeded ${MAX_AMBIENT_ACTION_LAYERS} distinct ambient ` +
+          `layer ids -- evicting oldest entries (the narrator is naming ambient layers ` +
+          `inconsistently). Logged once per session.`,
+        );
+      }
+    }
   }
 
   /**
@@ -286,10 +355,12 @@ export class ImmersionRuntime {
         presentationState: this.stateMachine.current,
       };
       preResults = this.hookManager.fire(preContext);
+      this.noteStageSuccess('pre-narration');
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Pre-narration hook error (degrading to silence):', err);
       }
+      this.noteStageFailure('pre-narration', err);
       // F-3fce4373: a non-debug player previously saw nothing distinguishing "no cue
       // this turn" from "a cue was computed and then silently dropped" -- push a
       // low-key marker through the same McpToolCall channel game.ts's onPresentation
@@ -306,10 +377,12 @@ export class ImmersionRuntime {
     try {
       // 3. Fire specific hooks based on events
       specificCalls = await this.fireEventHooks(engine, events, justEnteredCombat, justEnteredMenu);
+      this.noteStageSuccess('event-hooks');
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Hook error (degrading to silence):', err);
       }
+      this.noteStageFailure('event-hooks', err);
       degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'event-hooks' } });
     }
 
@@ -346,10 +419,12 @@ export class ImmersionRuntime {
         }
         audioCalls = [...audioCalls, ...this.bridge.flush()];
       }
+      this.noteStageSuccess('audio');
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Audio pipeline error (degrading to silence):', err);
       }
+      this.noteStageFailure('audio', err);
       degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'audio' } });
     }
 
@@ -375,10 +450,12 @@ export class ImmersionRuntime {
           postResults,
         );
       }
+      this.noteStageSuccess('post-narration');
     } catch (err) {
       if (this.debugMode) {
         console.error('[immersion] Post-narration hook error:', err);
       }
+      this.noteStageFailure('post-narration', err);
       degradedStages.push({ tool: '__presentation_degraded__', params: { stage: 'post-narration' } });
     }
 
@@ -397,9 +474,18 @@ export class ImmersionRuntime {
     }
   }
 
-  /** Get voice cast for an NPC. */
-  getVoiceCast(entityId: string): VoiceCast {
-    return this.voiceCaster.getVoice(entityId);
+  /**
+   * Get voice cast for an NPC.
+   *
+   * F-7e171dea: optional `engine` lets a caller that has it in hand (e.g.
+   * turn-loop.ts's executeTurn) opt into VoiceCaster.getVoice's infer-and-cache-on-
+   * first-miss path for an entity that was added to the world after the one-time
+   * autoCast() call in initialize() -- see that method's doc comment. Omitting
+   * `engine` preserves the exact prior behavior (fall back to the narrator voice).
+   */
+  getVoiceCast(entityId: string, engine?: Engine): VoiceCast {
+    const entity = engine?.world.entities[entityId];
+    return this.voiceCaster.getVoice(entityId, entity);
   }
 
   /** Get the narrator voice. */

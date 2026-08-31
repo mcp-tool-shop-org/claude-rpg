@@ -77,4 +77,51 @@ describe('VoiceCaster', () => {
     const voice = caster.getVoice('nonexistent');
     expect(voice.entityId).toBe('__narrator__');
   });
+
+  // F-7e171dea: autoCast() only runs once per session (ImmersionRuntime.initialize()).
+  // An entity added to the world afterward previously had no path back to a real
+  // voice cast for the rest of the session -- getVoice()'s optional second `entity`
+  // param lets a caller that has the entity in hand infer-and-cache one on first miss.
+  describe('infer-and-cache on first miss (F-7e171dea)', () => {
+    it('infers and caches a voice for an entity not covered by autoCast when the caller supplies it', () => {
+      const caster = new VoiceCaster();
+      caster.autoCast(mockWorld); // does NOT know about 'latecomer'
+
+      const latecomer = { id: 'latecomer', type: 'npc', name: 'Late Arrival', tags: ['guard'] };
+      const voice = caster.getVoice('latecomer', latecomer);
+
+      // Same heuristic autoCast() itself uses (announcer preset for 'guard' tag).
+      expect(voice.preset).toBe('announcer');
+      expect(caster.getAllCasts().has('latecomer')).toBe(true);
+    });
+
+    it('caches the inferred voice so a later call returns the SAME cast without needing the entity again', () => {
+      const caster = new VoiceCaster();
+      const latecomer = { id: 'latecomer', type: 'npc', name: 'Late Arrival', tags: ['merchant'] };
+
+      const first = caster.getVoice('latecomer', latecomer);
+      const second = caster.getVoice('latecomer'); // no entity arg this time
+
+      expect(second).toEqual(first);
+      expect(second.entityId).not.toBe('__narrator__');
+    });
+
+    it('still returns the narrator voice for a genuinely unknown entity when no entity is supplied (backward compatible)', () => {
+      const caster = new VoiceCaster();
+      const voice = caster.getVoice('still-unknown');
+      expect(voice.entityId).toBe('__narrator__');
+    });
+
+    it('does not overwrite an already-cached cast when an entity is supplied again', () => {
+      const caster = new VoiceCaster();
+      caster.autoCast(mockWorld);
+      const originalVoice = caster.getVoice('guard');
+
+      // Supplying a DIFFERENT-looking entity for the same id must not re-infer --
+      // the existing cache entry wins.
+      const voice = caster.getVoice('guard', { id: 'guard', type: 'npc', name: 'Gate Guard', tags: ['female'] });
+
+      expect(voice).toEqual(originalVoice);
+    });
+  });
 });

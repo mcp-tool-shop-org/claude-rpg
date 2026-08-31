@@ -324,6 +324,20 @@ describe('inferCompanionRole', () => {
     expect(inferCompanionRole({ tags: ['healer'], custom: { companionRole: 'scout' } })).toBe('scout');
   });
 
+  // F-35aef8dd: a stale/foreign save (an old campaign recruited under a
+  // since-renamed or removed CompanionRole value) or any other writer of
+  // entity.custom.companionRole must not be trusted blind -- falls through to the
+  // tag-inference chain exactly as if custom.companionRole had been absent.
+  it('falls back to tag inference when custom.companionRole is not a known CompanionRole value', () => {
+    expect(inferCompanionRole({ tags: ['healer'], custom: { companionRole: 'necromancer' } })).toBe('healer');
+    expect(inferCompanionRole({ tags: [], custom: { companionRole: 'necromancer' } })).toBe('fighter');
+  });
+
+  it('falls back to tag inference when custom.companionRole is a non-string value', () => {
+    expect(inferCompanionRole({ tags: ['scout'], custom: { companionRole: 42 } })).toBe('scout');
+    expect(inferCompanionRole({ tags: ['diplomat'], custom: { companionRole: {} } })).toBe('diplomat');
+  });
+
   it('infers healer from healer/medic tags', () => {
     expect(inferCompanionRole({ tags: ['healer'] })).toBe('healer');
     expect(inferCompanionRole({ tags: ['medic'] })).toBe('healer');

@@ -184,13 +184,29 @@ export function syncCompanionMorale(engine: Engine, party: PartyState): void {
 // code fully superseded by buildAllNpcProfiles, rather than left to drift as a second,
 // unwired "companion profile" path a future contributor could mistake for the live one.
 
+// F-35aef8dd: CompanionRole's own literal members, kept as a runtime array so
+// isCompanionRole() below can validate a value against the SAME set the type
+// describes, rather than trusting an unchecked cast at the one call site
+// (inferCompanionRole) that has no in-domain caller to prove every value it reads
+// was written by this domain's own type-checked recruitCompanion() path.
+const COMPANION_ROLES: readonly CompanionRole[] = ['fighter', 'scout', 'healer', 'diplomat', 'smuggler', 'scholar'];
+
+function isCompanionRole(value: unknown): value is CompanionRole {
+  return typeof value === 'string' && (COMPANION_ROLES as readonly string[]).includes(value);
+}
+
 /**
  * Infer companion role from entity tags.
  */
 export function inferCompanionRole(entity: { tags: string[]; custom?: Record<string, unknown> }): CompanionRole {
-  // Explicit custom role takes precedence
-  if (entity.custom?.companionRole) {
-    return entity.custom.companionRole as CompanionRole;
+  // Explicit custom role takes precedence -- but only when it's actually one of
+  // CompanionRole's known members (F-35aef8dd). inferCompanionRole is exported with
+  // no caller anywhere in this domain's own files, so a stale/foreign save (an old
+  // campaign recruited under a since-renamed or removed CompanionRole value) or any
+  // other writer of entity.custom.companionRole must not be trusted blind -- fall
+  // through to the same tag-inference chain used when custom.companionRole is absent.
+  if (isCompanionRole(entity.custom?.companionRole)) {
+    return entity.custom.companionRole;
   }
   // Infer from tags
   if (entity.tags.includes('healer') || entity.tags.includes('medic')) return 'healer';

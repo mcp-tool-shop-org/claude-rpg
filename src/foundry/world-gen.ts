@@ -551,17 +551,36 @@ export async function generateWorld(
   // configured from each faction's raw, un-reconciled memberIds BEFORE this function's NPC
   // loop resolved PBR-007 id collisions, so any memberIds entry naming an id that got
   // suffixed above was left tracking a stray id instead of the entity's real final one.
-  const factionCogState = engine.world.modules['faction-cognition'] as
-    | { membership: Record<string, string>; factionMembers: Record<string, string[]> }
-    | undefined;
-  if (factionCogState) {
-    for (const faction of proposal.factions) {
-      const reconciledIds = faction.memberIds.map((id) => npcIdRemap.get(id) ?? id);
-      factionCogState.factionMembers[faction.id] = reconciledIds;
-      for (const entityId of reconciledIds) {
-        factionCogState.membership[entityId] = faction.id;
+  //
+  // F-01b60e73: unlike every other fallible step in this function (the per-NPC loop
+  // immediately above, the LLM generation+validation loop), this block had no failure
+  // isolation of its own -- it reads/writes an inline shape cast from
+  // engine.world.modules['faction-cognition'] with no exported engine type backing it
+  // (@ai-rpg-engine/modules's faction-cognition.ts exports only READ accessors for this
+  // state; verified no setter exists anywhere in that module). Byte-accurate against
+  // today's engine, but a future engine version restructuring this internal, unversioned
+  // module state would throw a raw TypeError here, uncaught by anything in this function,
+  // discarding an otherwise-fully-built Engine plus every already-added zone/player/NPC.
+  // Degrade the same way the per-NPC loop above does: warn and skip, don't abort.
+  try {
+    const factionCogState = engine.world.modules['faction-cognition'] as
+      | { membership: Record<string, string>; factionMembers: Record<string, string[]> }
+      | undefined;
+    if (factionCogState && typeof factionCogState.factionMembers === 'object' && typeof factionCogState.membership === 'object') {
+      for (const faction of proposal.factions) {
+        const reconciledIds = faction.memberIds.map((id) => npcIdRemap.get(id) ?? id);
+        factionCogState.factionMembers[faction.id] = reconciledIds;
+        for (const entityId of reconciledIds) {
+          factionCogState.membership[entityId] = faction.id;
+        }
       }
     }
+  } catch (err) {
+    console.warn(
+      `[world-gen] Failed to reconcile faction-cognition membership for factions ` +
+      `[${proposal.factions.map((f) => f.id).join(', ')}]: ` +
+      `${err instanceof Error ? err.message : String(err)}. Skipping reconciliation.`,
+    );
   }
 
   return {

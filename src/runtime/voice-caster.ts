@@ -49,9 +49,30 @@ export class VoiceCaster {
     }
   }
 
-  /** Get voice for an entity. Returns narrator voice if not found. */
-  getVoice(entityId: string): VoiceCast {
-    return this.casts.get(entityId) ?? this.narratorVoice;
+  /**
+   * Get voice for an entity. Returns narrator voice if not found.
+   *
+   * F-7e171dea: autoCast() is invoked exactly once per session
+   * (ImmersionRuntime.initialize(), by its own doc comment), with no restore path.
+   * Any entity added to world.entities AFTER that one-time call -- this domain's own
+   * files cannot verify whether any cross-domain system (npc-agency, faction
+   * spawning) ever does this mid-session -- would otherwise share the narrator's
+   * voice for the rest of the session, indistinguishable from a genuinely-unknown
+   * id. When the caller can supply the entity (optional `entity` param, e.g. from a
+   * live engine.world.entities lookup), infer-and-cache its cast on first miss
+   * instead, reusing the SAME inferCast() heuristic autoCast() already uses, so a
+   * late-added entity gets its own voice on first use rather than permanently
+   * sharing the narrator's. Omitting `entity` preserves the exact prior behavior.
+   */
+  getVoice(entityId: string, entity?: { id: string; type: string; name: string; tags?: string[] }): VoiceCast {
+    const existing = this.casts.get(entityId);
+    if (existing) return existing;
+    if (entity && entity.id === entityId) {
+      const cast = this.inferCast(entity);
+      this.casts.set(entityId, cast);
+      return cast;
+    }
+    return this.narratorVoice;
   }
 
   /** Override a cast. */

@@ -1,27 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Engine } from '@ai-rpg-engine/core';
+import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { ImmersionRuntime } from './immersion-runtime.js';
+
+// F-0ad073b8: this file's suites build a real @ai-rpg-engine Engine via createGame()
+// (the same starter-fantasy pack test/helpers/game-harness.ts and every
+// test/integration/*.test.ts file already use) instead of a hand-typed `as any`
+// WorldState/Engine stand-in. The real engine's playerId ('player') and starting zone
+// (engine.world.locationId) replace the old fixture's hardcoded 'p1'/'z1' ids, so a
+// future @ai-rpg-engine shape change to WorldState/EntityState would actually be
+// caught here instead of silently passing against an unbacked fake shape.
 
 // ─── PFE-008: Audio/hook errors degrade to silence ─────────
 
 describe('immersion-runtime: error resilience', () => {
   let runtime: ImmersionRuntime;
-
-  // Minimal stubs
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
-
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  let engine: Engine;
 
   beforeEach(() => {
     runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    engine = createGame();
   });
 
   it('processPresentation survives hook errors without throwing', async () => {
@@ -36,7 +34,7 @@ describe('immersion-runtime: error resilience', () => {
 
     // Should not throw — degrades to silence
     const calls = await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'world.zone.entered', payload: {} } as any],
       'look',
     );
@@ -56,7 +54,7 @@ describe('immersion-runtime: error resilience', () => {
     } as any;
 
     const calls = await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [],
       'look',
       narrationPlan,
@@ -78,7 +76,7 @@ describe('immersion-runtime: error resilience', () => {
       musicCue: undefined,
     } as any;
 
-    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    await runtime.processPresentation(engine, [], 'look', narrationPlan);
     expect(stderrSpy).toHaveBeenCalledWith(
       '[immersion] Audio pipeline error (degrading to silence):',
       expect.any(Error),
@@ -87,7 +85,12 @@ describe('immersion-runtime: error resilience', () => {
     stderrSpy.mockRestore();
   });
 
-  it('non-debug mode does not log audio errors', async () => {
+  it('non-debug mode does not log the debug-only audio error line, but still logs the F-251bd7d7 first-occurrence marker', async () => {
+    // F-251bd7d7: a non-debug session previously had NO signal at all that a
+    // pipeline stage was silently degrading -- the debug-gated line below stays
+    // debug-only, but the new unconditional first-occurrence log (immersion-runtime.ts's
+    // noteStageFailure) must fire regardless of debugMode, or a recurring degrade is
+    // once again undiagnosable outside --debug.
     runtime.debugMode = false;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -101,10 +104,115 @@ describe('immersion-runtime: error resilience', () => {
       musicCue: undefined,
     } as any;
 
-    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
-    expect(stderrSpy).not.toHaveBeenCalled();
+    await runtime.processPresentation(engine, [], 'look', narrationPlan);
+
+    expect(stderrSpy).not.toHaveBeenCalledWith(
+      '[immersion] Audio pipeline error (degrading to silence):',
+      expect.any(Error),
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('presentation stage "audio" degraded to silence'),
+      expect.any(Error),
+    );
 
     stderrSpy.mockRestore();
+  });
+});
+
+// ─── F-251bd7d7: a recurring (not one-off) stage degradation must escalate its
+// visibility beyond the single first-occurrence line, and a stage that recovers
+// must not carry a stale streak into a later, unrelated failure run. ───
+
+describe('immersion-runtime: degraded-stage escalation logging (F-251bd7d7)', () => {
+  let runtime: ImmersionRuntime;
+  let engine: Engine;
+
+  beforeEach(() => {
+    runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    engine = createGame();
+  });
+
+  // Triggers the 'audio' stage specifically (via a rejecting bridge.executeCommands),
+  // not a throwing hook -- F-8968741e isolates hook exceptions INSIDE
+  // HookManager.fire() now, so a hook throw no longer reaches processPresentation's
+  // pre-narration/event-hooks/post-narration outer catches at all (see the
+  // F-8968741e-vs-F-3fce4373 note in the "non-debug degradation markers" describe
+  // block below). The audio stage's try/catch wraps bridge calls directly, so it
+  // remains a genuine, reachable trigger for this streak/escalation machinery.
+  const makeFailingNarrationPlan = () =>
+    ({ segments: [], sfx: [], ambientLayers: [], uiEffects: [], musicCue: undefined }) as any;
+
+  it('logs the first occurrence unconditionally but not the 2nd-19th consecutive failure', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(runtime.bridge, 'executeCommands').mockRejectedValue(new Error('boom'));
+
+    await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+    const firstOccurrenceCalls = stderrSpy.mock.calls.filter(([msg]) =>
+      typeof msg === 'string' && msg.includes('presentation stage "audio" degraded to silence'),
+    );
+    expect(firstOccurrenceCalls).toHaveLength(1);
+    stderrSpy.mockClear();
+
+    // Turns 2 through 19: still failing every turn, but the escalation line (every
+    // STAGE_ESCALATION_INTERVAL = 20 consecutive turns) has not been reached yet.
+    for (let i = 0; i < 18; i++) {
+      await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+    }
+    const midStreakCalls = stderrSpy.mock.calls.filter(([msg]) =>
+      typeof msg === 'string' && msg.includes('presentation stage "audio"'),
+    );
+    expect(midStreakCalls).toHaveLength(0);
+  });
+
+  it('escalates again on the 20th consecutive failure of the same stage', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(runtime.bridge, 'executeCommands').mockRejectedValue(new Error('boom'));
+
+    for (let i = 0; i < 20; i++) {
+      await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+    }
+
+    const escalationCalls = stderrSpy.mock.calls.filter(([msg]) =>
+      typeof msg === 'string' && msg.includes('still degrading to silence (20 consecutive turns)'),
+    );
+    expect(escalationCalls).toHaveLength(1);
+  });
+
+  it('resets the streak once the stage recovers, so a later fresh failure logs as a first occurrence again', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const executeCommandsSpy = vi.spyOn(runtime.bridge, 'executeCommands');
+    executeCommandsSpy.mockRejectedValueOnce(new Error('boom')); // turn 1: fails -> streak 1, logs
+    executeCommandsSpy.mockResolvedValueOnce([]); // turn 2: succeeds -> streak reset to 0
+
+    await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+    await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+    stderrSpy.mockClear();
+
+    executeCommandsSpy.mockRejectedValueOnce(new Error('boom again')); // turn 3: fails again
+    await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+    const firstOccurrenceCalls = stderrSpy.mock.calls.filter(([msg]) =>
+      typeof msg === 'string' && msg.includes('presentation stage "audio" degraded to silence'),
+    );
+    expect(firstOccurrenceCalls).toHaveLength(1);
+  });
+
+  it('tracks each stage independently -- a failing audio stage does not log anything for the other, unaffected stages', async () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(runtime.bridge, 'executeCommands').mockRejectedValue(new Error('audio boom'));
+
+    await runtime.processPresentation(engine, [], 'look', makeFailingNarrationPlan());
+
+    const audioFirstOccurrence = stderrSpy.mock.calls.filter(([msg]) =>
+      typeof msg === 'string' && msg.includes('presentation stage "audio" degraded to silence'),
+    );
+    const otherStageCalls = stderrSpy.mock.calls.filter(
+      ([msg]) =>
+        typeof msg === 'string' &&
+        msg.includes('presentation stage') &&
+        !msg.includes('"audio"'),
+    );
+    expect(audioFirstOccurrence).toHaveLength(1);
+    expect(otherStageCalls).toHaveLength(0);
   });
 });
 
@@ -117,48 +225,80 @@ describe('immersion-runtime: error resilience', () => {
 // this turn" from "a cue was computed and then silently dropped". ───
 
 describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
-  it('pushes a degraded marker into the returned calls when a pre-narration hook throws, even without debugMode', async () => {
+  // F-8968741e superseded these two: HookManager.fire() now isolates each hook's
+  // own exception INSIDE the loop (per-hook try/catch, logged via hooks.ts's own
+  // unconditional "[hooks] Hook ... threw and was skipped" line) so it never
+  // reaches processPresentation's pre-narration/event-hooks outer catch at all.
+  // Per F-8968741e's own routed fix text, this is intentional: a debug session now
+  // identifies the SPECIFIC culprit hook "instead of seeing only a generic
+  // event-hooks degraded-stage marker". These two tests now assert that new
+  // contract -- no stage-level marker for a hook-level throw, turn completes
+  // cleanly, hook-level log fires instead -- rather than the superseded behavior.
+  it('does not push a stage-level marker when a pre-narration hook throws -- F-8968741e isolates and logs it at the hook level instead', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = false;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     runtime.hookManager.register('pre-narration', () => {
       throw new Error('Hook exploded');
     });
 
     const calls = await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'world.zone.entered', payload: {} } as any],
       'look',
     );
 
     const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
-    expect(markers).toHaveLength(1);
-    expect(markers[0].params).toMatchObject({ stage: 'pre-narration' });
+    expect(markers).toHaveLength(0);
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('hookPoint "pre-narration" threw and was skipped'),
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
   });
 
-  it('pushes a degraded marker when an event hook throws', async () => {
+  it('does not push a stage-level marker when an event hook throws -- F-8968741e isolates and logs it at the hook level instead', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = false;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     runtime.hookManager.register('enter-room', () => {
       throw new Error('enter-room exploded');
     });
 
     const calls = await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'world.zone.entered', payload: {} } as any],
       'move',
+    );
+
+    const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
+    expect(markers).toHaveLength(0);
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('hookPoint "enter-room" threw and was skipped'),
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
+  });
+
+  it('still pushes the event-hooks marker for a genuine non-hook failure in that stage (e.g. the bridge itself throwing)', async () => {
+    // Unlike a HOOK throwing (isolated by F-8968741e, see the two tests above),
+    // executeMergedHookResult's own bridge dispatch calls are OUTSIDE HookManager.
+    // fire()'s per-hook try/catch, so a bridge-level failure still reaches
+    // processPresentation's 'event-hooks' outer catch exactly as before.
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    vi.spyOn(runtime.bridge, 'playSfx').mockRejectedValue(new Error('bridge crash'));
+
+    const calls = await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.contact.hit', payload: {} }] as any,
+      'attack',
     );
 
     const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
@@ -179,32 +319,37 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
       musicCue: undefined,
     } as any;
 
-    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    const calls = await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
     expect(markers).toHaveLength(1);
     expect(markers[0].params).toMatchObject({ stage: 'audio' });
   });
 
-  it('pushes a degraded marker when a post-narration hook throws', async () => {
+  it('does not push a stage-level marker when a post-narration hook throws -- F-8968741e isolates and logs it at the hook level instead', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = false;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     runtime.hookManager.register('post-narration', () => {
       throw new Error('post-narration exploded');
     });
 
-    const calls = await runtime.processPresentation(minimalEngine, [], 'look');
+    const calls = await runtime.processPresentation(engine, [], 'look');
 
     const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
-    expect(markers).toHaveLength(1);
-    expect(markers[0].params).toMatchObject({ stage: 'post-narration' });
+    expect(markers).toHaveLength(0);
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('hookPoint "post-narration" threw and was skipped'),
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
   });
 
   it('does not push a marker on a clean turn with no errors', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = false;
 
-    const calls = await runtime.processPresentation(minimalEngine, [], 'look');
+    const calls = await runtime.processPresentation(engine, [], 'look');
 
     const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
     expect(markers).toHaveLength(0);
@@ -220,7 +365,7 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
       segments: [], sfx: [], ambientLayers: [], uiEffects: [], musicCue: undefined,
     } as any;
 
-    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    const calls = await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     const markers = calls.filter((c) => c.tool === '__presentation_degraded__');
     expect(markers).toHaveLength(1);
@@ -236,20 +381,22 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
 // covered above. ───
 
 describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
-  it('debug mode logs pre-narration hook errors to stderr', async () => {
+  // F-8968741e superseded these three: a hook's own exception is now caught INSIDE
+  // HookManager.fire()'s per-hook loop (hooks.ts) and logged there unconditionally
+  // ("[hooks] Hook ... threw and was skipped"), so it never reaches
+  // processPresentation's own debugMode-gated per-stage lines below anymore -- per
+  // F-8968741e's own routed fix text, a debug session now identifies the SPECIFIC
+  // culprit hook "instead of seeing only a generic event-hooks degraded-stage
+  // marker". This domain's Contract B coverage still holds (debugMode wiring
+  // produces SOME diagnostic for a hook failure); the exact message + call site
+  // moved from immersion-runtime.ts to hooks.ts.
+  it('a pre-narration hook error is diagnosable via hooks.ts\'s own unconditional log', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -259,19 +406,19 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
     });
 
     await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'world.zone.entered', payload: {} } as any],
       'look',
     );
 
     expect(stderrSpy).toHaveBeenCalledWith(
-      '[immersion] Pre-narration hook error (degrading to silence):',
+      expect.stringContaining('hookPoint "pre-narration" threw and was skipped'),
       expect.any(Error),
     );
     stderrSpy.mockRestore();
   });
 
-  it('debug mode logs event-hook errors (e.g. enter-room) to stderr', async () => {
+  it('an event-hook error (e.g. enter-room) is diagnosable via hooks.ts\'s own unconditional log', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -281,19 +428,19 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
     });
 
     await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'world.zone.entered', payload: {} } as any],
       'move',
     );
 
     expect(stderrSpy).toHaveBeenCalledWith(
-      '[immersion] Hook error (degrading to silence):',
+      expect.stringContaining('hookPoint "enter-room" threw and was skipped'),
       expect.any(Error),
     );
     stderrSpy.mockRestore();
   });
 
-  it('debug mode logs post-narration hook errors to stderr', async () => {
+  it('a post-narration hook error is diagnosable via hooks.ts\'s own unconditional log', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -302,10 +449,10 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
       throw new Error('post-narration exploded');
     });
 
-    await runtime.processPresentation(minimalEngine, [], 'look');
+    await runtime.processPresentation(engine, [], 'look');
 
     expect(stderrSpy).toHaveBeenCalledWith(
-      '[immersion] Post-narration hook error:',
+      expect.stringContaining('hookPoint "post-narration" threw and was skipped'),
       expect.any(Error),
     );
     stderrSpy.mockRestore();
@@ -318,18 +465,11 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
 // under --debug, ever surfaces which state a turn transitioned to/from and why. ───
 
 describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('logs the state transition to stderr when debugMode is enabled and the state actually changes', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
@@ -337,7 +477,7 @@ describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () =>
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // exploration -> dialogue via the 'speak' verb (no events needed).
-    await runtime.processPresentation(minimalEngine, [], 'speak');
+    await runtime.processPresentation(engine, [], 'speak');
 
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('exploration -> dialogue'));
     stderrSpy.mockRestore();
@@ -348,7 +488,7 @@ describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () =>
     runtime.debugMode = false;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await runtime.processPresentation(minimalEngine, [], 'speak');
+    await runtime.processPresentation(engine, [], 'speak');
 
     expect(stderrSpy).not.toHaveBeenCalled();
     stderrSpy.mockRestore();
@@ -361,7 +501,7 @@ describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () =>
 
     // Starts in 'exploration'; 'look' with no events also infers 'exploration' -> no
     // transition, so nothing should be logged.
-    await runtime.processPresentation(minimalEngine, [], 'look');
+    await runtime.processPresentation(engine, [], 'look');
 
     expect(stderrSpy).not.toHaveBeenCalled();
     stderrSpy.mockRestore();
@@ -370,16 +510,13 @@ describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () =>
   it('also logs the sibling transition() call site in initialize() (session-restore)', () => {
     // Family-of-call-sites: initialize() has its own `this.stateMachine.transition(...)`
     // that discarded its result the same way processPresentation's did, so a save
-    // restored mid-combat was equally undiagnosable under --debug.
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-      modules: { 'combat-core': { inCombat: true, combatants: ['goblin-1'] } },
-    } as any;
-    const engine = { world, store: { state: {} } } as any;
+    // restored mid-combat was equally undiagnosable under --debug. F-0ad073b8: mutates
+    // the real engine's own combat-core module namespace (verified shape: { inCombat,
+    // combatants }) instead of hand-typing a modules bag.
+    const engine = createGame();
+    const combatCore = engine.world.modules['combat-core'] as { inCombat: boolean; combatants: string[] };
+    combatCore.inCombat = true;
+    combatCore.combatants = ['goblin-1'];
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
@@ -402,18 +539,11 @@ describe('immersion-runtime: state transition debug logging (F-aaaf50d9)', () =>
 // silently discarded with no error or warning. ───
 
 describe('immersion-runtime: post-narration hook results are no longer silently discarded (F-23bce472)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('debug mode surfaces a post-narration hook result that has nothing consuming it yet', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
@@ -424,7 +554,7 @@ describe('immersion-runtime: post-narration hook results are no longer silently 
       sfxCues: [{ effectId: 'future-cue', timing: 'immediate' as const, intensity: 0.5 }],
     }));
 
-    await runtime.processPresentation(minimalEngine, [], 'look');
+    await runtime.processPresentation(engine, [], 'look');
 
     expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining('post-narration'),
@@ -438,7 +568,7 @@ describe('immersion-runtime: post-narration hook results are no longer silently 
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await runtime.processPresentation(minimalEngine, [], 'look');
+    await runtime.processPresentation(engine, [], 'look');
 
     expect(stderrSpy).not.toHaveBeenCalled();
     stderrSpy.mockRestore();
@@ -453,7 +583,7 @@ describe('immersion-runtime: post-narration hook results are no longer silently 
       sfxCues: [{ effectId: 'future-cue', timing: 'immediate' as const, intensity: 0.5 }],
     }));
 
-    await runtime.processPresentation(minimalEngine, [], 'look');
+    await runtime.processPresentation(engine, [], 'look');
 
     expect(stderrSpy).not.toHaveBeenCalled();
     stderrSpy.mockRestore();
@@ -463,18 +593,11 @@ describe('immersion-runtime: post-narration hook results are no longer silently 
 // ─── F-0acb03fe: combat-start hookpoint fires once per fight, not every turn ───
 
 describe('immersion-runtime: combat-start dispatch (F-0acb03fe)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('fires combat-start only on the turn combat begins, not on every ongoing-combat turn', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
@@ -485,7 +608,7 @@ describe('immersion-runtime: combat-start dispatch (F-0acb03fe)', () => {
     const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
 
     // Turn 1: entering combat for the first time this fight
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
     const turn1CombatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
     expect(turn1CombatStarts).toHaveLength(1);
 
@@ -493,7 +616,7 @@ describe('immersion-runtime: combat-start dispatch (F-0acb03fe)', () => {
 
     // Turn 2: still mid-fight. combat-start must NOT re-fire — it's meant to play a
     // one-time warning SFX and intensify music on combat start, not every turn.
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
     const turn2CombatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
     expect(turn2CombatStarts).toHaveLength(0);
   });
@@ -502,29 +625,15 @@ describe('immersion-runtime: combat-start dispatch (F-0acb03fe)', () => {
 // ─── F-ed267860: aftermath countdown must actually decrement via the real engine tick ───
 
 describe('immersion-runtime: aftermath countdown wedge (F-ed267860)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
-
   it('drains aftermathTurns to exploration across consecutive no-combat turns via processPresentation, not a hand-fed tick', async () => {
     // Unlike presentation-state.test.ts's T-010 (which calls inferFromEvents directly
     // with hand-incremented tick args), this drives the actual production call path —
-    // processPresentation — through an engine whose `tick` getter genuinely advances,
-    // mirroring how the real Engine behaves. Before the fix, the call site never read
-    // engine.tick at all, so the guard's `tick ?? -2` sentinel was the same constant on
-    // every call and the countdown wedged after its first decrement.
-    let currentTick = 1;
-    const engine = {
-      world: minimalWorld,
-      store: { state: {} },
-      get tick() {
-        return currentTick;
-      },
-    } as any;
+    // processPresentation — through a REAL @ai-rpg-engine Engine (F-0ad073b8) whose
+    // `tick` getter genuinely advances via store.advanceTick(), rather than a hand-rolled
+    // getter simulating one. Before the fix, the call site never read engine.tick at
+    // all, so the guard's `tick ?? -2` sentinel was the same constant on every call and
+    // the countdown wedged after its first decrement.
+    const engine = createGame();
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
 
@@ -538,11 +647,11 @@ describe('immersion-runtime: aftermath countdown wedge (F-ed267860)', () => {
 
     // Turns 2 and 3: no combat/dialogue events, and the engine's tick genuinely advances
     // each turn (as it does in production) -> the countdown must actually reach 0.
-    currentTick = 2;
+    engine.store.advanceTick();
     await runtime.processPresentation(engine, [], 'wait');
     expect(runtime.stateMachine.current).toBe('aftermath'); // 2 -> 1
 
-    currentTick = 3;
+    engine.store.advanceTick();
     await runtime.processPresentation(engine, [], 'wait');
     expect(runtime.stateMachine.current).toBe('exploration'); // 1 -> 0
   });
@@ -551,23 +660,22 @@ describe('immersion-runtime: aftermath countdown wedge (F-ed267860)', () => {
 // ─── F-f13b58f3: presentation state seeded from persisted combat-core state on load ───
 
 describe('immersion-runtime: presentation state seeded on initialize (F-f13b58f3)', () => {
-  const makeWorld = (modules: Record<string, unknown>) =>
-    ({
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-      modules,
-    }) as any;
+  // F-0ad073b8: builds a real createGame() Engine and overwrites its own combat-core
+  // module namespace (verified real shape: { inCombat, combatants } — packages/
+  // modules/src/combat-core.ts) instead of hand-typing a whole WorldState around a
+  // `modules` bag.
+  const makeEngine = (combatCore: { inCombat: boolean; combatants: string[] }): Engine => {
+    const engine = createGame();
+    engine.world.modules['combat-core'] = combatCore;
+    return engine;
+  };
 
   it('does not replay the combat-start hook after loading a save that was mid-combat', async () => {
     // Simulates a session restored from a save made mid-fight: the engine's own
     // combat-core module namespace (registered via ctx.persistence.registerNamespace in
     // node_modules/@ai-rpg-engine/modules/dist/combat-core.js) still shows inCombat: true,
     // even though this freshly-constructed ImmersionRuntime has never seen a combat event.
-    const world = makeWorld({ 'combat-core': { inCombat: true, combatants: ['goblin-1'] } });
-    const engine = { world, store: { state: {} } } as any;
+    const engine = makeEngine({ inCombat: true, combatants: ['goblin-1'] });
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.initialize(engine);
@@ -584,8 +692,7 @@ describe('immersion-runtime: presentation state seeded on initialize (F-f13b58f3
   });
 
   it('still fires combat-start once for a genuinely fresh fight with no persisted combat state (F-0acb03fe non-regression)', async () => {
-    const world = makeWorld({});
-    const engine = { world, store: { state: {} } } as any;
+    const engine = makeEngine({ inCombat: false, combatants: [] });
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.initialize(engine);
@@ -610,26 +717,22 @@ describe('immersion-runtime: presentation state seeded on initialize (F-f13b58f3
 // justEnteredCombat-gated hooks (combat-start) still fire exactly once per fight. ───
 
 describe('immersion-runtime: inferAndTransition / processPresentation ordering contract (F-4ec3609b)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  // F-0ad073b8: real createGame() Engine, not a hand-typed `as any` WorldState/Engine.
+  // No test in this describe block asserts a specific absolute tick value (only that
+  // state transitions/hook dispatch behave correctly), so the real engine's own
+  // starting tick (0) stands in for the old fixture's hardcoded `tick: 1` unchanged.
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-    tick: 1,
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('returns the NEW state immediately on a combat-entry turn, before processPresentation runs', () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     expect(runtime.stateMachine.current).toBe('exploration');
 
     const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
-    const result = runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+    const result = runtime.inferAndTransition(engine, combatEvents, 'attack');
 
     // The caller (turn-loop.ts's executeTurn) reads this return value -- and
     // stateMachine.current, which must already agree -- to build narration context.
@@ -650,10 +753,10 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
 
     // Mirrors the fixed call order: the caller infers+transitions first (for
     // narration), THEN processPresentation runs with the same engine/events/verb.
-    const inferred = runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
+    const inferred = runtime.inferAndTransition(engine, combatEvents, 'attack');
     expect(inferred).toEqual({ from: 'exploration', to: 'combat', trigger: 'attack' });
 
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
 
     const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
     // Exactly one dispatch for the fight's actual start -- zero would mean
@@ -668,13 +771,13 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
 
     // Turn 1: combat begins.
-    runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    runtime.inferAndTransition(engine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
     fireSpy.mockClear();
 
     // Turn 2: still mid-fight, same ordered pair of calls as turn 1.
-    runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    runtime.inferAndTransition(engine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
 
     const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
     expect(combatStarts).toHaveLength(0);
@@ -685,22 +788,18 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     const transitionSpy = vi.spyOn(runtime.stateMachine, 'transition');
     const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
 
-    runtime.inferAndTransition(minimalEngine, combatEvents, 'attack');
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    runtime.inferAndTransition(engine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
 
     expect(transitionSpy).toHaveBeenCalledTimes(1);
   });
 
   it('preserves the mid-combat restore skip when inferAndTransition precedes processPresentation (F-f13b58f3 non-regression)', async () => {
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-      modules: { 'combat-core': { inCombat: true, combatants: ['goblin-1'] } },
-    } as any;
-    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    // Mutate the real engine's own combat-core module namespace (verified shape:
+    // { inCombat, combatants }) instead of hand-typing a modules bag.
+    const combatCore = engine.world.modules['combat-core'] as { inCombat: boolean; combatants: string[] };
+    combatCore.inCombat = true;
+    combatCore.combatants = ['goblin-1'];
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.initialize(engine); // seeds stateMachine.current = 'combat' via session-restore
@@ -725,7 +824,7 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
     const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
     const combatEvents = [{ type: 'combat.contact.hit', payload: {} }] as any;
 
-    await runtime.processPresentation(minimalEngine, combatEvents, 'attack');
+    await runtime.processPresentation(engine, combatEvents, 'attack');
 
     expect(runtime.stateMachine.current).toBe('combat');
     const combatStarts = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-start');
@@ -742,18 +841,17 @@ describe('immersion-runtime: inferAndTransition / processPresentation ordering c
 // the same edge this fix uses internally: `justDied = to === 'menu' && from !== 'menu'`. ───
 
 describe('immersion-runtime: inferAndTransition return shape + edge-triggered death gate (F-f3781f2a/SLATE-6)', () => {
-  const makeWorld = (hp: number) =>
-    ({
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: { p1: { name: 'Hero', resources: { hp }, statuses: [] } },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-    }) as any;
+  // F-0ad073b8: real createGame() Engine with the player's own hp mutated directly
+  // (the same direct-mutation convention companion-bridge.ts already documents as
+  // intentional for this codebase), instead of a hand-typed WorldState/Engine pair.
+  const makeEngine = (hp: number): Engine => {
+    const engine = createGame();
+    engine.world.entities[engine.world.playerId].resources.hp = hp;
+    return engine;
+  };
 
   it('inferAndTransition returns a {from, to, trigger} StateTransition on a death turn', () => {
-    const world = makeWorld(10);
-    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const engine = makeEngine(10);
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
 
     // Get into 'combat' first so `from` is observably not the initial 'exploration'
@@ -762,10 +860,10 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
     runtime.inferAndTransition(engine, [{ type: 'combat.contact.hit', payload: {} }] as any, 'attack');
     expect(runtime.stateMachine.current).toBe('combat');
 
-    engine.tick = 2;
+    engine.store.advanceTick();
     const result = runtime.inferAndTransition(
       engine,
-      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      [{ type: 'combat.entity.defeated', payload: { entityId: engine.world.playerId } }] as any,
       'attack',
     );
 
@@ -774,14 +872,13 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
   });
 
   it('fires the death hookPoint exactly once on the turn death is entered', async () => {
-    const world = makeWorld(10);
-    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const engine = makeEngine(10);
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
 
     await runtime.processPresentation(
       engine,
-      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      [{ type: 'combat.entity.defeated', payload: { entityId: engine.world.playerId } }] as any,
       'attack',
     );
 
@@ -791,8 +888,7 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
   });
 
   it('does NOT re-fire the death hookPoint on a second consecutive turn with hp still 0 and no new defeat event (repeat-fire regression)', async () => {
-    const world = makeWorld(0); // player already at 0 hp -- hazard-style death, no event needed (F-e57d6a60)
-    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const engine = makeEngine(0); // player already at 0 hp -- hazard-style death, no event needed (F-e57d6a60)
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
 
@@ -808,7 +904,7 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
     // defeat event. The OLD level-triggered gate (isPlayerDefeatEvent || isPlayerAtZeroHp)
     // would re-fire here every turn indefinitely; the new edge-triggered gate must not,
     // because priorState is already 'menu' going into this turn.
-    engine.tick = 2;
+    engine.store.advanceTick();
     await runtime.processPresentation(engine, [], 'wait');
     expect(runtime.stateMachine.current).toBe('menu');
     deathFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'death');
@@ -816,8 +912,7 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
   });
 
   it('fires the death hookPoint again on a fresh death after an intervening non-menu turn', async () => {
-    const world = makeWorld(0);
-    const engine = { world, store: { state: {} }, tick: 1 } as any;
+    const engine = makeEngine(0);
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
 
@@ -828,8 +923,8 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
 
     // Intervening turn: the player is revived (hp restored above 0) and no death
     // signal fires, so the state machine leaves 'menu'.
-    world.entities.p1.resources.hp = 10;
-    engine.tick = 2;
+    engine.world.entities[engine.world.playerId].resources.hp = 10;
+    engine.store.advanceTick();
     await runtime.processPresentation(
       engine,
       [{ type: 'world.zone.entered', payload: {} }] as any,
@@ -842,10 +937,10 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
 
     // Turn 3: a fresh, later death must fire the hookPoint again -- the edge-triggered
     // gate must not have "used up" its one firing permanently.
-    engine.tick = 3;
+    engine.store.advanceTick();
     await runtime.processPresentation(
       engine,
-      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      [{ type: 'combat.entity.defeated', payload: { entityId: engine.world.playerId } }] as any,
       'attack',
     );
     expect(runtime.stateMachine.current).toBe('menu');
@@ -858,26 +953,19 @@ describe('immersion-runtime: inferAndTransition return shape + edge-triggered de
 // just be present on the hook's raw (unconsumed) return value ───
 
 describe('immersion-runtime: death uiEffects dispatch (F-6ef6e5a0)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('dispatches the death fade-out through bridge.applyUiEffect on a player death', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const applyUiEffectSpy = vi.spyOn(runtime.bridge, 'applyUiEffect');
 
     await runtime.processPresentation(
-      minimalEngine,
-      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: engine.world.playerId } }] as any,
       'attack',
     );
 
@@ -894,18 +982,11 @@ describe('immersion-runtime: death uiEffects dispatch (F-6ef6e5a0)', () => {
 // scheduleAll() never reads plan.uiEffects, so they were silently dropped. ───
 
 describe('immersion-runtime: narrationPlan uiEffects dispatch (F-4ece453e)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('dispatches a narrator-authored flash effect through bridge.applyUiEffect and into the returned McpToolCall[]', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
@@ -919,7 +1000,7 @@ describe('immersion-runtime: narrationPlan uiEffects dispatch (F-4ece453e)', () 
       musicCue: undefined,
     } as any;
 
-    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    const calls = await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     expect(applyUiEffectSpy).toHaveBeenCalledWith({ type: 'flash', durationMs: 200 });
     const uiEffectCalls = calls.filter((c) => c.tool === '__ui_effect_intent__');
@@ -945,7 +1026,7 @@ describe('immersion-runtime: narrationPlan uiEffects dispatch (F-4ece453e)', () 
       musicCue: undefined,
     } as any;
 
-    const calls = await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    const calls = await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     expect(applyUiEffectSpy).toHaveBeenCalledTimes(3);
     const uiEffectCalls = calls.filter((c) => c.tool === '__ui_effect_intent__');
@@ -962,18 +1043,11 @@ describe('immersion-runtime: narrationPlan uiEffects dispatch (F-4ece453e)', () 
 // pipeline in a single turn. ───
 
 describe('immersion-runtime: sfx/ambientLayers cap (F-52475879)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('caps the sfx array passed to audioDirector.schedule so an oversized narrator plan cannot flood the pipeline', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
@@ -991,7 +1065,7 @@ describe('immersion-runtime: sfx/ambientLayers cap (F-52475879)', () => {
       musicCue: undefined,
     } as any;
 
-    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     expect(scheduleSpy).toHaveBeenCalledTimes(1);
     const scheduledPlan = scheduleSpy.mock.calls[0][0];
@@ -1016,7 +1090,7 @@ describe('immersion-runtime: sfx/ambientLayers cap (F-52475879)', () => {
       musicCue: undefined,
     } as any;
 
-    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     expect(scheduleSpy).toHaveBeenCalledTimes(1);
     const scheduledPlan = scheduleSpy.mock.calls[0][0];
@@ -1046,7 +1120,7 @@ describe('immersion-runtime: sfx/ambientLayers cap (F-52475879)', () => {
       musicCue: undefined,
     } as any;
 
-    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     const scheduledPlan = scheduleSpy.mock.calls[0][0];
     expect(scheduledPlan.sfx.length).toBeLessThan(11);
@@ -1056,26 +1130,19 @@ describe('immersion-runtime: sfx/ambientLayers cap (F-52475879)', () => {
 // ─── F-91f803b2: combat-end's victory cue must not fire on a player-death turn ───
 
 describe('immersion-runtime: combat-end suppressed on player death (F-91f803b2)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   it('does not play the ui_success victory chime when the player is the defeated entity', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
 
     await runtime.processPresentation(
-      minimalEngine,
-      [{ type: 'combat.entity.defeated', payload: { entityId: 'p1' } }] as any,
+      engine,
+      [{ type: 'combat.entity.defeated', payload: { entityId: engine.world.playerId } }] as any,
       'attack',
     );
 
@@ -1089,7 +1156,7 @@ describe('immersion-runtime: combat-end suppressed on player death (F-91f803b2)'
     const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
 
     await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'combat.entity.defeated', payload: { entityId: 'goblin-1' } }] as any,
       'attack',
     );
@@ -1111,19 +1178,27 @@ describe('immersion-runtime: combat-end suppressed on player death (F-91f803b2)'
 // remain. ───
 
 describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231c)', () => {
+  // F-0ad073b8: adds a hostile entity into the real engine's player zone via the real
+  // Engine's own store.addEntity() (the same API world-gen.ts's NPC-add path uses,
+  // src/foundry/world-gen.ts) instead of hand-typing a WorldState.entities bag.
+  const addHostile = (engine: Engine, id: string, hp: number): void => {
+    engine.store.addEntity({
+      id,
+      blueprintId: id,
+      type: 'enemy',
+      name: 'Goblin',
+      tags: ['hostile'],
+      stats: {},
+      resources: { hp },
+      statuses: [],
+      zoneId: engine.world.locationId,
+    });
+  };
+
   it('does not play the victory chime / soften music when other hostiles are still alive', async () => {
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: {
-        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
-        'goblin-1': { name: 'Goblin', resources: { hp: 5 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
-        'goblin-2': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
-      },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-    } as any;
-    const engine = { world, store: { state: {} } } as any;
+    const engine = createGame();
+    addHostile(engine, 'goblin-1', 5);
+    addHostile(engine, 'goblin-2', 0);
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
@@ -1141,17 +1216,8 @@ describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231
   });
 
   it('plays the victory chime once the LAST hostile falls', async () => {
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: {
-        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
-        'goblin-1': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
-      },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-    } as any;
-    const engine = { world, store: { state: {} } } as any;
+    const engine = createGame();
+    addHostile(engine, 'goblin-1', 0);
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
@@ -1167,18 +1233,9 @@ describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231
   });
 
   it('does not fire the combat-end hookPoint at all while hostiles remain (fireEventHooks dispatch gate)', async () => {
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: {
-        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
-        'goblin-1': { name: 'Goblin', resources: { hp: 5 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
-        'goblin-2': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
-      },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-    } as any;
-    const engine = { world, store: { state: {} } } as any;
+    const engine = createGame();
+    addHostile(engine, 'goblin-1', 5);
+    addHostile(engine, 'goblin-2', 0);
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
@@ -1194,17 +1251,8 @@ describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231
   });
 
   it('still fires the combat-end hookPoint once the encounter is genuinely over', async () => {
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: {
-        p1: { name: 'Hero', resources: { hp: 10 }, statuses: [], tags: [] },
-        'goblin-1': { name: 'Goblin', resources: { hp: 0 }, statuses: [], tags: ['hostile'], zoneId: 'z1' },
-      },
-      zones: { z1: { name: 'Town', neighbors: [] } },
-      factions: {},
-    } as any;
-    const engine = { world, store: { state: {} } } as any;
+    const engine = createGame();
+    addHostile(engine, 'goblin-1', 0);
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
@@ -1228,18 +1276,11 @@ describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231
 // ImmersionRuntime needs its own de-dup, independent of AudioDirector. ───
 
 describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)', () => {
-  const minimalWorld = {
-    playerId: 'p1',
-    locationId: 'z1',
-    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
-    zones: { z1: { name: 'Town', neighbors: [] } },
-    factions: {},
-  } as any;
+  let engine: Engine;
 
-  const minimalEngine = {
-    world: minimalWorld,
-    store: { state: {} },
-  } as any;
+  beforeEach(() => {
+    engine = createGame();
+  });
 
   // Minimal but VALIDATION-PASSING NarrationPlan base — audio-director's schedule()
   // runs validateNarrationPlan() first (dist/director.js) and returns zero commands
@@ -1266,12 +1307,12 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
       ambientLayers: [{ ...rainCue }],
     } as any);
 
-    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    await runtime.processPresentation(engine, [], 'look', makePlan());
     expect(setAmbientSpy).toHaveBeenCalledTimes(1);
 
     // Turn 2: the LLM narrator proposes the SAME cue again (sustained rainstorm mood)
     // -- must be suppressed instead of printing a second identical cue line.
-    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    await runtime.processPresentation(engine, [], 'look', makePlan());
     expect(setAmbientSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -1279,13 +1320,13 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
     const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
     const setAmbientSpy = vi.spyOn(runtime.bridge, 'setAmbient');
 
-    await runtime.processPresentation(minimalEngine, [], 'look', {
+    await runtime.processPresentation(engine, [], 'look', {
       ...basePlan, musicCue: undefined,
       ambientLayers: [{ layerId: 'ambient_rain', action: 'crossfade', volume: 0.4, fadeMs: 2000 }],
     } as any);
     expect(setAmbientSpy).toHaveBeenCalledTimes(1);
 
-    await runtime.processPresentation(minimalEngine, [], 'look', {
+    await runtime.processPresentation(engine, [], 'look', {
       ...basePlan, musicCue: undefined,
       ambientLayers: [{ layerId: 'ambient_rain', action: 'stop', volume: 0, fadeMs: 1000 }],
     } as any);
@@ -1304,10 +1345,10 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
       musicCue: { action: 'soften', fadeMs: 1000 },
     } as any);
 
-    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    await runtime.processPresentation(engine, [], 'look', makePlan());
     expect(setMusicSpy).toHaveBeenCalledTimes(1);
 
-    await runtime.processPresentation(minimalEngine, [], 'look', makePlan());
+    await runtime.processPresentation(engine, [], 'look', makePlan());
     expect(setMusicSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -1315,13 +1356,13 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
     const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
     const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
 
-    await runtime.processPresentation(minimalEngine, [], 'look', {
+    await runtime.processPresentation(engine, [], 'look', {
       ...basePlan, ambientLayers: [],
       musicCue: { action: 'soften', fadeMs: 1000 },
     } as any);
     expect(setMusicSpy).toHaveBeenCalledTimes(1);
 
-    await runtime.processPresentation(minimalEngine, [], 'look', {
+    await runtime.processPresentation(engine, [], 'look', {
       ...basePlan, ambientLayers: [],
       musicCue: { action: 'intensify', fadeMs: 300 },
     } as any);
@@ -1339,7 +1380,7 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
 
     // Turn 1: entering combat fires combatStartHook's hook-sourced 'intensify' cue.
     await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'combat.contact.hit', payload: {} }] as any,
       'attack',
     );
@@ -1353,7 +1394,7 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
     // validateNarrationPlan rejecting an incomplete plan before reaching the dedup
     // logic at all.
     await runtime.processPresentation(
-      minimalEngine,
+      engine,
       [{ type: 'combat.contact.hit', payload: {} }] as any,
       'attack',
       { ...basePlan, ambientLayers: [], musicCue: { action: 'intensify', fadeMs: 300 } } as any,
@@ -1378,7 +1419,7 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
       musicCue: undefined,
     } as any;
 
-    await runtime.processPresentation(minimalEngine, [], 'look', narrationPlan);
+    await runtime.processPresentation(engine, [], 'look', narrationPlan);
 
     const scheduledPlan = scheduleSpy.mock.calls[0][0];
     expect(scheduledPlan.ambientLayers.length).toBeLessThan(10);
@@ -1386,16 +1427,110 @@ describe('immersion-runtime: ambient/music cue de-dup across turns (F-d8d1f51d)'
   });
 });
 
+// ─── F-8986d316: lastAmbientAction is keyed on narrator-proposed AmbientCue.layerId,
+// a bare (not closed-enum) string populated by free-text LLM scene generation every
+// turn, with no eviction -- over a long session a narrator inconsistent in naming
+// ambient layers would grow the tracking Map by one entry per distinct layerId it
+// ever proposes, unbounded for the ImmersionRuntime instance's lifetime. ───
+
+describe('immersion-runtime: lastAmbientAction is capped (F-8986d316)', () => {
+  const basePlan = {
+    sceneText: 'The scene continues.',
+    tone: 'calm' as const,
+    urgency: 'normal' as const,
+    interruptibility: 'free' as const,
+    sfx: [],
+    uiEffects: [],
+  };
+
+  it('evicts the oldest tracked layer once distinct ambient layer ids exceed the cap, so a since-evicted layer re-emits its cue instead of staying deduped forever', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    const engine = createGame();
+    const setAmbientSpy = vi.spyOn(runtime.bridge, 'setAmbient');
+
+    // Feed 33 DISTINCT layer ids across 33 turns (one per turn, well under the
+    // per-plan MAX_AMBIENT_PER_PLAN=3 cap) -- one more than the 32-layer bound, so
+    // the very first layer ('layer-0') must be evicted as the oldest entry.
+    for (let i = 0; i < 33; i++) {
+      await runtime.processPresentation(engine, [], 'look', {
+        ...basePlan,
+        musicCue: undefined,
+        ambientLayers: [{ layerId: `layer-${i}`, action: 'crossfade' as const, volume: 0.4, fadeMs: 1000 }],
+      } as any);
+    }
+    setAmbientSpy.mockClear();
+
+    // 'layer-0' was the FIRST entry inserted -- now evicted. Proposing the SAME
+    // action it originally had must NOT be treated as a duplicate anymore (its
+    // tracking entry is gone), so it re-emits instead of staying silently deduped
+    // forever.
+    await runtime.processPresentation(engine, [], 'look', {
+      ...basePlan,
+      musicCue: undefined,
+      ambientLayers: [{ layerId: 'layer-0', action: 'crossfade' as const, volume: 0.4, fadeMs: 1000 }],
+    } as any);
+    expect(setAmbientSpy).toHaveBeenCalledTimes(1);
+    setAmbientSpy.mockClear();
+
+    // 'layer-32' (the most recently inserted, still within the cap) must still be
+    // correctly deduped when its action repeats -- the cap must not over-evict.
+    await runtime.processPresentation(engine, [], 'look', {
+      ...basePlan,
+      musicCue: undefined,
+      ambientLayers: [{ layerId: 'layer-32', action: 'crossfade' as const, volume: 0.4, fadeMs: 1000 }],
+    } as any);
+    expect(setAmbientSpy).not.toHaveBeenCalled();
+  });
+
+  it('logs a one-time debug warning when the cap first evicts an entry, not once per eviction', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    runtime.debugMode = true;
+    const engine = createGame();
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    for (let i = 0; i < 40; i++) {
+      await runtime.processPresentation(engine, [], 'look', {
+        ...basePlan,
+        musicCue: undefined,
+        ambientLayers: [{ layerId: `layer-${i}`, action: 'crossfade' as const, volume: 0.4, fadeMs: 1000 }],
+      } as any);
+    }
+
+    const capWarnings = stderrSpy.mock.calls.filter(
+      ([msg]) => typeof msg === 'string' && msg.includes('lastAmbientAction exceeded'),
+    );
+    expect(capWarnings).toHaveLength(1);
+    stderrSpy.mockRestore();
+  });
+
+  it('does not log the cap warning when debugMode is disabled', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    runtime.debugMode = false;
+    const engine = createGame();
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    for (let i = 0; i < 40; i++) {
+      await runtime.processPresentation(engine, [], 'look', {
+        ...basePlan,
+        musicCue: undefined,
+        ambientLayers: [{ layerId: `layer-${i}`, action: 'crossfade' as const, volume: 0.4, fadeMs: 1000 }],
+      } as any);
+    }
+
+    const capWarnings = stderrSpy.mock.calls.filter(
+      ([msg]) => typeof msg === 'string' && msg.includes('lastAmbientAction exceeded'),
+    );
+    expect(capWarnings).toHaveLength(0);
+    stderrSpy.mockRestore();
+  });
+});
+
 describe('immersion-runtime: hazard death with no defeat event (F-e57d6a60)', () => {
   it('engages death presentation (state -> menu, critical alarm dispatched) when hp reaches zero with no defeat event', async () => {
-    const world = {
-      playerId: 'p1',
-      locationId: 'z1',
-      entities: { p1: { name: 'Hero', resources: { hp: 0 }, statuses: [] } },
-      zones: { z1: { name: 'Hazard Bog', neighbors: [] } },
-      factions: {},
-    } as any;
-    const engine = { world, store: { state: {} } } as any;
+    // F-0ad073b8: real createGame() Engine with the player's hp zeroed directly, not a
+    // hand-typed WorldState/Engine pair.
+    const engine = createGame();
+    engine.world.entities[engine.world.playerId].resources.hp = 0;
 
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');

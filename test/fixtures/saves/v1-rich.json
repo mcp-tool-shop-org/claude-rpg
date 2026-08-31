@@ -22,7 +22,7 @@
   "characterName": "Aldric",
   "characterLevel": 3,
   "characterTitle": "Wanderer",
-  "packId": "starter-fantasy",
+  "packId": "chapel-threshold",
   "genre": "dark fantasy",
   "playerRumors": "[{\"id\":\"r1\",\"text\":\"The chapel guards whisper of a sealed crypt.\",\"source\":\"guard\",\"tick\":1}]",
   "activePressures": "[{\"id\":\"p1\",\"kind\":\"faction-conflict\",\"description\":\"Rival guilds clash over chapel territory\",\"severity\":2}]",

@@ -96,6 +96,85 @@ describe('generateSuggestions', () => {
     expect(discovery).toBeUndefined();
   });
 
+  // F-ecf4e179: the post-turn-10 filter used to be a hardcoded allowlist of
+  // trigger literals kept in sync by hand with the rules above -- a future
+  // rule whose trigger a contributor forgot to add would silently stop
+  // firing past turn 10 with no test failure. Removed the allowlist (see
+  // this file's own doc comment on why it was always redundant) rather than
+  // replacing it with a differently-shaped list that could drift the same
+  // way. These cases exercise every remaining trigger this function can
+  // produce against the real turnCount > 10 path -- each one calls
+  // generateSuggestions() directly rather than comparing two hardcoded
+  // lists against each other, so a real regression (the filter coming back
+  // and silently dropping one of these) fails here, not just in a
+  // reconciliation check.
+  describe('every non-early trigger survives past turn 10 (F-ecf4e179)', () => {
+    it('pressure-hint', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        recommendation: { situationTag: 'stable', top3: [{ reason: 'Address the threat', urgency: 0.5 }] },
+        activePressures: [{ urgency: 0.7 }] as any[],
+      }));
+      expect(result.find((s) => s.trigger === 'pressure-hint')).toBeTruthy();
+    });
+
+    it('supply-crisis', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        hasSupplyCrisis: true,
+      }));
+      expect(result.find((s) => s.trigger === 'supply-crisis')).toBeTruthy();
+    });
+
+    it('black-market', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        hasBlackMarket: true,
+      }));
+      expect(result.find((s) => s.trigger === 'black-market')).toBeTruthy();
+    });
+
+    it('crafting-shortage', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        hasCraftingShortage: true,
+        hasCraftableMaterials: true,
+      }));
+      expect(result.find((s) => s.trigger === 'crafting-shortage')).toBeTruthy();
+    });
+
+    it('new-opportunity', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        hasNewOpportunity: true,
+      }));
+      expect(result.find((s) => s.trigger === 'new-opportunity')).toBeTruthy();
+    });
+
+    it('expiring-opportunity', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        hasExpiringOpportunity: true,
+      }));
+      expect(result.find((s) => s.trigger === 'expiring-opportunity')).toBeTruthy();
+    });
+
+    it('stale-opportunity', () => {
+      const result = generateSuggestions(defaults({
+        turnCount: 15,
+        hasUsedLeverage: true,
+        hasStaleAcceptedOpportunity: true,
+      }));
+      expect(result.find((s) => s.trigger === 'stale-opportunity')).toBeTruthy();
+    });
+  });
+
   it('returns endgame-detected suggestion when endgame is detected', () => {
     const result = generateSuggestions(defaults({
       turnCount: 20,

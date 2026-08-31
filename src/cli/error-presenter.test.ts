@@ -76,6 +76,39 @@ describe('error-presenter: opening narration', () => {
   });
 });
 
+/**
+ * F-cdbe6d09: 'startup' is not a branched ErrorContext of its own in
+ * classifyForPresentation, so a plain Error used to fall to
+ * presentUnknownError, which always returns exitCode: null (non-fatal) --
+ * but bin.ts's unhandledRejection handler (registered for the entire
+ * process lifetime, not just true startup) unconditionally calls
+ * process.exit() right after presentError() returns, so the rendered copy
+ * ("Try again, or type save to keep your progress") contradicted the
+ * process force-exiting immediately after. 'startup' now joins 'opening'
+ * in the forced-fatal branch, so renderError's fatal styling (red +
+ * "Exiting.") matches reality.
+ */
+describe('error-presenter: startup / unhandledRejection (F-cdbe6d09)', () => {
+  it('a plain Error under context "startup" is fatal (exit 1), not a reprompt', () => {
+    const err = new Error('something escaped the main() promise chain');
+    const p = classifyForPresentation(err, 'startup');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('a NarrationError under context "startup" is also fatal, even though every NarrationError branch defaults to exitCode: null', () => {
+    const err = new NarrationError({ kind: 'transport', message: 'network blip' });
+    const p = classifyForPresentation(err, 'startup');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('renders with fatal styling ("Exiting.") for a startup error, matching the unconditional exit that follows', () => {
+    const err = new Error('boom');
+    const p = classifyForPresentation(err, 'startup');
+    const rendered = renderError(p, false);
+    expect(rendered).toContain('Exiting.');
+  });
+});
+
 // ─── Save Errors ────────────────────────────────────────────
 
 describe('error-presenter: save errors', () => {
@@ -213,6 +246,17 @@ describe('error-presenter: exit codes', () => {
   it('opening errors return 1 (fatal)', () => {
     const err = new NarrationError({ kind: 'unexpected', message: 'oops' });
     expect(classifyForPresentation(err, 'opening').exitCode).toBe(1);
+  });
+
+  // F-cdbe6d09: bin.ts's process-lifetime unhandledRejection handler passes
+  // context: 'startup' and unconditionally calls process.exit() right after
+  // presentError() returns (both there and in the top-level main().catch()
+  // backstop) -- before this fix, an ordinary Error hit presentUnknownError
+  // and got exitCode: null, rendering a non-fatal yellow "try again" warning
+  // immediately followed by a force-exit that contradicted it.
+  it('startup errors return 1 (fatal), matching that every startup call site exits unconditionally right after', () => {
+    const err = new Error('boom');
+    expect(classifyForPresentation(err, 'startup').exitCode).toBe(1);
   });
 });
 

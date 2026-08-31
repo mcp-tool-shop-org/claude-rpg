@@ -327,9 +327,17 @@ describe('renderDeathScreen (F-7484bd2e, SLATE-6, director ruling R3: setback no
   it('offers a continue-first affordance (a setback, not an ending) and only promises real commands', () => {
     const output = renderDeathScreen({ narration: 'Darkness takes you.' });
     expect(output).toContain('"continue"');
-    // Coordinator stitch (wave 18): no dispatchable "save" command exists —
-    // saving happens on quit/autosave, so the copy promises exactly that.
-    expect(output).toContain('"quit" will save and exit.');
+    // F-7d57bf98 (wave-6 amend): the previous pin here asserted
+    // '"quit" will save and exit.' on the theory that "saving happens on
+    // quit/autosave, so the copy promises exactly that" -- that theory is
+    // false. "save" IS a real dispatchable command (bin.ts:819,
+    // `if (trimmed === 'save')`), separate from quit, and neither
+    // game.ts's __QUIT__ sentinel nor bin.ts's __QUIT__ handler
+    // (bin.ts:904-913) ever calls it. Inverted to pin the honest copy and
+    // guard against the false promise regressing.
+    expect(output).toContain('"quit" exits without saving');
+    expect(output).toContain('"save" first');
+    expect(output).not.toContain('"quit" will save and exit.');
     expect(output).not.toContain('"save" and "quit"');
   });
 

@@ -130,6 +130,51 @@ function buildSaveInput(session: GameSession, savePath: string, packId?: string)
   };
 }
 
+/**
+ * F-4997779f: PFE-002's graceful SIGINT contract ("first Ctrl+C saves,
+ * second force-exits") is only registered once runGameLoop() starts --
+ * well after runNew()'s generateWorld() call (the largest LLM token budget
+ * anywhere in this app) and runPlay's buildCharacter() flow have already
+ * run. A player who Ctrl+C's during world generation or character creation
+ * previously got Node's raw default SIGINT disposition (immediate
+ * termination, exit 130, no "Farewell." message) instead of the
+ * considerate exit the rest of the app markets. Neither pre-gameplay
+ * window has session data to protect yet, so this is deliberately lighter
+ * than PFE-002's save-then-exit dance: a single Ctrl+C here just prints
+ * the same farewell and exits cleanly (exit 0, matching every other
+ * graceful exit path in this file).
+ *
+ * Callers MUST invoke the returned disposer immediately before handing off
+ * to runGameLoop (which installs its own permanent SIGINT handler), so the
+ * two never both fire for the same keypress.
+ */
+function installEarlySigintGuard(): () => void {
+  const handler = (): void => {
+    console.log('\n  Farewell.\n');
+    process.exit(0);
+  };
+  process.on('SIGINT', handler);
+  return () => {
+    process.removeListener('SIGINT', handler);
+  };
+}
+
+/**
+ * Promisified readline question helper (avoids recursive callbacks growing
+ * the stack). PFE-001: rejects on 'close' (Ctrl+D / pipe EOF) so a caller
+ * awaiting an answer doesn't hang forever if stdin closes before one
+ * arrives. Hoisted to module scope (F-e3f935ec) so both runGameLoop's
+ * per-turn prompt and runLoad's save-selection prompt share the one PFE-001
+ * guard instead of runLoad bypassing it via its own raw, close-unaware
+ * `new Promise<string>((resolve) => { rl.question(...) })`.
+ */
+function question(rlInst: ReturnType<typeof createInterface>, promptText: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    rlInst.question(promptText, resolve);
+    rlInst.once('close', () => reject(new Error('__STDIN_CLOSED__')));
+  });
+}
+
 let debugMode = false;
 
 async function main(): Promise<void> {
@@ -139,9 +184,20 @@ async function main(): Promise<void> {
   // Catch unhandled rejections from fire-and-forget callback chains (e.g. rl.question)
   // that escape the main() promise chain. Routes through presentError so users never
   // see raw stack traces.
+  //
+  // F-cdbe6d09: this used to call presentError(...) then unconditionally
+  // process.exit(1), discarding presentError's own returned exit code --
+  // the only call site in this file that discarded it outright (the
+  // opening-narration handler below correctly does
+  // `process.exit(exitCode ?? 1)`). Now matches that pattern; combined with
+  // classifyForPresentation's 'startup' fatal branch (error-presenter.ts),
+  // the rendered copy and the actual exit agree. This handler stays
+  // registered for the entire process lifetime, not just true startup, so
+  // any promise that escapes the main chain later during actual gameplay
+  // hits this same path.
   process.on('unhandledRejection', (reason: unknown) => {
-    presentError(reason, 'startup', debugMode);
-    process.exit(1);
+    const exitCode = presentError(reason, 'startup', debugMode);
+    process.exit(exitCode ?? 1);
   });
 
   const filteredArgs = args.filter((a) => a !== '--debug');
@@ -154,6 +210,21 @@ async function main(): Promise<void> {
   if (filteredArgs.length === 0 || filteredArgs.includes('--help') || filteredArgs.includes('-h')) {
     console.log(renderUsage());
     process.exit(0);
+  }
+
+  const command = filteredArgs[0];
+
+  // F-f51578f1: 'archive' (runArchive -> listArchivedCampaigns +
+  // renderArchiveBrowser) only reads saved/archived campaign files from
+  // disk and renders them -- it makes no LLM calls at all. Dispatches here,
+  // before the ANTHROPIC_API_KEY gate below, the same way --version/--help
+  // already bypass that gate above. usage.ts's own --help text documents
+  // 'claude-rpg archive' as a peer of --version/--help for exactly this
+  // reason -- a user who just wants to browse completed campaigns shouldn't
+  // be blocked by a key requirement that command never uses.
+  if (command === 'archive') {
+    await runArchive();
+    return;
   }
 
   // Check for API key
@@ -170,16 +241,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const command = filteredArgs[0];
-
   // PFE-006: Command dispatch is an if/else chain. If more commands are added,
   // consider extracting to a command registry map (e.g. Record<string, (args) => Promise<void>>).
   if (command === 'play') {
     await runPlay(filteredArgs.slice(1));
   } else if (command === 'load') {
     await runLoad();
-  } else if (command === 'archive') {
-    await runArchive();
   } else if (command === 'new') {
     const raw = filteredArgs.slice(1).join(' ');
     // Strip matching quote pairs only (e.g. "foo" or 'foo', not "foo')
@@ -231,6 +298,12 @@ async function runPlay(args: string[]): Promise<void> {
     historySize: 100,
   });
 
+  // F-4997779f: covers Ctrl+C for the entire pre-gameplay window (character
+  // creation below, plus the synchronous session setup that follows it) --
+  // disposed right before runGameLoop hands off to its own permanent
+  // SIGINT handler.
+  const disposeEarlySigintGuard = installEarlySigintGuard();
+
   // Character creation flow (includes pack selection). Director ruling R2:
   // a --world selection stays LOCKED through the character retry loop --
   // packInfo is a function-scope parameter builder.ts's own retry loop
@@ -273,6 +346,7 @@ async function runPlay(args: string[]): Promise<void> {
   const initialEconomies = cloneEconomies(session.districtEconomies);
   const initialCustom = structuredClone(result.profile.custom);
   const initialOpportunities = structuredClone(session.activeOpportunities);
+  disposeEarlySigintGuard();
   await runGameLoop({
     session, rl, packId: result.pack.meta.id, presentationBox, streamBox, spinnerBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
@@ -298,6 +372,11 @@ async function runLoad(): Promise<void> {
     completer: slashCompleter,
     historySize: 100,
   });
+
+  // F-4997779f: covers Ctrl+C for the save-selection prompt below and the
+  // rest of this pre-gameplay window -- disposed right before runGameLoop
+  // hands off to its own permanent SIGINT handler.
+  const disposeEarlySigintGuard = installEarlySigintGuard();
 
   console.log('\n  Saved Games:\n');
   for (let i = 0; i < saves.length; i++) {
@@ -328,9 +407,26 @@ async function runLoad(): Promise<void> {
   // keeps the session alive.
   let idx: number | null = null;
   while (idx === null) {
-    const answer = await new Promise<string>((resolve) => {
-      rl.question(formatSaveSelectionPrompt(saves.length), resolve);
-    });
+    // F-e3f935ec: previously a raw `new Promise<string>((resolve) => {
+    // rl.question(...) })` with no 'close'-event listener, unlike the
+    // shared question() helper (PFE-001) used below/in runGameLoop -- if
+    // stdin closed (Ctrl+D, or piped/redirected input running out) while at
+    // this prompt, that Promise never resolved or rejected and the process
+    // hung indefinitely with no error and no exit code.
+    let answer: string;
+    try {
+      answer = await question(rl, formatSaveSelectionPrompt(saves.length));
+    } catch (err) {
+      if (err instanceof Error && err.message === '__STDIN_CLOSED__') {
+        // No session exists yet at this point (still choosing a save), so
+        // there is nothing to autosave -- just exit cleanly, mirroring
+        // this same loop's existing 'cancel' branch below.
+        console.log('\n  Input stream closed.');
+        rl.close();
+        process.exit(0);
+      }
+      throw err;
+    }
 
     if (answer.toLowerCase() === 'cancel') {
       console.log('  Cancelled.');
@@ -505,6 +601,7 @@ async function runLoad(): Promise<void> {
   const initialEconomies = cloneEconomies(session.districtEconomies);
   const initialCustom = profile ? structuredClone(profile.custom) : {};
   const initialOpportunities = structuredClone(session.activeOpportunities);
+  disposeEarlySigintGuard();
   await runGameLoop({
     session, rl, packId: savedSession.packId, presentationBox, streamBox, spinnerBox,
     initialSnapshot: snapshot, initialWorldSnapshot: worldSnap, initialDistrictMoods: districtMoods,
@@ -519,6 +616,13 @@ async function runArchive(): Promise<void> {
 }
 
 async function runNew(worldPrompt: string): Promise<void> {
+  // F-4997779f: covers Ctrl+C for the world-gen call below (this file's own
+  // comment on generateWorld calls it "the largest LLM token budget
+  // anywhere in this app") through the rest of this pre-gameplay window --
+  // disposed right before runGameLoop hands off to its own permanent
+  // SIGINT handler.
+  const disposeEarlySigintGuard = installEarlySigintGuard();
+
   console.log('\n  Generating world...\n');
 
   // F-b1c363e3: generateWorld's single generateStructured call carries the
@@ -582,6 +686,7 @@ async function runNew(worldPrompt: string): Promise<void> {
     historySize: 100,
   });
 
+  disposeEarlySigintGuard();
   await runGameLoop({ session, rl, presentationBox, streamBox, spinnerBox });
 }
 
@@ -695,7 +800,7 @@ function flushPresentationCues(box: PresentationBox): void {
   const calls = box.calls;
   box.calls = [];
   if (calls.length === 0) return;
-  const cues = renderPresentationCues(calls);
+  const cues = renderPresentationCues(calls, debugMode);
   if (cues) console.log(cues);
 }
 
@@ -737,14 +842,9 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
     process.exit(exitCode ?? 1);
   }
 
-  // Promisified readline question helper (avoids recursive callbacks growing the stack).
-  // PFE-001: Rejects on 'close' (Ctrl+D / pipe EOF) so the game loop doesn't hang forever.
-  function question(rlInst: ReturnType<typeof createInterface>, promptText: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      rlInst.question(promptText, resolve);
-      rlInst.once('close', () => reject(new Error('__STDIN_CLOSED__')));
-    });
-  }
+  // question() (PFE-001: rejects on readline 'close' so this doesn't hang
+  // forever on Ctrl+D/pipe EOF) is now a module-level helper shared with
+  // runLoad's save-selection prompt -- see its doc comment above.
 
   // PFE-002: Graceful SIGINT handling — first Ctrl+C attempts save, second force-exits.
   let sigintCount = 0;
@@ -923,7 +1023,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       // separate call after the full screen -- the old order printed cues
       // BELOW the prompt asking what the player wants to do next, between it
       // and the actual '  > ' input marker.
-      const cues = renderPresentationCues(presentationBox.calls);
+      const cues = renderPresentationCues(presentationBox.calls, debugMode);
       presentationBox.calls = [];
       console.log(insertCuesBeforePrompt(output, cues));
     } catch (err) {

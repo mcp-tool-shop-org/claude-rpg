@@ -69,6 +69,14 @@ export function createStreamPresenter(): StreamSession {
   // F-c94fa782: exact text written to stdout since (and including) the
   // opening indent, so clear() can compute how many rows to erase.
   let written = '';
+  // F-5880e27f: terminal width snapshotted once when streaming starts, not
+  // re-read live in clear(). `written` accumulates over the whole streaming
+  // window, which can span several seconds -- the already-printed text's
+  // real on-screen wrap points were fixed at the width each chunk was
+  // written under, so recomputing row count against a width the player
+  // changed mid-stream (a resize) produces wrong cursor-movement math.
+  // TTY-only, matching clear()'s own TTY gate below.
+  let streamColumns = 80;
 
   const onChunk: StreamCallback = (chunk: string) => {
     if (!started) {
@@ -82,6 +90,7 @@ export function createStreamPresenter(): StreamSession {
       process.stdout.write('\n');
       written = '\n';
       started = true;
+      streamColumns = process.stdout.columns || 80;
     }
     process.stdout.write(chunk);
     written += chunk;
@@ -106,7 +115,7 @@ export function createStreamPresenter(): StreamSession {
 
   const clear = () => {
     if (!started || !process.stdout.isTTY) return;
-    const rows = computeClearedRowCount(written, process.stdout.columns || 80);
+    const rows = computeClearedRowCount(written, streamColumns);
     if (rows > 0) moveCursor(process.stdout, 0, -rows);
     cursorTo(process.stdout, 0);
     clearScreenDown(process.stdout);

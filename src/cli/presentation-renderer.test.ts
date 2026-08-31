@@ -425,3 +425,46 @@ describe('cue label vocabulary-drift tripwire (F-7eb33249)', () => {
     }
   });
 });
+
+/**
+ * F-386bb9b2 (wave-6 amend): `call.tool` is a bare `string`, not a closed
+ * union, so an unrecognized tool value used to fall through the switch's
+ * default branch with zero player-visible feedback and zero diagnostic
+ * signal -- the same failure shape that already hit this file twice
+ * (F-53ca7db8's 'sting' action, F-08f594de's original ui-effect gap).
+ * renderPresentationCues now takes an optional `debugMode` flag (threaded
+ * from bin.ts's existing --debug flag) that surfaces anything landing in
+ * the default branch, other than the one documented/intentional 'speak'
+ * case, as a diagnostic line instead of staying silent.
+ */
+describe('renderPresentationCues unrecognized-tool diagnostic (F-386bb9b2)', () => {
+  it('stays silent for an unrecognized tool when debugMode is off (default), matching prior behavior', () => {
+    const calls: McpToolCall[] = [{ tool: 'some_future_tool', params: {} }];
+    expect(renderPresentationCues(calls)).toBe('');
+    expect(renderPresentationCues(calls, false)).toBe('');
+  });
+
+  it('surfaces a diagnostic line for an unrecognized tool when debugMode is on', () => {
+    const calls: McpToolCall[] = [{ tool: 'some_future_tool', params: {} }];
+    const text = renderPresentationCues(calls, true);
+    expect(text).not.toBe('');
+    // No raw underscored token reaches the screen, matching this file's
+    // existing humanizeToken() rule for sfx/ambient ids.
+    expect(text).not.toContain('some_future_tool');
+    expect(text).toContain('some future tool');
+  });
+
+  it('still stays silent for a "speak" call even when debugMode is on (the one documented, intentional default-branch case)', () => {
+    const calls: McpToolCall[] = [{ tool: 'speak', params: { text: 'hi', voice: 'narrator' } }];
+    expect(renderPresentationCues(calls, true)).toBe('');
+  });
+
+  it('does not affect recognized tools when debugMode is on', () => {
+    const calls: McpToolCall[] = [
+      { tool: 'sound_effect', params: { effect: 'click', intensity: 0.5 } },
+    ];
+    const withoutDebug = renderPresentationCues(calls, false);
+    const withDebug = renderPresentationCues(calls, true);
+    expect(withDebug).toBe(withoutDebug);
+  });
+});

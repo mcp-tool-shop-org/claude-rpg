@@ -289,7 +289,14 @@ export function renderDeathScreen(opts: { narration: string; characterName?: str
   parts.push('');
   parts.push(dim('─'.repeat(getTerminalWidth())));
   parts.push(hint('  Type "continue" when you are ready to rise.'));
-  parts.push(hint('  "quit" will save and exit.'));
+  // F-7d57bf98: this used to promise '"quit" will save and exit.', but
+  // nothing on the actual quit path saves -- game.ts's processInput()
+  // returns the __QUIT__ sentinel with no save call, and bin.ts's
+  // __QUIT__ handler only prints the recap and exits. Fixed the COPY to
+  // match reality (per coordinator ruling, quit's behavior is unchanged
+  // this wave) -- ' "save" first' matches the house voice already used
+  // by error-presenter.ts's 'type "save" to keep your progress.'
+  parts.push(hint('  "quit" exits without saving -- type "save" first to keep this.'));
   parts.push('');
   return parts.join('\n');
 }

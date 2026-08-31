@@ -15,7 +15,7 @@ docs/
 coverage/
 *.tsbuildinfo
 
-# The following rules (lines 14-16) are defensive/redundant and exist to explicitly
+# The following rules are defensive/redundant and exist to explicitly
 # document what should never be packaged, even if package.json's files field changes.
 # Currently, package.json limits distribution to ['dist', 'CHANGELOG.md'], which already
 # excludes these paths. If the files field is later expanded to include 'src/', 'test/',

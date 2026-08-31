@@ -2,7 +2,14 @@
 
 import { describe, it, expect } from 'vitest';
 import type { Engine, EntityState } from '@ai-rpg-engine/core';
-import { createPartyState, addCompanion, type CompanionState } from '@ai-rpg-engine/modules';
+import {
+  createPartyState,
+  addCompanion,
+  resolveEntityFaction,
+  deriveNpcRelationship,
+  deriveLoyaltyBreakpoint,
+  type CompanionState,
+} from '@ai-rpg-engine/modules';
 import {
   recruitCompanion,
   dismissCompanion,
@@ -54,6 +61,37 @@ function makeEngine(
       // syncCompanionMorale test now reaches setPartyState and would throw a
       // TypeError without this.
       modules: {},
+    },
+  } as unknown as Engine;
+}
+
+// F-444ac034 / F-761ad9eb: the descriptive pins below read engine-side
+// npc-agency/faction-cognition functions directly (not just companion-bridge
+// exports), which touch more of WorldState than makeEngine() above provides:
+// deriveNpcRelationship reads world.meta.tick (via getRecentMemories), and
+// one pin seeds a faction-cognition membership registry directly, mirroring
+// the existing precedent in src/game/game-state.test.ts's own
+// extractProfileHints suite (`modules: { 'faction-cognition': { membership,
+// factionCognition: {}, factionMembers } }`).
+function makeAgencyEngine(
+  entities: Record<string, EntityState>,
+  factionCognition?: { membership?: Record<string, string>; factionMembers?: Record<string, string[]> },
+): Engine {
+  return {
+    world: {
+      playerId: 'player',
+      entities,
+      zones: {},
+      meta: { tick: 0 },
+      modules: factionCognition
+        ? {
+            'faction-cognition': {
+              membership: factionCognition.membership ?? {},
+              factionCognition: {},
+              factionMembers: factionCognition.factionMembers ?? {},
+            },
+          }
+        : {},
     },
   } as unknown as Engine;
 }
@@ -273,6 +311,75 @@ describe('recruitCompanion', () => {
   });
 });
 
+// F-444ac034: descriptive pins for the recruit-visibility delta introduced by
+// the 3.10 engine bump. The coordinator's landed default is accept-and-pin
+// (these pins document what the INSTALLED 3.10 engine actually does today via
+// resolveEntityFaction's registry-or-entity.faction fallback); this is NOT an
+// endorsement and is explicitly reversible at the Director's pending Group-B
+// architecture gate (see ADDENDUM-COMMON.md). recruitCompanion's dual-write
+// itself (companion-bridge.ts:140-143) is untouched by this wave.
+describe('recruitCompanion — 3.10 resolveEntityFaction descriptive pins (F-444ac034)', () => {
+  it('an unaffiliated recruit (no faction-cognition membership entry) resolves to the party faction post-recruit', () => {
+    const npc = makeEntity();
+    const player = makeEntity({ id: 'player', zoneId: 'zone1' });
+    const engine = makeAgencyEngine({ player, 'npc-1': npc });
+    const party = createPartyState();
+
+    const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
+
+    expect(result.ok).toBe(true);
+    // No 'faction-cognition' registry entry exists for npc-1 -- descriptive
+    // pin of 3.10 behavior, reversible at the Group-B gate ruling (F-444ac034).
+    expect(resolveEntityFaction(engine.world, 'npc-1')).toBe('party');
+  });
+
+  it('the npc-agency read-through classifies an unaffiliated recruit as allied via the auto-vivified 0.8-cohesion party record', () => {
+    const npc = makeEntity({
+      // High player-trust set independently of this bug so the loyalty change
+      // alone decides the allied/favorable boundary: at pre-3.10 loyalty (0,
+      // no faction), trust=70/fear=0/greed=30 classifies 'favorable'
+      // (trust>=30 && fear<40 && greed<50) -- the resolveEntityFaction switch
+      // is what flips it to 'allied'.
+      relations: { 'player-trust': 70 },
+    });
+    const player = makeEntity({ id: 'player', zoneId: 'zone1' });
+    const engine = makeAgencyEngine({ player, 'npc-1': npc });
+    const party = createPartyState();
+
+    recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
+
+    const rel = deriveNpcRelationship(engine.world, 'npc-1', 'player');
+    // floor(0.8 * 80 + 20) -- getFactionCognition auto-creates the 'party'
+    // cognition record at the default 0.8 cohesion the first time anything
+    // asks for it; nothing in this world ever configured a 'party' faction.
+    // Descriptive pin of 3.10 behavior, reversible at the Group-B gate ruling
+    // (F-444ac034).
+    expect(rel.loyalty).toBe(84);
+    expect(deriveLoyaltyBreakpoint(rel, undefined, 'player')).toBe('allied');
+  });
+
+  it('a companion already in the faction-cognition membership registry keeps resolving to their ORIGIN faction after recruit -- registry wins over the dual-write', () => {
+    const npc = makeEntity();
+    const player = makeEntity({ id: 'player', zoneId: 'zone1' });
+    const engine = makeAgencyEngine(
+      { player, 'npc-1': npc },
+      { membership: { 'npc-1': 'wardens' }, factionMembers: { wardens: ['npc-1'] } },
+    );
+    const party = createPartyState();
+
+    const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
+
+    expect(result.ok).toBe(true);
+    // recruitCompanion's dual-write still overwrites entity.faction to
+    // 'party' (companion-bridge.ts:140-143) but never touches the membership
+    // map -- resolveEntityFaction's `membership[entityId] ?? entity.faction`
+    // reads the registry entry first. Descriptive pin of 3.10 behavior,
+    // reversible at the Group-B gate ruling (F-444ac034).
+    expect(npc.faction).toBe('party');
+    expect(resolveEntityFaction(engine.world, 'npc-1')).toBe('wardens');
+  });
+});
+
 describe('dismissCompanion', () => {
   it('removes the companion tag and custom fields when the companion is found', () => {
     const npc = makeEntity({
@@ -322,6 +429,38 @@ describe('dismissCompanion', () => {
       result = dismissCompanion(engine, party, 'npc-1');
     }).not.toThrow();
     expect(result?.removed?.npcId).toBe('npc-1');
+  });
+});
+
+// F-761ad9eb: the engine's own suite independently documents this exact
+// lossiness as a known, roadmap-deferred limitation of the recruit
+// dual-write pattern: ai-rpg-engine packages/modules/src/faction-fallback
+// .test.ts:200-209 (F-cf1ddc9f) -- "the companion's ORIGIN faction is
+// destroyed at recruit ... originFaction preserved on CompanionState
+// (roadmap design note)". This pin documents current (3.10) behavior; it is
+// not an endorsement, and origin-faction restoration remains a Director-
+// gated design decision.
+describe('dismissCompanion — the origin-faction dismiss-lossiness pin (F-761ad9eb)', () => {
+  it('does not restore (or clear) entity.faction on dismiss -- the party faction from recruit is permanent', () => {
+    const npc = makeEntity({ faction: 'wardens' }); // pre-recruit origin faction
+    const player = makeEntity({ id: 'player', zoneId: 'zone1' });
+    const engine = makeEngine({ player, 'npc-1': npc });
+    let party = createPartyState();
+
+    const recruitResult = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
+    expect(recruitResult.ok).toBe(true);
+    if (recruitResult.ok) party = recruitResult.party;
+    // F-444ac034: recruit's dual-write already overwrote the origin faction.
+    expect(npc.faction).toBe('party');
+
+    const dismissResult = dismissCompanion(engine, party, 'npc-1');
+
+    expect(dismissResult.removed?.npcId).toBe('npc-1');
+    // dismissCompanion strips tags + custom.companionMorale/companionRole
+    // (companion-bridge.ts:154-181) but never touches entity.faction -- the
+    // origin faction ('wardens') is unrecoverably lost, not merely stale.
+    // Descriptive pin of 3.10 behavior (F-761ad9eb).
+    expect(npc.faction).toBe('party');
   });
 });
 

@@ -461,6 +461,24 @@ export async function generateWorld(
         })),
       }),
       createRumorPropagation({ propagationDelay: 2 }),
+      // F-d907f10e: registered with ZERO district definitions, unlike every
+      // sibling module in this construction block, which is fully configured
+      // from the LLM world-gen proposal. Deliberately unfed, not an
+      // oversight-in-waiting: no module registered in this list depends on
+      // district-core (checked dependsOn on all of them -- only district-core
+      // itself declares one, ['environment-core'], and nothing declares a
+      // reverse dependency on district-core), so nothing here structurally
+      // requires its presence. Effect, verified against ai-rpg-engine
+      // packages/modules/src/district-core.ts: the world.zone.entered handler
+      // (lines 176-184) returns early because state.definitions is empty, and
+      // processDistrictTick's own loop (lines 337-342) iterates
+      // state.districts, which is always {} -- dead by construction. Its two
+      // resolveEntityFaction call sites (district-core.ts:191 intruder-
+      // likelihood, :380 surveillance count) are therefore unreachable in
+      // every world this file generates today. Feeding it (e.g. deriving
+      // districts from proposal zone tags or faction territory) or removing
+      // the registration outright is a Director-gated design decision, not
+      // resolved here.
       createDistrictCore({ districts: [] }),
       createBeliefProvenance(),
       createObserverPresentation({ rules: [] }),

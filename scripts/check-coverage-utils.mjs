@@ -72,7 +72,8 @@ export function getGlobalFunctionThreshold() {
  * coverage.thresholds — vitest is the enforcement gate on every CI run;
  * this script is the per-changed-file PR report built on the same floors.
  *
- * Mirrored per Contract C (wave 12):
+ * These thresholds are validated during CI runs via vitest.config.ts and must be kept
+ * in sync to prevent gate drift. The per-path floors are:
  * - src/llm/: 82
  * - src/session/: 58
  * - src/game.ts: 30 (specific file floor, per vitest.config.ts measurement)

@@ -72,6 +72,19 @@ describe('SessionTokenTracker (FT-B-004)', () => {
     expect(summary).not.toContain('dialogue');
   });
 
+  it('discloses that interpretation-call cost is not counted in the total (F-9713d34a)', () => {
+    const tracker = new SessionTokenTracker();
+    tracker.record('narration', 1000, 500);
+
+    const summary = tracker.formatCostSummary();
+    // Previously the omission was invisible: interpretation calls are never
+    // recorded (withTokenTracking's generateStructured passthrough, below),
+    // so the type simply never appeared in the per-type loop and the Total
+    // silently summed only what WAS recorded. Assert the disclaimer is
+    // present so the total's scope stays honestly disclosed.
+    expect(summary).toContain("interpreting your actions isn't included below");
+  });
+
   describe('divider convention (F-3453d747)', () => {
     afterEach(() => {
       Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });

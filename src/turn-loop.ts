@@ -440,12 +440,36 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       toolId: interpreted.toolId ?? undefined,
       parameters: interpreted.parameters ?? undefined,
     });
-  } catch {
+  } catch (err) {
+    // F-d421875b: previously a bare `catch` -- the thrown error/reason was
+    // discarded entirely (not even logged) and every failure here rendered
+    // the same flat sentence regardless of cause, eleven lines below the
+    // low-confidence clarification branch above, which distinguishes causes
+    // and offers concrete alternatives.
+    //
+    // What ActionDispatcher.dispatch (engine.ts, read-only) actually does
+    // with an ordinary invalid/out-of-range/missing-target action: it emits
+    // a non-throwing `action.rejected` event (with its own `reason`) and
+    // returns normally -- that event flows into narrateScene() below like
+    // any other event, same as every other rejected action. So this catch
+    // is reached only for a genuine internal engine exception, not "you
+    // typed something invalid" -- the message below no longer implies the
+    // player's input was evaluated and declined (misleading for the actual
+    // failure mode), and the real diagnostic goes to debugLog the same
+    // unconditional-under---debug way game.ts's post-turn subsystem catch
+    // already does (F-f13ca236), instead of nowhere at all.
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStack = err instanceof Error && err.stack ? err.stack : errMsg;
+    debugLog?.error('turn', 'engine.submitAction threw', {
+      verb: interpreted.verb,
+      error: errMsg,
+      stack: errStack,
+    });
     return {
       playerInput,
       interpreted,
       events: [],
-      narration: `You try to ${interpreted.verb}, but nothing happens.`,
+      narration: `Something interrupted your attempt to ${interpreted.verb} — try again.`,
       narrationPlan: null,
       dialogue: null,
       audioCalls: [],

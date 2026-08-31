@@ -462,7 +462,12 @@ function tryLeverageVerb(
   return null;
 }
 
-function findEntityByName(name: string, entities: EntityState[]): EntityState | null {
+// F-88570323: exported so game.ts's /recruit and /dismiss handlers can
+// reuse the same tiered case-insensitive exact-name -> substring-name ->
+// substring-id resolution every other player-facing targeting command
+// (attack/speak/inspect/use, above) already gets, instead of requiring the
+// exact internal entity id verbatim.
+export function findEntityByName(name: string, entities: EntityState[]): EntityState | null {
   const lower = name.toLowerCase().trim();
   if (!lower) return null;
   return (

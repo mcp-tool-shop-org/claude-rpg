@@ -798,7 +798,14 @@ describe('consecutiveFallbacks / isFallback seam (F-940cd4d0)', () => {
       engine, client, history, playerInput: 'attack nonexistent-target-xyz', tone: 'dark fantasy',
     });
 
-    if (result.narration.includes('nothing happens')) {
+    // F-d421875b: the catch's player-facing text changed from "You try to
+    // ${verb}, but nothing happens." (implied the action was evaluated and
+    // declined -- misleading, since an ordinary invalid target is rejected
+    // through the engine's own non-throwing action.rejected event instead,
+    // never reaching this catch) to "Something interrupted your attempt to
+    // ${verb} -- try again." — updating the substring this branch keys off
+    // of rather than leaving it checking text that can no longer appear.
+    if (result.narration.includes('interrupted')) {
       expect(result.isFallback).toBe(false);
     } else {
       // If the fast-path interpreter didn't resolve a target and this ended

@@ -80,6 +80,16 @@ export class SessionTokenTracker {
   formatCostSummary(): string {
     const divider = dim('─'.repeat(getTerminalWidth()));
     const lines: string[] = [divider, '  Session Token Usage', divider];
+    // F-9713d34a: withTokenTracking's generateStructured passthrough (below)
+    // never calls tracker.record() for interpretation calls, by design (see
+    // its doc comment) -- so 'interpretation' silently never appears in the
+    // per-type loop below (callCount stays 0) and Total only sums what WAS
+    // recorded. Nothing else in this output disclosed that a whole call
+    // category was missing, so a cost-conscious player had no way to know
+    // the number was structurally partial. This line makes the scope of the
+    // total honest without requiring the cross-domain StructuredResult
+    // change the doc comment below describes.
+    lines.push(dim("  Note: cost from interpreting your actions isn't included below — the real total is higher."));
     const allTypes: CallType[] = ['interpretation', 'narration', 'dialogue', 'other'];
     for (const callType of allTypes) {
       const record = this.getRecord(callType);

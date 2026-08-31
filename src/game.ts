@@ -12,7 +12,7 @@
 // v1.2: NPC agency — named NPCs as individual actors with goals, fears, and autonomous actions
 // v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
-import type { Engine } from '@ai-rpg-engine/core';
+import type { Engine, EntityState } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog, ItemDefinition } from '@ai-rpg-engine/equipment';
@@ -217,6 +217,10 @@ import {
   syncCompanionMorale,
   inferCompanionRole,
 } from './companion/companion-bridge.js';
+// F-88570323: shared tiered name resolution — see its doc comment in
+// action-interpreter.ts for why this is the same lookup attack/speak/
+// inspect/use already get.
+import { findEntityByName } from './action-interpreter.js';
 import {
   createPartyState,
   isCompanion,
@@ -1127,6 +1131,10 @@ export class GameSession {
     this.debugLog.setTick(this.engine.tick);
     this.debugLog.info('turn', 'turn-start', { input: trimmed, tick: this.engine.tick });
     let subsystemWarning: string | undefined;
+    // F-7c44396e: player-facing notice when processOpportunityAction (below)
+    // found no matching opportunity for the requested sub-action — see that
+    // method's doc comment.
+    let opportunityNotice: string | undefined;
     try {
       // Process leverage actions (social/rumor/diplomacy/sabotage)
       this.processLeverageAction(turnResult);
@@ -1215,7 +1223,7 @@ export class GameSession {
       this.evaluateEndgameTrigger();
 
       // Process opportunity actions from this turn (accept/decline/complete/etc.)
-      this.processOpportunityAction(turnResult);
+      opportunityNotice = this.processOpportunityAction(turnResult) ?? undefined;
     } catch (err) {
       // Subsystem failure — the turn itself was processed safely.
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1336,6 +1344,9 @@ export class GameSession {
       }
       this.pendingAnnouncements = [];
     }
+    // F-7c44396e: surfaced ahead of subsystemWarning/autosaveMsg — it's the
+    // most direct response to what the player just typed this turn.
+    if (opportunityNotice) trailerNotices.push(this.formatTrailerNotice(opportunityNotice));
     if (subsystemWarning) trailerNotices.push(subsystemWarning);
     if (autosaveMsg) trailerNotices.push(autosaveMsg);
     finalOutput += trailerNotices.join('\n');
@@ -1717,11 +1728,26 @@ export class GameSession {
     }
   }
 
-  /** Process opportunity verb from a turn result. */
-  private processOpportunityAction(turnResult: TurnResult): void {
-    if (turnResult.interpreted.verb !== 'opportunity') return;
+  /**
+   * Process opportunity verb from a turn result.
+   *
+   * F-7c44396e: previously void-returning — every case's guard clause
+   * (`if (available.length === 0) break;` / `if (accepted.length === 0)
+   * break;`) was a bare no-op: no state change, no chronicle entry, no
+   * player-facing signal. action-interpreter.ts's fast-path regex matches
+   * verbs like "decline" / "abandon" / "complete" on syntax alone with no
+   * check that a matching opportunity exists, so this was reachable from
+   * ordinary phrasing, not just a contrived edge case. Now returns a
+   * player-facing notice (consumed by the executeTurn call site as a
+   * trailer notice, mirroring subsystemWarning/autosaveMsg) when a guard
+   * clause fires, or null when the sub-action resolved normally (including
+   * "not an opportunity verb this turn" — the pre-existing silent-skip
+   * cases, which are correct as-is and stay silent).
+   */
+  private processOpportunityAction(turnResult: TurnResult): string | null {
+    if (turnResult.interpreted.verb !== 'opportunity') return null;
     const subAction = turnResult.interpreted.parameters?.subAction as string | undefined;
-    if (!subAction) return;
+    if (!subAction) return null;
 
     // FT-B-007: Extract optional disambiguation identifier
     const opportunityName = turnResult.interpreted.parameters?.opportunityName as string | undefined;
@@ -1730,7 +1756,9 @@ export class GameSession {
     switch (subAction) {
       case 'accept': {
         const available = getAvailableOpportunities(this.activeOpportunities);
-        if (available.length === 0) break;
+        if (available.length === 0) {
+          return 'No opportunity is available to accept — type /jobs to see current contracts.';
+        }
         // FT-B-007: Match by name/index, fallback to most recent
         const original = this.matchOpportunity(available, opportunityName, opportunityIndex);
         const target: OpportunityState = { ...original, status: 'accepted', acceptedAtTick: this.engine.tick };
@@ -1740,36 +1768,46 @@ export class GameSession {
         for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
           this.journal.record(entry);
         }
-        break;
+        return null;
       }
       case 'decline': {
         const available = getAvailableOpportunities(this.activeOpportunities);
-        if (available.length === 0) break;
+        if (available.length === 0) {
+          return 'No opportunity is available to decline — type /jobs to see current contracts.';
+        }
         const target = this.matchOpportunity(available, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'declined');
-        break;
+        return null;
       }
       case 'abandon': {
         const accepted = getAcceptedOpportunities(this.activeOpportunities);
-        if (accepted.length === 0) break;
+        if (accepted.length === 0) {
+          return 'You have no accepted opportunity to abandon — type /jobs to see current contracts.';
+        }
         const target = this.matchOpportunity(accepted, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'abandoned');
-        break;
+        return null;
       }
       case 'betray': {
         const accepted = getAcceptedOpportunities(this.activeOpportunities);
-        if (accepted.length === 0) break;
+        if (accepted.length === 0) {
+          return 'You have no accepted opportunity to betray — type /jobs to see current contracts.';
+        }
         const target = this.matchOpportunity(accepted, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'betrayed');
-        break;
+        return null;
       }
       case 'complete': {
         const accepted = getAcceptedOpportunities(this.activeOpportunities);
-        if (accepted.length === 0) break;
+        if (accepted.length === 0) {
+          return 'You have no accepted opportunity to complete — type /jobs to see current contracts.';
+        }
         const target = this.matchOpportunity(accepted, opportunityName, opportunityIndex);
         this.resolveOpportunity(target, 'completed');
-        break;
+        return null;
       }
+      default:
+        return null;
     }
   }
 
@@ -3165,8 +3203,24 @@ export class GameSession {
     const npcId = args[0];
     if (!npcId) return '  Usage: /recruit <npc-id> [role]';
 
-    const entity = this.engine.world.entities[npcId];
-    if (!entity) return `  Entity "${npcId}" not found.`;
+    // F-88570323: try the same tiered name resolution attack/speak/inspect
+    // already use (exact name -> substring name -> substring id) against
+    // entities in the player's current zone before falling back to a raw id
+    // lookup. Entity ids aren't reliably derivable from what's displayed to
+    // the player (a starter-fantasy NPC declared `id: 'pilgrim'` shows
+    // everywhere else as "Suspicious Pilgrim"), so most players only ever
+    // know the spoken name. Zone-scoping mirrors the fast-path interpreter's
+    // own scoping and can't produce a false positive recruitCompanion's own
+    // same-zone check below wouldn't reject anyway.
+    const zoneEntities = Object.values(this.engine.world.entities).filter(
+      (e) => e.zoneId === this.engine.world.locationId && e.id !== this.engine.world.playerId,
+    );
+    const resolved = findEntityByName(npcId, zoneEntities);
+    const entity = resolved ?? this.engine.world.entities[npcId];
+    if (!entity) {
+      return `  No one named "${npcId}" is here to recruit — type "look" to see who's nearby.`;
+    }
+    const resolvedId = entity.id;
 
     const roleArg = args[1] as CompanionRole | undefined;
     const role = roleArg ?? inferCompanionRole(entity);
@@ -3174,7 +3228,7 @@ export class GameSession {
     const result = recruitCompanion(
       this.engine,
       this.partyState,
-      npcId,
+      resolvedId,
       role,
       this.engine.tick,
     );
@@ -3187,7 +3241,7 @@ export class GameSession {
     // Record chronicle event
     const joinSource: ChronicleEventSource = {
       kind: 'companion-joined',
-      npcId,
+      npcId: resolvedId,
       npcName: entity.name,
       role,
       tick: this.engine.tick,
@@ -3203,10 +3257,24 @@ export class GameSession {
   private handleDismiss(npcId?: string): string {
     if (!npcId) return '  Usage: /dismiss <npc-id>';
 
-    const entity = this.engine.world.entities[npcId];
+    // F-88570323: resolve against the current party roster's display names,
+    // the same tiered way /recruit above does. Scoping the search to
+    // companions already in the party (rather than every entity in the
+    // world) means a match here can never point at the wrong NPC — a
+    // dismiss target is always an existing companion or nothing at all.
+    // Party member display names are already visible every turn via the
+    // party status line (game-presenter.ts's buildPartyStatusLine), so
+    // that's genuinely what a player has on hand to type, not the id.
+    const partyEntities = this.partyState.companions
+      .map((c) => this.engine.world.entities[c.npcId])
+      .filter((e): e is EntityState => e != null);
+    const resolved = findEntityByName(npcId, partyEntities);
+    const resolvedId = resolved ? resolved.id : npcId;
+
+    const entity = this.engine.world.entities[resolvedId];
     const name = entity?.name ?? npcId;
 
-    const result = dismissCompanion(this.engine, this.partyState, npcId);
+    const result = dismissCompanion(this.engine, this.partyState, resolvedId);
     if (!result.removed) return `  ${name} is not in your party.`;
 
     this.partyState = result.party;
@@ -3214,7 +3282,7 @@ export class GameSession {
     // Record chronicle event
     const dismissSource: ChronicleEventSource = {
       kind: 'companion-departed',
-      npcId,
+      npcId: resolvedId,
       npcName: name,
       reason: 'dismissed',
       tick: this.engine.tick,

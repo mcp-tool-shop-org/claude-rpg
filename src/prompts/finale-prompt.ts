@@ -78,6 +78,10 @@ Respond with narration text only, no JSON or formatting.`;
  * has an entry here, not just in allPacks.
  */
 export const PACK_VOICES: Record<string, string> = {
+  'mercantile, wry, precise about money, quietly ruinous': // merchant (salt-road-ledger)
+    'Write in a ledger-closing voice that counts what everything cost — the tone of an audit that reads like an obituary.',
+  'plain, unhurried, period-precise, unsentimental about hanging': // bounty-hunter (hue-and-cry)
+    "Write in a thief-taker's final report voice, plain and exact — the tone of a man recording who was taken, and for how much.",
   'dark fantasy, concise, atmospheric, foreboding': // fantasy
     'Write in an epic chronicle voice with archaic turns of phrase — the tone of a saga told beside a dying fire.',
   'cyberpunk noir, terse, neon-lit, paranoid': // cyberpunk

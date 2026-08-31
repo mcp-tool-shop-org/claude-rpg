@@ -477,7 +477,11 @@ describe('renderDeathScreen (F-7484bd2e, SLATE-6, director ruling R3: setback no
     // common case without guaranteeing it. The '"save" and "quit"' guard
     // also stays: "save" remains its own separate dispatchable command
     // (bin.ts's `if (trimmed === 'save')`), not merged into quit.
-    expect(output).toContain('"quit" now saves your progress automatically, like Ctrl+C.');
+    // Coordinator strings review (LAW): trimmed — 'auto-saves' is the
+    // honest best-effort verb (the rejected/failed branch prints its own
+    // notice), and the Ctrl+C comparison assumed knowledge a player may
+    // not have.
+    expect(output).toContain('"quit" auto-saves before exiting.');
     expect(output).not.toContain('"quit" exits without saving');
     expect(output).not.toContain('"save" first');
     expect(output).not.toContain('"quit" will save and exit.');

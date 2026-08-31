@@ -107,6 +107,8 @@ export type NarrateSceneOpts = {
   opportunityContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  /** Coordinator ruling (b): pre-gated strategic hint, threaded live. */
+  situationHint?: string;
   /**
    * F-7815df9e (game-core seam contract): compact, pre-condensed long-term-memory
    * summary drawn from the campaign chronicle. Folded into the narration prompt
@@ -172,7 +174,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     previousLocationId, presentationState, characterPresence,
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
-    arcContext, endgameContext, chronicleContext, onChunk, logger,
+    arcContext, endgameContext, situationHint, chronicleContext, onChunk, logger,
     consecutiveFallbacks, onStreamReset,
   } = opts;
 
@@ -204,6 +206,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     opportunityContext,
     arcContext,
     endgameContext,
+    situationHint,
   );
 
   // Add presentation state and long-term chronicle context to the narration input

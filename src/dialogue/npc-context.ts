@@ -13,7 +13,6 @@ import {
   getRumorsKnownToFaction,
   getPressuresForFaction,
   buildNpcProfile,
-  getPersistedNpcLastActions,
   getVisiblePressures,
   formatPressureForDialogue,
   getOpportunitiesForNpc,
@@ -328,7 +327,11 @@ export function buildNPCDialogueContext(
   // ANY caller that doesn't thread the array (this file's own tests
   // included), and activates for free the moment a future write-side fix
   // calls setPersistedNpcState.
-  const effectiveLastActions = lastNpcActions ?? getPersistedNpcLastActions(world);
+  // Coordinator ruling (b) (wave-13 RULING-persisted-namespaces.md): the
+  // getPersistedNpcLastActions fallback was removed — that namespace is
+  // never populated in this app; the threaded param (already live from
+  // turn-loop) is the sole source.
+  const effectiveLastActions = lastNpcActions ?? [];
   const recentActionHint = getNpcDialogueHint(npcId, effectiveLastActions);
   if (recentActionHint) npcRecentAction = recentActionHint;
 

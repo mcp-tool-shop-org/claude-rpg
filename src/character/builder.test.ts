@@ -155,14 +155,14 @@ describe('buildCharacter presetPack (F-ef4a283d / SLATE-4, Coordinator Brief con
 // pattern (F-6c9e02d4) -- so an 11th pack either lands correctly or this
 // test flags it for a human to look at.
 describe('buildDifficultyGroups (F-6ed5f350 test plan item e: difficulty-split drift guard)', () => {
-  it('groups all 10 live packs into the expected 2/6/2 beginner/intermediate/advanced split', () => {
+  it('groups all 12 live packs into the expected 2/6/4 beginner/intermediate/advanced split (wave-13 registration: merchant + bounty-hunter are both advanced)', () => {
     const groups = buildDifficultyGroups(allPacks);
     const byLabel = Object.fromEntries(groups.map((g) => [g.label, g.items.length]));
 
     expect(byLabel).toEqual({
       'BEGINNER-FRIENDLY': 2,
       STANDARD: 6,
-      ADVANCED: 2,
+      ADVANCED: 4,
     });
   });
 

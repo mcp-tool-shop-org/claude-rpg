@@ -349,7 +349,7 @@ export function renderDeathScreen(opts: { narration: string; characterName?: str
   // back to match the new reality. attemptExitAutosave can still return
   // 'rejected'/'failed' (path-guard rejection, write error), so this states
   // the common case without over-promising a guarantee.
-  parts.push(hint('  "quit" now saves your progress automatically, like Ctrl+C.'));
+  parts.push(hint('  "quit" auto-saves before exiting.'));
   parts.push('');
   return parts.join('\n');
 }

@@ -30,6 +30,7 @@ import type { TurnHistory } from './session/history.js';
 import type { ImmersionRuntime } from './runtime/immersion-runtime.js';
 import type { StateTransition } from './runtime/presentation-state.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
+import type { OpportunityState } from '@ai-rpg-engine/modules';
 import { withTokenTracking, type SessionTokenTracker } from './game/token-tracker.js';
 import type { DebugLogger } from './game/debug-logger.js';
 
@@ -187,6 +188,11 @@ export type ExecuteTurnOpts = {
   lastNpcActions?: NpcActionResult[];
   districtDescriptor?: string;
   partyPresence?: string;
+  /** Coordinator ruling (b): live opportunities threaded for the dialogue
+   * opportunityHint — GameSession state, never the persisted namespace. */
+  activeOpportunities?: OpportunityState[];
+  /** Pre-gated strategic hint from game.ts's buildMoveRecommendation. */
+  situationHint?: string;
   economyContext?: string;
   craftingContext?: string;
   opportunityContext?: string;
@@ -336,7 +342,8 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     engine, client, history, playerInput, tone, immersion,
     characterPresence, npcPlayerPresence, playerProfile, playerRumors,
     pressureContext, worldPressures, lastNpcActions, districtDescriptor,
-    partyPresence, economyContext, craftingContext, opportunityContext,
+    partyPresence, activeOpportunities, situationHint,
+    economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
     tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
   } = opts;
@@ -517,6 +524,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       activePressures: pressureContext,
       districtDescriptor,
       partyPresence,
+      situationHint,
       economyContext,
       craftingContext,
       opportunityContext,
@@ -639,6 +647,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
         // ExecuteTurnOpts.conversationHistory's doc comment).
         opportunityContext,
         conversationHistory?.get(interpreted.targetIds[0]),
+        // logger + consecutiveFallbacks stay unthreaded for dialogue
+        // (unchanged behavior); the two live params per coordinator
+        // ruling (b) follow.
+        undefined,
+        undefined,
+        activeOpportunities,
+        partyPresence,
       );
 
       // Add voice cast to dialogue if immersion is active

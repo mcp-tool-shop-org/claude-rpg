@@ -1,5 +1,5 @@
 // F-394f583d (SLATE-3, wave 18 tests domain): structural/visual-regression
-// coverage for a grouped world-selection menu, proving all ten pack ids
+// coverage for a grouped world-selection menu, proving all twelve pack ids
 // remain reachable and selection resolves to the correct pack id after
 // grouping.
 //
@@ -44,7 +44,7 @@ describe('world-selection menu — real grouped pipeline (F-44c11c9b: buildDiffi
     vi.restoreAllMocks();
   });
 
-  it('all ten pack ids are reachable: every pack meta.name is printed in the rendered grouped menu (F-00ddfc68 sibling regression shape -- grouping must not silently drop an entry)', async () => {
+  it('all twelve pack ids are reachable: every pack meta.name is printed in the rendered grouped menu (F-00ddfc68 sibling regression shape -- grouping must not silently drop an entry)', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const groups = buildDifficultyGroups(allPacks);
     const rl = createFakeReadline(['1']); // answer the menu with the first item; content is what's under test here
@@ -52,13 +52,13 @@ describe('world-selection menu — real grouped pipeline (F-44c11c9b: buildDiffi
     await promptGroupedMenu(rl, 'Choose your world:', groups);
 
     const rendered = logSpy.mock.calls.map((args) => String(args[0])).join('\n');
-    expect(allPacks.length).toBe(10);
+    expect(allPacks.length).toBe(12);
     for (const p of allPacks) {
       expect(rendered).toContain(p.meta.name);
     }
   });
 
-  it('selecting each flat position 1..10 resolves to the correct pack id, in the real grouped display order', async () => {
+  it('selecting each flat position 1..12 resolves to the correct pack id, in the real grouped display order', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const groups = buildDifficultyGroups(allPacks);
     const flatOrder = groups.flatMap((g) => g.items.map((entry) => entry.item));

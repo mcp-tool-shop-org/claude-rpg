@@ -225,12 +225,13 @@ describe('deriveNpcPersonality (F-c8c8c67c / Coordinator Brief contract #1)', ()
   });
 });
 
-// F-5c8be67d: npcRecentAction now sources lastNpcActions from
-// getPersistedNpcLastActions(world) whenever the caller omits the
-// lastNpcActions argument, instead of silently staying undefined. An
-// explicitly-passed array (even empty) still takes precedence.
-describe('buildNPCDialogueContext F-5c8be67d: lastNpcActions sourced from world when omitted', () => {
-  it('populates npcRecentAction from world.modules[\'npc-agency\'] when no lastNpcActions argument is passed', () => {
+// F-5c8be67d + coordinator ruling (b) (wave-13
+// RULING-persisted-namespaces.md), deliberate INVERSION of the original
+// world-sourced pin: the getPersistedNpcLastActions fallback was removed —
+// this app never populates world.modules['npc-agency'], and the threaded
+// lastNpcActions param (live from turn-loop) is the sole source.
+describe('buildNPCDialogueContext F-5c8be67d: lastNpcActions param is the sole source (ruling b)', () => {
+  it('yields no npcRecentAction when the lastNpcActions param is omitted — even if the namespace is populated', () => {
     mockedGetCognition.mockReturnValue(makeCognition());
     mockedGetRumorsFrom.mockReturnValue([]);
     const world = makeWorld();
@@ -247,7 +248,7 @@ describe('buildNPCDialogueContext F-5c8be67d: lastNpcActions sourced from world 
 
     const ctx = buildNPCDialogueContext(world, 'npc-1', 'hello', 'dark fantasy');
 
-    expect(ctx!.npcRecentAction).toBe('The guard eyes you warily, still shaken from the warning.');
+    expect(ctx!.npcRecentAction).toBeUndefined();
   });
 
   it('leaves npcRecentAction undefined when persisted lastActions has no entry for this NPC', () => {
@@ -259,7 +260,7 @@ describe('buildNPCDialogueContext F-5c8be67d: lastNpcActions sourced from world 
     expect(ctx!.npcRecentAction).toBeUndefined();
   });
 
-  it('still prefers an explicitly-passed lastNpcActions argument over the persisted world state', () => {
+  it('sources npcRecentAction from the explicitly-passed lastNpcActions argument (the sole source per ruling b)', () => {
     mockedGetCognition.mockReturnValue(makeCognition());
     mockedGetRumorsFrom.mockReturnValue([]);
     const world = makeWorld();

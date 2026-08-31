@@ -42,7 +42,7 @@ const KNOWN_BLOCKED_STARTER_PACKS: string[] = [];
 // finale voices, which does not describe a pack registering next wave.
 // The companion tripwire is the pending-registration test at the bottom
 // of the drift-gate describe.
-const PENDING_REGISTRATION_STARTER_PACKS: string[] = ['merchant', 'bounty-hunter'];
+const PENDING_REGISTRATION_STARTER_PACKS: string[] = [];
 
 describe('packs registry (F-00ddfc68 drift gate)', () => {
   const pkg = require('../../package.json') as {
@@ -105,16 +105,9 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
     }
   });
 
-  // Pending-registration TRIPWIRE (coordinator, Director-approved Group D):
-  // merchant + bounty-hunter deps are installed but deliberately not yet
-  // registered. This pins today's 10-pack registry so the wave-12
-  // registration flips it red — at that moment, empty
-  // PENDING_REGISTRATION_STARTER_PACKS and DELETE this test; the drift
-  // gate above then enforces the full 12-pack wiring (menu, --world,
-  // PACK_VOICES).
-  it('pending-registration tripwire: the registry holds exactly 10 packs until the approved merchant/bounty-hunter wiring lands', () => {
-    expect(allPacks).toHaveLength(10);
-  });
+  // (The pending-registration tripwire that pinned the 10-pack registry was
+  // deleted here by the wave-13 registration stitch, per its own comment —
+  // the drift gate above now enforces the full 12-pack wiring.)
 });
 
 // F-ef4a283d (SLATE-4) / Coordinator Brief contract #3: WORLD_FLAG_MAP is

@@ -1030,6 +1030,25 @@ export class GameSession {
         lastNpcActions: this.lastNpcActions,
         districtDescriptor,
         partyPresence: partyPresenceStr,
+        // Coordinator ruling (b) (wave-13 RULING-persisted-namespaces.md):
+        // live GameSession state threaded to the two remaining hints —
+        // never the unpopulated persisted namespaces. situationHint is
+        // pre-gated to the urgent tags so calm rounds add zero prompt text.
+        activeOpportunities: this.activeOpportunities,
+        situationHint: (() => {
+          // A hint computation must never kill a turn: buildMoveRecommendation
+          // aggregates the full strategic map, and any state shape it dislikes
+          // (fresh worlds, minimal test worlds) degrades to no-hint, not a
+          // thrown turn.
+          try {
+            const rec = this.profile ? this.buildMoveRecommendation() : null;
+            return rec && (rec.situationTag === 'pressured' || rec.situationTag === 'crisis')
+              ? rec.situationHint
+              : undefined;
+          } catch {
+            return undefined;
+          }
+        })(),
         economyContext: turnEconomyCtx,
         craftingContext: turnCraftingCtx,
         opportunityContext: this.getOpportunityContext(),

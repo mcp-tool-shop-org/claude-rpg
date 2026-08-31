@@ -4,7 +4,6 @@ import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import {
   getPerceptionLog,
   presentForObserver,
-  getPersistedMoveRecommendation,
   type ObserverPresentedEvent,
 } from '@ai-rpg-engine/modules';
 import type { SceneNarrationInput } from '../prompts/narrate-scene.js';
@@ -30,6 +29,7 @@ export function buildSceneContext(
   opportunityContext?: string,
   arcContext?: string,
   endgameContext?: string,
+  situationHint?: string,
 ): SceneContext {
   const zone = world.zones[world.locationId];
   const player = world.entities[world.playerId];
@@ -81,29 +81,13 @@ export function buildSceneContext(
   const noise = zone?.noise ?? 3;
   const stability = zone?.stability ?? 8;
 
-  // F-2218267d: non-attaching read of the engine's own per-round strategic
-  // hint -- zero new computation, explicitly re-read here rather than
-  // recomputed (mirrors traversal-core.ts's own 'inspect' verb call site, per
-  // its comment: exactly one buildStrategicMap call per round). Gated to
-  // 'pressured'/'crisis' only, matching this domain's other hint fields'
-  // urgency-gated absence contract -- 'safe' and 'opportunity' rounds render
-  // nothing here, leaving the director's on-demand /map-style screen as the
-  // only place to see a non-urgent recommendation.
-  //
-  // NOTE (verified, not assumed): getPersistedMoveRecommendation(world)
-  // reads world.modules['move-advisor'], which claude-rpg never populates
-  // today -- game-state.ts calls recommendMoves() directly for the director
-  // /map-style screen but never setPersistedMoveRecommendation(), and
-  // nothing in this app calls the engine's runWorldTick driver (the function
-  // whose per-round step is documented as the production writer of this
-  // namespace). This wiring is correct, additive, and byte-identical-when-
-  // absent infrastructure; it activates for free the moment a future
-  // game-core fix populates the namespace (or this app adopts runWorldTick).
-  const moveRecommendation = getPersistedMoveRecommendation(world);
-  const situationHint = moveRecommendation?.situationHint
-    && (moveRecommendation.situationTag === 'pressured' || moveRecommendation.situationTag === 'crisis')
-    ? moveRecommendation.situationHint
-    : undefined;
+  // F-2218267d + coordinator ruling (b) (wave-13
+  // RULING-persisted-namespaces.md): the persisted-namespace read
+  // (getPersistedMoveRecommendation) was removed — claude-rpg never
+  // populates world.modules['move-advisor'] and GameSession state is the
+  // declared source of truth this cycle. The hint arrives as a threaded
+  // param instead, computed live by game.ts's own buildMoveRecommendation
+  // wrapper and pre-gated to 'pressured'/'crisis' at the producer.
 
   const narrationInput: SceneNarrationInput = {
     zoneName: zone?.name ?? 'unknown',

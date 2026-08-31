@@ -1,4 +1,4 @@
-// Pack registry: all 10 starter packs with metadata + factory functions
+// Pack registry: all 12 starter packs with metadata + factory functions
 
 import type { Engine, RulesetDefinition } from '@ai-rpg-engine/core';
 import type { PackMetadata } from '@ai-rpg-engine/pack-registry';
@@ -97,6 +97,27 @@ export type PackInfo = {
   createGame: (seed?: number) => Engine;
 };
 
+// Coordinator stitch (wave 13, Director-approved Group D): the two packs
+// the wave-13 narrative-llm envelope left unregistered (and undeclared) —
+// registered here per the pack-registration ritual the addendum locked:
+// entries + WORLD_FLAG_MAP + PACK_VOICES (finale-prompt.ts) + the
+// pending-registration list emptied and its tripwire deleted, one commit.
+import {
+  createGame as createMerchantGame,
+  packMeta as merchantMeta,
+  buildCatalog as merchantBuild,
+  itemCatalog as merchantItems,
+  merchantMinimalRuleset,
+} from '@ai-rpg-engine/starter-merchant';
+
+import {
+  createGame as createBountyHunterGame,
+  packMeta as bountyHunterMeta,
+  buildCatalog as bountyHunterBuild,
+  itemCatalog as bountyHunterItems,
+  bountyHunterMinimalRuleset,
+} from '@ai-rpg-engine/starter-bounty-hunter';
+
 export const allPacks: PackInfo[] = [
   { meta: fantasyMeta, buildCatalog: fantasyBuild, itemCatalog: fantasyItems, ruleset: fantasyMinimalRuleset, createGame: createFantasyGame },
   { meta: gladiatorMeta, buildCatalog: gladiatorBuild, itemCatalog: gladiatorItems, ruleset: gladiatorMinimalRuleset, createGame: createGladiatorGame },
@@ -108,6 +129,8 @@ export const allPacks: PackInfo[] = [
   { meta: weirdWestMeta, buildCatalog: weirdWestBuild, itemCatalog: weirdWestItems, ruleset: weirdWestMinimalRuleset, createGame: createWeirdWestGame },
   { meta: zombieMeta, buildCatalog: zombieBuild, itemCatalog: zombieItems, ruleset: zombieMinimalRuleset, createGame: createZombieGame },
   { meta: colonyMeta, buildCatalog: colonyBuild, itemCatalog: colonyItems, ruleset: colonyMinimalRuleset, createGame: createColonyGame },
+  { meta: merchantMeta, buildCatalog: merchantBuild, itemCatalog: merchantItems, ruleset: merchantMinimalRuleset, createGame: createMerchantGame },
+  { meta: bountyHunterMeta, buildCatalog: bountyHunterBuild, itemCatalog: bountyHunterItems, ruleset: bountyHunterMinimalRuleset, createGame: createBountyHunterGame },
 ];
 
 export function getPackById(id: string): PackInfo | undefined {
@@ -131,6 +154,8 @@ export const WORLD_FLAG_MAP: Record<string, string> = {
   'weird-west': 'dust-devils-bargain',
   zombie: 'ashfall-dead',
   colony: 'signal-loss',
+  merchant: 'salt-road-ledger',
+  'bounty-hunter': 'hue-and-cry',
 };
 
 /**

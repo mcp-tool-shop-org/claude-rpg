@@ -76,7 +76,7 @@ if (!existsSync(coveragePath)) {
 
 const coverage = JSON.parse(readFileSync(coveragePath, 'utf8'));
 
-console.log(`${bold('── Runtime-Critical Changed Files ──')}\n`);
+console.log(`${bold(useColor ? '── Runtime-Critical Changed Files ──' : '-- Runtime-Critical Changed Files --')}\n`);
 
 // Global branch coverage floor — extracted to check-coverage-utils.mjs to ensure
 // scripts and vitest.config.ts stay in sync. See getGlobalBranchThreshold().
@@ -105,7 +105,7 @@ for (const file of criticalChanged) {
   const threshold = getApplicableThreshold(file, THRESHOLDS);
 
   // Use coverageReportLine to format the output
-  const reportLine = coverageReportLine(file, stmtsPct, branchPct, threshold);
+  const reportLine = coverageReportLine(file, stmtsPct, branchPct, threshold, useColor);
   console.log(reportLine);
 
   // F-5c3345ff: a single gate check per file rather than one increment per

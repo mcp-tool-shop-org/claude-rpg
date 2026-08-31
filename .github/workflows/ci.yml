@@ -40,7 +40,7 @@ concurrency:
 #   - Test any minor/major bumps in a feature branch before merging to main
 #   - Document the compatibility baseline date in this comment
 #
-# Last reviewed: 2026-08-26 (Node-24 baseline verified against c18d3bf)
+# Last reviewed: 2026-08-31 (Node-24 baseline verified against c18d3bf)
 
 jobs:
   build-and-test:

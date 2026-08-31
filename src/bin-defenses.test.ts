@@ -14,8 +14,8 @@ import { validateEngineState } from './cli/engine-state-validator.js';
 // than a hand-copied fork of the logic that could silently drift from it.
 
 describe('bin defenses: engine state validation (PFE-007)', () => {
-  it('accepts valid engine state with world.state', () => {
-    const result = validateEngineState(JSON.stringify({ world: { state: { hp: 10 } } }));
+  it('accepts valid engine state with world.state carrying meta', () => {
+    const result = validateEngineState(JSON.stringify({ world: { state: { hp: 10, meta: { version: '1.0.0' } } } }));
     expect(result.valid).toBe(true);
   });
 
@@ -59,8 +59,30 @@ describe('bin defenses: engine state validation (PFE-007)', () => {
     expect(result.valid).toBe(false);
   });
 
-  it('accepts empty world.state object', () => {
+  // F-dea554cc (3.9 slice): deliberate INVERSION of the old
+  // "accepts empty world.state object" pin. An empty state is exactly the
+  // corrupted/truncated-save shape the engine's own Engine.deserialize
+  // rejects with SAVE_MALFORMED (`!data.world.state.meta`) — accepting it
+  // here meant Object.assign(engine.store.state, {}) was a silent no-op and
+  // the player resumed onto a freshly-reset simulation world with zero
+  // error. The validator now mirrors the engine's meta gate.
+  it('rejects empty world.state object (no meta — the silent-world-reset shape)', () => {
     const result = validateEngineState(JSON.stringify({ world: { state: {} } }));
+    expect(result).toMatchObject({ valid: false, error: expect.stringContaining('meta') });
+  });
+
+  it('rejects world.state.meta === null (typeof null === "object" again)', () => {
+    const result = validateEngineState(JSON.stringify({ world: { state: { meta: null } } }));
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects array-shaped world.state.meta', () => {
+    const result = validateEngineState(JSON.stringify({ world: { state: { meta: [1] } } }));
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts world.state with an empty meta object (cheap structural gate only — deep shape stays the engine\'s job)', () => {
+    const result = validateEngineState(JSON.stringify({ world: { state: { meta: {} } } }));
     expect(result.valid).toBe(true);
   });
 });

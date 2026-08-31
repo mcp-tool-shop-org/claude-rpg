@@ -371,20 +371,31 @@ async function runLoad(): Promise<void> {
           if (validation.error === 'not valid JSON') {
             console.error('  Save file engine state is not valid JSON.');
           } else {
-            console.error('  Save file has invalid engine state structure (missing world.state).');
+            console.error(`  Save file has invalid engine state structure (${validation.error}).`);
           }
           console.error('  Your save may be corrupted. Check for a .bak backup.');
           rl.close();
           process.exit(1);
         }
         Object.assign(engine.store.state, structuredClone(validation.state));
+        // F-1afba928 (3.9 slice): the assign above wholesale-replaces the
+        // top-level `modules` key, so a namespace for any module ADDED to the
+        // engine after this save was written would stay undefined and crash
+        // (or silently blank) its first reader. Mirror Engine.deserialize's
+        // own post-restore step: absent namespaces get the module's registered
+        // defaults; present ones are never touched.
+        engine.moduleManager.initializeNamespaces(engine.store);
         // task_3ddb1c06 (c): the save carries the full engine.serialize()
         // envelope — restore the seeded RNG stream too, or every resume
-        // silently forks the world's determinism. (Full Engine.deserialize
-        // needs the pack's module list, which packs don't export; state +
-        // rngState covers the material fidelity.)
+        // silently forks the world's determinism. Number.isFinite, not
+        // typeof: JSON.parse('1e999') yields Infinity, and SeededRNG.setState
+        // does no validation (mirrors the engine's own world.ts guard).
+        // Full Engine.deserialize remains blocked: it needs the pack's module
+        // list, which packs don't export — and actionLog is private with no
+        // setter, so campaign-spanning getActionLog() after a resume is an
+        // engine-side ask (pack engine-options export), not fixable here.
         const envelope = JSON.parse(savedSession.engineState) as { world?: { rngState?: unknown } };
-        if (typeof envelope.world?.rngState === 'number') {
+        if (typeof envelope.world?.rngState === 'number' && Number.isFinite(envelope.world.rngState)) {
           engine.store.rng.setState(envelope.world.rngState);
         }
       } catch (err) {

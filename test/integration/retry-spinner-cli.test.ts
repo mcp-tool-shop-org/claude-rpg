@@ -260,14 +260,16 @@ describe('real-process retry path — world-gen (F-d102b95a)', () => {
       // call, before the subsequent opening-narration call (runNew ->
       // runGameLoop, bin.ts:796) adds a third request.
       await cli.waitForStdout('World "Test World" created!', 15000);
-
-      // The real HTTP-level proof: exactly 2 requests hit the mock server
-      // (the forced 429, then the retried 200) for world-gen's own single
-      // generateStructured() call.
-      expect(server.callCount()).toBe(2);
       expect(cli.stdout()).not.toContain('Unexpected error');
 
+      // Coordinator stitch (wave 13): reading callCount() at the created!
+      // line RACED the opening-narration request runNew fires immediately
+      // after (observed 2 on one run, 3 on the next). Wait for the gameplay
+      // prompt instead — every request has landed by then — and assert the
+      // deterministic TOTAL: the forced 429 + the retried world-gen 200 +
+      // the single unforced opening-narration call.
       await cli.waitForStdout('  > ');
+      expect(server.callCount()).toBe(3);
       cli.sendLine('quit');
       const exitCode = await cli.waitForExit();
       expect(exitCode).toBe(0);

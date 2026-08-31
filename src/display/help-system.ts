@@ -336,11 +336,16 @@ export function renderPlayHelp(): string {
   // verb (crafting-recipes.ts's createCraftingCore registers it) that this
   // domain's own contextual-suggestions.ts already nudges players to type
   // mid-play. Adding 'craft' ONLY here, not salvage/repair/modify --
-  // per this wave's cross-domain coherence rule (F-4fc952ae suppresses
-  // those three plus individual leverage verbs from the interpreter's
-  // visible verb list until the Director rules on the feature; a help
-  // screen must not advertise a verb another fix is suppressing). Revisit
-  // this line alongside F-4fc952ae once that ruling lands.
+  // F-4fc952ae (coordinator-locked design, turn-loop.ts) suppresses those
+  // three plus individual leverage verbs from the interpreter's visible verb
+  // list, so a help screen must not advertise a verb the interpreter won't
+  // accept. F-4fc952ae has since landed (this wave's closed-findings
+  // ledger) as a locked design decision, not a still-open ruling -- this
+  // comment previously read as "revisit once the ruling lands," which was
+  // stale. contextual-suggestions.ts's matching mid-play nudge was updated
+  // in step (F-d6f7107e) to stop suggesting "salvage" for the same reason,
+  // so this section and that nudge now agree: both surface 'craft' only,
+  // until salvage/repair/modify are un-suppressed.
   const commandRows = PLAY_COMMANDS
     .filter((c) => c.cmd !== '/help')
     .map((c) => renderNameDescriptionRow(c.cmd, c.description, 30))

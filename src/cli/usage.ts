@@ -50,6 +50,18 @@ function renderWorldsSection(): string {
   return `Worlds (claude-rpg play --world <name>):\n${rows}`;
 }
 
+/**
+ * F-a5396488: `[--debug]` used to render as a second flag line nested
+ * directly under `claude-rpg play [--fast]`, with no other command line
+ * showing it -- reading as "these two flags belong to play." But --debug is
+ * parsed globally in main() (`debugMode = args.includes('--debug')`,
+ * bin.ts, before command dispatch) and affects every subcommand's error
+ * rendering (load/new included), unlike --fast, which really is play-only.
+ * Moved to its own "Global flags:" line below the per-command list so the
+ * help text's grouping matches --debug's actual (global) scope instead of
+ * implying it only applies to `play`.
+ */
+
 export function renderUsage(): string {
   const rule = dim('─'.repeat(getTerminalWidth()));
   return `
@@ -60,12 +72,14 @@ ${rule}
 Usage:
   claude-rpg play [--fast]                      Play a starter world (choose
                                                 from 10 worlds interactively)
-                  [--debug]                     Show structured error details
   claude-rpg load                               Load a saved game
   claude-rpg new "<prompt>"                     Generate a world from a prompt
   claude-rpg archive                            Browse completed campaigns
   claude-rpg --version                          Show version
   claude-rpg --help                             Show this help
+
+Global flags:
+  --debug                                       Show structured error details
 
 ${renderWorldsSection()}
 

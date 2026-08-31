@@ -108,9 +108,15 @@ export function generateSuggestions(opts: {
   }
 
   // 10. Has abundant materials → suggest crafting (v1.8)
+  // F-d6f7107e: dropped 'or "salvage"' -- F-4fc952ae's coordinator-locked
+  // verb allowlist (turn-loop.ts) suppresses 'salvage' from the
+  // interpreter's visible surface, and renderPlayHelp's CRAFTING section
+  // (help-system.ts) only ever documented 'craft'. This mid-play nudge was
+  // the one surface in this domain still telling players to type a verb the
+  // interpreter won't accept.
   if (suggestions.length < 2 && hasCraftableMaterials && !hasCraftingShortage) {
     suggestions.push({
-      text: 'You have materials — type "craft" or "salvage" to use them',
+      text: 'You have materials — type "craft" to use them',
       trigger: 'crafting-hint',
     });
   }

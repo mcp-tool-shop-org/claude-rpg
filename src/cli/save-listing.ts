@@ -64,3 +64,32 @@ export function formatSaveSlotPrefix(index: number): string {
 export function formatSaveSlotIndent(index: number): string {
   return ' '.repeat(formatSaveSlotPrefix(index).length);
 }
+
+/**
+ * F-df387f5b: runLoad()'s /load listing printed every entry listSaves()
+ * returned with no cap, page size, or filter. Every save action in this app
+ * -- the manual "save" command and both the SIGINT and stdin-closed autosave
+ * paths (bin.ts) -- names its file with a fresh Date.now() suffix, i.e.
+ * saves are never overwritten, only ever added. Over the multi-hundred-turn
+ * campaigns this codebase's own comments repeatedly cite as the target
+ * scale, combined with every accidental Ctrl+C or piped-input EOF silently
+ * adding another autosave file, the save directory realistically
+ * accumulates dozens-to-hundreds of entries with no cleanup path anywhere
+ * in this domain.
+ *
+ * session/session.ts's listSaves() already returns entries newest-first
+ * (sorted by `savedAt` descending), so capping to the first
+ * SAVE_LISTING_CAP entries is exactly "most recent N" with no extra sort
+ * needed at the call site.
+ */
+export const SAVE_LISTING_CAP = 20;
+
+/**
+ * Footer line noting how many older saves exist beyond SAVE_LISTING_CAP, or
+ * null when nothing was truncated (the common case for most campaigns,
+ * where no footer should print at all).
+ */
+export function formatOlderSavesFooter(hiddenCount: number): string | null {
+  if (hiddenCount <= 0) return null;
+  return `  + ${hiddenCount} older save${hiddenCount === 1 ? '' : 's'} not shown.`;
+}

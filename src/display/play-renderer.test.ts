@@ -183,6 +183,139 @@ describe('renderPlayScreen HP coloring (F-ce17a470)', () => {
 });
 
 /**
+ * F-d386d9df: hpText used to render as a bare 'HP: x' regardless of maxHp,
+ * so a critical and a full-health character produced textually identical
+ * strings -- the ONLY signal a critical player got was the critical()
+ * color wrap, a total loss of the warning under NO_COLOR, piped/non-TTY
+ * output, or for a colorblind player. Now mirrors status-compact.ts's own
+ * `s.maxHp ? 'HP: x/max' : 'HP: x'`.
+ */
+describe('renderPlayScreen HP text includes maxHp when known (F-d386d9df)', () => {
+  const world = {
+    playerId: 'p1',
+    locationId: 'z1',
+    entities: { p1: { name: 'Hero', resources: { hp: 10 }, statuses: [] } },
+    zones: { z1: { name: 'Town', neighbors: [] } },
+    factions: {},
+  } as any;
+
+  it('renders "HP: x/max" when maxHp is known', () => {
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world,
+      availableActions: [],
+      profileStatus: {
+        name: 'Hero', level: 1, archetypeName: 'Warrior',
+        hp: 45, maxHp: 100, injuryTags: [], statuses: [],
+      },
+    });
+    expect(output).toContain('HP: 45/100');
+  });
+
+  it('falls back to bare "HP: x" when maxHp is not known', () => {
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world,
+      availableActions: [],
+      profileStatus: {
+        name: 'Hero', level: 1, archetypeName: 'Warrior',
+        hp: 45, injuryTags: [], statuses: [],
+      },
+    });
+    expect(output).toContain('HP: 45');
+    expect(output).not.toContain('HP: 45/');
+  });
+
+  it('a critical and a healthy character are no longer textually identical (the bug this finding flags)', () => {
+    const critOutput = renderPlayScreen({
+      narration: 'Test.', world, availableActions: [],
+      profileStatus: { name: 'Hero', level: 1, archetypeName: 'Warrior', hp: 5, maxHp: 100, injuryTags: [], statuses: [] },
+    });
+    const healthyOutput = renderPlayScreen({
+      narration: 'Test.', world, availableActions: [],
+      profileStatus: { name: 'Hero', level: 1, archetypeName: 'Warrior', hp: 95, maxHp: 100, injuryTags: [], statuses: [] },
+    });
+    expect(critOutput).toContain('HP: 5/100');
+    expect(healthyOutput).toContain('HP: 95/100');
+  });
+});
+
+/**
+ * F-7eff9b3a: the character-status line used to be built as one long
+ * unwrapped string (`  ${bold(nameLine)} | ${statParts.join(' | ')}`),
+ * unlike this domain's reference tables (help-system.ts's
+ * renderNameDescriptionRow), which got dedicated word-wrap-with-hanging-
+ * indent treatment for the identical overflow bug class (three prior fixes:
+ * F-a17315ac/F-d36903d0/F-1367afd9). At the addendum's 40-column floor, a
+ * character with a long name/title/archetype/weapon/armor combination now
+ * wraps at segment boundaries with a hanging indent instead of the terminal
+ * hard-wrapping wherever it falls mid-word.
+ */
+describe('wrapStatusLine (F-7eff9b3a)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('is behavior-preserving when every segment fits on one line', async () => {
+    const mod = await import('./play-renderer.js');
+    const result = mod.wrapStatusLine('  ', ['Name (Lv1 Warrior)', 'HP: 10', 'Sword']);
+    expect(result).toBe('  Name (Lv1 Warrior) | HP: 10 | Sword');
+  });
+
+  it('wraps onto a new line with a hanging indent once segments exceed the terminal width', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const mod = await import('./play-renderer.js');
+    // Each segment individually fits within 40 columns (segments are atomic
+    // and never split, so a single oversized segment can legitimately
+    // exceed the width on its own -- that behavior is covered by the
+    // "never splits a segment" test below instead).
+    const result = mod.wrapStatusLine('  ', [
+      'Alexandria (Lv12 Battlemage)',
+      'HP: 450/450',
+      'Ceremonial Warhammer',
+      'Dragonscale Armor',
+    ]);
+    const lines = result.split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    // No line exceeds the terminal width.
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+    // Continuation lines carry the hanging indent, not the lead indent.
+    for (let i = 1; i < lines.length; i++) {
+      expect(lines[i].startsWith('    ')).toBe(true);
+    }
+  });
+
+  it('never splits a segment mid-string, even one longer than the terminal width (degrades legibly, matching wrapWords\' unsplit-overlong-word behavior)', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const mod = await import('./play-renderer.js');
+    const longSegment = 'A'.repeat(60);
+    const result = mod.wrapStatusLine('  ', ['Name', longSegment]);
+    expect(result).toContain(longSegment);
+  });
+
+  it('renderPlayScreen wraps the full character-status line at a narrow width without losing any field', () => {
+    const engine = createGame();
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      profileStatus: {
+        name: 'Alexandria Longname', title: 'The Unrelenting', level: 12, archetypeName: 'Battlemage',
+        hp: 450, maxHp: 450, weaponName: 'Ceremonial Warhammer of the Ancients',
+        armorName: 'Plated Dragonscale Battle Armor', injuryTags: [], statuses: [],
+      },
+    });
+    expect(output).toContain('Alexandria Longname');
+    expect(output).toContain('HP: 450/450');
+    expect(output).toContain('Ceremonial Warhammer of the Ancients');
+    expect(output).toContain('Plated Dragonscale Battle Armor');
+  });
+});
+
+/**
  * F-61e67d85: src/npc/ambient-dialogue.ts's generateAmbientLine/
  * generateZoneAmbience is a fully built, fully unit-tested, zero-API-cost
  * flavor-text generator with no rendering surface anywhere in cli-display --

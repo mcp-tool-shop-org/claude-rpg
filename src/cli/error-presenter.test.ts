@@ -60,6 +60,22 @@ describe('error-presenter: narration errors', () => {
   });
 });
 
+/**
+ * F-9eefaf97: 'auth' was the only one of the five NarrationError kinds whose
+ * nextAction didn't mention saving first -- an auth failure (invalid/
+ * expired/revoked key) can happen mid-turn, not just at startup, so a player
+ * following "restart" literally could exit without knowing "save" (which
+ * needs no API call) was available first. Now matches its four siblings.
+ */
+describe('error-presenter: auth nextAction mentions save, matching its sibling kinds (F-9eefaf97)', () => {
+  it('auth nextAction offers "save" alongside the restart instruction', () => {
+    const err = new NarrationError({ kind: 'auth', message: 'invalid key' });
+    const p = classifyForPresentation(err, 'turn');
+    expect(p.nextAction).toBe('Check ANTHROPIC_API_KEY and restart, or type "save" to keep your progress.');
+    expect(p.nextAction).toContain('save');
+  });
+});
+
 // ─── Opening Narration (Fatal) ──────────────────────────────
 
 describe('error-presenter: opening narration', () => {
@@ -334,6 +350,57 @@ describe('error-presenter: unknown pack on load', () => {
     const output = rendered(p, true, err);
     expect(output).toContain('[debug]');
     expect(output).toContain('iron-colosseum');
+  });
+
+  it('does not shadow the unrelated generic load error path', () => {
+    const err = new Error('ENOENT: file not found');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Could not load save');
+  });
+});
+
+// ─── Invalid Engine State on Load (F-e58b49ed) ───────────────
+
+/**
+ * F-e58b49ed: bin.ts's runLoad() used to render validateEngineState()
+ * failures as two raw console.error() lines plus a bare process.exit(1),
+ * bypassing this classify/render pipeline entirely -- the only fatal branch
+ * in that function that did. It now raises a plain Error carrying the
+ * validator's own diagnostic and routes it through presentError(err, 'load',
+ * debugMode) like the adjacent branches already do. These tests cover the
+ * new classification branch for all three validateEngineState() error
+ * strings (cli/engine-state-validator.ts).
+ */
+describe('error-presenter: invalid engine state on load (F-e58b49ed)', () => {
+  it('gets a distinct headline and surfaces the validator\'s specific diagnostic', () => {
+    const err = new Error('Save file has invalid engine state: not valid JSON.');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Invalid save data');
+    expect(p.explanation).toContain('not valid JSON');
+    expect(p.nextAction).toContain('.bak');
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('surfaces "missing world.state" distinctly', () => {
+    const err = new Error('Save file has invalid engine state: missing world.state.');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Invalid save data');
+    expect(p.explanation).toContain('missing world.state');
+  });
+
+  it('surfaces "missing world.state.meta" distinctly', () => {
+    const err = new Error('Save file has invalid engine state: missing world.state.meta.');
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Invalid save data');
+    expect(p.explanation).toContain('missing world.state.meta');
+  });
+
+  it('debug mode shows the error type alongside the diagnostic', () => {
+    const err = new Error('Save file has invalid engine state: not valid JSON.');
+    const p = classifyForPresentation(err, 'load');
+    const output = rendered(p, true, err);
+    expect(output).toContain('[debug]');
+    expect(output).toContain('not valid JSON');
   });
 
   it('does not shadow the unrelated generic load error path', () => {

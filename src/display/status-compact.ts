@@ -6,7 +6,7 @@ import type { LeverageState, ScoredMove } from '@ai-rpg-engine/modules';
 import { formatLeverageStatus } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
 import { bold, dim, red, yellow, cyan, danger, critical } from '../cli/colors.js';
-import { getTerminalWidth, isCriticalHp } from './play-renderer.js';
+import { getTerminalWidth, isCriticalHp, wrapStatusLine } from './play-renderer.js';
 
 // F-38eb3dec: was a fixed 60-char divider regardless of terminal size,
 // unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
@@ -46,9 +46,17 @@ export function renderCompactStatus(opts: {
   // screen can't disagree about what counts as dangerously low HP.
   const rawHpPart = s.maxHp ? `HP: ${s.hp}/${s.maxHp}` : `HP: ${s.hp}`;
   const hpPart = isCriticalHp(s.hp, s.maxHp) ? critical(rawHpPart) : rawHpPart;
-  const weaponPart = s.weaponName ? ` | ${s.weaponName}` : '';
-  const armorPart = s.armorName ? ` | ${s.armorName}` : '';
-  lines.push(`  ${bold(s.name)}${titlePart} (Lv${s.level} ${s.archetypeName}${discipline}) | ${hpPart}${weaponPart}${armorPart}`);
+  // F-7eff9b3a: routed through play-renderer.ts's wrapStatusLine (shared
+  // helper, same fix as that file's own character-status line) instead of
+  // raw concatenation -- segments wrap at " | " boundaries with a hanging
+  // indent once the line exceeds getTerminalWidth(), instead of the
+  // terminal hard-wrapping wherever it falls mid-word. Behavior-preserving
+  // when everything fits on one line (see wrapStatusLine's doc comment).
+  const nameSeg = `${bold(s.name)}${titlePart} (Lv${s.level} ${s.archetypeName}${discipline})`;
+  const segs = [nameSeg, hpPart];
+  if (s.weaponName) segs.push(s.weaponName);
+  if (s.armorName) segs.push(s.armorName);
+  lines.push(wrapStatusLine('  ', segs));
 
   // Injuries / statuses
   const tags = [...s.injuryTags, ...s.statuses];

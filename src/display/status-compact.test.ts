@@ -207,3 +207,59 @@ describe('renderCompactStatus HP coloring (F-ce17a470)', () => {
     expect(result).not.toContain('\x1b[');
   });
 });
+
+/**
+ * F-7eff9b3a: the character line here was built as one long unwrapped
+ * template string, the same overflow bug class play-renderer.ts's own
+ * character-status line had -- both now route through the shared
+ * wrapStatusLine helper (play-renderer.ts), so a long name/title/weapon/
+ * armor combination wraps at segment boundaries with a hanging indent
+ * instead of the terminal hard-wrapping wherever it falls. This file's own
+ * existing 40-column test (above) only asserted the divider rule's width,
+ * never the content line's wrapping behavior -- these tests close that gap.
+ */
+describe('renderCompactStatus character line wraps at narrow widths (F-7eff9b3a)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('stays a single line and unchanged at a normal terminal width', () => {
+    const result = renderCompactStatus(baseOpts({
+      statusData: { ...DEFAULT_STATUS_DATA, weaponName: 'Sword', armorName: 'Leather Armor' },
+    }));
+    expect(result).toContain('Aldric (Lv3 Warrior) | HP: 20 | Sword | Leather Armor');
+  });
+
+  it('wraps the character line without losing any field at a narrow (40-column) terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    // Each individual segment fits within 40 columns on its own -- a single
+    // oversized segment legitimately exceeding the width is covered by
+    // wrapStatusLine's own "never splits a segment" test (play-renderer.
+    // test.ts), not this one.
+    const result = renderCompactStatus(baseOpts({
+      statusData: {
+        ...DEFAULT_STATUS_DATA,
+        name: 'Alexandria',
+        level: 12,
+        archetypeName: 'Battlemage',
+        maxHp: 450,
+        hp: 450,
+        weaponName: 'Ceremonial Warhammer',
+        armorName: 'Dragonscale Armor',
+      },
+    }));
+    expect(result).toContain('Alexandria');
+    expect(result).toContain('HP: 450/450');
+    expect(result).toContain('Ceremonial Warhammer');
+    expect(result).toContain('Dragonscale Armor');
+
+    // The character line itself (between the two header dividers and the
+    // rest of the screen) never exceeds the 40-column budget per physical
+    // line.
+    const lines = result.split('\n').filter((l) => l.includes('Alexandria') || l.trim().startsWith('Ceremonial') || l.trim().startsWith('Dragonscale'));
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+  });
+});

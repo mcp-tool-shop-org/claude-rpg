@@ -261,7 +261,13 @@ export function getCraftingContext(
 ): string | undefined {
   if (!profile || !itemCatalog) return undefined;
   const parts: string[] = [];
-  for (const slot of ['weapon', 'armor', 'tool', 'accessory', 'trinket'] as const) {
+  // F-3daaf5dc: EQUIPMENT_SLOTS is the engine-owned canonical slot list
+  // (already imported above, already used identically by game.ts:2599's
+  // tickItemRecognition for the same equipped-slot iteration) -- a hand-
+  // copied literal here could silently desync from it on a future engine
+  // slot addition/rename while every other equipped-slot consumer updates
+  // automatically.
+  for (const slot of EQUIPMENT_SLOTS) {
     const itemId = profile.loadout.equipped[slot];
     if (!itemId) continue;
     const item = itemCatalog.items.find((i) => i.id === itemId);
@@ -457,6 +463,40 @@ export function addRumor(
   return [...playerRumors, rumor];
 }
 
+// ─── Faction Cognition ───────────────────────────────────────
+
+/**
+ * F-faf37249: the single safe-read for a faction cognition state's numeric
+ * scalars -- replaces 5-6 hand-copied inline guards (game.ts:1661-1675,
+ * 2388-2400 'cog', 3054-3068 'cog2'; this file's buildPressureInputs,
+ * buildArcInputs, buildFinaleFromState) with one exported function. This is
+ * also the function faction-cognition-guards.test.ts (PB-003) now imports
+ * and exercises directly, instead of a hand-maintained local mirror that
+ * could drift from production code with zero signal.
+ *
+ * F-74884c54: getFactionCognition() is declared (and implemented) to always
+ * return a concrete FactionCognitionState, never undefined -- so every call
+ * site below passes its result straight through with no cast. The `unknown`
+ * parameter type here (rather than FactionCognitionState) is deliberate,
+ * not a regression: it is what lets this function keep validating a
+ * malformed/legacy value at runtime (matching buildPressureInputs' original
+ * ad hoc discipline, the "if defensive validation is wanted" alternative
+ * that finding named) and keeps PB-003's existing null/undefined/wrong-type
+ * coverage exercising the REAL function instead of a reimplementation.
+ */
+export function readFactionCognitionScalars(fcog: unknown): { alertLevel: number; cohesion: number } {
+  if (fcog && typeof fcog === 'object') {
+    const state = fcog as Record<string, unknown>;
+    const rawAlert = state.alertLevel;
+    const rawCohesion = state.cohesion;
+    return {
+      alertLevel: typeof rawAlert === 'number' ? rawAlert : 0,
+      cohesion: typeof rawCohesion === 'number' ? rawCohesion : 1,
+    };
+  }
+  return { alertLevel: 0, cohesion: 1 };
+}
+
 // ─── Pressure System ─────────────────────────────────────────
 
 /** Build PressureInputs from current session state. */
@@ -476,18 +516,7 @@ export function buildPressureInputs(
   }));
   const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
   for (const factionId of factionIds) {
-    const fcog = getFactionCognition(world, factionId);
-    if (fcog && typeof fcog === 'object') {
-      const state = fcog as Record<string, unknown>;
-      const rawAlert = state.alertLevel;
-      const rawCohesion = state.cohesion;
-      factionStates[factionId] = {
-        alertLevel: typeof rawAlert === 'number' ? rawAlert : 0,
-        cohesion: typeof rawCohesion === 'number' ? rawCohesion : 1,
-      };
-    } else {
-      factionStates[factionId] = { alertLevel: 0, cohesion: 1 };
-    }
+    factionStates[factionId] = readFactionCognitionScalars(getFactionCognition(world, factionId));
   }
   const milestones = (profile?.milestones ?? []).map((m) => ({ label: m.label, tags: m.tags }));
   const districtIds = getAllDistrictIds(world);
@@ -710,15 +739,10 @@ export function buildArcInputs(
   fastMode: boolean,
 ): ArcInputs {
   const factionIds = Object.keys(world.factions);
-  const factionStates = factionIds.map((factionId) => {
-    const fcog = getFactionCognition(world, factionId);
-    const state = fcog as Record<string, unknown> | undefined;
-    return {
-      factionId,
-      alertLevel: (state?.alertLevel as number) ?? 0,
-      cohesion: (state?.cohesion as number) ?? 1,
-    };
-  });
+  const factionStates = factionIds.map((factionId) => ({
+    factionId,
+    ...readFactionCognitionScalars(getFactionCognition(world, factionId)),
+  }));
   const playerReputations = factionIds.map((fid) => ({
     factionId: fid,
     value: profile ? getReputation(profile, fid) : 0,
@@ -786,16 +810,11 @@ export function buildFinaleFromState(
   }));
 
   const factionIds = Object.keys(world.factions);
-  const factions: FinaleFactionInput[] = factionIds.map((fid) => {
-    const fcog = getFactionCognition(world, fid);
-    const state = fcog as Record<string, unknown> | undefined;
-    return {
-      factionId: fid,
-      playerReputation: profile ? getReputation(profile, fid) : 0,
-      alertLevel: (state?.alertLevel as number) ?? 0,
-      cohesion: (state?.cohesion as number) ?? 1,
-    };
-  });
+  const factions: FinaleFactionInput[] = factionIds.map((fid) => ({
+    factionId: fid,
+    playerReputation: profile ? getReputation(profile, fid) : 0,
+    ...readFactionCognitionScalars(getFactionCognition(world, fid)),
+  }));
 
   const districtIds = getAllDistrictIds(world);
   const districts: FinaleDistrictInput[] = districtIds.map((did) => {

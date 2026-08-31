@@ -180,6 +180,7 @@ import {
   applyEconomyShiftToMap,
   buildArcInputs as _buildArcInputs,
   buildFinaleFromState,
+  readFactionCognitionScalars,
   buildCurrentStrategicMap as _buildCurrentStrategicMap,
   buildMoveRecommendation as _buildMoveRecommendation,
   hasEverUsedLeverage as _hasEverUsedLeverage,
@@ -1658,20 +1659,12 @@ export class GameSession {
       value: this.profile ? getReputation(this.profile, fid) : 0,
     }));
 
+    // F-faf37249: routes through game-state.ts's single exported guard
+    // instead of a hand-copied inline mirror (see readFactionCognitionScalars'
+    // doc comment).
     const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
     for (const factionId of factionIds) {
-      const fcog = getFactionCognition(this.engine.world, factionId);
-      if (fcog && typeof fcog === 'object') {
-        const state = fcog as Record<string, unknown>;
-        const rawAlert = state.alertLevel;
-        const rawCohesion = state.cohesion;
-        factionStates[factionId] = {
-          alertLevel: typeof rawAlert === 'number' ? rawAlert : 0,
-          cohesion: typeof rawCohesion === 'number' ? rawCohesion : 1,
-        };
-      } else {
-        factionStates[factionId] = { alertLevel: 0, cohesion: 1 };
-      }
+      factionStates[factionId] = readFactionCognitionScalars(getFactionCognition(this.engine.world, factionId));
     }
 
     return {
@@ -2386,18 +2379,19 @@ export class GameSession {
         }
 
         case 'cohesion': {
+          // F-faf37249: readFactionCognitionScalars() replaces the inline
+          // typeof guard -- cog is a live reference into world state
+          // (getFactionCognition's own contract), so writing the clamped,
+          // safely-defaulted scalar back onto it is the same mutation as
+          // before, just no longer hand-duplicated.
           const cog = getFactionCognition(this.engine.world, effect.factionId);
-          if (cog && typeof cog === 'object' && typeof (cog as Record<string, unknown>).cohesion === 'number') {
-            (cog as Record<string, unknown>).cohesion = Math.max(0, Math.min(1, ((cog as Record<string, unknown>).cohesion as number) + effect.delta));
-          }
+          cog.cohesion = Math.max(0, Math.min(1, readFactionCognitionScalars(cog).cohesion + effect.delta));
           break;
         }
 
         case 'alert': {
           const cog = getFactionCognition(this.engine.world, effect.factionId);
-          if (cog && typeof cog === 'object' && typeof (cog as Record<string, unknown>).alertLevel === 'number') {
-            (cog as Record<string, unknown>).alertLevel = Math.max(0, Math.min(100, ((cog as Record<string, unknown>).alertLevel as number) + effect.delta));
-          }
+          cog.alertLevel = Math.max(0, Math.min(100, readFactionCognitionScalars(cog).alertLevel + effect.delta));
           break;
         }
 
@@ -3052,18 +3046,17 @@ export class GameSession {
         }
 
         case 'cohesion': {
+          // F-faf37249: same readFactionCognitionScalars() consolidation as
+          // the byte-for-byte-duplicate 'cog' block above (this one was
+          // 'cog2', a renamed copy).
           const cog2 = getFactionCognition(this.engine.world, effect.factionId);
-          if (cog2 && typeof cog2 === 'object' && typeof (cog2 as Record<string, unknown>).cohesion === 'number') {
-            (cog2 as Record<string, unknown>).cohesion = Math.max(0, Math.min(1, ((cog2 as Record<string, unknown>).cohesion as number) + effect.delta));
-          }
+          cog2.cohesion = Math.max(0, Math.min(1, readFactionCognitionScalars(cog2).cohesion + effect.delta));
           break;
         }
 
         case 'alert': {
           const cog2 = getFactionCognition(this.engine.world, effect.factionId);
-          if (cog2 && typeof cog2 === 'object' && typeof (cog2 as Record<string, unknown>).alertLevel === 'number') {
-            (cog2 as Record<string, unknown>).alertLevel = Math.max(0, Math.min(100, ((cog2 as Record<string, unknown>).alertLevel as number) + effect.delta));
-          }
+          cog2.alertLevel = Math.max(0, Math.min(100, readFactionCognitionScalars(cog2).alertLevel + effect.delta));
           break;
         }
 

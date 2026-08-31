@@ -1,6 +1,8 @@
 // Prompt template: scene narration from perception-filtered state
 // v0.2: outputs NarrationPlan JSON for multi-modal presentation
 
+import type { UiEffectType } from '@ai-rpg-engine/presentation';
+
 /**
  * Coordinator Brief contract #7: the 10-id sound-effect list, single-sourced
  * here so BOTH this file's own prompt text (below) AND cli-display's
@@ -31,6 +33,45 @@ function formatSoundEffectIds(): string {
   return Object.entries(SOUND_EFFECT_IDS)
     .map(([id, gloss]) => `${id} (${gloss})`)
     .join(', ');
+}
+
+/**
+ * F-01127b93: the uiEffects[].type instruction below used to be a THIRD
+ * independent hand-copied mirror of @ai-rpg-engine/presentation's
+ * UiEffectType (packages/presentation/src/types.ts) -- alongside
+ * src/cli/presentation-renderer.ts's own mirror, fixed in F-3e0274e7 by
+ * importing the type directly. Verified byte-identical today, but with zero
+ * compile-time coupling to the type it claimed to track: per narrator.ts's
+ * parseNarrationPlan, an unrecognized uiEffects value fails
+ * isValidNarrationPlan and falls into the coerced-plan branch that drops
+ * uiEffects entirely, so a future engine-side rename/addition would surface
+ * only as effects quietly stopping -- never as a test or type failure.
+ *
+ * UiEffectType is a type-only union (erased at runtime), unlike
+ * SOUND_EFFECT_IDS's Record above, so it can't be iterated the way
+ * formatSoundEffectIds() iterates SOUND_EFFECT_IDS. Instead this tuple is
+ * pinned to it in BOTH directions at compile time (npm run verify's
+ * typecheck step, not just this file's own tests):
+ *  - `satisfies readonly UiEffectType[]` right below fails to typecheck if
+ *    this tuple contains a value UiEffectType does NOT have (a stale/renamed
+ *    entry here);
+ *  - `_allUiEffectTypesCovered` further below fails to typecheck if
+ *    UiEffectType has a member this tuple is missing (a variant added
+ *    upstream and never mirrored here).
+ * Together those make a future UiEffectType change a compile error in this
+ * file instead of a silent drift -- the same guarantee F-3e0274e7 established
+ * for presentation-renderer.ts, applied here where the type is rendered as
+ * prompt prose rather than used to narrow an incoming value.
+ */
+export const UI_EFFECT_TYPES = ['flash', 'shake', 'fade-in', 'fade-out', 'border-pulse'] as const satisfies readonly UiEffectType[];
+
+// See UI_EFFECT_TYPES's doc comment above: the other half of the two-way pin.
+type _AllUiEffectTypesCovered = [UiEffectType] extends [(typeof UI_EFFECT_TYPES)[number]] ? true : false;
+const _allUiEffectTypesCovered: _AllUiEffectTypesCovered = true;
+
+/** Render UI_EFFECT_TYPES as the "type": "a" | "b" | ... union text the prompt below expects. */
+function formatUiEffectTypes(): string {
+  return UI_EFFECT_TYPES.map((t) => `"${t}"`).join(' | ');
 }
 
 export const NARRATE_SYSTEM = `You are the narrator of a text RPG. You describe what the player character perceives — not objective truth, but their subjective experience.
@@ -65,7 +106,7 @@ Respond with a JSON object (NarrationPlan) with this shape:
   "urgency": "idle" | "normal" | "elevated" | "critical",
   "sfx": [{ "effectId": "string", "timing": "immediate" | "with-text" | "after-text", "intensity": 0.0-1.0 }],
   "ambientLayers": [{ "layerId": "string", "action": "start" | "stop" | "crossfade", "volume": 0.0-1.0, "fadeMs": number }],
-  "uiEffects": [{ "type": "flash" | "shake" | "fade-in" | "fade-out" | "border-pulse", "durationMs": number }],
+  "uiEffects": [{ "type": ${formatUiEffectTypes()}, "durationMs": number }],
   "interruptibility": "free" | "locked" | "soft-lock"
 }
 

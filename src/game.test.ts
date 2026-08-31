@@ -1063,6 +1063,142 @@ describe('GameSession', () => {
     });
   });
 
+  // F-934bed47: no test in this suite exercised the companion combat-reaction
+  // branch (game.ts:1199-1213) -- hasCombatWon/hasCombatLost gating
+  // processCompanionReactions('combat-won'|'combat-lost'). Both cases below
+  // drive a REAL engine (createGame() via the game-harness, same
+  // createGame()+executeTurn pattern as turn-loop.test.ts:249-299's
+  // 'attack pilgrim' precedent) through the real 'attack' verb to a genuine
+  // combat.entity.defeated event, rather than fabricating a TurnResult.
+  //
+  // Both scenarios stay in chapel-entrance specifically: (a) it is the one
+  // zone with both a killable non-hostile-tagged NPC (the pilgrim) and the
+  // player's own start position, so combat-won needs no travel back and
+  // forth to line up companion + target in the same zone; (b) its district
+  // (chapel-grounds) has mood tone 'tense' in a fresh game (verified
+  // directly against the engine) rather than 'grim'/'oppressive'/
+  // 'prosperous' -- the OTHER trigger this same post-turn block can fire
+  // (game.ts's district-mood check, right after the combat-reaction check)
+  // would otherwise call processCompanionReactions again the same turn and
+  // overwrite lastCompanionReactions before the assertion runs. (The
+  // starter-fantasy hostiles -- ash-ghoul/crypt-warden/crypt-stalker -- all
+  // sit in crypt-depths, whose tone is 'oppressive' in a fresh game, which
+  // is exactly this collision; verified directly against the engine rather
+  // than assumed.)
+  //
+  // Both hits are driven through combat-core's real hit-chance roll rather
+  // than a mocked resolution. That roll is a deterministic hash of
+  // (tick, attackerId, targetId, seed) -- not RNG in the "different every
+  // run" sense (combat-core.ts's simpleRoll) -- so a fixed number of setup
+  // turns before the decisive attack (pinning which tick it resolves on)
+  // makes the hit land the same way on every run without looping/retrying
+  // at runtime (ADDENDUM-COMMON: "Drive HP deliberately... rather than
+  // looping RNG"). Verified directly against the engine before being
+  // encoded here as fixed turn counts, not derived from the formula alone.
+  describe('companion combat-reaction branch: hasCombatWon/hasCombatLost -> processCompanionReactions (F-934bed47)', () => {
+    it('combat-won: a defeat event with no living hostile left in the zone fires the combat-won companion reaction', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      // Brother Aldric (chapel-nave) is brought back to chapel-entrance so
+      // he is present in the same zone as the pilgrim for the decisive
+      // attack -- companions follow the player's zone changes (game.ts's
+      // followPlayer call), so no separate recruit-then-return step is
+      // needed beyond these two moves.
+      await h.play('go to chapel-nave');
+      await h.play('/recruit aldric');
+      await h.play('go to chapel-entrance');
+
+      // Drive the target to the brink before the killing blow
+      // (ADDENDUM-COMMON: "Drive HP deliberately... rather than looping
+      // RNG") -- the hit itself still resolves through real combat-core
+      // roll logic, not a fabricated event.
+      const pilgrim = h.session.engine.world.entities['pilgrim'];
+      pilgrim.resources.hp = 1;
+
+      await h.play('attack pilgrim');
+
+      // pilgrim is now defeated; chapel-entrance never has a
+      // hostile-tagged entity, so hasLivingHostiles() is false and
+      // game.ts's hasCombatWon branch (game.ts:1199-1213) fires
+      // processCompanionReactions('combat-won'). Brother Aldric is a
+      // healer (REACTION_TABLE['combat-won'].healer === -1 in the 3.10
+      // engine).
+      expect(pilgrim.resources.hp).toBe(0);
+      expect(h.session.lastCompanionReactions).toEqual([
+        expect.objectContaining({ npcId: 'brother-aldric', trigger: 'combat-won', moraleDelta: -1 }),
+      ]);
+      const aldric = h.session.partyState.companions.find((c) => c.npcId === 'brother-aldric');
+      expect(aldric?.morale).toBe(59);
+    });
+
+    it('combat-lost priority: a same-turn player defeat takes the combat-lost branch even when the zone also has no living hostile (game.ts:1209 if/else-if)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness({
+        clientOpts: {
+          // combat-core's attackHandler never checks attacker.id !==
+          // target.id, and engine.submitAction() always resolves the
+          // player as actor -- so a forced {verb:'attack', targetIds:
+          // ['player']} makes the player their own target, landing a real
+          // combat-core hit on themselves. "attack myself" falls through
+          // the fast-path interpreter to reach this forced response: its
+          // target-resolution pool explicitly excludes the player
+          // (action-interpreter.ts's tryFastInterpret builds `entities`
+          // via `e.id !== world.playerId`), so "myself" never resolves
+          // there and interpretAction() calls generateStructured()
+          // instead of short-circuiting. Fixture text only, never rendered
+          // to a player: confidence:'high' skips the one branch
+          // (low-confidence clarification) that would otherwise surface
+          // `reasoning` in output.
+          structuredData: {
+            verb: 'attack',
+            targetIds: ['player'],
+            toolId: null,
+            parameters: null,
+            confidence: 'high',
+            reasoning: 'a wild swing catches the wanderer',
+            alternatives: null,
+          },
+        },
+      });
+
+      await h.play('/recruit maren');
+      // Filler turn: advances the tick by exactly one so the decisive
+      // self-attack below resolves on a tick verified (directly against
+      // the engine) to land a hit -- see the describe-level comment on
+      // combat-core's deterministic roll.
+      await h.play('look around');
+
+      // Drive the player's HP to the brink before the killing blow, same
+      // discipline as the combat-won case above.
+      const player = h.session.engine.world.entities['player'];
+      player.resources.hp = 3;
+      await h.play('attack myself');
+
+      // The player is defeated (combat.entity.defeated, entityId===
+      // playerId) in this SAME turn's events, and chapel-entrance never
+      // has a living hostile either, so hasCombatWon is ALSO true this
+      // turn -- the exact priority collision the routed finding calls out
+      // (game.ts:1209 if/else-if). Sister Maren is a diplomat:
+      // REACTION_TABLE['combat-won'].diplomat is 0 (a wrongly-prioritized
+      // combat-won would leave lastCompanionReactions empty, not just
+      // wrong-triggered), REACTION_TABLE['combat-lost'].diplomat is -3.
+      // combat-core also wires real passive companion interception here
+      // (combat-builders.ts's buildCombatFormulas().isAlly, via
+      // buildCombatStack) since the target of this attack IS the player --
+      // verified directly against the engine that Sister Maren's
+      // diplomat role (an interception-role penalty in combat-core.ts's
+      // INTERCEPT_ROLE_BONUS) does not intercept this specific hit, so it
+      // reaches the player rather than her.
+      expect(player.resources.hp).toBe(0);
+      expect(h.session.lastCompanionReactions).toEqual([
+        expect.objectContaining({ npcId: 'sister-maren', trigger: 'combat-lost', moraleDelta: -3 }),
+      ]);
+      const maren = h.session.partyState.companions.find((c) => c.npcId === 'sister-maren');
+      expect(maren?.morale).toBe(57);
+    });
+  });
+
   // F-c4332895: engine.submitAction() inside executeTurn() mutates world state
   // (Step 2) before narrateScene runs (Step 3). Once narrator.ts started
   // rethrowing fatal NarrationError kinds (auth/bad-request) instead of

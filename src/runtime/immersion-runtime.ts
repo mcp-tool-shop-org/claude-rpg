@@ -74,8 +74,30 @@ export class ImmersionRuntime {
     }
   }
 
-  /** Whether debug logging is enabled. Set externally if needed. */
-  debugMode = false;
+  /**
+   * Whether debug logging is enabled. Set externally if needed (e.g.
+   * game.ts's `this.immersion.debugMode = this.debugLog.enabled`).
+   *
+   * F-06fffa64: the setter also propagates to `hookManager.debugMode` below,
+   * so this one flag gates BOTH this file's own `[immersion] ...`
+   * diagnostics AND HookManager.fire()'s hook-threw diagnostic (F-9ba5f482)
+   * -- before this, HookManager had no debugMode/gate of its own at all, so
+   * flipping ImmersionRuntime's debugMode had no way to reach the sibling
+   * gate one layer down and hooks.ts's diagnostic stayed unconditional
+   * regardless. Read/write behavior for existing callers is unchanged --
+   * `runtime.debugMode = x` and `if (runtime.debugMode)` both still work
+   * exactly as they did when this was a plain field.
+   */
+  private _debugMode = false;
+
+  get debugMode(): boolean {
+    return this._debugMode;
+  }
+
+  set debugMode(value: boolean) {
+    this._debugMode = value;
+    this.hookManager.debugMode = value;
+  }
 
   /**
    * F-4ec3609b / F-961f14aa: memoizes the from/to of the last inferAndTransition() call,

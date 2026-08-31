@@ -105,6 +105,22 @@ export function hasLivingHostiles(world: WorldState): boolean {
 export class HookManager {
   private hooks = new Map<HookPoint, Hook[]>();
 
+  /**
+   * F-9ba5f482/F-06fffa64: gates fire()'s hook-threw diagnostic below.
+   * Mirrors ImmersionRuntime's own public `debugMode` field/convention --
+   * the gate every OTHER diagnostic in this domain already uses -- instead
+   * of this being the one call site with no gate of any kind. Before this,
+   * a non-debug player's terminal got a raw hook name, hookPoint string,
+   * and full Error/stack dumped the instant any hook threw, with no way to
+   * suppress it and no relation to whether --debug was passed.
+   * ImmersionRuntime (the sole production instantiator of HookManager)
+   * keeps this in sync with its own debugMode via the setter on its
+   * `debugMode` accessor (immersion-runtime.ts), so `runtime.debugMode`
+   * remains the one flag that gates every diagnostic in this domain,
+   * HookManager's included.
+   */
+  debugMode = false;
+
   register(point: HookPoint, hook: Hook): void {
     const existing = this.hooks.get(point) ?? [];
     existing.push(hook);
@@ -131,10 +147,14 @@ export class HookManager {
         const result = hook(context);
         if (result) results.push(result);
       } catch (err) {
-        console.error(
-          `[hooks] Hook "${hook.name || '<anonymous>'}" at hookPoint "${context.hookPoint}" threw and was skipped:`,
-          err,
-        );
+        // F-9ba5f482: gated on debugMode -- previously unconditional (see
+        // the `debugMode` field's doc comment above for why).
+        if (this.debugMode) {
+          console.error(
+            `[hooks] Hook "${hook.name || '<anonymous>'}" at hookPoint "${context.hookPoint}" threw and was skipped:`,
+            err,
+          );
+        }
       }
     }
     return results;

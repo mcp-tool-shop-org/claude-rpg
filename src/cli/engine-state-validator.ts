@@ -41,5 +41,18 @@ export function validateEngineState(raw: string): EngineStateValidation {
     return { valid: false, error: 'missing world.state' };
   }
 
+  // F-dea554cc (3.9 slice): require world.state.meta, mirroring the engine's
+  // own Engine.deserialize gate (SAVE_MALFORMED on `!data.world.state.meta`).
+  // Every real engine.serialize() payload carries meta; a present-but-empty
+  // state (truncated write, hand-edit) used to pass here, making
+  // Object.assign(engine.store.state, {}) a silent no-op — the player
+  // "loaded" onto a freshly-reset simulation world with zero error shown.
+  // Same null/array discipline as the state check above: this is a cheap
+  // structural gate, not a deep shape assertion (that stays the engine's).
+  const meta = (state as Record<string, unknown>).meta;
+  if (meta === null || Array.isArray(meta) || typeof meta !== 'object') {
+    return { valid: false, error: 'missing world.state.meta' };
+  }
+
   return { valid: true, state: state as Record<string, unknown> };
 }

@@ -10,7 +10,7 @@
 // or after the round-trip.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createProfile } from '@ai-rpg-engine/character-profile';
@@ -147,6 +147,74 @@ describe('resumeHarness — session-state continuity (F-95191273)', () => {
 
     const h2 = await resumeHarness(savePath);
     expect(h2.session.engine.store.rng.getState()).toBe(stateAtSave);
+  });
+
+  // F-1afba928 (3.9 slice, T1 tripwire): Object.assign(engine.store.state, …)
+  // wholesale-replaces the top-level `modules` key, so a module namespace the
+  // save PREDATES (a module added to the engine after the save was written)
+  // ends up undefined instead of defaulted — the engine's own deserialize
+  // backfills exactly this via initializeNamespaces (absent namespaces get
+  // defaults; present ones are never touched). resumeHarness/runLoad must do
+  // the same after their state-assign.
+  it('backfills module namespaces the save predates (mirrors Engine.deserialize)', async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-resume-harness-backfill-'));
+    const savePath = join(tmpDir, 'save.json');
+
+    const h1 = createHarness();
+    await h1.play('look');
+    await saveSession({
+      engine: h1.session.engine,
+      history: h1.session.history,
+      tone: h1.session.tone,
+      savePath,
+      packId: 'chapel-threshold',
+      genre: h1.session.genre,
+    });
+
+    // Simulate a save written before one of the engine's modules existed:
+    // strip a single module namespace out of the persisted engine state.
+    const raw = JSON.parse(await readFile(savePath, 'utf8')) as { engineState: string };
+    const envelope = JSON.parse(raw.engineState) as { world: { state: { modules?: Record<string, unknown> } } };
+    const moduleKeys = Object.keys(envelope.world.state.modules ?? {});
+    expect(moduleKeys.length).toBeGreaterThan(0);
+    const stripped = moduleKeys[0];
+    delete envelope.world.state.modules![stripped];
+    raw.engineState = JSON.stringify(envelope);
+    await writeFile(savePath, JSON.stringify(raw), 'utf8');
+
+    const h2 = await resumeHarness(savePath);
+    const modules = h2.session.engine.store.state.modules as Record<string, unknown>;
+    expect(modules[stripped]).toBeDefined();
+  });
+
+  // F-fe598c44 (3.9 slice, T3 tripwire): JSON.parse('1e999') yields Infinity,
+  // which passes a bare `typeof === 'number'` check, and SeededRNG.setState
+  // does zero validation — a corrupted/hand-edited save could silently poison
+  // the determinism stream. The engine's own load path guards with
+  // Number.isFinite (world.ts); the mirrors must too.
+  it('refuses a non-finite rngState from the save envelope instead of poisoning the stream', async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-resume-harness-rng-inf-'));
+    const savePath = join(tmpDir, 'save.json');
+
+    const h1 = createHarness();
+    await h1.play('look');
+    await saveSession({
+      engine: h1.session.engine,
+      history: h1.session.history,
+      tone: h1.session.tone,
+      savePath,
+      packId: 'chapel-threshold',
+      genre: h1.session.genre,
+    });
+
+    const raw = JSON.parse(await readFile(savePath, 'utf8')) as { engineState: string };
+    // 1e999 is valid JSON that parses to Infinity — the one non-finite number
+    // reachable through JSON.parse.
+    raw.engineState = raw.engineState.replace(/"rngState":\s*-?[\d.eE+]+/, '"rngState":1e999');
+    await writeFile(savePath, JSON.stringify(raw), 'utf8');
+
+    const h2 = await resumeHarness(savePath);
+    expect(Number.isFinite(h2.session.engine.store.rng.getState())).toBe(true);
   });
 
   it('throws a clear error when the save has no packId to restore an engine from', async () => {

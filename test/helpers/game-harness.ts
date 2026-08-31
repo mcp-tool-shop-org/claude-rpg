@@ -127,9 +127,14 @@ export async function resumeHarness(
     throw new Error(`resumeHarness: save at "${savePath}" has invalid engine state (${validation.error}).`);
   }
   Object.assign(engine.store.state, structuredClone(validation.state));
+  // Mirrors bin.ts F-1afba928 (3.9 slice): backfill namespaces for modules
+  // the save predates — absent get defaults, present are never touched.
+  engine.moduleManager.initializeNamespaces(engine.store);
   // Mirrors bin.ts task_3ddb1c06 (c): restore the seeded RNG stream too.
+  // Number.isFinite, not typeof — JSON.parse('1e999') yields Infinity and
+  // SeededRNG.setState does no validation (F-fe598c44).
   const envelope = JSON.parse(savedSession.engineState) as { world?: { rngState?: unknown } };
-  if (typeof envelope.world?.rngState === 'number') {
+  if (typeof envelope.world?.rngState === 'number' && Number.isFinite(envelope.world.rngState)) {
     engine.store.rng.setState(envelope.world.rngState);
   }
 

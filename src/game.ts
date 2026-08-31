@@ -2686,6 +2686,14 @@ export class GameSession {
   private registerLeverageVerbs(): void {
     const leverageVerbs = ['social', 'rumor', 'diplomacy', 'sabotage'] as const;
     for (const verb of leverageVerbs) {
+      // F-a658b0fb (3.9 slice): engine 3.9's buildWorldStack starters always
+      // include player-leverage, which registers 'sabotage' — and 3.9's
+      // registerVerb throws on duplicates. claude-rpg owns these verbs by
+      // design (thin attempted-event handlers; game.ts processes them), so
+      // 'sabotage' takes the engine's sanctioned intentional-replacement
+      // path. The other three stay fail-loud on purpose: if the engine ever
+      // claims them, we want the throw, not a silent shadow.
+      const opts = verb === 'sabotage' ? { override: true } : undefined;
       this.engine.dispatcher.registerVerb(verb, (action) => {
         // Thin handler: just produce an "attempted" event for game.ts to process
         return [{
@@ -2699,10 +2707,12 @@ export class GameSession {
           targetIds: action.targetIds ?? [],
           tick: 0,
         }];
-      });
+      }, opts);
     }
 
-    // Register craft verb (v1.8)
+    // Register craft verb (v1.8). { override: true }: engine 3.9's crafting
+    // module (always in buildWorldStack starters) registers 'craft' first —
+    // same intentional replacement as 'sabotage' above (F-a658b0fb).
     this.engine.dispatcher.registerVerb('craft', (action) => {
       return [{
         id: `craft-${Date.now()}`,
@@ -2715,7 +2725,7 @@ export class GameSession {
         targetIds: action.targetIds ?? [],
         tick: 0,
       }];
-    });
+    }, { override: true });
   }
 
   /**

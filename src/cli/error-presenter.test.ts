@@ -167,8 +167,12 @@ describe('error-presenter: output format', () => {
     const p = classifyForPresentation(err, 'turn');
     const output = rendered(p, false, err);
 
-    expect(output).toContain('\u26A0'); // warning symbol
-    expect(output).toContain('\u2192'); // arrow
+    // F-937c9399: vitest's own stdout is not a TTY, so color -- and these
+    // two glyphs, now gated the same way -- is disabled here. See the
+    // dedicated NO_COLOR-parity regime tests below for the color-enabled
+    // (Unicode) case.
+    expect(output).toContain('!'); // ASCII warning marker (color disabled)
+    expect(output).toContain('->'); // ASCII arrow marker (color disabled)
     expect(output).not.toContain('[debug]');
     expect(output).not.toContain('stack');
     expect(output).not.toContain('at ');
@@ -536,5 +540,72 @@ describe('error-presenter: fatal vs reprompt visual severity (F-643e4d55)', () =
       expect(repromptOutput).not.toContain('\x1b[31m');
       expect(repromptOutput).toContain('\x1b[33m'); // yellow, unchanged
     });
+  });
+});
+
+// ─── Warning/Arrow Glyphs Respect NO_COLOR (F-937c9399) ──────
+
+/**
+ * F-937c9399: renderError() baked ⚠ (headline) and → (nextAction) into the
+ * template string unconditionally, unlike every actual color wrap in this
+ * function (headlineColor/dim/cyan already no-op under NO_COLOR or a
+ * non-TTY stream) -- so the glyphs printed even when color was off. Both now
+ * gate on the same isColorEnabled() check the rest of this function already
+ * uses, with a plain-ASCII fallback ('!' / '->'), matching the wave-8
+ * ASCII-under-NO_COLOR convention this wave's addendum names as the model
+ * (scripts/check-critical-coverage.mjs, F-1a4feed0).
+ */
+describe('error-presenter: warning/arrow glyphs respect NO_COLOR (F-937c9399)', () => {
+  let originalIsTTY: boolean | undefined;
+
+  afterEach(() => {
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    delete process.env.NO_COLOR;
+  });
+
+  it('uses plain-ASCII markers when color is disabled (non-TTY)', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = false;
+    vi.resetModules();
+    const mod = await import('./error-presenter.js');
+
+    const err = new NarrationError({ kind: 'timeout', message: 'timed out' });
+    const p = mod.classifyForPresentation(err, 'turn');
+    const output = mod.renderError(p, false);
+
+    expect(output).toContain('!');
+    expect(output).toContain('->');
+    expect(output).not.toContain('⚠');
+    expect(output).not.toContain('→');
+  });
+
+  it('uses the Unicode glyphs when color is enabled (TTY, NO_COLOR unset)', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./error-presenter.js');
+
+    const err = new NarrationError({ kind: 'timeout', message: 'timed out' });
+    const p = mod.classifyForPresentation(err, 'turn');
+    const output = mod.renderError(p, false);
+
+    expect(output).toContain('⚠');
+    expect(output).toContain('→');
+  });
+
+  it('uses plain-ASCII markers when NO_COLOR is set, even on a TTY', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    process.env.NO_COLOR = '1';
+    vi.resetModules();
+    const mod = await import('./error-presenter.js');
+
+    const err = new NarrationError({ kind: 'timeout', message: 'timed out' });
+    const p = mod.classifyForPresentation(err, 'turn');
+    const output = mod.renderError(p, false);
+
+    expect(output).toContain('!');
+    expect(output).toContain('->');
   });
 });

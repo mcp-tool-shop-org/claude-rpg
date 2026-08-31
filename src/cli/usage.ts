@@ -62,6 +62,73 @@ function renderWorldsSection(): string {
  * implying it only applies to `play`.
  */
 
+/**
+ * F-9c2dbb5b: the Usage:/Global flags:/Commands in-game: blocks below used
+ * to be a raw hardcoded template literal, hand-aligned to a fixed column and
+ * never measured against getTerminalWidth() -- unlike this same function's
+ * own divider and renderWorldsSection() above, both of which already adapt
+ * via getTerminalWidth()/renderNameDescriptionRow. At the addendum's
+ * 40-column floor every one of these lines hard-wrapped wherever the real
+ * terminal broke it, with no hanging indent -- the exact bug class already
+ * fixed three times elsewhere in this domain (F-a17315ac/F-d36903d0/
+ * F-1367afd9), but that fix had only reached this function's divider and
+ * Worlds section, not its primary command reference. Routed through the
+ * same renderNameDescriptionRow() renderWorldsSection already uses so these
+ * tables can't independently drift from that fix.
+ */
+
+// Longest Usage: entry: 'claude-rpg play [--fast]' / 'claude-rpg new
+// "<prompt>"' (25 chars) + 2.
+const USAGE_NAME_WIDTH = 27;
+// Longest Commands in-game: entry: '/leverage' / '/conclude' / '/director'
+// (9 chars). Wider than the domain's usual +2/+3 pad so the 'quit' row's
+// description lands at the exact column the pre-fix hand-typed text placed
+// it at (11 spaces after 'quit', matching usage.test.ts's pinned
+// 'quit           Exit the game' row).
+const COMMANDS_NAME_WIDTH = 15;
+
+function renderUsageSection(): string {
+  const rows: [string, string][] = [
+    ['claude-rpg play [--fast]', 'Play a starter world (choose from 10 worlds interactively)'],
+    ['claude-rpg load', 'Load a saved game'],
+    ['claude-rpg new "<prompt>"', 'Generate a world from a prompt'],
+    ['claude-rpg archive', 'Browse completed campaigns'],
+    ['claude-rpg --version', 'Show version'],
+    ['claude-rpg --help', 'Show this help'],
+  ];
+  return rows.map(([name, desc]) => renderNameDescriptionRow(name, desc, USAGE_NAME_WIDTH)).join('\n');
+}
+
+function renderGlobalFlagsSection(): string {
+  // Deliberately its own (narrower) width rather than USAGE_NAME_WIDTH: at
+  // this width "Show structured error details" still fits on one line at
+  // the default 60-column fallback. Sharing the wider Usage: column would
+  // push it past that width and wrap it into two lines.
+  return renderNameDescriptionRow('--debug', 'Show structured error details', 9);
+}
+
+function renderCommandsSection(): string {
+  const rows: [string, string][] = [
+    ['save', 'Save the current game'],
+    ['/sheet', 'View character sheet (/character is an alias)'],
+    ['/status', 'Compact strategic snapshot'],
+    ['/map', 'Strategic map overview'],
+    ['/leverage', 'View political capital'],
+    ['/jobs', 'View available opportunities'],
+    ['/arcs', 'View campaign arc trajectory'],
+    ['/conclude', 'Trigger campaign finale'],
+    ['/recruit', 'Recruit an NPC into your party (ids via /status or /map)'],
+    ['/dismiss', 'Remove a companion from your party'],
+    ['/archive', 'Browse completed campaigns'],
+    ['/export', 'Export chronicle (md/json/finale)'],
+    ['/director', 'Inspect hidden truth'],
+    ['/cost', "View this session's estimated API cost"],
+    ['/help', 'In-game help system'],
+    ['quit', 'Exit the game'],
+  ];
+  return rows.map(([name, desc]) => renderNameDescriptionRow(name, desc, COMMANDS_NAME_WIDTH)).join('\n');
+}
+
 export function renderUsage(): string {
   const rule = dim('─'.repeat(getTerminalWidth()));
   return `
@@ -70,36 +137,15 @@ ${rule}
 ${rule}
 
 Usage:
-  claude-rpg play [--fast]                      Play a starter world (choose
-                                                from 10 worlds interactively)
-  claude-rpg load                               Load a saved game
-  claude-rpg new "<prompt>"                     Generate a world from a prompt
-  claude-rpg archive                            Browse completed campaigns
-  claude-rpg --version                          Show version
-  claude-rpg --help                             Show this help
+${renderUsageSection()}
 
 Global flags:
-  --debug                                       Show structured error details
+${renderGlobalFlagsSection()}
 
 ${renderWorldsSection()}
 
 Commands in-game:
-  save           Save the current game
-  /sheet         View character sheet (/character is an alias)
-  /status        Compact strategic snapshot
-  /map           Strategic map overview
-  /leverage      View political capital
-  /jobs          View available opportunities
-  /arcs          View campaign arc trajectory
-  /conclude      Trigger campaign finale
-  /recruit       Recruit an NPC into your party (ids via /status or /map)
-  /dismiss       Remove a companion from your party
-  /archive       Browse completed campaigns
-  /export        Export chronicle (md/json/finale)
-  /director      Inspect hidden truth
-  /cost          View this session's estimated API cost
-  /help          In-game help system
-  quit           Exit the game
+${renderCommandsSection()}
 
 Environment:
   ANTHROPIC_API_KEY   Required. Your Claude API key.

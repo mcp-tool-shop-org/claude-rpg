@@ -4,6 +4,7 @@
 
 import { moveCursor, cursorTo, clearScreenDown } from 'node:readline';
 import type { StreamCallback } from '../claude-client.js';
+import { dim } from './colors.js';
 
 export type StreamSession = {
   /** Callback to pass to narrateScene/executeTurn as onChunk. */
@@ -140,5 +141,12 @@ export function createStreamPresenter(): StreamSession {
  * a clean visual break before the fallback narration.
  */
 export function renderStreamInterruption(): void {
-  process.stdout.write('\n\n  [The narrator pauses...]\n');
+  // F-f615ff1d: this bracketed system-status aside was the one in the
+  // domain with no color import at all, reading as ordinary body/narration
+  // text instead of a visually-subordinate note -- unlike play-renderer.ts's
+  // renderThinking() (dim() on the structurally identical "brief aside shown
+  // while nothing else is happening") and presentation-renderer.ts's cue
+  // lines / play-renderer.ts's ambient lines, all of which follow the same
+  // "peripheral, non-primary text gets dim()" rule.
+  process.stdout.write(dim('\n\n  [The narrator pauses...]\n'));
 }

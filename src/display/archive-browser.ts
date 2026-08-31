@@ -2,6 +2,7 @@
 
 import type { ResolutionClass } from '@ai-rpg-engine/modules';
 import { getTerminalWidth } from './play-renderer.js';
+import { critical, danger, dim, positive, yellow } from '../cli/colors.js';
 
 export type ArchivedCampaign = {
   filename: string;
@@ -19,8 +20,13 @@ export type ArchivedCampaign = {
 // unlike play-renderer.ts's own dividers (PFE-005). Computed per call (not
 // a module-level constant) so it tracks the real terminal width, matching
 // play-renderer.ts's makeDivider() pattern.
+// F-624591cf: was missing the dim() wrap every other divider-producing
+// helper in this domain applies (play-renderer.ts's makeDivider()/
+// makeThinDivider(), director-renderer.ts's divider(), status-compact.ts's
+// divider(), usage.ts's rule) -- this was one of the two exceptions left in
+// the whole domain (help-system.ts's divider()/thinDivider() was the other).
 function divider(): string {
-  return '─'.repeat(getTerminalWidth());
+  return dim('─'.repeat(getTerminalWidth()));
 }
 
 export function renderArchiveBrowser(campaigns: ArchivedCampaign[]): string {
@@ -44,7 +50,12 @@ ${divider()}`;
     const c = campaigns[i];
     const resolution = c.resolutionClass ?? 'unknown';
     const arc = c.dominantArc ?? 'none';
-    const resColor = getResolutionLabel(resolution);
+    // F-0aee91cc: resColor read as though it already carried color, but
+    // getResolutionLabel only uppercases text -- every one of the 8
+    // ResolutionClass outcomes rendered in identical, uncolored text despite
+    // spanning triumphant wins to total failure. Now actually colored, via
+    // getResolutionColor below.
+    const resColor = getResolutionColor(resolution)(getResolutionLabel(resolution));
 
     lines.push('');
     lines.push(`  ${i + 1}. ${c.title}`);
@@ -92,4 +103,31 @@ export const RESOLUTION_CLASS_LABELS: Record<ResolutionClass, string> = {
 
 function getResolutionLabel(resolution: string): string {
   return RESOLUTION_CLASS_LABELS[resolution as ResolutionClass] ?? resolution.toUpperCase();
+}
+
+/**
+ * F-0aee91cc: semantic color per ResolutionClass, matched against the same
+ * tone guide finale-prompt.ts (epilogue narration) and help-system.ts's
+ * RESOLUTION_CLASS_HELP already use for these 8 classes, so this table can't
+ * independently invent a different read of any given ending. Clear wins
+ * (victory/overthrow/quiet-retirement) get positive(); catastrophic or fatal
+ * outcomes (collapse/martyrdom) get critical(); exile is bad but survived,
+ * one notch down at danger(); and the two morally-ambiguous endings
+ * (puppet-master's "shadow victory," tragic-stabilization's "bittersweet,
+ * pyrrhic") get plain yellow(), matching this wave's "yellow = warning"
+ * convention rather than a false positive() or critical().
+ */
+const RESOLUTION_CLASS_COLOR: Record<ResolutionClass, (t: string) => string> = {
+  'victory': positive,
+  'overthrow': positive,
+  'quiet-retirement': positive,
+  'puppet-master': yellow,
+  'tragic-stabilization': yellow,
+  'exile': danger,
+  'martyrdom': critical,
+  'collapse': critical,
+};
+
+function getResolutionColor(resolution: string): (t: string) => string {
+  return RESOLUTION_CLASS_COLOR[resolution as ResolutionClass] ?? ((t: string) => t);
 }

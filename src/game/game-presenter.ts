@@ -102,6 +102,50 @@ export function renderOpeningOutput(
 // ─── Finale Output ───────────────────────────────────────────
 
 /**
+ * F-2e80b14b: the trailer/actions line below (renderConcludeOutput) was a
+ * single unwrapped string pushed straight into `lines`, unlike that
+ * function's own heavyDivider/thinDivider two lines above it, which are
+ * explicitly sized via getTerminalWidth() -- the same overflow-at-narrow-
+ * width bug class already fixed for this exact pattern elsewhere in the
+ * codebase (help-system.ts's renderNameDescriptionRow, F-a17315ac/
+ * F-d36903d0/F-1367afd9; play-renderer.ts's wrapStatusLine, F-7eff9b3a,
+ * which this mirrors). Segments are treated as atomic units -- never split
+ * mid-segment -- and wrapped once a candidate line would exceed
+ * getTerminalWidth(), with a hanging indent on continuation lines.
+ * Reimplemented locally rather than calling wrapStatusLine directly: that
+ * helper lives in cli-display's domain (play-renderer.ts, out of scope
+ * here) and hardcodes a " | " separator, which would silently change this
+ * line's existing "  |  " spacing even when nothing wraps. Each step
+ * measures the real candidate length against the real width, so
+ * correctness doesn't depend on the lead and hanging indents being the
+ * same length (a plain wrapWords-with-a-precomputed-budget approach would
+ * need that invariant to hold and silently overflow by (hangIndent.length -
+ * leadIndent.length) columns if it didn't). Byte-identical to the old raw
+ * string when every segment fits on one line.
+ */
+function wrapTrailerLine(leadIndent: string, segments: string[]): string {
+  const width = getTerminalWidth();
+  const contIndent = '    ';
+  const rows: string[] = [];
+  let current = '';
+  for (const seg of segments) {
+    if (current === '') {
+      current = `${leadIndent}${seg}`;
+      continue;
+    }
+    const candidate = `${current}  |  ${seg}`;
+    if (candidate.length > width) {
+      rows.push(current);
+      current = `${contIndent}${seg}`;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== '') rows.push(current);
+  return rows.join('\n');
+}
+
+/**
  * Format the conclusion terminal output from decided finale data.
  *
  * F-001ef2af / F-81067750: the section dividers used to be built as
@@ -140,7 +184,14 @@ export function renderConcludeOutput(result: {
   lines.push(result.worldAfter);
   lines.push('');
   lines.push(thinDivider);
-  lines.push('  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit');
+  lines.push(
+    wrapTrailerLine('  ', [
+      'Continue playing',
+      'Type "save" to archive',
+      '/export md',
+      'Type "quit" to exit',
+    ]),
+  );
 
   return lines.join('\n');
 }

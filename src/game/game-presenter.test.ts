@@ -106,6 +106,43 @@ describe('renderConcludeOutput (F-001ef2af / F-81067750)', () => {
     const output = renderConcludeOutput({ ...baseResult, epilogue: 'And so it ends.' });
     expect(output).toContain('  And so it ends.');
   });
+
+  // F-2e80b14b: the trailer/actions line ('  Continue playing  |  Type
+  // "save" to archive  |  /export md  |  Type "quit" to exit', 84 chars)
+  // used to be pushed raw, so a narrow terminal hard-wrapped it wherever it
+  // fell -- verified live, slicing at 40-column boundaries splits 'archive'
+  // into 'ar' / 'chive'. Now routed through wrapTrailerLine, which wraps at
+  // segment ("action") boundaries instead of mid-word.
+  it('word-wraps the trailer/actions line at segment boundaries without splitting a word, with a hanging indent, at a 40-column floor (F-2e80b14b)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+
+    const output = renderConcludeOutput(baseResult);
+    const lines = output.split('\n');
+    const trailerLines = lines.filter((l) => /Continue playing|"save"|export md|"quit"/.test(l));
+
+    // Confirms it actually wrapped at this width (a single 84-char line
+    // would never fit in 40 columns).
+    expect(trailerLines.length).toBeGreaterThan(1);
+    for (const line of trailerLines) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+    // Each action survives fully intact as one contiguous run -- proves the
+    // wrap broke between actions, never inside one (the old bug: 'Type
+    // "save" to ar' / 'chive').
+    expect(output).toContain('Continue playing');
+    expect(output).toContain('Type "save" to archive');
+    expect(output).toContain('/export md');
+    expect(output).toContain('Type "quit" to exit');
+  });
+
+  it('renders the trailer/actions line byte-identical to the un-wrapped original at a wide (120-column) terminal', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+
+    const output = renderConcludeOutput(baseResult);
+    expect(output).toContain(
+      '  Continue playing  |  Type "save" to archive  |  /export md  |  Type "quit" to exit',
+    );
+  });
 });
 
 // F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26): thin

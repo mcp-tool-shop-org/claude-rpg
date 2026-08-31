@@ -34,12 +34,27 @@ import { tmpdir } from 'node:os';
 import {
   bundleBinCli,
   startFlakyAnthropicServer,
+  startFlakyAfterAnthropicServer,
   writeFantasySave,
   spawnCli,
   cleanupCliTestResources,
   type BinCliBundle,
   type CliHandle,
 } from '../helpers/bin-cli-harness.js';
+
+/** Counts non-overlapping occurrences of a literal substring (mirrors sfx-humanization-cli.test.ts's identical local helper). */
+function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) return 0;
+  let count = 0;
+  let idx = 0;
+  for (;;) {
+    const found = haystack.indexOf(needle, idx);
+    if (found === -1) break;
+    count++;
+    idx = found + needle.length;
+  }
+  return count;
+}
 
 let bundle: BinCliBundle;
 
@@ -82,6 +97,69 @@ describe('real-process retry path (F-99dc64ac infrastructure gap this domain clo
       // confirming claude-adapter.ts's own retry loop ran for real rather
       // than the failure being fatal or silently swallowed.
       expect(server.callCount()).toBe(2);
+      expect(cli.stdout()).not.toContain('Unexpected error');
+
+      cli.sendLine('quit');
+      const exitCode = await cli.waitForExit();
+      expect(exitCode).toBe(0);
+    } finally {
+      await cleanupCliTestResources({ cli, server, homeDir });
+    }
+  }, 20000);
+});
+
+// F-e44285c0 (wave 8 amend): ADDENDUM-COMMON.md's Stage-C lens item 2 names
+// FOUR latency paths needing waiting-feedback probe coverage: narration,
+// dialogue, world-gen, finale. The describe block above exercises exactly
+// one (opening narration on `load`) -- grepping every sendLine() call
+// across test/integration/*.ts at the time this finding was routed
+// confirmed no real-process test ever sent a dialogue verb, spawned bin.ts
+// with `new`, or drove a session to a finale/conclude screen, even though
+// startFlakyAnthropicServer (this file's own infra) is content-agnostic and
+// could already probe any of them. This block closes the dialogue gap.
+describe('real-process retry path — dialogue turn (F-e44285c0)', () => {
+  it('a retryable (429) failure on a dialogue turn is retried for real through claude-adapter.ts and the turn still completes', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-retry-dialogue-home-'));
+    await writeFantasySave(join(homeDir, '.claude-rpg', 'saves'));
+    // Request 1 (opening narration on load) succeeds cleanly; the first
+    // request the dialogue turn itself makes is forced to fail once before
+    // succeeding, isolating the retry proof to the dialogue turn
+    // specifically rather than incidentally reusing the narration retry.
+    const server = await startFlakyAfterAnthropicServer(1, 1);
+    let cli: CliHandle | undefined;
+
+    try {
+      cli = spawnCli(bundle.entryPath, ['load'], {
+        ...process.env,
+        ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+        ANTHROPIC_BASE_URL: server.url,
+        HOME: homeDir,
+        USERPROFILE: homeDir,
+      });
+
+      await cli.waitForStdout('Choose a save');
+      cli.sendLine('1');
+      await cli.waitForStdout('  > ');
+
+      // Baseline AFTER the opening narration's own "  > " prompt -- the
+      // opening screen's TRY-hint lines contain their own "  > "-shaped
+      // bullets (bin-cli-turn-loop.test.ts's own established convention for
+      // this exact pollution).
+      const promptsBeforeTurn = countOccurrences(cli.stdout(), '  > ');
+      const callsBeforeTurn = server.callCount();
+
+      cli.sendLine('talk to pilgrim');
+      await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, 20000);
+
+      const callsForThisTurn = server.callCount() - callsBeforeTurn;
+      // Measured at this wave's HEAD (2026-08-31, this exact scenario): a
+      // dialogue turn burns 2 real requests unforced (dialogue-mind.ts's
+      // own client.generate() call, then narrateScene's) -- matching
+      // conversation-memory.test.ts's documented "each speak turn burns 2
+      // generate() calls" baseline via the real process, not just the
+      // in-process fake harness -- plus exactly 1 forced retry from this
+      // turn's own flaky window above.
+      expect(callsForThisTurn).toBe(3);
       expect(cli.stdout()).not.toContain('Unexpected error');
 
       cli.sendLine('quit');

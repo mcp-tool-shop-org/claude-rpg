@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
-import { buildFinalePrompt, PACK_VOICES } from './finale-prompt.js';
+import {
+  buildFinalePrompt, PACK_VOICES,
+  NPC_FATES_MAX_COUNT, FACTION_FATES_MAX_COUNT, COMPANION_FATES_MAX_COUNT,
+  DISTRICT_FATES_MAX_COUNT, LEGACY_MAX_COUNT, LEGACY_CHAR_BUDGET, SEEDS_MAX_COUNT,
+} from './finale-prompt.js';
 
 function makeOutline(overrides: Partial<FinaleOutline> = {}): FinaleOutline {
   return {
@@ -117,5 +121,128 @@ describe('buildFinalePrompt (F-f4f6ac90): looks up PACK_VOICES by narratorTone, 
       'victorian noir, measured, atmospheric, suspenseful',
     );
     expect(prompt).toContain('case-file summary voice');
+  });
+});
+
+// F-b641df8e: buildFinalePrompt used to join npcFates/factionFates/
+// companionFates/districtFates/legacy/epilogueSeeds in full, with no
+// character or count budget (unlike keyMoments' pre-existing .slice(0, 5)).
+// Mirrors narrate-scene.test.ts's own "F-9ee9b5a7: defensive prompt-size
+// caps" describe block: prove the most-recent entries survive and the
+// oldest are dropped once each field's own MAX_COUNT is exceeded.
+describe('buildFinalePrompt (F-b641df8e): defensive per-field budgets', () => {
+  const pad = (i: number) => String(i).padStart(3, '0');
+
+  it('caps npcFates at NPC_FATES_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const npcFates = Array.from({ length: NPC_FATES_MAX_COUNT + 10 }, (_, i) => ({
+      npcId: `npc-${pad(i)}`, name: `NPC-${pad(i)}`, outcome: 'survived',
+    })) as unknown as FinaleOutline['npcFates'];
+    const prompt = buildFinalePrompt(makeOutline({ npcFates }), 'fantasy', 'Kael');
+
+    const renderedCount = npcFates.filter((f) => prompt.includes(`- ${f.name}:`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(NPC_FATES_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- NPC-${pad(npcFates.length - 1)}:`); // most recent survives
+    expect(prompt).not.toContain('- NPC-000:'); // oldest dropped
+  });
+
+  it('caps factionFates at FACTION_FATES_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const factionFates = Array.from({ length: FACTION_FATES_MAX_COUNT + 10 }, (_, i) => ({
+      factionId: `faction-${pad(i)}`, outcome: 'stable', playerReputation: 0, cohesion: 50,
+    })) as unknown as FinaleOutline['factionFates'];
+    const prompt = buildFinalePrompt(makeOutline({ factionFates }), 'fantasy', 'Kael');
+
+    const renderedCount = factionFates.filter((f) => prompt.includes(`- ${f.factionId}:`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(FACTION_FATES_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- faction-${pad(factionFates.length - 1)}:`);
+    expect(prompt).not.toContain('- faction-000:');
+  });
+
+  it('caps companionFates at COMPANION_FATES_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const companionFates = Array.from({ length: COMPANION_FATES_MAX_COUNT + 10 }, (_, i) => ({
+      npcId: `comp-${pad(i)}`, name: `Companion-${pad(i)}`, outcome: 'loyal',
+    })) as unknown as FinaleOutline['companionFates'];
+    const prompt = buildFinalePrompt(makeOutline({ companionFates }), 'fantasy', 'Kael');
+
+    const renderedCount = companionFates.filter((f) => prompt.includes(`- ${f.name}:`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(COMPANION_FATES_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- Companion-${pad(companionFates.length - 1)}:`);
+    expect(prompt).not.toContain('- Companion-000:');
+  });
+
+  it('caps districtFates at DISTRICT_FATES_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const districtFates = Array.from({ length: DISTRICT_FATES_MAX_COUNT + 10 }, (_, i) => ({
+      districtId: `d-${pad(i)}`, name: `District-${pad(i)}`, stability: 50, economyTone: 'stable',
+    })) as unknown as FinaleOutline['districtFates'];
+    const prompt = buildFinalePrompt(makeOutline({ districtFates }), 'fantasy', 'Kael');
+
+    const renderedCount = districtFates.filter((f) => prompt.includes(`- ${f.name}:`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(DISTRICT_FATES_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- District-${pad(districtFates.length - 1)}:`);
+    expect(prompt).not.toContain('- District-000:');
+  });
+
+  it('caps legacy at LEGACY_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const legacy = Array.from({ length: LEGACY_MAX_COUNT + 10 }, (_, i) => ({
+      label: `Legacy-${pad(i)}`, category: 'deed', significance: 1,
+    })) as unknown as FinaleOutline['legacy'];
+    const prompt = buildFinalePrompt(makeOutline({ legacy }), 'fantasy', 'Kael');
+
+    const renderedCount = legacy.filter((l) => prompt.includes(`- ${l.label} (`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(LEGACY_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- Legacy-${pad(legacy.length - 1)} (`);
+    expect(prompt).not.toContain('- Legacy-000 (');
+  });
+
+  it('caps epilogueSeeds at SEEDS_MAX_COUNT, keeping the most recent and dropping the oldest', () => {
+    const epilogueSeeds = Array.from({ length: SEEDS_MAX_COUNT + 10 }, (_, i) => `seed-${pad(i)}`);
+    const prompt = buildFinalePrompt(makeOutline({ epilogueSeeds }), 'fantasy', 'Kael');
+
+    const renderedCount = epilogueSeeds.filter((s) => prompt.includes(`- ${s}`)).length;
+    expect(renderedCount).toBeLessThanOrEqual(SEEDS_MAX_COUNT);
+    expect(renderedCount).toBeGreaterThan(0);
+    expect(prompt).toContain(`- seed-${pad(epilogueSeeds.length - 1)}`);
+    expect(prompt).not.toContain('- seed-000');
+  });
+
+  it('enforces a char budget on legacy even under the count cap, dropping oldest first (LEGACY_CHAR_BUDGET independent of LEGACY_MAX_COUNT)', () => {
+    // A handful of long legacy labels (well under LEGACY_MAX_COUNT in count)
+    // should still be trimmed once their combined length exceeds
+    // LEGACY_CHAR_BUDGET -- proving the char ceiling is a real, independent
+    // limit, not just a second way of expressing the count cap.
+    const longLabelLength = Math.floor(LEGACY_CHAR_BUDGET / 2) + 50;
+    const legacy = Array.from({ length: 5 }, (_, i) => ({
+      label: `Legacy-${pad(i)}-` + 'y'.repeat(longLabelLength),
+      category: 'deed',
+      significance: 1,
+    })) as unknown as FinaleOutline['legacy'];
+    const prompt = buildFinalePrompt(makeOutline({ legacy }), 'fantasy', 'Kael');
+
+    expect(prompt).toContain(legacy[legacy.length - 1].label);
+    expect(prompt).not.toContain(legacy[0].label);
+  });
+
+  it('does not cap keyMoments differently than before this fix (still .slice(0, 5), untouched by the new per-field budgets)', () => {
+    const keyMoments = Array.from({ length: 10 }, (_, i) => ({
+      description: `moment-${pad(i)}`,
+    })) as unknown as FinaleOutline['keyMoments'];
+    const prompt = buildFinalePrompt(makeOutline({ keyMoments }), 'fantasy', 'Kael');
+
+    const renderedCount = keyMoments.filter((m) => prompt.includes(`- ${m.description}`)).length;
+    expect(renderedCount).toBe(5);
+  });
+
+  it('renders cleanly under every cap at once with realistic-scale data (no crash, no budget bleeds into another section)', () => {
+    const npcFates = Array.from({ length: NPC_FATES_MAX_COUNT + 5 }, (_, i) => ({ name: `NPC-${pad(i)}`, outcome: 'ok' })) as unknown as FinaleOutline['npcFates'];
+    const legacy = Array.from({ length: LEGACY_MAX_COUNT + 5 }, (_, i) => ({ label: `Legacy-${pad(i)}`, category: 'deed', significance: 1 })) as unknown as FinaleOutline['legacy'];
+    const prompt = buildFinalePrompt(makeOutline({ npcFates, legacy }), 'fantasy', 'Kael');
+
+    expect(prompt).toContain('NPC fates:');
+    expect(prompt).toContain('Legacy:');
+    expect(prompt).toContain('Write the epilogue.');
   });
 });

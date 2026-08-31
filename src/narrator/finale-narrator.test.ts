@@ -3,6 +3,7 @@ import { narrateFinale, FALLBACK_EPILOGUE } from './finale-narrator.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { createTestLogger } from '../game/debug-logger.js';
 
 function makeOutline(overrides: Partial<FinaleOutline> = {}): FinaleOutline {
   return {
@@ -179,5 +180,73 @@ describe('narrateFinale F-0f76ecc2: retry-once, then a labeled (non-empty) fallb
     // final-failure log, not left dead.
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(userMessage(timeoutErr)));
     warnSpy.mockRestore();
+  });
+});
+
+// F-e2ef2c38: narrateFinale's two non-fatal failure branches (retry, then
+// permanent fallback) only ever console.warn'd, unlike narrator.ts's
+// narrateScene/narrateSceneLegacy (F-fa65fe50), which also land in
+// DebugLogger's queryable entries[] via an optional `logger` parameter — so
+// a per-session degradation tally built on that logger would silently miss
+// an epilogue fallback, the narratively highest-stakes degradation in the
+// whole domain. Mirrors narrator.test.ts's "F-fa65fe50: optional
+// DebugLogger threading" describe block: createTestLogger() captures
+// entries without writing to stderr.
+describe('narrateFinale F-e2ef2c38: optional DebugLogger threading', () => {
+  it('logs the attempt-1 failure to the logger when the first attempt fails non-fatally but the retry succeeds', async () => {
+    const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
+    const generate = vi.fn()
+      .mockRejectedValueOnce(timeoutErr)
+      .mockResolvedValueOnce({ ok: true, text: 'The city rebuilt, slowly.', inputTokens: 10, outputTokens: 20 } satisfies GenerateResult);
+    const client: ClaudeClient = {
+      generate,
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '' }),
+      model: 'test-model',
+    };
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logger = createTestLogger();
+
+    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael', undefined, logger);
+
+    expect(result.isFallback).toBe(false);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'finale-narrator',
+        message: expect.stringContaining('attempt 1/2'),
+      }),
+    );
+  });
+
+  it('logs the attempt-2 (final) failure to the logger when both attempts fail non-fatally', async () => {
+    const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
+    const client = makeFailingClient(timeoutErr);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logger = createTestLogger();
+
+    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael', undefined, logger);
+
+    expect(result.epilogue).toBe(FALLBACK_EPILOGUE);
+    expect(result.isFallback).toBe(true);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'finale-narrator',
+        message: expect.stringContaining('attempt 2/2'),
+      }),
+    );
+    // Both attempts' failures are recorded, not just the final one.
+    expect(logger.getEntries().filter((e) => e.subsystem === 'finale-narrator')).toHaveLength(2);
+  });
+
+  it('behaves exactly as before (no throw, normal fallback) when logger is omitted', async () => {
+    const timeoutErr = new NarrationError({ kind: 'timeout', message: 'request timed out' });
+    const client = makeFailingClient(timeoutErr);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await narrateFinale(client, makeOutline(), 'dark fantasy', 'Kael');
+
+    expect(result.epilogue).toBe(FALLBACK_EPILOGUE);
+    expect(result.isFallback).toBe(true);
   });
 });

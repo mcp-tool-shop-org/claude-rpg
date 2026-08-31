@@ -1,20 +1,43 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Interface as ReadlineInterface } from 'node:readline';
-import { promptGroupedMenu, wrapMenuLine, type MenuGroup } from './prompts.js';
+import { EventEmitter } from 'node:events';
+import { promptGroupedMenu, promptText, wrapMenuLine, type MenuGroup } from './prompts.js';
 
 // F-6ed5f350 (SLATE-3): prompts.ts had no test file before this wave (2 of
 // the 8 character/** files F-8d11d865 already flagged as untested).
 
-/** Minimal fake readline.Interface: scripted answers, ignores prompt text. */
+/**
+ * Minimal fake readline.Interface: scripted answers, ignores prompt text.
+ * F-3a8ccf9c: built on a real EventEmitter (not a plain object) so
+ * promptText's `rl.once('close', ...)` / `rl.off('close', ...)` guard has
+ * real listener semantics to attach to, matching node:readline's actual
+ * Interface (which itself extends EventEmitter).
+ */
 function makeFakeRl(answers: string[]): ReadlineInterface {
   let i = 0;
-  return {
+  const rl = new EventEmitter();
+  return Object.assign(rl, {
     question: (_prompt: string, cb: (answer: string) => void) => {
       const answer = answers[i] ?? '';
       i++;
       cb(answer);
     },
-  } as unknown as ReadlineInterface;
+  }) as unknown as ReadlineInterface;
+}
+
+/**
+ * Fake readline.Interface whose `question` never calls back -- simulating
+ * stdin ending (Ctrl+D / pipe EOF) while an answer is still pending. Tests
+ * trigger the close by emitting 'close' on the returned emitter directly.
+ */
+function makeHangingFakeRl(): ReadlineInterface {
+  const rl = new EventEmitter();
+  return Object.assign(rl, {
+    question: (_prompt: string, _cb: (answer: string) => void) => {
+      // Never invokes cb -- the question is left pending, as it would be if
+      // stdin closed before the user answered.
+    },
+  }) as unknown as ReadlineInterface;
 }
 
 describe('promptGroupedMenu (F-6ed5f350 / SLATE-3)', () => {
@@ -89,6 +112,34 @@ describe('promptGroupedMenu (F-6ed5f350 / SLATE-3)', () => {
     await promptGroupedMenu(rl, 'Pick:', groups);
     const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(printed).toContain('a fine choice');
+  });
+});
+
+describe('promptText (F-3a8ccf9c: stdin close guard)', () => {
+  it('rejects instead of hanging when stdin closes before the question is answered', async () => {
+    const rl = makeHangingFakeRl();
+    const pending = promptText(rl, 'Character name');
+
+    // Simulate stdin ending (Ctrl+D / pipe EOF) while the question is still
+    // pending -- readline emits 'close', and rl.question's callback never
+    // fires because the interface is already closed.
+    (rl as unknown as EventEmitter).emit('close');
+
+    await expect(pending).rejects.toThrow('input closed before answering');
+  });
+
+  it('resolves normally on a real answer and does not leave a dangling close listener', async () => {
+    const rl = makeFakeRl(['  Aria the Bold  ']);
+    await expect(promptText(rl, 'Character name')).resolves.toBe('Aria the Bold');
+    // The 'close' guard registered per-call must be cleaned up on the
+    // resolve path too, or a long multi-prompt flow (character creation
+    // asks a dozen+ questions) would accumulate listeners on the shared rl.
+    expect(rl.listenerCount('close')).toBe(0);
+  });
+
+  it('trims whitespace from the answer (pre-existing behavior, unaffected by the close guard)', async () => {
+    const rl = makeFakeRl(['   padded   ']);
+    await expect(promptText(rl, 'X')).resolves.toBe('padded');
   });
 });
 

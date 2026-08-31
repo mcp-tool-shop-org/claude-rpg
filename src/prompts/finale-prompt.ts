@@ -2,6 +2,36 @@
 // v2.0: grounded in deterministic finale data
 
 import type { FinaleOutline } from '@ai-rpg-engine/campaign-memory';
+import { capRecentLines } from './narrate-scene.js';
+
+// F-b641df8e: defensive budgets enforced by buildFinalePrompt itself,
+// mirroring narrate-scene.ts's F-9ee9b5a7 pattern (CHRONICLE_CHAR_BUDGET /
+// EVENTS_MAX_COUNT / PRESSURES_MAX_COUNT / ENTITIES_MAX_COUNT) — the one
+// prompt builder in this domain that didn't already have one, despite
+// finale-narrator.ts's own F-0f76ecc2 comment naming this call "plausibly
+// the point in a session with the largest accumulated prompt context" and
+// the one with the least room for a do-over (a single same-turn retry
+// before permanently falling back to FALLBACK_EPILOGUE). Sized for a
+// one-time epilogue prompt rather than a per-turn one — this call happens
+// exactly once per campaign, so it can afford noticeably more headroom per
+// field than narrate-scene.ts's per-turn budgets without materially
+// affecting total campaign cost, while still keeping a genuine ceiling on
+// what a "several-hundred-turn campaign" (finale-narrator.ts's own framing)
+// worth of tracked NPCs/factions/districts/legacy could otherwise grow to.
+// keyMoments is unaffected — it already had its own count-only cap
+// (.slice(0, 5)) before this fix.
+export const NPC_FATES_MAX_COUNT = 30;
+export const NPC_FATES_CHAR_BUDGET = 3000;
+export const FACTION_FATES_MAX_COUNT = 20;
+export const FACTION_FATES_CHAR_BUDGET = 2000;
+export const COMPANION_FATES_MAX_COUNT = 15;
+export const COMPANION_FATES_CHAR_BUDGET = 1500;
+export const DISTRICT_FATES_MAX_COUNT = 20;
+export const DISTRICT_FATES_CHAR_BUDGET = 2000;
+export const LEGACY_MAX_COUNT = 40;
+export const LEGACY_CHAR_BUDGET = 3000;
+export const SEEDS_MAX_COUNT = 20;
+export const SEEDS_CHAR_BUDGET = 1500;
 
 export const FINALE_SYSTEM = `You are the narrator of a text RPG, delivering the campaign epilogue. This is the final narration — a retrospective on the player's journey and the world they shaped.
 
@@ -99,34 +129,46 @@ export function buildFinalePrompt(
   playerName?: string,
   narratorTone?: string,
 ): string {
-  const npcFates = outline.npcFates
-    .map((f) => `  - ${f.name}: ${f.outcome}${f.lastSignificantEvent ? ` (${f.lastSignificantEvent})` : ''}`)
-    .join('\n');
+  const npcFates = capRecentLines(
+    outline.npcFates.map((f) => `  - ${f.name}: ${f.outcome}${f.lastSignificantEvent ? ` (${f.lastSignificantEvent})` : ''}`),
+    NPC_FATES_MAX_COUNT,
+    NPC_FATES_CHAR_BUDGET,
+  ).join('\n');
 
-  const factionFates = outline.factionFates
-    .map((f) => `  - ${f.factionId}: ${f.outcome} (rep: ${f.playerReputation}, cohesion: ${f.cohesion})`)
-    .join('\n');
+  const factionFates = capRecentLines(
+    outline.factionFates.map((f) => `  - ${f.factionId}: ${f.outcome} (rep: ${f.playerReputation}, cohesion: ${f.cohesion})`),
+    FACTION_FATES_MAX_COUNT,
+    FACTION_FATES_CHAR_BUDGET,
+  ).join('\n');
 
-  const companionFates = outline.companionFates
-    .map((f) => `  - ${f.name}: ${f.outcome}${f.lastSignificantEvent ? ` (${f.lastSignificantEvent})` : ''}`)
-    .join('\n');
+  const companionFates = capRecentLines(
+    outline.companionFates.map((f) => `  - ${f.name}: ${f.outcome}${f.lastSignificantEvent ? ` (${f.lastSignificantEvent})` : ''}`),
+    COMPANION_FATES_MAX_COUNT,
+    COMPANION_FATES_CHAR_BUDGET,
+  ).join('\n');
 
-  const districtFates = outline.districtFates
-    .map((f) => `  - ${f.name}: stability ${f.stability}${f.controllingFaction ? `, controlled by ${f.controllingFaction}` : ''}, ${f.economyTone}`)
-    .join('\n');
+  const districtFates = capRecentLines(
+    outline.districtFates.map((f) => `  - ${f.name}: stability ${f.stability}${f.controllingFaction ? `, controlled by ${f.controllingFaction}` : ''}, ${f.economyTone}`),
+    DISTRICT_FATES_MAX_COUNT,
+    DISTRICT_FATES_CHAR_BUDGET,
+  ).join('\n');
 
-  const legacy = outline.legacy
-    .map((l) => `  - ${l.label} (${l.category}, significance: ${l.significance.toFixed(1)})`)
-    .join('\n');
+  const legacy = capRecentLines(
+    outline.legacy.map((l) => `  - ${l.label} (${l.category}, significance: ${l.significance.toFixed(1)})`),
+    LEGACY_MAX_COUNT,
+    LEGACY_CHAR_BUDGET,
+  ).join('\n');
 
   const keyMoments = outline.keyMoments
     .slice(0, 5)
     .map((m) => `  - ${m.description}`)
     .join('\n');
 
-  const seeds = outline.epilogueSeeds
-    .map((s) => `  - ${s}`)
-    .join('\n');
+  const seeds = capRecentLines(
+    outline.epilogueSeeds.map((s) => `  - ${s}`),
+    SEEDS_MAX_COUNT,
+    SEEDS_CHAR_BUDGET,
+  ).join('\n');
 
   return `Resolution: ${outline.resolutionClass}
 Dominant arc: ${outline.dominantArc ?? 'none'}

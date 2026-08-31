@@ -7,6 +7,7 @@ import type { ClaudeClient } from '../claude-client.js';
 import { FINALE_SYSTEM, buildFinalePrompt } from '../prompts/finale-prompt.js';
 import { NarrationError, userMessage } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
+import type { DebugLogger } from '../game/debug-logger.js';
 
 export type FinaleNarrationResult = {
   epilogue: string;
@@ -75,6 +76,17 @@ async function attemptEpilogue(client: ClaudeClient, userPrompt: string): Promis
  *   those requires edits to src/game.ts and src/game/game-narration.ts, both
  *   outside src/narrator/**'s domain — tracked as a residual caller-side
  *   remainder rather than made here.
+ * @param logger F-e2ef2c38: optional structured logger, same contract as
+ *   narrator.ts's NarrateSceneOpts.logger and dialogue-mind.ts's
+ *   generateDialogue (this call chain's two siblings under
+ *   claude-errors.ts's NarrationError.fatal doc comment — all three are one
+ *   unified LLM-call-site contract family). Before this fix, only
+ *   narrator.ts's degradations landed in DebugLogger's queryable entries[];
+ *   an epilogue that fell back to FALLBACK_EPILOGUE — the narratively
+ *   climactic payoff of a whole campaign — was invisible to it. Trailing
+ *   positional parameter, matching narrateSceneLegacy's identical reasoning
+ *   in narrator.ts. Omitted by every current caller — behavior is unchanged
+ *   when absent.
  */
 export async function narrateFinale(
   client: ClaudeClient,
@@ -82,6 +94,7 @@ export async function narrateFinale(
   genre: string,
   playerName?: string,
   narratorTone?: string,
+  logger?: DebugLogger,
 ): Promise<FinaleNarrationResult> {
   const deterministicSummary = formatFinaleForTerminal(outline);
   const userPrompt = buildFinalePrompt(outline, genre, playerName, narratorTone);
@@ -107,9 +120,9 @@ export async function narrateFinale(
   if (first.ok) {
     epilogue = first.text;
   } else {
-    console.warn(
-      `[finale-narrator] LLM epilogue generation failed (attempt 1/2): ${first.err.message}. Retrying once.`,
-    );
+    const firstFailureMessage = `LLM epilogue generation failed (attempt 1/2): ${first.err.message}. Retrying once.`;
+    console.warn(`[finale-narrator] ${firstFailureMessage}`);
+    logger?.warn('finale-narrator', firstFailureMessage);
     const second = await attemptEpilogue(client, userPrompt);
     if (second.ok) {
       epilogue = second.text;
@@ -119,9 +132,9 @@ export async function narrateFinale(
       // the diagnostic message (not into FALLBACK_EPILOGUE's player-facing
       // text, which stays a generic, always-true system notice rather than
       // guessing at a kind-specific cause).
-      console.warn(
-        `[finale-narrator] LLM epilogue generation failed after retry (attempt 2/2): ${second.err.message}. ${userMessage(second.err)} Falling back to deterministic summary only.`,
-      );
+      const secondFailureMessage = `LLM epilogue generation failed after retry (attempt 2/2): ${second.err.message}. ${userMessage(second.err)} Falling back to deterministic summary only.`;
+      console.warn(`[finale-narrator] ${secondFailureMessage}`);
+      logger?.warn('finale-narrator', secondFailureMessage);
       epilogue = FALLBACK_EPILOGUE;
       isFallback = true;
     }

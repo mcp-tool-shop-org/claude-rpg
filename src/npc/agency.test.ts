@@ -446,4 +446,107 @@ describe('applyNpcEffects F-8d11d865: reputation, rumor, and structural effects'
       expect(mockedMakeOpportunity).not.toHaveBeenCalled();
     });
   });
+
+  // F-74ff036d: unlike the MAX_ACTIVE/MAX_OPPS blocks above (skip-the-new-
+  // item once full), rumor/npc-rumor drop-oldest instead — playerRumors is
+  // cumulative session history, not a small active working set, so the
+  // newest rumor is the one worth keeping. See pushPlayerRumor's own doc
+  // comment in agency.ts for the full rationale.
+  describe('rumor/npc-rumor effects — MAX_PLAYER_RUMORS capacity guard', () => {
+    function makeFullRumors(count = 100): any[] {
+      return Array.from({ length: count }, (_, i) => ({ id: `r${i}` }));
+    }
+
+    it('evicts the oldest rumor (not the newest) once MAX_PLAYER_RUMORS (100) is reached, for a rumor effect', () => {
+      const existing = makeFullRumors();
+      mockedSpawnPlayerRumor.mockReturnValue({ id: 'r100-new' } as any);
+      const ctx = makeCtx({ playerRumors: existing });
+      const result = makeResult([
+        { type: 'rumor', claim: 'The player is a hero', valence: 'heroic', targetFactionIds: ['guild'] },
+      ]);
+
+      applyNpcEffects(result, ctx);
+
+      expect(ctx.playerRumors).toHaveLength(100);
+      expect(ctx.playerRumors.find((r: any) => r.id === 'r0')).toBeUndefined(); // oldest evicted
+      expect(ctx.playerRumors[0]).toEqual({ id: 'r1' }); // next-oldest now at the front
+      expect(ctx.playerRumors[99]).toEqual({ id: 'r100-new' }); // newest kept at the back
+    });
+
+    it('evicts the oldest rumor once MAX_PLAYER_RUMORS is reached, for an npc-rumor effect', () => {
+      const existing = makeFullRumors();
+      mockedSpawnNpcOriginatedRumor.mockReturnValue({ id: 'r100-new' } as any);
+      const ctx = makeCtx({ playerRumors: existing });
+      const result = makeResult([
+        {
+          type: 'npc-rumor', claim: 'The player betrayed us', valence: 'fearsome',
+          sourceEvent: 'npc-betrayal', originNpcId: 'npc-1', targetFactionIds: ['guild'],
+        },
+      ]);
+
+      applyNpcEffects(result, ctx);
+
+      expect(ctx.playerRumors).toHaveLength(100);
+      expect(ctx.playerRumors.find((r: any) => r.id === 'r0')).toBeUndefined();
+      expect(ctx.playerRumors[99]).toEqual({ id: 'r100-new' });
+    });
+
+    it('does NOT console.warn by default (no --debug/CLAUDE_RPG_DEBUG) when a rumor is evicted', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockedSpawnPlayerRumor.mockReturnValue({ id: 'overflow' } as any);
+      const ctx = makeCtx({ playerRumors: makeFullRumors() });
+      const result = makeResult([
+        { type: 'rumor', claim: 'claim', valence: 'heroic', targetFactionIds: ['guild'] },
+      ]);
+
+      applyNpcEffects(result, ctx);
+
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('logs a console.warn on the first drop only when CLAUDE_RPG_DEBUG is set — silent on further drops in the same session', () => {
+      vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockedSpawnPlayerRumor.mockReturnValue({ id: 'overflow' } as any);
+      const ctx = makeCtx({ playerRumors: makeFullRumors() });
+      const result = makeResult([
+        { type: 'rumor', claim: 'claim', valence: 'heroic', targetFactionIds: ['guild'] },
+      ]);
+
+      // Three overflow pushes in a row on the same ctx/session.
+      applyNpcEffects(result, ctx);
+      applyNpcEffects(result, ctx);
+      applyNpcEffects(result, ctx);
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('MAX_PLAYER_RUMORS'));
+      warnSpy.mockRestore();
+      vi.unstubAllEnvs();
+    });
+
+    it('warns again for a different session (a fresh playerRumors array) even after another session already warned', () => {
+      vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockedSpawnPlayerRumor.mockReturnValue({ id: 'overflow' } as any);
+
+      const firstSessionCtx = makeCtx({ playerRumors: makeFullRumors() });
+      const result = makeResult([
+        { type: 'rumor', claim: 'claim', valence: 'heroic', targetFactionIds: ['guild'] },
+      ]);
+      applyNpcEffects(result, firstSessionCtx);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+
+      // A second, independent session (its own fresh array instance) that
+      // also happens to already be at capacity must still get its own
+      // first-drop warning rather than being silenced by the first
+      // session's WeakSet entry.
+      const secondSessionCtx = makeCtx({ playerRumors: makeFullRumors() });
+      applyNpcEffects(result, secondSessionCtx);
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+
+      warnSpy.mockRestore();
+      vi.unstubAllEnvs();
+    });
+  });
 });

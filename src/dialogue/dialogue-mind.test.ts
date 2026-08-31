@@ -3,6 +3,7 @@ import { generateDialogue } from './dialogue-mind.js';
 import type { ClaudeClient, GenerateResult } from '../claude-client.js';
 import type { WorldState } from '@ai-rpg-engine/core';
 import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { createTestLogger } from '../game/debug-logger.js';
 
 // Mock npc-context so we control the context shape
 vi.mock('./npc-context.js', () => ({
@@ -308,5 +309,63 @@ describe('generateDialogue F-35969d3a: conversationHistory reaches the built pro
 
     const callArgs = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(callArgs.prompt).not.toContain('Recent conversation:');
+  });
+});
+
+// F-e2ef2c38: generateDialogue's non-fatal fallback path only ever
+// console.warn'd, unlike narrator.ts's narrateScene/narrateSceneLegacy
+// (F-fa65fe50), which also land in DebugLogger's queryable entries[] via an
+// optional `logger` parameter -- so a per-session degradation tally built on
+// that logger would silently miss every NPC-dialogue stall. Mirrors
+// narrator.test.ts's "F-fa65fe50: optional DebugLogger threading" describe
+// block: createTestLogger() captures entries without writing to stderr.
+describe('generateDialogue F-e2ef2c38: optional DebugLogger threading', () => {
+  it('logs to the logger (alongside console.warn) on a non-fatal LLM failure', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeFailingClient(new Error('API timeout'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logger = createTestLogger();
+
+    await generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+      undefined, // playerPresence
+      undefined, // playerProfile
+      undefined, // playerRumors
+      undefined, // activePressures
+      undefined, // lastNpcActions
+      undefined, // economyContext
+      undefined, // craftingContext
+      undefined, // opportunityContext
+      undefined, // conversationHistory
+      logger,
+    );
+
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'dialogue-mind',
+        message: expect.stringContaining('LLM generation failed'),
+      }),
+    );
+    // Both channels fire from the same message, not two different strings.
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('LLM generation failed'));
+    warnSpy.mockRestore();
+  });
+
+  it('behaves exactly as before (no throw, normal fallback) when logger is omitted', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeFailingClient(new Error('API timeout'));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy');
+
+    expect(result!.isFallback).toBe(true);
+    warnSpy.mockRestore();
   });
 });

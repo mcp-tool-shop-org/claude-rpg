@@ -196,8 +196,15 @@ export const ENTITIES_CHAR_BUDGET = 1500;
  * met. Mirrors dialogue-npc.ts's formatConversationHistory (cap chars, keep
  * most recent, drop oldest first) so this domain's two prompt builders share
  * one defensive-capping shape instead of each reinventing it.
+ *
+ * F-b641df8e: exported (was module-local) so finale-prompt.ts's
+ * buildFinalePrompt can import the same helper directly instead of a second,
+ * driftable copy — that file's own npcFates/factionFates/companionFates/
+ * districtFates/legacy/seeds fields needed this exact shape too, just with
+ * larger one-time-prompt budgets. See this file's own capText below for the
+ * companion single-block variant.
  */
-function capRecentLines(lines: string[], maxCount: number, maxChars: number): string[] {
+export function capRecentLines(lines: string[], maxCount: number, maxChars: number): string[] {
   const recent = lines.slice(-maxCount);
   const kept: string[] = [];
   let charCount = 0;
@@ -210,8 +217,12 @@ function capRecentLines(lines: string[], maxCount: number, maxChars: number): st
   return kept;
 }
 
-/** Truncate a single free-text block to a hard character ceiling, with a visible indicator when trimmed. */
-function capText(text: string, maxChars: number): string {
+/**
+ * Truncate a single free-text block to a hard character ceiling, with a
+ * visible indicator when trimmed. F-b641df8e: exported alongside
+ * capRecentLines above for the same reason (finale-prompt.ts reuse).
+ */
+export function capText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) + '...[truncated]';
 }

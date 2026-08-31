@@ -9,8 +9,22 @@ export function promptText(
   rl: ReadlineInterface,
   question: string,
 ): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // F-3a8ccf9c: if stdin ends while this question is pending (piped input
+    // running out, or a non-interactive/scripted invocation reaching EOF
+    // without answering), rl.question's callback never fires -- the
+    // interface is already closed -- so the returned Promise would hang
+    // forever. Reject on 'close' instead (PFE-001 pattern, mirroring
+    // bin.ts's own question() helper) so every awaiter up the chain
+    // (promptMenu's retry loop, promptMultiSelect, promptConfirm, and
+    // ultimately builder.ts's buildCharacter flow) surfaces a catchable
+    // error instead of hanging silently. The listener is removed once the
+    // question settles normally so a long, multi-prompt flow like character
+    // creation doesn't accumulate 'close' listeners on the shared rl.
+    const onClose = () => reject(new Error('input closed before answering'));
+    rl.once('close', onClose);
     rl.question(`  ${question}: `, (answer) => {
+      rl.off('close', onClose);
       resolve(answer.trim());
     });
   });

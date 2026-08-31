@@ -8,6 +8,7 @@ import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type C
 import { buildNPCDialogueContext } from './npc-context.js';
 import { NarrationError, userMessage } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
+import type { DebugLogger } from '../game/debug-logger.js';
 
 export type DialogueResult = {
   speakerId: string;
@@ -81,6 +82,17 @@ export type DialogueResult = {
  * 5. Player-turn append: push the player's line into the SAME NPC's buffer
  *    at the same time as the NPC's reply, or "recent conversation" reads as
  *    a one-sided monologue.
+ *
+ * @param logger F-e2ef2c38: optional structured logger, same contract as
+ *   narrator.ts's NarrateSceneOpts.logger — when provided, the non-fatal
+ *   fallback path below also logs via logger.warn('dialogue-mind', ...)
+ *   alongside the existing console.warn, so an NPC-dialogue stall lands in
+ *   DebugLogger's queryable entries[] like narrator.ts's own degradations
+ *   already do, instead of undercounting a per-session degradation tally
+ *   that only ever tallied narrator.ts's. Trailing positional parameter
+ *   (matching narrateSceneLegacy's identical reasoning in narrator.ts) since
+ *   this function predates any opts-object shape. Omitted by every current
+ *   caller — behavior is unchanged when absent.
  */
 export async function generateDialogue(
   client: ClaudeClient,
@@ -97,6 +109,7 @@ export async function generateDialogue(
   craftingContext?: string,
   opportunityContext?: string,
   conversationHistory?: ConversationExchange[],
+  logger?: DebugLogger,
 ): Promise<DialogueResult | null> {
   const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
   if (context && economyContext) context.economyContext = economyContext;
@@ -138,9 +151,9 @@ export async function generateDialogue(
     // fallbackMessage below -- `text` itself stays the in-character stall
     // (see the comment above) rather than being replaced by it.
     const guidance = userMessage(narrationErr);
-    console.warn(
-      `[dialogue-mind] LLM generation failed for NPC "${npcId}": ${narrationErr.message}. ${guidance} Using fallback.`,
-    );
+    const failureMessage = `LLM generation failed for NPC "${npcId}": ${narrationErr.message}. ${guidance} Using fallback.`;
+    console.warn(`[dialogue-mind] ${failureMessage}`);
+    logger?.warn('dialogue-mind', failureMessage);
     const npc = world.entities[npcId];
     return {
       speakerId: npcId,

@@ -1,6 +1,7 @@
 // Thin wrapper around @anthropic-ai/sdk for claude-rpg
 
 import Anthropic from '@anthropic-ai/sdk';
+import type { NarrationErrorKind } from './llm/claude-errors.js';
 
 /**
  * F-aaaa105f: single-sourced default model id, consumed by both
@@ -67,6 +68,24 @@ export type ClaudeClient = {
     prompt: string;
     maxTokens?: number;
     onChunk: StreamCallback;
+    /**
+     * F-f2e58ce0: createAdaptedClient's generateStream wraps its call in
+     * withRetry. If the stream fails mid-transmission with a retryable
+     * error (e.g. a dropped connection after several chunks were already
+     * emitted via onChunk), withRetry re-invokes the whole streaming call
+     * from scratch -- but onChunk itself has no way to signal "the previous
+     * partial chunks are being discarded, a fresh stream is starting."
+     * Without this, a caller that appends every onChunk call straight to
+     * the screen (bin.ts's terminal renderer, per NARRATE_SYSTEM_LEGACY
+     * streaming) would visibly show a partial sentence followed by the same
+     * narration restarting from the beginning, instead of the single clean
+     * narration the non-retried path produces. Optional and invoked only
+     * immediately before a retried attempt (never for the initial attempt),
+     * mirroring RetryConfig.onRetry's existing timing/shape (llm/claude-adapter.ts)
+     * so a caller can clear/re-render instead of appending. Omitted by every
+     * current caller -- behavior is unchanged when absent.
+     */
+    onStreamReset?: (info: { attempt: number; maxAttempts: number; kind: NarrationErrorKind; delayMs: number }) => void;
   }): Promise<GenerateResult>;
 
   /**

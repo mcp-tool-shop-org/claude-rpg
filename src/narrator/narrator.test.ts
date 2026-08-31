@@ -117,20 +117,29 @@ describe('narrateScene', () => {
     expect(result.plan!.interruptibility).toBe('free');
   });
 
-  it('should return null plan when JSON is valid but has no sceneText', async () => {
+  it('F-f18cc0d7: falls back to FALLBACK_NARRATION (not the raw JSON) when JSON is valid but has no sceneText', async () => {
     const noSceneText = JSON.stringify({ tone: 'calm', urgency: 'normal' });
     const opts = makeOpts({ client: makeClient(noSceneText) });
     const result = await narrateScene(opts);
 
     expect(result.plan).toBeNull();
-    expect(result.narration).toBe(noSceneText.trim());
+    // Before this fix, this echoed the raw JSON scaffolding (noSceneText.trim(),
+    // e.g. `{"tone":"calm","urgency":"normal"}`) to the player as if it were
+    // authored narration, with isFallback: false.
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    expect(result.narration).not.toBe(noSceneText.trim());
+    expect(result.isFallback).toBe(true);
   });
 
-  it('should return null plan for malformed JSON', async () => {
-    const opts = makeOpts({ client: makeClient('{ broken json: }') });
+  it('F-f18cc0d7: falls back to FALLBACK_NARRATION (not the raw broken JSON) for malformed JSON', async () => {
+    const brokenJson = '{ broken json: }';
+    const opts = makeOpts({ client: makeClient(brokenJson) });
     const result = await narrateScene(opts);
 
     expect(result.plan).toBeNull();
+    expect(result.narration).toBe(FALLBACK_NARRATION);
+    expect(result.narration).not.toBe(brokenJson.trim());
+    expect(result.isFallback).toBe(true);
   });
 
   // --- (4) Streaming path (FT-BR-004: uses LEGACY plain-text prompt) ---
@@ -265,6 +274,78 @@ describe('parseNarrationPlan PBR-004: observability logging', () => {
       expect.stringContaining('broken json'),
     );
     warnSpy.mockRestore();
+  });
+});
+
+// F-f18cc0d7: narrateScene used to treat EVERY parseNarrationPlan null
+// return the same way -- echo result.text.trim() as plain-text narration
+// with isFallback: false. That's correct only when no JSON-like structure
+// was found at all (the model just answered in prose); it's wrong when a
+// brace/fence match WAS found but JSON.parse threw, or the parsed object had
+// no sceneText -- NARRATE_SYSTEM always instructs JSON mode, so that raw
+// text is very likely broken JSON scaffolding, not prose. These tests pin
+// the corrected split: broken-JSON paths now use the same
+// FALLBACK_NARRATION/FALLBACK_NARRATION_REPEATED selection as an outright
+// LLM-call failure, while the genuine no-JSON-at-all path is unchanged.
+describe('narrateScene F-f18cc0d7: broken JSON-mode responses fall back instead of leaking scaffolding', () => {
+  it('still falls back to plain text (unchanged) when no JSON-like structure is present at all', async () => {
+    const plainText = 'The wind howls through the corridor.';
+    const opts = makeOpts({ client: makeClient(plainText) });
+    const result = await narrateScene(opts);
+
+    expect(result.plan).toBeNull();
+    expect(result.narration).toBe(plainText);
+    expect(result.isFallback).toBe(false);
+    expect(result.fallbackMessage).toBeUndefined();
+  });
+
+  it('uses FALLBACK_NARRATION_REPEATED instead of FALLBACK_NARRATION once consecutiveFallbacks >= 1, same as an outright LLM failure', async () => {
+    const brokenJson = '{ broken json: }';
+    const opts = makeOpts({ client: makeClient(brokenJson), consecutiveFallbacks: 1 });
+    const result = await narrateScene(opts);
+
+    expect(result.narration).toBe(FALLBACK_NARRATION_REPEATED);
+    expect(result.isFallback).toBe(true);
+  });
+
+  it('sets a non-empty fallbackMessage for the missing-sceneText case, matching the LLM-failure contract', async () => {
+    const noSceneText = JSON.stringify({ tone: 'calm', urgency: 'normal' });
+    const opts = makeOpts({ client: makeClient(noSceneText) });
+    const result = await narrateScene(opts);
+
+    expect(result.fallbackMessage).toEqual(expect.any(String));
+    expect(result.fallbackMessage!.length).toBeGreaterThan(0);
+  });
+
+  it('logs a narrateScene-level warning (both console and logger) for the malformed-JSON case, not just parseNarrationPlan\'s own lower-level warning', async () => {
+    const logger = createTestLogger();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const opts = makeOpts({ client: makeClient('{ broken json: }'), logger });
+
+    await narrateScene(opts);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('could not be parsed into a usable NarrationPlan'),
+    );
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'narrator',
+        message: expect.stringContaining('could not be parsed into a usable NarrationPlan'),
+      }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('does not affect the streaming path (LEGACY plain-text mode never calls parseNarrationPlan)', async () => {
+    const onChunk = () => {};
+    const streamClient = makeClient('unused', 'The wind howls through the corridor.');
+    const opts = makeOpts({ client: streamClient, onChunk });
+
+    const result = await narrateScene(opts);
+
+    expect(result.isFallback).toBe(false);
+    expect(result.narration).toBe('The wind howls through the corridor.');
   });
 });
 

@@ -204,6 +204,120 @@ describe('createAdaptedClient', () => {
     });
   });
 
+  // F-f2e58ce0: generateStream's body is wrapped in withRetry. If a stream
+  // fails mid-transmission with a retryable error after several chunks were
+  // already emitted via onChunk, withRetry re-invokes the whole streaming
+  // call from scratch -- `accumulated` is correctly reset per attempt (it
+  // always was), but onChunk itself gave a caller (e.g. bin.ts's terminal
+  // renderer, appending every chunk straight to the screen) no way to know a
+  // reset was happening, so a recovered retry would visibly show a partial
+  // sentence followed by the same narration restarting from the beginning.
+  // onStreamReset is a new, optional, PER-CALL hook (opts.onStreamReset, not
+  // a client-level RetryConfig field) invoked with the same payload shape as
+  // RetryConfig.onRetry, at the same instant (immediately before a retried
+  // attempt's backoff delay).
+  describe('generateStream onStreamReset (F-f2e58ce0)', () => {
+    /** First call to messages.stream() rejects with `err` (retryable); every call after that succeeds with `successText`. */
+    function makeFailOnceThenSucceedStream(err: Error, successText: string) {
+      let callCount = 0;
+      streamSpy.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            on: vi.fn().mockReturnThis(),
+            finalMessage: vi.fn().mockRejectedValue(err),
+          } as unknown as ReturnType<typeof Anthropic.Messages.prototype.stream>;
+        }
+        const onFn = vi.fn().mockImplementation(function (this: unknown, event: string, cb: (t: string) => void) {
+          if (event === 'text') cb(successText);
+          return this;
+        });
+        return {
+          on: onFn,
+          finalMessage: vi.fn().mockResolvedValue(fakeMessage()),
+        } as unknown as ReturnType<typeof Anthropic.Messages.prototype.stream>;
+      });
+    }
+
+    it('invokes onStreamReset immediately before a retried attempt, with the same shape as onRetry', async () => {
+      makeFailOnceThenSucceedStream(
+        new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'x' } }, 'x', {}),
+        'recovered',
+      );
+
+      const onStreamReset = vi.fn();
+      const chunks: string[] = [];
+      const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1 });
+      const result = await client.generateStream!({
+        system: 's', prompt: 'p', onChunk: (c) => chunks.push(c), onStreamReset,
+      });
+
+      expect(result.text).toBe('recovered');
+      // The superseded first attempt emitted no chunks in this fixture (it
+      // failed before any 'text' event); the surviving attempt's chunk is
+      // what the final result reflects.
+      expect(chunks).toEqual(['recovered']);
+      expect(onStreamReset).toHaveBeenCalledTimes(1);
+      expect(onStreamReset).toHaveBeenCalledWith({ attempt: 1, maxAttempts: 2, kind: 'rate-limit', delayMs: 1 });
+    });
+
+    it('still invokes the client-level retryConfig.onRetry (unchanged) alongside the new per-call onStreamReset', async () => {
+      // A real SDK exception (not a hand-built NarrationError) -- classifyError
+      // only recognizes actual Anthropic.APIError subclasses; feeding it a
+      // NarrationError directly falls through to the generic 'unexpected'
+      // (non-retryable) branch instead of preserving 'timeout'.
+      makeFailOnceThenSucceedStream(
+        new Anthropic.APIConnectionTimeoutError({ message: 'timed out' }),
+        'recovered',
+      );
+
+      const onRetry = vi.fn();
+      const onStreamReset = vi.fn();
+      const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1, onRetry });
+      await client.generateStream!({ system: 's', prompt: 'p', onChunk: () => {}, onStreamReset });
+
+      expect(onRetry).toHaveBeenCalledTimes(1);
+      expect(onStreamReset).toHaveBeenCalledTimes(1);
+      // Both fire from the same withRetry event, with the same payload --
+      // onStreamReset is additive, not a replacement for the existing hook.
+      expect(onRetry.mock.calls[0][0]).toEqual(onStreamReset.mock.calls[0][0]);
+    });
+
+    it('does not invoke onStreamReset when the first attempt succeeds (no retry occurred)', async () => {
+      const onStreamReset = vi.fn();
+      const client = createAdaptedClient({ apiKey: 'test' });
+      await client.generateStream!({ system: 's', prompt: 'p', onChunk: () => {}, onStreamReset });
+      expect(onStreamReset).not.toHaveBeenCalled();
+    });
+
+    it('does not throw and behaves exactly as before when onStreamReset is omitted', async () => {
+      makeFailOnceThenSucceedStream(
+        new Anthropic.RateLimitError(429, { type: 'error', error: { type: 'rate_limit_error', message: 'x' } }, 'x', {}),
+        'recovered',
+      );
+
+      const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1 });
+      const result = await client.generateStream!({ system: 's', prompt: 'p', onChunk: () => {} });
+      expect(result.text).toBe('recovered');
+    });
+
+    it('does not invoke onStreamReset for a fatal (non-retryable) stream error', async () => {
+      streamSpy.mockReturnValue({
+        on: vi.fn().mockReturnThis(),
+        finalMessage: vi.fn().mockRejectedValue(
+          new Anthropic.AuthenticationError(401, { type: 'error', error: { type: 'authentication_error', message: 'bad key' } }, 'bad key', {}),
+        ),
+      } as unknown as ReturnType<typeof Anthropic.Messages.prototype.stream>);
+
+      const onStreamReset = vi.fn();
+      const client = createAdaptedClient({ apiKey: 'test' }, { maxRetries: 1, initialDelayMs: 1 });
+      await expect(
+        client.generateStream!({ system: 's', prompt: 'p', onChunk: () => {}, onStreamReset }),
+      ).rejects.toThrow(NarrationError);
+      expect(onStreamReset).not.toHaveBeenCalled();
+    });
+  });
+
   describe('generateStructured', () => {
     it('parses JSON from fenced block', async () => {
       createSpy.mockResolvedValue(
@@ -313,10 +427,42 @@ describe('classifyError', () => {
     expect(result.fatal).toBe(true);
   });
 
-  it('maps generic APIError to unexpected', () => {
-    const err = new Anthropic.APIError(500, { type: 'error', error: { type: 'api_error', message: 'boom' } }, 'boom', {});
+  // F-4a6a8d31: these three used to be one test -- 'maps generic APIError to
+  // unexpected' -- that constructed `new Anthropic.APIError(500, ...)`
+  // directly rather than the real-world `InternalServerError` a live 500
+  // response actually produces (see APIError.generate() in the installed
+  // SDK's error.js, which maps status 409 -> ConflictError and status >=500
+  // -> InternalServerError). That let the test pass unchanged regardless of
+  // whether classifyError actually recognized those subclasses, so it never
+  // caught that both were falling into the non-retryable 'unexpected'
+  // bucket alongside every genuine 5xx/409 the SDK's own default retry
+  // logic (core.js shouldRetry) treats as transient.
+  it('maps InternalServerError (5xx, incl. 529 Overloaded) to transport and retryable', () => {
+    const err = new Anthropic.InternalServerError(529, { type: 'error', error: { type: 'overloaded_error', message: 'overloaded' } }, 'overloaded', {});
+    const result = classifyError(err);
+    expect(result.kind).toBe('transport');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('maps ConflictError (409) to transport and retryable', () => {
+    const err = new Anthropic.ConflictError(409, { type: 'error', error: { type: 'conflict_error', message: 'conflict' } }, 'conflict', {});
+    const result = classifyError(err);
+    expect(result.kind).toBe('transport');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('maps a bare APIError with status 408 (request-timeout, no dedicated SDK subclass) to transport and retryable', () => {
+    const err = new Anthropic.APIError(408, { type: 'error', error: { type: 'timeout_error', message: 'timed out' } }, 'timed out', {});
+    const result = classifyError(err);
+    expect(result.kind).toBe('transport');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('maps an APIError status outside the SDK default retry set (404) to unexpected and non-retryable', () => {
+    const err = new Anthropic.NotFoundError(404, { type: 'error', error: { type: 'not_found_error', message: 'missing' } }, 'missing', {});
     const result = classifyError(err);
     expect(result.kind).toBe('unexpected');
+    expect(result.retryable).toBe(false);
   });
 
   it('maps non-SDK Error to unexpected', () => {

@@ -1,6 +1,7 @@
 // NPC agency bridge — connects engine NPC agency to GameSession
 // v1.2: NPC Agency phase 1
 
+import { isDebugEnabled } from '../game/debug-logger.js';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { getReputation, adjustReputation } from '@ai-rpg-engine/character-profile';
@@ -88,6 +89,61 @@ export function buildNpcProfilesForDirector(
 // --- Effect Application ---
 
 /**
+ * F-74ff036d: ctx.playerRumors is session-level state, persisted as
+ * SavedSession.playerRumors and JSON.stringify'd on every save — unlike
+ * MAX_ACTIVE/MAX_OPPS below (small bounded *active* working sets: pressures
+ * and opportunities currently in play), this is cumulative rumor history
+ * across a "potentially several-hundred-turn campaign" (finale-narrator.ts's
+ * own framing), read in full on every deriveWhatPeopleAreSaying /
+ * computeRumorDelta / getRumorsFrom call. Sized between this codebase's
+ * smaller bounded caps (dialogue/npc-context.ts's own read-side fix,
+ * F-b52349e0: BELIEFS_MAX=8, RUMORS_MAX=5 — but those are a per-NPC,
+ * per-dialogue-turn slice, not the full session history this caps) and the
+ * engine's own larger historical-log caps (perception-filter.ts
+ * DEFAULT_MAX_PERCEPTION_LOG=200, narrative-authority.ts objectiveLog=500)
+ * — large enough to keep a rich rumor history across a long campaign, small
+ * enough to bound save-file size and those full-array scans.
+ */
+const MAX_PLAYER_RUMORS = 100;
+
+/**
+ * F-74ff036d: tracks which ctx.playerRumors array instances have already
+ * logged the capacity-drop diagnostic, so a long campaign that keeps
+ * evicting doesn't spam a warning on every single drop once steady-state is
+ * reached — "first drop only" per session (a WeakSet keyed on the array
+ * itself rather than a module-level boolean so independent sessions/tests,
+ * each with their own fresh playerRumors array, get independent tracking).
+ */
+const warnedForRumorArray = new WeakSet<PlayerRumor[]>();
+
+/**
+ * Push a newly-spawned rumor onto ctx.playerRumors, evicting the oldest
+ * entry first once at MAX_PLAYER_RUMORS capacity (ring-buffer / shift-on-
+ * overflow, matching the engine's own perception-filter.ts logPerception()).
+ *
+ * Drop-oldest rather than this file's sibling 'pressure'/'spawn-opportunity'
+ * cases' skip-the-new-one strategy: those cap small *active* working sets
+ * where an already-in-flight item deserves to resolve before a new one
+ * starts, but playerRumors is a rolling history where a late-campaign rumor
+ * is more likely to still be currently relevant than one from turn 3 —
+ * mirroring dialogue/npc-context.ts's own read-side fix (F-b52349e0), which
+ * sorts most-recent-first before its own cap for the same reason.
+ */
+function pushPlayerRumor(ctx: NpcEffectApplicationContext, rumor: PlayerRumor): void {
+  const rumors = ctx.playerRumors;
+  rumors.push(rumor);
+  if (rumors.length > MAX_PLAYER_RUMORS) {
+    rumors.shift();
+    if (isDebugEnabled() && !warnedForRumorArray.has(rumors)) {
+      warnedForRumorArray.add(rumors);
+      console.warn(
+        `[npc-agency] playerRumors exceeded MAX_PLAYER_RUMORS (${MAX_PLAYER_RUMORS}); evicting oldest entries to bound save-file size (further drops this session are silent).`,
+      );
+    }
+  }
+}
+
+/**
  * Apply effects from an NPC action to session state.
  * Mirrors applyFactionEffects() pattern in game.ts.
  * Returns the updated profile (reputation changes produce a new profile instance).
@@ -141,7 +197,8 @@ export function applyNpcEffects(
         break;
 
       case 'rumor':
-        ctx.playerRumors.push(
+        pushPlayerRumor(
+          ctx,
           spawnPlayerRumor(
             { label: effect.claim, description: effect.claim, tags: [effect.valence] },
             profile,
@@ -153,7 +210,8 @@ export function applyNpcEffects(
         break;
 
       case 'npc-rumor':
-        ctx.playerRumors.push(
+        pushPlayerRumor(
+          ctx,
           spawnNpcOriginatedRumor(
             effect.claim,
             effect.valence,

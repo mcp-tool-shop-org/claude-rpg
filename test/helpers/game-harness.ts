@@ -105,6 +105,23 @@ export function createHarness(opts: HarnessOptions = {}): GameHarness {
  * discarded) are FIXED in bin.ts's runLoad() and mirrored as fixed here:
  * the restored TurnHistory, campaignStatus, packId, and the envelope's
  * rngState all flow into the resumed session, exactly as production does.
+ *
+ * F-966c84ab (wave-2 tests domain, verify-the-stitch): this helper does not
+ * call the engine's own `Engine.deserialize()`, so it never runs
+ * WorldStore's save-version migration chain or any registered module's
+ * migrateState() hook (engine.ts's ENG-009 seam), and it never restores
+ * `actionLog`. This is not a gap unique to this helper -- bin.ts's runLoad()
+ * documents the identical limitation for the identical reason (src/bin.ts:
+ * "Full Engine.deserialize remains blocked"): `PackInfo` (src/character/
+ * packs.ts) exposes only `createGame(seed?)`, never the registered module
+ * list `Engine.deserialize()`'s `options.modules` needs to run real
+ * migrateState() hooks or rebuild the module registry, and Engine's
+ * `actionLog` field is private with no setter, so nothing outside the
+ * engine can push a restored actionLog onto an engine built any other way.
+ * Tests built on resumeHarness() (this file, consecutive-fallbacks.test.ts,
+ * conversation-memory.test.ts) do not exercise a module's migrateState()
+ * hook or actionLog continuity, and will stay green even if one is missing
+ * or broken -- do not rely on them as tripwires for either.
  */
 export async function resumeHarness(
   savePath: string,

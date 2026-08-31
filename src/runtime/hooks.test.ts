@@ -98,7 +98,11 @@ describe('HookManager', () => {
 
   it('logs which hook and hookPoint failed so a debug session can identify the culprit', () => {
     const manager = new HookManager();
-    function myBrokenHook() {
+    // Coordinator stitch (wave 6): `never` return, not the inferred `void` —
+    // a function that only throws doesn't satisfy Hook's
+    // `HookResult | null` return under tsc, and vitest runs alone don't
+    // typecheck, which is how this slipped the worktree's green run.
+    function myBrokenHook(): never {
       throw new Error('boom');
     }
     manager.register('combat-start', myBrokenHook);

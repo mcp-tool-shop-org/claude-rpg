@@ -9,6 +9,8 @@ import {
   buildPressureInputs,
   propagateRumors,
   addRumor,
+  capPlayerRumors,
+  MAX_PLAYER_RUMORS,
   getPlayerFactionAccess,
   getOpportunityContext,
   getArcContext,
@@ -253,6 +255,66 @@ describe('addRumor', () => {
     const rumor = { id: 'r1', valence: 'neutral' } as any;
     addRumor(rumor, original, makeEmptyPartyState(), 1);
     expect(original).toHaveLength(0);
+  });
+
+  it('caps at MAX_PLAYER_RUMORS once the list is full (F-fd5e8eec)', () => {
+    let rumors: any[] = [];
+    for (let i = 0; i < MAX_PLAYER_RUMORS; i++) {
+      rumors = addRumor({ id: `r${i}`, valence: 'neutral', confidence: 0.9 } as any, rumors, makeEmptyPartyState(), i);
+    }
+    expect(rumors).toHaveLength(MAX_PLAYER_RUMORS);
+
+    rumors = addRumor(
+      { id: 'r-overflow', valence: 'neutral', confidence: 0.9 } as any,
+      rumors,
+      makeEmptyPartyState(),
+      MAX_PLAYER_RUMORS,
+    );
+    expect(rumors).toHaveLength(MAX_PLAYER_RUMORS);
+    expect(rumors.some((r: any) => r.id === 'r-overflow')).toBe(true);
+  });
+});
+
+describe('capPlayerRumors (F-fd5e8eec)', () => {
+  it('returns the array unchanged (same reference) when at or under the cap', () => {
+    const rumors = [{ id: 'r1', confidence: 0.9 } as any];
+    expect(capPlayerRumors(rumors)).toBe(rumors);
+  });
+
+  it('evicts the oldest inert (confidence <= 0.3) rumor first once over the cap', () => {
+    // One inert rumor buried in the middle; every other rumor is still hot.
+    const rumors = Array.from({ length: MAX_PLAYER_RUMORS + 1 }, (_, i) => ({
+      id: `r${i}`,
+      confidence: i === 5 ? 0.2 : 0.9,
+    })) as any[];
+
+    const result = capPlayerRumors(rumors);
+    expect(result).toHaveLength(MAX_PLAYER_RUMORS);
+    expect(result.some((r) => r.id === 'r5')).toBe(false);
+    // Hot rumors survive on both sides of the evicted inert one.
+    expect(result.some((r) => r.id === 'r0')).toBe(true);
+    expect(result.some((r) => r.id === `r${MAX_PLAYER_RUMORS}`)).toBe(true);
+  });
+
+  it('falls back to oldest-first eviction once every rumor is hot (confidence > 0.3)', () => {
+    const rumors = Array.from({ length: MAX_PLAYER_RUMORS + 1 }, (_, i) => ({
+      id: `r${i}`,
+      confidence: 0.9,
+    })) as any[];
+
+    const result = capPlayerRumors(rumors);
+    expect(result).toHaveLength(MAX_PLAYER_RUMORS);
+    expect(result.some((r) => r.id === 'r0')).toBe(false);
+    expect(result[0].id).toBe('r1');
+  });
+
+  it('does not mutate the input array', () => {
+    const rumors = Array.from({ length: MAX_PLAYER_RUMORS + 1 }, (_, i) => ({
+      id: `r${i}`,
+      confidence: 0.9,
+    })) as any[];
+    capPlayerRumors(rumors);
+    expect(rumors).toHaveLength(MAX_PLAYER_RUMORS + 1);
   });
 });
 

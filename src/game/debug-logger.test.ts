@@ -58,6 +58,50 @@ describe('debug-logger (PB-004)', () => {
     expect(logger.getEntries()[0].data).toBeUndefined();
   });
 
+  describe('entries ring buffer (F-654b626a)', () => {
+    it('caps entries at MAX_LOG_ENTRIES (1000), evicting the oldest first', () => {
+      const logger = createTestLogger();
+      for (let i = 0; i < 1001; i++) {
+        logger.info('turn', `event-${i}`);
+      }
+      const entries = logger.getEntries();
+      expect(entries).toHaveLength(1000);
+      // event-0 was the oldest and should have been evicted first.
+      expect(entries[0].message).toBe('event-1');
+      expect(entries[entries.length - 1].message).toBe('event-1000');
+    });
+
+    it('warns once (debug-gated) the first time the ring buffer fills, not on every subsequent drop', () => {
+      const logger = createDebugLogger(true);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+      for (let i = 0; i < 1005; i++) {
+        logger.info('turn', `event-${i}`);
+      }
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0][0])).toContain('MAX_LOG_ENTRIES');
+      expect(logger.getEntries()).toHaveLength(1000);
+
+      warnSpy.mockRestore();
+      stderrSpy.mockRestore();
+    });
+
+    it('does not warn when the logger is disabled (createTestLogger)', () => {
+      const logger = createTestLogger();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      for (let i = 0; i < 1005; i++) {
+        logger.info('turn', `event-${i}`);
+      }
+
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(logger.getEntries()).toHaveLength(1000);
+      warnSpy.mockRestore();
+    });
+  });
+
   describe('isDebugEnabled (F-34078c07)', () => {
     afterEach(() => {
       vi.unstubAllEnvs();

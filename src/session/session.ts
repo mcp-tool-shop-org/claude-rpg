@@ -9,9 +9,9 @@ import { readFile, writeFile, mkdir, readdir, rename, unlink, stat } from 'node:
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { CURRENT_SCHEMA_VERSION, migrateSave } from './migrate.js';
+import { CURRENT_SCHEMA_VERSION, migrateSave, isValidPlayerRumor, isValidWorldPressure } from './migrate.js';
 import { isDebugEnabled } from '../game/debug-logger.js';
-import { VALID_SUPPLY_CATEGORIES } from '../game/game-state.js';
+import { VALID_SUPPLY_CATEGORIES, capPlayerRumors } from '../game/game-state.js';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
@@ -370,31 +370,130 @@ export function loadPresentationStateFromSession(session: SavedSession): string 
   return session.presentationState;
 }
 
-/** Load player rumors from a saved session. */
+/**
+ * Load player rumors from a saved session.
+ *
+ * F-b6456823: the previous `JSON.parse(x) as PlayerRumor[]` cast trusted a
+ * syntactically valid but wrong-shape element unexamined — e.g. game.ts's
+ * `/status` handler reads array-position fields off this same rumor/pressure
+ * array family unguarded (see loadPressuresFromSession's doc comment below).
+ * Mirrors loadOpportunitiesFromSession's per-entry validate/drop-with-warning
+ * discipline. isValidPlayerRumor is migrate.ts's own predicate — already
+ * proven against real legacy-shape fixtures during v1->v2 migration —
+ * exported and shared here instead of re-derived.
+ *
+ * F-fd5e8eec: also applies capPlayerRumors on the way out, so a save already
+ * over MAX_PLAYER_RUMORS (written before that cap existed, or hand-edited)
+ * self-heals on this load instead of carrying its unbounded growth forward
+ * — mirrors TurnHistory.fromJSON applying trimCompactedChunks() on load
+ * (F-dfd125bb).
+ */
 export function loadRumorsFromSession(session: SavedSession): PlayerRumor[] {
   if (!session.playerRumors) return [];
   try {
-    return JSON.parse(session.playerRumors) as PlayerRumor[];
+    const parsed: unknown = JSON.parse(session.playerRumors);
+    if (!Array.isArray(parsed)) return [];
+    const result: PlayerRumor[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (value != null && typeof value === 'object' && isValidPlayerRumor(value as Record<string, unknown>)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed playerRumors entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return capPlayerRumors(result);
   } catch {
     return [];
   }
 }
 
-/** Load world pressures from a saved session. */
+/**
+ * Load world pressures from a saved session.
+ *
+ * F-b6456823: shares the unguarded-cast shape loadRumorsFromSession had (see
+ * its doc comment) — same per-entry validate/drop-with-warning fix.
+ * processInput() (game.ts) has no enclosing try/catch around its `/status`
+ * slash-command branch, and reads `this.activePressures[0].description`/
+ * `.urgency` unguarded — a malformed first element throws uncaught out of
+ * processInput() every time the player runs `/status` on that save.
+ */
 export function loadPressuresFromSession(session: SavedSession): WorldPressure[] {
   if (!session.activePressures) return [];
   try {
-    return JSON.parse(session.activePressures) as WorldPressure[];
+    const parsed: unknown = JSON.parse(session.activePressures);
+    if (!Array.isArray(parsed)) return [];
+    const result: WorldPressure[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (value != null && typeof value === 'object' && isValidWorldPressure(value as Record<string, unknown>)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed activePressures entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return [];
   }
 }
 
-/** Load resolved pressures (fallout history) from a saved session. */
+/**
+ * F-b6456823: shape guard for a single PressureResolution embedded within a
+ * parsed PressureFallout entry. character/session-recap.ts's
+ * computeFactionDeltas does `f.resolution.resolvedBy` unguarded, and
+ * `f.effects.some((e) => e.type === 'reputation' && ...)` right after —
+ * mirrors isValidOpportunityResolution's validation depth for the same
+ * class of problem.
+ */
+function isValidPressureResolution(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const r = value as Record<string, unknown>;
+  return (
+    typeof r.pressureId === 'string' &&
+    typeof r.pressureKind === 'string' &&
+    typeof r.resolutionType === 'string' &&
+    typeof r.resolvedBy === 'string' &&
+    typeof r.resolvedAtTick === 'number' &&
+    typeof r.resolutionVisibility === 'string'
+  );
+}
+
+/**
+ * F-b6456823: shape guard for a single PressureFallout entry within a parsed
+ * resolvedPressures array. Mirrors isValidOpportunityFallout's per-entry
+ * validation depth for the same class of problem: character/session-recap.ts's
+ * computeFactionDeltas dereferences `.resolution.resolvedBy` and iterates
+ * `.effects` fully unguarded when building the post-session recap.
+ */
+function isValidPressureFallout(value: unknown): value is PressureFallout {
+  if (value == null || typeof value !== 'object') return false;
+  const f = value as Record<string, unknown>;
+  return (
+    isValidPressureResolution(f.resolution) &&
+    Array.isArray(f.effects) &&
+    typeof f.summary === 'string'
+  );
+}
+
+/**
+ * Load resolved pressures (fallout history) from a saved session.
+ *
+ * F-b6456823: shares the unguarded-cast shape loadRumorsFromSession had (see
+ * its doc comment) — same per-entry validate/drop-with-warning fix.
+ */
 export function loadResolvedPressuresFromSession(session: SavedSession): PressureFallout[] {
   if (!session.resolvedPressures) return [];
   try {
-    return JSON.parse(session.resolvedPressures) as PressureFallout[];
+    const parsed: unknown = JSON.parse(session.resolvedPressures);
+    if (!Array.isArray(parsed)) return [];
+    const result: PressureFallout[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (isValidPressureFallout(value)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed resolvedPressures entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return [];
   }

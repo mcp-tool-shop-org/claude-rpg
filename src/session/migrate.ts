@@ -4,6 +4,7 @@
 
 import { SaveValidationError } from './session.js';
 import { isDebugEnabled } from '../game/debug-logger.js';
+import type { PlayerRumor, WorldPressure } from '@ai-rpg-engine/modules';
 
 /** Current schema version. Increment when save shape changes. */
 export const CURRENT_SCHEMA_VERSION = 2;
@@ -60,13 +61,18 @@ type MigrationFn = (data: Record<string, unknown>) => Record<string, unknown>;
 /**
  * Shape guards for the current PlayerRumor/WorldPressure types (F-c5ff2a5c)
  * — used by the normalizers below to detect an already-conformant entry and
- * pass it through unchanged. Plain boolean, not a type predicate: both
- * callers already hold a `Record<string, unknown>` (narrowed by their own
- * `typeof === 'object'` check), so a same-type predicate here would narrow
- * the negative branch to `never` instead of leaving it as the
- * still-inspectable record it is.
+ * pass it through unchanged.
+ *
+ * F-b6456823: exported (was private) and upgraded to type predicates so
+ * session.ts's loadRumorsFromSession/loadPressuresFromSession can share
+ * these exact predicates for their own per-entry validation instead of
+ * re-deriving an independent copy — this file's normalizers already proved
+ * them against the real legacy-shape fixtures (test/fixtures/saves/
+ * v1-rich.json). The type-predicate form still works as a plain boolean
+ * condition at the existing call sites below (`if (isValidPlayerRumor(r))
+ * return r;`), so this is additive, not a behavior change here.
  */
-function isValidPlayerRumor(entry: Record<string, unknown>): boolean {
+export function isValidPlayerRumor(entry: Record<string, unknown>): entry is PlayerRumor {
   const r = entry;
   return (
     typeof r.id === 'string' &&
@@ -82,7 +88,7 @@ function isValidPlayerRumor(entry: Record<string, unknown>): boolean {
   );
 }
 
-function isValidWorldPressure(entry: Record<string, unknown>): boolean {
+export function isValidWorldPressure(entry: Record<string, unknown>): entry is WorldPressure {
   const p = entry;
   return (
     typeof p.id === 'string' &&

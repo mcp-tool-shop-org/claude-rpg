@@ -449,6 +449,18 @@ export class GameSession {
    */
   private autosaveFailureWarned = false;
   /**
+   * F-fd5e8eec: true once the player's session has been shown the one-time
+   * playerRumors-cap notice — addRumor() below checks this so a
+   * long-running campaign that stays over MAX_PLAYER_RUMORS for the rest of
+   * its life doesn't repeat the notice on every subsequent rumor-spawning
+   * turn. Mirrors autosaveFailureWarned's one-time-notice discipline
+   * directly above. capPlayerRumors (game-state.ts) itself stays silent by
+   * design — that file is documented "No console IO" — so the notice lives
+   * here instead, gated through debugLog (a NoopLogger when --debug/
+   * CLAUDE_RPG_DEBUG is off, so no explicit enabled check is needed).
+   */
+  private rumorCapWarned = false;
+  /**
    * F-f13ca236: post-turn subsystem-tick failure count + a bounded ring
    * buffer of the most recent ones, tracked independent of the --debug gate
    * (see the PB-001 catch block below and debug-logger.ts's NoopLogger).
@@ -3216,7 +3228,17 @@ export class GameSession {
 
   /** Add a rumor, applying companion rumor-suppression if applicable. */
   private addRumor(rumor: PlayerRumor): void {
-    this.playerRumors = _addRumor(rumor, this.playerRumors, this.partyState, this.engine.tick);
+    const before = this.playerRumors;
+    this.playerRumors = _addRumor(rumor, before, this.partyState, this.engine.tick);
+    // F-fd5e8eec: detect a cap eviction (a genuinely new array — ruling out
+    // suppression, which returns the same reference unchanged — whose length
+    // didn't grow) and warn once per session. See rumorCapWarned's doc
+    // comment above for why the notice lives here rather than inside
+    // capPlayerRumors/addRumor (game-state.ts, "No console IO").
+    if (!this.rumorCapWarned && this.playerRumors !== before && this.playerRumors.length <= before.length) {
+      this.rumorCapWarned = true;
+      this.debugLog.warn('rumors', 'playerRumors hit MAX_PLAYER_RUMORS — oldest/inert rumors are now evicted as new ones are spawned.');
+    }
   }
 
   /** Process companion reactions to a trigger. Applies morale deltas and handles departures. */

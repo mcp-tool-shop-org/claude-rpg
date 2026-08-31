@@ -6,7 +6,7 @@
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
 </p>
 
-<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
+<p align="center"><em>Twelve worlds. One narrator. The engine keeps the truth.</em></p>
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -61,7 +61,7 @@ npx @mcptoolshop/claude-rpg play
 ## 快速入门
 
 ```bash
-# Play — interactive world and character selection (ten worlds, grouped by difficulty)
+# Play — interactive world and character selection (twelve worlds, grouped by difficulty)
 npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
@@ -83,22 +83,19 @@ npm install @ai-rpg-engine/core @ai-rpg-engine/modules
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## v1.6.0 中的新功能
+## v1.7 版本的新功能
 
-v1.6 使十个世界真实存在，让失败具有真正的意义，并在网络不稳定时使叙述者更具弹性。
+v1.7 将整个游戏迁移到 3.9 引擎——一次性更新了十个小版本，所有旧存档仍然可以加载——并将新的资源用于改善你在游戏中的体验。
 
 | 特性 | 其含义 |
 |---------|--------------|
-| **Ten playable worlds** | 铁竞技场（角斗士）、翡翠面纱（浪人）和猩红法庭（吸血鬼）加入游戏——十个世界，按选择器中的难度分组。 |
-| **`--world` 标志** | `npx @mcptoolshop/claude-rpg play --world gladiator` 跳过菜单，直接进入指定的某个世界。十个别名，全部列在 `--help` 中。 |
-| **Death is a setback** | 战斗失败会淡出并显示一个独特的死亡画面，并且会限制你的行动，直到你复活——战役将通过 `/conclude` 有意地结束，而不是因为一次糟糕的战斗而结束。 |
-| **Streaming narration** | 散文在叙述者写作时呈现出来，而不是之后。 |
-| **按需使用 `/cost`** | 会话令牌的使用情况和预估费用，无需花费任何费用即可查询。 |
-| **一个能说真话的指示器** | 在 API 重试期间，思考指示器会报告尝试次数和原因——“仍在思考（重试 1/2——达到速率限制）”。持续中断时，备用散文将切换为诚实的提示：“这仍然在发生”。 |
-| **Ambient world chatter** | 背景 NPC 会继续他们的生活——一个商人检查价格，一个警卫扫描人群——每个世界都有不同的风格，且无需任何 API 费用。 |
-| **NPC 即使在保存之间也会记住** | 对话记忆现在会保留在保存/加载期间：你两回合前告诉警卫的内容仍然会影响他们所说的话。 |
-| **Names, not slugs** | 状态栏、摘要和保存列表显示“忏悔骑士”，而不是 `penitent-knight`。声音提示以单词的形式呈现，而不是 `white_noise`。 |
-| **1,542 个测试** | 从 95 个文件中的 625 个开始，并在 CI 中强制执行每个路径的覆盖率下限。 |
+| **Twelve playable worlds** | 《盐路账本》（一个商人战役，每个债务都像一把刀）和《声张与追捕》（一个在没有警察的城市里追捕小偷的人）加入了游戏——现在共有十二个世界，并根据难度进行分组。 |
+| **Engine 3.9 under the hood** | 一次性更新了十个小版本的引擎，同时保持了游戏的行为方式不变。升级后，所有旧存档都可以加载，并且所有新的子系统都采用默认设置，不会出现任何问题。 |
+| **`quit` 自动保存** | 现在，输入 `quit` 可以在退出游戏前自动保存，就像 Ctrl+C 一直以来的作用一样——而且死亡界面终于会如实地告诉你。 |
+| **NPC 会注意到你身边的人** | 对话会根据你队伍中当前的人员、开放的机会、世界压力和区域环境进行调整——酒馆老板可以按名字称呼你的同伴，并根据你们之前谈好的交易进行交涉。 |
+| **同伴在战斗中发挥作用** | 招募到的盟友现在会携带引擎内置的角色标签和共同的阵营：战士会为你拦截攻击，而且你的队伍中再也不会有人被当成敌人。 |
+| **The strategic read** | 当世界与你为敌时，叙述会反映出引擎自身的状况——你可以在打开地图之前，通过文字感受到压力。 |
+| **1870 次测试** | 从 98 个文件中进行的 1542 次测试增加到 1870 次，并且完成了整个四阶段的健康测试（提交了 149 个问题，修复了 136 个）。 |
 
 ## 它与众不同之处
 
@@ -178,7 +175,7 @@ Claude RPG 只是一个更大的工具链的一部分，用于构建基于模拟
 
 | 项目 | 作用 |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | 确定性模拟运行时——29 个模块，零 LLM 依赖。 |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | 确定性模拟运行时——完整的动态世界模块堆栈，没有使用任何 LLM 依赖。 |
 | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | 2D 世界创作工作室——地图编辑器、NPC 构建器、渲染器、导出功能。 |
 | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | 模式验证、故事板测试、AI RPG 导出流水线。 |
 | **Claude RPG** (this repo) | 参考运行时——Claude 叙述、沉浸式音频、导演工具。 |

@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] - 2026-08-31
+
+The engine-alignment release: @ai-rpg-engine 2.9 → 3.9 in one
+behavior-preserving migration slice, a full four-stage health pass on the
+migrated tree, and a Director-ruled feature pass — 13 waves, 149 findings
+filed, 136 fixed, and the test suite grown from 1,542 to 1,870.
+
+### Added
+- **Two new worlds**: Salt Road Ledger (`--world merchant`) and Hue and
+  Cry (`--world bounty-hunter`) — the roster grows to twelve, grouped by
+  difficulty in the chooser.
+- **Living dialogue hints**: NPC dialogue is fed live party presence, open
+  opportunities, world pressures, and zone texture; scene narration
+  carries the engine's strategic situation read when the world turns
+  hostile. All threaded from live game state.
+- **`quit` auto-saves** before exiting, matching the Ctrl+C path, with an
+  honest death-screen line to match. Post-death quits preserve the downed
+  presentation state so a reload resumes where you fell.
+- Real-process retry coverage for the world-gen and dialogue latency
+  paths; a composed Phase-9 proof that boots every registered pack and
+  plays a full turn.
+
+### Changed
+- **Engine 3.9.0** across all 23 `@ai-rpg-engine` packages. Saves written
+  before the upgrade load with every new module namespace defaulted via
+  the engine's own backfill — never dropped, never reset.
+- Companions are real to the engine: recruit/dismiss perform the full
+  three-part contract (party state in the world module, namespaced role
+  tags, shared faction) — fighters intercept, and party members are never
+  targeted as enemies.
+- The interpreter's verb surface is a curated allowlist with a loud drift
+  gate: new engine verbs become conscious decisions, never silent
+  pass-throughs.
+- Save loading validates structure the way the engine's own loader does,
+  backfills missing module namespaces, and refuses non-finite RNG state.
+- Transient API errors (5xx including 529, 409, 408) retry instead of
+  failing narration; the death screen, error presentations, and empty
+  states across the CLI carry what-happened / what-survived / next-step
+  copy.
+
+### Fixed
+- The false "quit will save" death-screen promise (it now actually does).
+- Loading a corrupt or empty save no longer silently resets the world.
+- A stdout flush race that could eat the empty-save-dir guidance line.
+- Dozens of hardening, humanization, and terminal-polish findings from
+  the four-stage health pass — per-entry save-loader guards, stdin-EOF
+  hang prevention, per-hook error isolation, NO_COLOR/ASCII parity, and
+  width-safe rendering at 40–120 columns.
+
 ## [1.6.2] - 2026-08-27
 
 ### Changed

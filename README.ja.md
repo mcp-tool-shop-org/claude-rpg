@@ -6,7 +6,7 @@
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
 </p>
 
-<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
+<p align="center"><em>Twelve worlds. One narrator. The engine keeps the truth.</em></p>
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -61,7 +61,7 @@ npx @mcptoolshop/claude-rpg play
 ## クイックスタート
 
 ```bash
-# Play — interactive world and character selection (ten worlds, grouped by difficulty)
+# Play — interactive world and character selection (twelve worlds, grouped by difficulty)
 npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
@@ -83,22 +83,19 @@ Anthropic APIキーを設定する（クロードによるナレーションに�
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## v1.6.0の新機能
+## v1.7.0の新機能
 
-v1.6では、10個の世界が実際に利用可能になり、敗北に真の重みが与えられ、ネットワークが不安定な場合でもナレーターが安定して動作するようになる。
+v1.7では、ゲーム全体をエンジン3.9に移行しました。これは、10回のマイナーバージョンアップを一度に行うもので、古いセーブデータも引き続き読み込めるようになっています。また、新しいエンジンを活用して、ゲームプレイの体験を向上させました。
 
 | 機能 | その意味 |
 |---------|--------------|
-| **Ten playable worlds** | グラディエーターの「アイアンコロシアム」、浪人の「ジェイドベール」、ヴァンパイアの「クリムゾンコート」がロースターに参加。10個の世界を、選択画面で難易度別にグループ化。 |
-| **`--world`フラグ** | `npx @mcptoolshop/claude-rpg play --world gladiator`を指定すると、メニューをスキップして指定された世界に直接移動する。10個のエイリアスがあり、すべては`--help`にリストされている。 |
-| **Death is a setback** | 戦闘で敗北すると、明確なゲームオーバー画面が表示され、勝利するまでアクションが制限される。キャンペーンは、悪い戦いによって終わるのではなく、意図的に`/conclude`によって終了する。 |
-| **Streaming narration** | 文章はナレーターが書いている間にレンダリングされ、後でレンダリングされることはない。 |
-| **オンデマンドの`/cost`** | セッショントークンの使用量と推定費用を、実際に消費することなく確認できる。 |
-| **真実を伝えるスピナー** | API再試行中に、思考中のスピナーは試行と原因を表示する。「まだ考えています（2回目の再試行/2回 — レート制限に達しました）」など。持続的な障害が発生した場合、代替の文章が正直な「これはまだ発生しています」に切り替わる。 |
-| **Ambient world chatter** | 背景のNPCはそれぞれの生活を送る—価格をチェックする商人、群衆をスキャンする警備員—世界ごとに異なる演出が施され、APIコストはゼロ。 |
-| **NPCは記憶を持ち、セーブデータの間でも保持される** | 会話の記憶は、セーブ/ロード時にも保持されるようになった。2つのセッション前に警備員に話したことは、彼らの発言に影響を与える。 |
-| **Names, not slugs** | ステータスバー、要約、およびセーブリストには、「悔悛の騎士」と表示され、`penitent-knight`は表示されない。効果音は単語として読み上げられ、`white_noise`としては読み上げられない。 |
-| **1,542個のテスト** | 95個のファイルにまたがる625個から増加し、CIでパスごとのカバレッジの下限が強制される。 |
+| **Twelve playable worlds** | 「ソルト・ロード・レジャー」（すべての借金が刃となる商人キャンペーン）と「ヒュー・アンド・クライ」（警察が存在しない都市で盗賊を追う）が、ゲームに新たなシナリオとして追加されました。これにより、難易度別にグループ化された12の世界がプレイできるようになりました。 |
+| **Engine 3.9 under the hood** | 1回の移行で10回のマイナーエンジンバージョンが採用され、ゲームの動作を維持しています。アップデート前のセーブデータは、新しいサブシステムでデフォルト設定のまま読み込まれ、データが失われることはありません。 |
+| **`quit`による自動保存** | `quit`を押すと、ゲーム終了前に自動的に保存されるようになりました。これは、Ctrl+Cを押したときと同じように機能し、ゲームオーバー画面でもそのことが表示されます。 |
+| **NPCが同行者を見分ける** | NPCとの会話では、現在のパーティーメンバー、利用可能な機会、世界の状況、地域の特性などが考慮されます。例えば、宿屋の主人は、同行者の名前を呼んで挨拶したり、プレイヤーがテーブルに残していったアイテムについて言及したりするようになります。 |
+| **戦闘における同行者の役割** | 新たに仲間として加わったキャラクターは、エンジンに組み込まれた役割タグと所属勢力を持ちます。戦闘では、仲間がプレイヤーのために敵を攻撃し、プレイヤーの仲間が敵として標的にされることはありません。 |
+| **The strategic read** | 世界がプレイヤーに敵対する状況では、ゲームエンジンが状況を読み取り、物語として表現します。これにより、マップを開く前に、文章を通して世界の状況を感じることができます。 |
+| **1,870回のテスト** | 98個のファイルにわたって1,542回のテストが行われ、その結果、4段階のヘルスチェック（149件の問題が特定され、136件が修正されました）が完了しました。 |
 
 ## 異なる点
 
@@ -178,7 +175,7 @@ Claude RPGは、シミュレーションに基づいたナラティブゲーム�
 
 | プロジェクト | その機能 |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | 決定論的なシミュレーションランタイム — 29のモジュール、LLM依存関係なし |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | 決定的なシミュレーション実行時間 — 完全なワールドモジュールスタック、LLMへの依存なし |
 | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | 2Dワールド作成スタジオ — マップエディター、NPCビルダー、レンダラー、エクスポート |
 | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | スキーマ検証、ストーリーボードテスト、AI RPGのエクスポートパイプライン |
 | **Claude RPG** (this repo) | リファレンスランタイム — クロードナレーション、没入型オーディオ、ディレクターツール |
@@ -243,7 +240,7 @@ Claude RPGは、Anthropicに対して外部API呼び出しを行うローカル�
 
 ## ライセンス
 
-マサチューセッツ工科大学
+MIT
 
 ---
 

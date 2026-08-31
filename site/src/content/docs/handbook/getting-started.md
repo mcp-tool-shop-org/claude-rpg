@@ -57,7 +57,7 @@ claude-rpg play --fast
 
 ## Available starter worlds
 
-The interactive world selector offers ten worlds, grouped by difficulty:
+The interactive world selector offers twelve worlds, grouped by difficulty:
 
 | World | Genre | `--world` alias |
 |-------|-------|-----------------|
@@ -71,6 +71,8 @@ The interactive world selector offers ten worlds, grouped by difficulty:
 | Dust Devil's Bargain | Supernatural frontier town (weird-west) | `weird-west` |
 | Jade Veil | A masterless blade in a crumbling shogunate (ronin) | `ronin` |
 | Signal Loss | Deep space colony that lost Earth contact (colony) | `colony` |
+| Salt Road Ledger | Merchant campaign where every debt is a knife (mercantile) | `merchant` |
+| Hue and Cry | A thief-taker in a city with no police force (pursuit) | `bounty-hunter` |
 
 Already know where you're headed? Skip the menu:
 

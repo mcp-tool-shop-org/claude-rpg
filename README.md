@@ -6,7 +6,7 @@
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
 </p>
 
-<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
+<p align="center"><em>Twelve worlds. One narrator. The engine keeps the truth.</em></p>
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -23,7 +23,7 @@ A simulation-grounded campaign RPG where Claude stages the story, the engine pre
 
 ## What Is Claude RPG?
 
-Claude RPG sits on top of the [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — a deterministic simulation runtime with 29 modules covering combat, cognition, perception, factions, rumors, belief provenance, NPC agency, companions, player leverage, strategic maps, item recognition, equipment provenance, emergent opportunities, campaign arc detection, and endgame triggers. Claude's job is to interpret, narrate, and speak. The engine's job is to own truth.
+Claude RPG sits on top of the [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) — a deterministic simulation runtime whose module stack covers combat, cognition, perception, factions, rumors, belief provenance, NPC agency, companions, player leverage, strategic maps, item recognition, equipment provenance, emergent opportunities, campaign arc detection, and endgame triggers. Claude's job is to interpret, narrate, and speak. The engine's job is to own truth.
 
 The golden rule: **Claude proposes, engine disposes.**
 
@@ -61,7 +61,7 @@ npx @mcptoolshop/claude-rpg play
 ## Quick Start
 
 ```bash
-# Play — interactive world and character selection (ten worlds, grouped by difficulty)
+# Play — interactive world and character selection (twelve worlds, grouped by difficulty)
 npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
@@ -83,22 +83,19 @@ Set your Anthropic API key (only needed for Claude narration):
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## What's New in v1.6.0
+## What's New in v1.7.0
 
-v1.6 makes the ten-world roster real, gives defeat real weight, and makes the narrator resilient when the network isn't.
+v1.7 moves the whole game onto engine 3.9 — ten minor versions in one migration, with every old save still loading — and spends the new surface on the things you feel at the table.
 
 | Feature | What it means |
 |---------|--------------|
-| **Ten playable worlds** | Iron Colosseum (gladiator), Jade Veil (ronin), and Crimson Court (vampire) join the roster — ten worlds, grouped by difficulty in the chooser. |
-| **`--world` flag** | `npx @mcptoolshop/claude-rpg play --world gladiator` skips the menu straight into a named world. Ten aliases, all listed in `--help`. |
-| **Death is a setback** | Falling in combat fades to a distinct death screen and gates your actions until you rise — campaigns end deliberately through `/conclude`, never by one bad fight. |
-| **Streaming narration** | Prose renders as the narrator writes it, not after. |
-| **`/cost` on demand** | Session token usage and estimated spend, without spending anything to ask. |
-| **A spinner that tells the truth** | During API retries the thinking spinner reports the attempt and cause — "still thinking (retry 1/2 — rate limit reached)". Sustained outages switch the fallback prose to an honest "this is still happening". |
-| **Ambient world chatter** | Background NPCs go about their lives — a merchant checking prices, a guard scanning the crowd — flavored per world, at zero API cost. |
-| **NPCs remember, even across saves** | Conversation memory now persists through save/load: what you told the guard two sessions ago still shapes what they say. |
-| **Names, not slugs** | Status bar, recaps, and save listings show "Penitent Knight", never `penitent-knight`. Sound cues read as words, never `white_noise`. |
-| **1,542 tests** | Grown from 625 across 95 files, with per-path coverage floors enforced in CI. |
+| **Twelve playable worlds** | Salt Road Ledger (a merchant campaign where every debt is a knife) and Hue and Cry (a thief-taker in a city with no police force) join the roster — twelve worlds, grouped by difficulty in the chooser. |
+| **Engine 3.9 under the hood** | Ten minor engine versions adopted in one behavior-preserving migration. Saves written before the upgrade load with every new subsystem defaulted, never dropped. |
+| **`quit` auto-saves** | Typing `quit` now saves before exiting, the same way Ctrl+C always has — and the death screen finally tells the truth about it. |
+| **NPCs notice who's with you** | Dialogue is fed live party presence, open opportunities, world pressures, and zone texture — the innkeeper can greet your companion by name and lean on the deal you left on the table. |
+| **Companions count in combat** | Recruited allies now carry their engine-native role tags and shared faction: fighters intercept for you, and nobody on your side is ever targeted as an enemy again. |
+| **The strategic read** | When the world turns against you, narration carries the engine's own situation read — pressure you can feel in the prose before you open the map. |
+| **1,870 tests** | Grown from 1,542 across 98 files, with the whole four-stage health pass (149 findings filed, 136 fixed) behind them. |
 
 ## Why It's Different
 
@@ -178,7 +175,7 @@ Claude RPG is one piece of a larger toolchain for building simulation-grounded n
 
 | Project | What It Does |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Deterministic simulation runtime — 29 modules, zero LLM dependencies |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Deterministic simulation runtime — full living-world module stack, zero LLM dependencies |
 | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | 2D world authoring studio — map editor, NPC builder, renderer, export |
 | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | Schema validation, storyboard testing, AI RPG export pipelines |
 | **Claude RPG** (this repo) | Reference runtime — Claude narration, immersion audio, director tools |
@@ -190,7 +187,7 @@ Claude RPG depends on these [@ai-rpg-engine](https://github.com/mcp-tool-shop-or
 | Package | Purpose |
 |---------|---------|
 | [`@ai-rpg-engine/core`](https://www.npmjs.com/package/@ai-rpg-engine/core) | State, entities, actions, events, rules, RNG |
-| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | 29 modules — combat, cognition, perception, factions, rumors, NPC agency, companions, leverage, strategic map, item recognition, emergent opportunities |
+| [`@ai-rpg-engine/modules`](https://www.npmjs.com/package/@ai-rpg-engine/modules) | The living-world module stack — combat, cognition, perception, factions, rumors, NPC agency, companions, leverage, strategic map, item recognition, emergent opportunities |
 | [`@ai-rpg-engine/character-profile`](https://www.npmjs.com/package/@ai-rpg-engine/character-profile) | Character progression, injuries, reputation |
 | [`@ai-rpg-engine/equipment`](https://www.npmjs.com/package/@ai-rpg-engine/equipment) | Equipment, item provenance, relic growth, chronicles |
 | [`@ai-rpg-engine/campaign-memory`](https://www.npmjs.com/package/@ai-rpg-engine/campaign-memory) | Cross-session memory, relationship effects |

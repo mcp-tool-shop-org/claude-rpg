@@ -6,7 +6,7 @@
   <img src="https://raw.githubusercontent.com/mcp-tool-shop-org/claude-rpg/main/site/public/banner.jpg" width="800" alt="Ten glowing world-gates in a dark gallery — a lone traveler with a lantern chooses between them">
 </p>
 
-<p align="center"><em>Ten worlds. One narrator. The engine keeps the truth.</em></p>
+<p align="center"><em>Twelve worlds. One narrator. The engine keeps the truth.</em></p>
 
 <p align="center">
   <a href="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml"><img src="https://github.com/mcp-tool-shop-org/claude-rpg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -61,7 +61,7 @@ npx @mcptoolshop/claude-rpg play
 ## Começo Rápido
 
 ```bash
-# Play — interactive world and character selection (ten worlds, grouped by difficulty)
+# Play — interactive world and character selection (twelve worlds, grouped by difficulty)
 npx @mcptoolshop/claude-rpg play
 
 # Jump straight into a named world
@@ -83,22 +83,19 @@ Defina sua chave de API Anthropic (necessária apenas para a narração de Claud
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## O que há de novo na v1.6.0
+## O que há de novo na versão 1.7.0
 
-A v1.6 torna o conjunto de dez mundos real, dá peso real à derrota e torna o narrador resiliente quando a rede não está disponível.
+Na versão 1.7, todo o jogo é transferido para o motor 3.9 — dez versões menores em uma única atualização, com todos os arquivos de salvamento antigos ainda funcionando — e a nova versão concentra-se nos elementos que você sente durante o jogo.
 
 | Recurso | O que significa |
 |---------|--------------|
-| **Ten playable worlds** | Coliseu de Ferro (gladiador), Véu de Jade (ronin) e Corte Carmesim (vampiro) se juntam ao elenco — dez mundos, agrupados por dificuldade no seletor. |
-| **Flag `--world`** | `npx @mcptoolshop/claude-rpg play --world gladiator` ignora o menu e vai direto para um mundo específico. Dez aliases, todos listados em `--help`. |
-| **Death is a setback** | Cair em combate leva a uma tela de morte distinta e limita suas ações até que você se levante — as campanhas terminam deliberadamente através de `/conclude`, nunca por causa de uma única luta ruim. |
-| **Streaming narration** | A prosa é renderizada enquanto o narrador a escreve, não depois. |
-| **`/cost` sob demanda** | Uso do token da sessão e gasto estimado, sem gastar nada para perguntar. |
-| **Um indicador que diz a verdade** | Durante as tentativas de API, o indicador de "pensamento" relata a tentativa e a causa — "ainda pensando (tentativa 1/2 — limite de taxa atingido)". Falhas prolongadas alternam a prosa de fallback para um honesto "isso ainda está acontecendo". |
-| **Ambient world chatter** | NPCs de fundo seguem com suas vidas — um mercador verificando os preços, um guarda examinando a multidão — com sabor específico para cada mundo, sem custo de API. |
-| **NPCs se lembram, mesmo entre salvamentos** | A memória da conversa agora persiste durante o salvamento/carregamento: o que você disse ao guarda duas sessões atrás ainda influencia o que ele diz. |
-| **Names, not slugs** | A barra de status, os resumos e as listas de salvamento mostram "Cavaleiro Penitente", nunca `penitent-knight`. As dicas sonoras são lidas como palavras, nunca `white_noise`. |
-| **1.542 testes** | Aumentou de 625 em 95 arquivos, com limites mínimos de cobertura por caminho aplicados no CI. |
+| **Twelve playable worlds** | Salt Road Ledger (uma campanha de mercador onde cada dívida é uma arma) e Hue and Cry (um caçador de ladrões em uma cidade sem força policial) juntam-se à lista — doze mundos, agrupados por dificuldade no menu de seleção. |
+| **Engine 3.9 under the hood** | Dez versões menores do motor foram adotadas em uma única atualização que preserva o comportamento do jogo. Os arquivos de salvamento criados antes da atualização são carregados com todos os novos subsistemas definidos como padrão, e nunca são perdidos. |
+| **`quit` salvamentos automáticos** | Ao digitar `quit`, o jogo agora salva antes de sair, da mesma forma que sempre funcionou com Ctrl+C — e a tela de morte finalmente revela a verdade sobre isso. |
+| **Os NPCs notam quem está com você** | O diálogo é atualizado em tempo real com a presença do grupo, oportunidades abertas, pressões do mundo e características da zona — o dono da estalagem pode cumprimentar seu companheiro pelo nome e fazer referência ao acordo que você deixou em aberto. |
+| **Os companheiros contam no combate** | Os aliados recrutados agora possuem as etiquetas de função nativas do motor e compartilham a mesma facção: os lutadores interceptam os inimigos por você, e ninguém do seu lado será mais alvo como inimigo. |
+| **The strategic read** | Quando o mundo se volta contra você, a narrativa apresenta a situação atual do jogo — uma pressão que você pode sentir na descrição antes de abrir o mapa. |
+| **1.870 testes** | Aumentou de 1.542 em 98 arquivos, com todo o processo de quatro etapas para verificar a integridade (149 problemas identificados, 136 corrigidos) concluído. |
 
 ## Por que é diferente
 
@@ -178,7 +175,7 @@ Claude RPG é uma parte de um conjunto de ferramentas maior para construir jogos
 
 | Projeto | O que ele faz |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Runtime de simulação determinística — 29 módulos, sem dependências do LLM. |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Tempo de execução de simulação determinístico — conjunto completo de módulos de mundo dinâmico, sem dependências de LLM. |
 | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | Estúdio de criação de mundo 2D — editor de mapa, criador de NPCs, renderizador e exportação. |
 | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | Validação de esquema, testes de storyboard, pipelines de exportação de RPG com IA. |
 | **Claude RPG** (this repo) | Runtime de referência — narração de Claude, áudio imersivo, ferramentas de direção. |

@@ -41,6 +41,7 @@ import {
   type BinCliBundle,
   type CliHandle,
 } from '../helpers/bin-cli-harness.js';
+import type { WorldGenProposal } from '../../src/foundry/world-gen.js';
 
 /** Counts non-overlapping occurrences of a literal substring (mirrors sfx-humanization-cli.test.ts's identical local helper). */
 function countOccurrences(haystack: string, needle: string): number {
@@ -160,6 +161,172 @@ describe('real-process retry path — dialogue turn (F-e44285c0)', () => {
       // in-process fake harness -- plus exactly 1 forced retry from this
       // turn's own flaky window above.
       expect(callsForThisTurn).toBe(3);
+      expect(cli.stdout()).not.toContain('Unexpected error');
+
+      cli.sendLine('quit');
+      const exitCode = await cli.waitForExit();
+      expect(exitCode).toBe(0);
+    } finally {
+      await cleanupCliTestResources({ cli, server, homeDir });
+    }
+  }, 20000);
+});
+
+// F-d102b95a: F-e44285c0 named FOUR latency paths needing real-process retry
+// coverage -- narration and dialogue are closed by the two blocks above;
+// this block and the one below close the remaining two (world-gen, finale),
+// the exact "later-path targets" startFlakyAfterAnthropicServer's own doc
+// comment (bin-cli-harness.ts:236-253) already names. Neither path is
+// reachable from the two describe blocks above: `new` (this block) is a
+// distinct bin.ts entry point from `load`, never spawned by any existing
+// real-process test, and `/conclude` (the block below) is a slash command
+// no existing real-process test ever sends.
+describe('real-process retry path — world-gen (F-d102b95a)', () => {
+  it('a retryable (429) failure on the world-gen call triggered by `new` is retried for real through claude-adapter.ts and the world is still created', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-retry-worldgen-home-'));
+    // No writeFantasySave here -- `new` (bin.ts:266-296) builds a fresh
+    // world from a prompt; there is no save to select or load.
+
+    // Mirrors src/foundry/world-gen.test.ts's own makeValidProposal()
+    // fixture (already proven there to make generateWorld() succeed
+    // end-to-end, including engine construction). generateStructured()
+    // (world-gen's generateWorld()) needs the response to BE a bare JSON
+    // object matching WorldGenProposal, not plain prose -- the default
+    // canned text would fail claude-adapter.ts's bare-{...} JSON match and
+    // silently route generateWorld's own shape-retry loop (MAX_ATTEMPTS=3)
+    // into a second/third attempt instead of proving one clean HTTP-level
+    // retry.
+    const validProposal: WorldGenProposal = {
+      title: 'Test World',
+      theme: 'fantasy',
+      toneGuide: 'dark and brooding',
+      ruleset: {
+        id: 'test-rules',
+        name: 'Test Rules',
+        stats: [{ id: 'str', name: 'Strength', default: 10 }],
+        resources: [{ id: 'hp', name: 'HP', default: 100, max: 100 }],
+      },
+      zones: [
+        { id: 'town-square', roomId: 'town-square', name: 'Town Square', tags: [], neighbors: ['market'], light: 7 },
+        { id: 'market', roomId: 'market', name: 'Market', tags: [], neighbors: ['town-square'], light: 5 },
+      ],
+      factions: [
+        { id: 'guard', name: 'Town Guard', disposition: 'neutral', description: 'Protectors', memberIds: ['guard-1'] },
+      ],
+      npcs: [
+        {
+          id: 'guard-1',
+          name: 'Guard Captain',
+          type: 'npc',
+          tags: ['guard'],
+          zoneId: 'town-square',
+          personality: 'stern',
+          goals: ['protect the town'],
+          stats: { str: 12 },
+          resources: { hp: 80 },
+          beliefs: [{ subject: 'town', key: 'safety', value: 'high', confidence: 0.8 }],
+        },
+      ],
+      player: {
+        name: 'Hero',
+        stats: { str: 10 },
+        resources: { hp: 100 },
+        startZoneId: 'town-square',
+      },
+      quests: [
+        { id: 'q1', name: 'First Quest', description: 'Do something', stages: [{ id: 's1', description: 'Step 1' }] },
+      ],
+    };
+
+    // No unconditional-success calls before the flaky window -- world-gen's
+    // own generateStructured() call is the very first request `new` makes.
+    // Request 1 fails 429; request 2 (retried) succeeds with the JSON body.
+    const server = await startFlakyAfterAnthropicServer(0, 1, JSON.stringify(validProposal));
+    let cli: CliHandle | undefined;
+
+    try {
+      cli = spawnCli(bundle.entryPath, ['new', 'A pirate-infested trade port'], {
+        ...process.env,
+        ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+        ANTHROPIC_BASE_URL: server.url,
+        HOME: homeDir,
+        USERPROFILE: homeDir,
+      });
+
+      // withRetry's real backoff (DEFAULT_RETRY.initialDelayMs = 1000ms) is
+      // genuinely awaited here, same as the narration block above. Waiting
+      // for this exact line (bin.ts:768) BEFORE reading server.callCount()
+      // isolates the count to world-gen's own single generateStructured()
+      // call, before the subsequent opening-narration call (runNew ->
+      // runGameLoop, bin.ts:796) adds a third request.
+      await cli.waitForStdout('World "Test World" created!', 15000);
+
+      // The real HTTP-level proof: exactly 2 requests hit the mock server
+      // (the forced 429, then the retried 200) for world-gen's own single
+      // generateStructured() call.
+      expect(server.callCount()).toBe(2);
+      expect(cli.stdout()).not.toContain('Unexpected error');
+
+      await cli.waitForStdout('  > ');
+      cli.sendLine('quit');
+      const exitCode = await cli.waitForExit();
+      expect(exitCode).toBe(0);
+    } finally {
+      await cleanupCliTestResources({ cli, server, homeDir });
+    }
+  }, 20000);
+});
+
+// F-d102b95a: the finale half of F-e44285c0's remaining pair (see the
+// world-gen block above for the other). /conclude is reachable directly
+// from a freshly-loaded session with NO mode switch first -- GameSession.mode
+// defaults to 'play' (game.ts:410), and /conclude is dispatched from the
+// 'play'-mode inline slash-command chain (game.ts:906-973), a sibling of --
+// not gated behind -- the mode==='director' branch (game.ts:870-903).
+describe('real-process retry path — finale (F-d102b95a)', () => {
+  it('a retryable (429) failure on the /conclude epilogue call is retried for real through claude-adapter.ts and the conclusion screen still renders', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-retry-finale-home-'));
+    await writeFantasySave(join(homeDir, '.claude-rpg', 'saves'));
+    // Request 1 (opening narration on load) succeeds unconditionally; the
+    // epilogue call /conclude triggers is forced to fail once before
+    // succeeding -- same server config this file's dialogue block above
+    // already uses. finale-narrator.ts's attemptEpilogue (src/narrator/
+    // finale-narrator.ts:43-62) calls the plain client.generate() (prose),
+    // never generateStructured, so no JSON text override is needed here,
+    // unlike world-gen above.
+    const server = await startFlakyAfterAnthropicServer(1, 1);
+    let cli: CliHandle | undefined;
+
+    try {
+      cli = spawnCli(bundle.entryPath, ['load'], {
+        ...process.env,
+        ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+        ANTHROPIC_BASE_URL: server.url,
+        HOME: homeDir,
+        USERPROFILE: homeDir,
+      });
+
+      await cli.waitForStdout('Choose a save');
+      cli.sendLine('1');
+      await cli.waitForStdout('  > ');
+
+      // Baseline AFTER the opening narration's own request (call 1).
+      const callsBeforeTurn = server.callCount();
+
+      cli.sendLine('/conclude');
+      // withRetry's real backoff (DEFAULT_RETRY.initialDelayMs = 1000ms) is
+      // genuinely awaited here, same as the blocks above. 'CAMPAIGN
+      // CONCLUSION' is the exact heading renderConcludeOutput prints
+      // (game-presenter.ts:173).
+      await cli.waitForStdout('CAMPAIGN CONCLUSION', 20000);
+
+      // The real HTTP-level proof: exactly 2 requests hit the mock server
+      // for this turn (the forced 429, then the retried 200).
+      // narrateFinale's own same-turn fallback retry (finale-narrator.ts:
+      // 119-141) never fires -- claude-adapter.ts's withRetry already
+      // absorbed the failure one layer down, so attemptEpilogue's first
+      // attempt itself comes back ok.
+      expect(server.callCount() - callsBeforeTurn).toBe(2);
       expect(cli.stdout()).not.toContain('Unexpected error');
 
       cli.sendLine('quit');

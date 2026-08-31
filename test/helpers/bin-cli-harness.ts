@@ -445,6 +445,26 @@ export type CliHandle = {
   spawnError: () => Error | undefined;
 };
 
+/**
+ * task_74f8e121: CI runners (cold shared VMs) run the spawned CLI slower
+ * than any dev machine — the v1.7.0 Release workflow flaked at the old
+ * flat 15s ceiling on a wait that is green locally and on warm runners.
+ * One env-scaled factor gives CI 3x headroom while local feedback stays
+ * fast. Call sites that need more than the base express it through
+ * scaledWaitMs() instead of flat per-call constants, so the CI scaling
+ * applies everywhere uniformly. Every consumer is a POSITIVE
+ * appearance-wait: a larger ceiling can never fail a passing test earlier,
+ * it only tolerates runner slowness.
+ */
+const CI_WAIT_SCALE = process.env.CI ? 3 : 1;
+
+/** Scale a locally-calibrated wait ceiling for the current environment. */
+export function scaledWaitMs(localMs: number): number {
+  return localMs * CI_WAIT_SCALE;
+}
+
+const DEFAULT_WAIT_MS = scaledWaitMs(15000); // 15s local / 45s CI
+
 /** Spawns the bundled bin.cjs as a real child process with piped stdio. */
 export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessEnv): CliHandle {
   let stdoutBuf = '';
@@ -504,9 +524,9 @@ export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessE
     sendLine: (line: string) => {
       child.stdin.write(`${line}\n`);
     },
-    waitForStdout: (pattern, timeoutMs = 15000) => waitFor(() => stdoutBuf, pattern, timeoutMs, 'stdout'),
-    waitForStderr: (pattern, timeoutMs = 15000) => waitFor(() => stderrBuf, pattern, timeoutMs, 'stderr'),
-    waitForStdoutCount: (needle, minCount, timeoutMs = 15000) =>
+    waitForStdout: (pattern, timeoutMs = DEFAULT_WAIT_MS) => waitFor(() => stdoutBuf, pattern, timeoutMs, 'stdout'),
+    waitForStderr: (pattern, timeoutMs = DEFAULT_WAIT_MS) => waitFor(() => stderrBuf, pattern, timeoutMs, 'stderr'),
+    waitForStdoutCount: (needle, minCount, timeoutMs = DEFAULT_WAIT_MS) =>
       new Promise((resolve, reject) => {
         const satisfied = () => countOccurrences(stdoutBuf, needle) >= minCount;
         if (satisfied()) {
@@ -528,7 +548,7 @@ export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessE
           ));
         }, timeoutMs);
       }),
-    waitForExit: (timeoutMs = 15000) =>
+    waitForExit: (timeoutMs = DEFAULT_WAIT_MS) =>
       new Promise((resolve, reject) => {
         if (child.exitCode !== null) {
           resolve(child.exitCode);

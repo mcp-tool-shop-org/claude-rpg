@@ -51,13 +51,14 @@ import {
   cleanupCliTestResources,
   type BinCliBundle,
   type CliHandle,
+  scaledWaitMs,
 } from '../helpers/bin-cli-harness.js';
 
 let bundle: BinCliBundle;
 
 beforeAll(async () => {
   bundle = await bundleBinCli();
-}, 30000);
+}, scaledWaitMs(30000));
 
 afterAll(async () => {
   await bundle.cleanup();
@@ -93,7 +94,7 @@ describe('bin.ts `load` against an empty save directory (F-95569ed3)', () => {
 
     const exitCode = await cli.waitForExit();
     expect(exitCode).toBe(0);
-  }, 15000);
+  }, scaledWaitMs(15000));
 });
 
 describe('bin.ts `archive` against an empty save directory (F-95569ed3: no test/** coverage of the real archive subcommand existed before this file)', () => {
@@ -128,7 +129,7 @@ describe('bin.ts `archive` against an empty save directory (F-95569ed3: no test/
 
     const exitCode = await cli.waitForExit();
     expect(exitCode).toBe(0);
-  }, 15000);
+  }, scaledWaitMs(15000));
 });
 
 describe('bin.ts `load` against a corrupted or future-version save (F-95569ed3)', () => {
@@ -168,7 +169,7 @@ describe('bin.ts `load` against a corrupted or future-version save (F-95569ed3)'
     // Node exception dump.
     expect(cli.stderr()).toContain('Exiting.');
     expect(cli.stderr()).not.toMatch(/at Object\.|at async |node:internal/);
-  }, 15000);
+  }, scaledWaitMs(15000));
 
   it('a save with no recognizable version metadata (fixture: no-version.json) is selectable from the real save picker, then rejected with a structured message on stderr and a clean exit 1 -- not a raw stack trace', async () => {
     homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-load-noversion-home-'));
@@ -198,5 +199,5 @@ describe('bin.ts `load` against a corrupted or future-version save (F-95569ed3)'
     expect(cli.stderr()).toContain('no version metadata');
     expect(cli.stderr()).toContain('Exiting.');
     expect(cli.stderr()).not.toMatch(/at Object\.|at async |node:internal/);
-  }, 15000);
+  }, scaledWaitMs(15000));
 });

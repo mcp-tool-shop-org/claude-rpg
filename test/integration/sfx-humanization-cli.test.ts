@@ -48,6 +48,7 @@ import {
   cleanupCliTestResources,
   type BinCliBundle,
   type CliHandle,
+  scaledWaitMs,
 } from '../helpers/bin-cli-harness.js';
 
 /**
@@ -71,7 +72,7 @@ let bundle: BinCliBundle;
 
 beforeAll(async () => {
   bundle = await bundleBinCli();
-}, 30000);
+}, scaledWaitMs(30000));
 
 afterAll(async () => {
   await bundle.cleanup();
@@ -110,7 +111,7 @@ describe('sfx cue humanization reaches real player-visible stdout (F-9998efb0)',
       const promptCountBeforeTurn = countOccurrences(cli.stdout(), '  > ');
 
       cli.sendLine('attack pilgrim');
-      await cli.waitForStdoutCount('  > ', promptCountBeforeTurn + 1, 15000);
+      await cli.waitForStdoutCount('  > ', promptCountBeforeTurn + 1);
 
       // "warning sounds" is today's exact raw-template-plus-registry-label
       // output (renderSfxLine's `  · ${effect} sounds`, effect resolved to
@@ -122,5 +123,5 @@ describe('sfx cue humanization reaches real player-visible stdout (F-9998efb0)',
     } finally {
       await cleanupCliTestResources({ cli, server, homeDir });
     }
-  }, 20000);
+  }, scaledWaitMs(20000));
 });

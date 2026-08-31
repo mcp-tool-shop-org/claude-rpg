@@ -40,6 +40,7 @@ import {
   cleanupCliTestResources,
   type BinCliBundle,
   type CliHandle,
+  scaledWaitMs,
 } from '../helpers/bin-cli-harness.js';
 import type { WorldGenProposal } from '../../src/foundry/world-gen.js';
 
@@ -61,7 +62,7 @@ let bundle: BinCliBundle;
 
 beforeAll(async () => {
   bundle = await bundleBinCli();
-}, 30000);
+}, scaledWaitMs(30000));
 
 afterAll(async () => {
   await bundle.cleanup();
@@ -91,7 +92,7 @@ describe('real-process retry path (F-99dc64ac infrastructure gap this domain clo
       // genuinely awaited here -- no injectable delayFn on this path
       // (createAdaptedClient never overrides it) -- so this needs real
       // wall-clock patience, not just the default waitFor timeout.
-      await cli.waitForStdout('  > ', 15000);
+      await cli.waitForStdout('  > ');
 
       // The real HTTP-level proof this test exists for: two requests hit
       // the mock server (the failed attempt, then the retried success),
@@ -106,7 +107,7 @@ describe('real-process retry path (F-99dc64ac infrastructure gap this domain clo
     } finally {
       await cleanupCliTestResources({ cli, server, homeDir });
     }
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-e44285c0 (wave 8 amend): ADDENDUM-COMMON.md's Stage-C lens item 2 names
@@ -150,7 +151,7 @@ describe('real-process retry path — dialogue turn (F-e44285c0)', () => {
       const callsBeforeTurn = server.callCount();
 
       cli.sendLine('talk to pilgrim');
-      await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, 20000);
+      await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(20000));
 
       const callsForThisTurn = server.callCount() - callsBeforeTurn;
       // Measured at this wave's HEAD (2026-08-31, this exact scenario): a
@@ -169,7 +170,7 @@ describe('real-process retry path — dialogue turn (F-e44285c0)', () => {
     } finally {
       await cleanupCliTestResources({ cli, server, homeDir });
     }
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-d102b95a: F-e44285c0 named FOUR latency paths needing real-process retry
@@ -259,7 +260,7 @@ describe('real-process retry path — world-gen (F-d102b95a)', () => {
       // isolates the count to world-gen's own single generateStructured()
       // call, before the subsequent opening-narration call (runNew ->
       // runGameLoop, bin.ts:796) adds a third request.
-      await cli.waitForStdout('World "Test World" created!', 15000);
+      await cli.waitForStdout('World "Test World" created!');
       expect(cli.stdout()).not.toContain('Unexpected error');
 
       // Coordinator stitch (wave 13): reading callCount() at the created!
@@ -276,7 +277,7 @@ describe('real-process retry path — world-gen (F-d102b95a)', () => {
     } finally {
       await cleanupCliTestResources({ cli, server, homeDir });
     }
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-d102b95a: the finale half of F-e44285c0's remaining pair (see the
@@ -320,7 +321,7 @@ describe('real-process retry path — finale (F-d102b95a)', () => {
       // genuinely awaited here, same as the blocks above. 'CAMPAIGN
       // CONCLUSION' is the exact heading renderConcludeOutput prints
       // (game-presenter.ts:173).
-      await cli.waitForStdout('CAMPAIGN CONCLUSION', 20000);
+      await cli.waitForStdout('CAMPAIGN CONCLUSION', scaledWaitMs(20000));
 
       // The real HTTP-level proof: exactly 2 requests hit the mock server
       // for this turn (the forced 429, then the retried 200).
@@ -337,5 +338,5 @@ describe('real-process retry path — finale (F-d102b95a)', () => {
     } finally {
       await cleanupCliTestResources({ cli, server, homeDir });
     }
-  }, 20000);
+  }, scaledWaitMs(20000));
 });

@@ -35,6 +35,7 @@ import {
   type BinCliBundle,
   type MockAnthropicServer,
   type CliHandle,
+  scaledWaitMs,
 } from '../helpers/bin-cli-harness.js';
 import { getPackById, resolveWorldFlag } from '../../src/character/packs.js';
 
@@ -42,7 +43,7 @@ let bundle: BinCliBundle;
 
 beforeAll(async () => {
   bundle = await bundleBinCli();
-}, 30000);
+}, scaledWaitMs(30000));
 
 afterAll(async () => {
   await bundle.cleanup();
@@ -77,7 +78,7 @@ describe('bin.ts --world flag — preselection skips the menu (F-8d865d50)', () 
     // script) to prove the readline interface is live and progressing
     // normally past the (skipped) world-selection step, not stuck.
     cli.sendLine('Test Hero');
-  }, 15000);
+  }, scaledWaitMs(15000));
 
   it("red in-worktree, green expected at merge (Coordinator Brief R5): an unrecognized --world value is a structured error with exit 1, never a silent fall-through to the interactive menu", async () => {
     cli = spawnCli(bundle.entryPath, ['play', '--world', 'not-a-real-world-xyz'], {
@@ -91,7 +92,7 @@ describe('bin.ts --world flag — preselection skips the menu (F-8d865d50)', () 
     // produces (it just sits at the interactive menu prompt indefinitely).
     const outcome = await Promise.race([
       cli.waitForExit(15000).then((code) => ({ kind: 'exit' as const, code })),
-      cli.waitForStdout('Choose your world', 15000).then(() => ({ kind: 'menu-fallback' as const })),
+      cli.waitForStdout('Choose your world').then(() => ({ kind: 'menu-fallback' as const })),
     ]);
     expect(outcome.kind, 'expected a structured-error exit, but got a silent fall-through to the interactive menu instead').toBe('exit');
     if (outcome.kind === 'exit') {
@@ -103,7 +104,7 @@ describe('bin.ts --world flag — preselection skips the menu (F-8d865d50)', () 
     // silence -- rather than guessing the exact wording, which R5 doesn't
     // pin.
     expect(cli.stderr().trim().length).toBeGreaterThan(0);
-  }, 20000);
+  }, scaledWaitMs(20000));
 
   // Table-driven across every alias resolveWorldFlag() recognizes
   // (src/character/packs.ts:118-136). Each spawn only needs to reach the
@@ -124,12 +125,12 @@ describe('bin.ts --world flag — preselection skips the menu (F-8d865d50)', () 
       ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
     });
     try {
-      await handle.waitForStdout(pack.meta.name, 15000);
+      await handle.waitForStdout(pack.meta.name);
       expect(handle.stdout()).not.toContain('Choose your world');
     } finally {
       await cleanupCliTestResources({ cli: handle });
     }
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 describe('bin.ts --world flag — interaction with the load path (F-8d865d50)', () => {
@@ -174,5 +175,5 @@ describe('bin.ts --world flag — interaction with the load path (F-8d865d50)', 
     cli.sendLine('quit');
     const exitCode = await cli.waitForExit();
     expect(exitCode).toBe(0);
-  }, 20000);
+  }, scaledWaitMs(20000));
 });

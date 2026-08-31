@@ -33,6 +33,7 @@ import {
   type BinCliBundle,
   type MockAnthropicServer,
   type CliHandle,
+  scaledWaitMs,
 } from '../helpers/bin-cli-harness.js';
 import { loadSession } from '../../src/session/session.js';
 
@@ -51,7 +52,7 @@ let bundle: BinCliBundle;
 
 beforeAll(async () => {
   bundle = await bundleBinCli();
-}, 30000);
+}, scaledWaitMs(30000));
 
 afterAll(async () => {
   await bundle.cleanup();
@@ -119,7 +120,7 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
     // top-level `main().catch()`, which unconditionally calls
     // process.exit(1) — no second prompt would ever print, and this
     // would time out.)
-    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, 5000);
+    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(5000));
     const promptsAfterTurn = countStdoutPrompts(cli.stdout());
     expect(promptsAfterTurn).toBeGreaterThan(promptsBeforeTurn);
 
@@ -138,7 +139,7 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
     // sequencing (not e.g. every call silently succeeding, which would
     // make the stderr assertions above vacuous) is what actually ran.
     expect(server.callCount()).toBe(2);
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-2af28d17: attemptExitAutosave's 'rejected' branch (src/cli/exit-autosave.ts,
@@ -226,7 +227,7 @@ describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits',
     const exitCode = await cli.waitForExit();
     expect(exitCode).toBe(0);
     expect(cli.stdout()).toContain('Farewell.');
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-6eed28b9: the describe block above only ever writes a save whose
@@ -308,7 +309,7 @@ describe('bin.ts exit-autosave — saved path reaches real SIGINT/EOF exits', ()
     expect(new Date(postSave.session.savedAt).getTime()).toBeGreaterThan(
       new Date(preSave.session.savedAt).getTime(),
     );
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-276d4e75: grepping test/** for NO_COLOR/isTTY/isColorEnabled/raw ANSI
@@ -375,7 +376,7 @@ describe('bin.ts NO_COLOR / non-TTY output — full run is provably colorless (F
     const promptsBeforeTurn = countStdoutPrompts(cli.stdout());
 
     cli.sendLine('look');
-    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, 20000);
+    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(20000));
 
     cli.sendLine('quit');
     const exitCode = await cli.waitForExit();
@@ -384,7 +385,7 @@ describe('bin.ts NO_COLOR / non-TTY output — full run is provably colorless (F
 
     expect(cli.stdout()).not.toContain('\x1b[');
     expect(cli.stderr()).not.toContain('\x1b[');
-  }, 20000);
+  }, scaledWaitMs(20000));
 });
 
 // F-b6e89ebb: locks in the file-level beforeAll/afterAll hoist above.

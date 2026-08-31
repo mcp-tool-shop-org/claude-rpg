@@ -37,15 +37,31 @@ function richSave(): SavedSession {
     genre: 'fantasy',
     chronicleRecords: JSON.stringify(journal.serialize().records),
     campaignStatus: 'completed',
+    // Coordinator stitch (wave 6): these fixtures predate the guarded
+    // loaders (F-d521bb19 arcSnapshot, F-5d6fe829 chronicle-export reuse).
+    // A hand-authored minimal shape that a real save could never produce
+    // now loads as null — completed to the validator's contract (tick +
+    // full signal fields; totalChronicleEvents + keyMoments) so the tests
+    // exercise the rich path they were written for.
     arcSnapshot: JSON.stringify({
       dominantArc: 'rising-power',
       momentum: 'accelerating',
-      signals: [{ kind: 'rising-power', momentum: 'accelerating' }],
+      tick: 30,
+      signals: [{ kind: 'rising-power', strength: 0.8, momentum: 'accelerating', primaryDrivers: ['reputation'], turnsActive: 12 }],
     }),
     finaleOutline: JSON.stringify({
       dominantArc: 'rising-power',
       resolutionClass: 'victory',
       campaignDuration: 30,
+      totalChronicleEvents: 4,
+      // Non-empty on purpose: chronicle-export uses `outline?.keyMoments ??
+      // getTopEvents(journal)` — a present-but-empty array suppresses the
+      // journal fallback, and the validator requires the array to exist, so
+      // a rich fixture carries real, chronologically-ascending moments.
+      keyMoments: [
+        { tick: 3, category: 'kill', description: 'Slew the Crypt Warden', significance: 0.95 },
+        { tick: 12, category: 'alliance', description: 'Won over Sister Maren', significance: 0.7 },
+      ],
       factionFates: [{ factionId: 'guardians', fate: 'diminished', reason: 'Player hostility' }],
       npcFates: [{ npcId: 'pilgrim', name: 'Suspicious Pilgrim', fate: 'ally', reason: 'Joined party' }],
       companionFates: [{ name: 'Suspicious Pilgrim', outcome: 'survived' }],

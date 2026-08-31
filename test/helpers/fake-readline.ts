@@ -56,6 +56,16 @@ export function createFakeReadline(answers: string[]): FakeReadline {
     close(): void {
       /* no-op */
     },
+    // Coordinator stitch (wave 6): F-3a8ccf9c's promptText registers
+    // rl.once('close', …) and removes it with rl.off(…) so stdin-EOF can't
+    // hang character creation. This double answers every question and never
+    // closes, so inert listener registration is the faithful behavior.
+    once(): void {
+      /* no-op — see above */
+    },
+    off(): void {
+      /* no-op — see above */
+    },
     get consumed() {
       return consumed;
     },

@@ -56,6 +56,12 @@ function makeScriptedRl(opts: { acceptAnswers?: string[] } = {}): { rl: Readline
       }
       cb(answer);
     },
+    // Coordinator stitch (wave 6): F-3a8ccf9c's promptText now guards
+    // against stdin-close hangs via rl.once('close', …)/rl.off(…) — this
+    // mock answers synchronously and never closes, so no-op listeners are
+    // the faithful shape.
+    once: () => {},
+    off: () => {},
   } as unknown as ReadlineInterface;
 
   return { rl, prompts };

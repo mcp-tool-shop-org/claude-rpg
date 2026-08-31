@@ -22,8 +22,12 @@ describe('unhandled rejection safety net', () => {
 
     const exitCode = presentError(err, 'startup', false);
 
-    // startup + unknown error => exitCode null (reprompt semantics)
-    expect(exitCode).toBeNull();
+    // Coordinator stitch (wave 6), deliberate INVERSION of the old pin:
+    // F-cdbe6d09 makes 'startup' fatal (exitCode 1) — bin.ts's
+    // unhandledRejection handler force-exits right after presenting, so a
+    // null/"try again" presentation contradicted what the process actually
+    // did. Fatal styling now matches the force-exit.
+    expect(exitCode).toBe(1);
     expect(writeSpy).toHaveBeenCalled();
     const output = writeSpy.mock.calls.map((c) => String(c[0])).join('');
     // Structured output has the "Unexpected error" headline, not a raw stack
@@ -36,7 +40,8 @@ describe('unhandled rejection safety net', () => {
 
     const exitCode = presentError('unexpected string rejection', 'startup', false);
 
-    expect(exitCode).toBeNull();
+    // Inverted with the sibling above (F-cdbe6d09): startup is fatal now.
+    expect(exitCode).toBe(1);
     expect(writeSpy).toHaveBeenCalled();
     const output = writeSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(output).toContain('Unexpected error');

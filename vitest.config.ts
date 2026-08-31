@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -6,7 +6,19 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts'],
+      // F-5ba54290: coverage.exclude is spread AFTER coverageConfigDefaults
+      // by @vitest/coverage-v8's BaseCoverageProvider._initialize
+      // ({...coverageConfigDefaults, ...config}), so an exclude array here
+      // wholesale-REPLACES Vitest's own defaults rather than extending them.
+      // Vitest's defaults also cover *.spec.ts, hyphenated *-test.ts,
+      // *.bench.ts/*.benchmark.ts, and **/__tests__/** -- none of which the
+      // previous two-entry list covered. Spreading coverageConfigDefaults.exclude
+      // alongside the two project-specific entries means a *.spec.ts or
+      // *.bench.ts file colocated under src/ (an ordinary alternate test
+      // convention this repo doesn't use today) can never be silently
+      // miscounted as production code against the ratcheted floors below,
+      // and future Vitest default additions are inherited automatically.
+      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', ...coverageConfigDefaults.exclude],
       // Layer 1 — global hygiene floor (stops total collapse)
       // F-ce3b86de: ratcheted with headroom below actuals measured via a
       // full `vitest run --coverage` at this wave's HEAD (statements

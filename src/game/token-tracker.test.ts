@@ -4,6 +4,16 @@ import type { ClaudeClient } from '../claude-client.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
 
 describe('SessionTokenTracker (FT-B-004)', () => {
+  // F-5e805e01: formatCostSummary's disclaimer line now wraps to
+  // getTerminalWidth() (see token-tracker.ts's wrapNoteLine), so any test
+  // in this describe block that pins process.stdout.columns must restore it
+  // afterward -- matching the discipline the divider-convention block below
+  // already established, and needed now by the disclosure test just below
+  // that pins a wide terminal so the line stays unwrapped.
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
   it('should record and retrieve tokens by call type', () => {
     const tracker = new SessionTokenTracker();
     tracker.record('interpretation', 100, 50);
@@ -73,6 +83,12 @@ describe('SessionTokenTracker (FT-B-004)', () => {
   });
 
   it('discloses that interpretation-call cost is not counted in the total (F-9713d34a)', () => {
+    // F-5e805e01: pinned wide so the disclaimer line's assertion below
+    // (a contiguous substring spanning a wrap point at narrower widths)
+    // stays valid regardless of the ambient test-runner terminal width --
+    // this test is about the disclosure existing, not about wrapping (that
+    // gets its own narrow-width coverage in the divider-convention block).
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
     const tracker = new SessionTokenTracker();
     tracker.record('narration', 1000, 500);
 
@@ -107,6 +123,37 @@ describe('SessionTokenTracker (FT-B-004)', () => {
       const width = getTerminalWidth();
       const dividerLines = lines.filter((l) => l === '─'.repeat(width));
       expect(dividerLines.length).toBeGreaterThanOrEqual(2);
+    });
+
+    // F-5e805e01: the disclaimer line ('  Note: cost from interpreting your
+    // actions isn't included below — the real total is higher.', 92 chars)
+    // used to be pushed raw into dim(...), so a narrow terminal hard-wrapped
+    // it wherever it fell -- verified live, slicing at 40-column boundaries
+    // splits both 'actions' ('acti'/'ons') and 'total' ('tota'/'l') mid-
+    // word. Now routed through wrapNoteLine, which word-wraps without ever
+    // splitting a word.
+    it('word-wraps the disclosure note without splitting a word, with a hanging indent, at a 40-column floor (F-5e805e01)', () => {
+      Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+      const tracker = new SessionTokenTracker();
+      tracker.record('narration', 100, 50);
+
+      const summary = tracker.formatCostSummary();
+      const lines = summary.split('\n');
+      const noteLines = lines.filter((l) => /Note:|interpreting|actions|included|higher\./.test(l));
+
+      // Confirms it actually wrapped at this width (a single 92-char line
+      // would never fit in 40 columns).
+      expect(noteLines.length).toBeGreaterThan(1);
+      for (const line of noteLines) {
+        expect(line.length).toBeLessThanOrEqual(40);
+      }
+      // Every word survives intact across the wrap -- none split mid-word.
+      expect(summary).toContain('interpreting');
+      expect(summary).toContain('actions');
+      expect(summary).toContain("isn't");
+      expect(summary).toContain('included');
+      expect(summary).toContain('total');
+      expect(summary).toContain('higher.');
     });
   });
 

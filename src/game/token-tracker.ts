@@ -3,6 +3,7 @@
 import type { ClaudeClient } from '../claude-client.js';
 import { dim } from '../cli/colors.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
+import { wrapWords } from '../display/help-system.js';
 
 export type CallType = 'interpretation' | 'narration' | 'dialogue' | 'other';
 
@@ -21,6 +22,31 @@ export type CostEstimate = {
 // Sonnet pricing: $3/MTok input, $15/MTok output
 const INPUT_COST_PER_TOKEN = 3 / 1_000_000;
 const OUTPUT_COST_PER_TOKEN = 15 / 1_000_000;
+
+/**
+ * F-5e805e01: formatCostSummary's disclaimer line (below) was a single
+ * unwrapped string pushed unconditionally into every /cost summary, unlike
+ * the divider two lines above it in the same function, which is explicitly
+ * sized via getTerminalWidth() per F-3453d747's own doc comment -- the same
+ * overflow bug class as this wave's sibling fix in game-presenter.ts's
+ * renderConcludeOutput (see that file's wrapTrailerLine) and the fixes
+ * already on record for it elsewhere (help-system.ts's
+ * renderNameDescriptionRow, F-a17315ac/F-d36903d0/F-1367afd9; play-renderer.
+ * ts's wrapStatusLine, F-7eff9b3a). This line is one flowing sentence, not
+ * a list of discrete segments, so it reuses help-system.ts's shared
+ * wrapWords primitive directly (the plain word-wrap-with-hanging-indent
+ * treatment renderNameDescriptionRow also builds on) rather than
+ * wrapTrailerLine's segment-aware variant. Lead and continuation lines
+ * share the same indent -- unlike renderNameDescriptionRow's name-column
+ * hang -- so the width budget passed to wrapWords bounds every returned
+ * line identically; there is no separate, differently-sized indent that
+ * could push a continuation line past getTerminalWidth(). Byte-identical
+ * to the old raw string when it fits on one line.
+ */
+function wrapNoteLine(text: string, indent: string): string {
+  const wrapped = wrapWords(text, getTerminalWidth() - indent.length);
+  return wrapped.map((line) => `${indent}${line}`).join('\n');
+}
 
 export class SessionTokenTracker {
   private records: Map<CallType, TokenRecord> = new Map();
@@ -89,7 +115,14 @@ export class SessionTokenTracker {
     // the number was structurally partial. This line makes the scope of the
     // total honest without requiring the cross-domain StructuredResult
     // change the doc comment below describes.
-    lines.push(dim("  Note: cost from interpreting your actions isn't included below — the real total is higher."));
+    lines.push(
+      dim(
+        wrapNoteLine(
+          "Note: cost from interpreting your actions isn't included below — the real total is higher.",
+          '  ',
+        ),
+      ),
+    );
     const allTypes: CallType[] = ['interpretation', 'narration', 'dialogue', 'other'];
     for (const callType of allTypes) {
       const record = this.getRecord(callType);

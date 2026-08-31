@@ -308,21 +308,32 @@ describe('presentation seam — real turn integration (F-f9b5f874)', () => {
 
     // Defensive fixture setup, not a mock of anything under test: a fresh
     // createGame() world's player starts with only 8 stamina and "attack"
-    // costs 1, but @ai-rpg-engine/starter-fantasy's createGame() has been
-    // observed (empirically, against this exact dependency version) to
-    // share player.resources.stamina across separate createGame() calls
-    // within one process, so a run of many prior tests in this file can
-    // leave too little stamina left for "attack" to resolve as
-    // combat.contact.miss/hit and instead reject the action outright with
-    // no combat.* event at all. Pinning both combatants' resources directly
-    // on the real engine -- the same idiom src/action-interpreter.test.ts
-    // already uses against a real createGame() engine (`engine.world.entities[engine.world.playerId]`)
-    // -- makes this test's outcome depend only on the real presentation
-    // seam under test, not on stamina left over from execution order.
+    // costs some of it, and the hit/miss roll is genuinely RNG-driven, so
+    // without pinning, "attack" could resolve as a stamina-rejected no-op
+    // (no combat.* event at all) instead of combat.contact.miss/hit. Pinning
+    // both combatants' resources directly on the real engine -- the same
+    // idiom src/action-interpreter.test.ts already uses against a real
+    // createGame() engine (`engine.world.entities[engine.world.playerId]`)
+    // -- makes this test's outcome depend only on the real presentation seam
+    // under test, not on the RNG roll or starting resource levels.
     // Pilgrim's hp is pinned high too so the hit/miss roll can't coincidentally
     // one-shot it into combat.entity.defeated, which would route this turn
     // through combatEndHook (aftermath) instead of the combat-start seam
     // this case exists to prove.
+    //
+    // F-1c93a004 (wave-2 tests domain): an earlier revision of this comment
+    // attributed the low-stamina risk to createGame() "observed (empirically,
+    // against this exact dependency version)" to share player.resources.stamina
+    // across separate calls within one process. That premise is false at
+    // every dependency version this repo has ever pinned: WorldStore.
+    // addEntity() detaches its argument via structuredClone at ingestion --
+    // engine CHANGELOG.md credits this as v2.7.0's root-cause fix for the
+    // F-71ec5dcd cross-instance state-bleed class, two-plus minor versions
+    // before this repo's original 2.9.0 pin, and it is unchanged at the
+    // current 3.9.0 (ai-rpg-engine/packages/core/src/world.ts). Each
+    // createGame() call already gets its own independent world; the pins
+    // above exist to stabilize the RNG-driven hit/miss outcome
+    // deterministically, not to work around a real leak.
     const world = h.session.engine.world;
     world.entities[world.playerId].resources.stamina = 999;
     const pilgrim = Object.values(world.entities).find((e) => e.id === 'pilgrim');

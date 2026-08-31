@@ -297,3 +297,50 @@ describe('buildCharacter cancel keyword (F-f480fef1)', () => {
     expect(printed).toContain('Character creation cancelled. No character was created.');
   });
 });
+
+// F-7360c1a0: the Character Summary header -- the closing screen of
+// character creation, shown to every new player right before they accept
+// their character -- used to be a bare `── Character Summary ──` line
+// matching neither of this domain's two established header idioms.
+// Promoted to the full-width divider()+ALL-CAPS convention (matching
+// sheet.ts's CHARACTER SHEET / recap.ts's LAST TIME ON CLAUDE RPG), framed
+// top and bottom, same as this wave's F-8e8ac939 fix to its five sibling
+// files in this domain.
+describe('buildCharacter Character Summary header (F-7360c1a0)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+    vi.restoreAllMocks();
+  });
+
+  it('renders CHARACTER SUMMARY in ALL CAPS instead of the old bare hyphen-bracketed title, framed top and bottom by a full-width divider', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { rl } = makeScriptedRl();
+
+    await buildCharacter(rl);
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).not.toContain('── Character Summary ──');
+    expect(printed).toContain('CHARACTER SUMMARY');
+    // divider() is called before the header, after the header, and again
+    // after the Resources line -- three full-width rules framing the screen.
+    const dividerCount = printed.split('═'.repeat(40)).length - 1;
+    expect(dividerCount).toBeGreaterThanOrEqual(3);
+  });
+
+  it('divider width tracks the terminal instead of a fixed width', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 100, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { rl } = makeScriptedRl();
+
+    await buildCharacter(rl);
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('═'.repeat(100));
+    // A 100-char run trivially contains any shorter same-character run as a
+    // substring, so proving this ISN'T hardcoded needs a probe ONE LONGER
+    // than the real width (never a substring of it) -- the same technique
+    // recap.test.ts's/sheet.test.ts's own F-e475c46d width tests already use.
+    expect(printed).not.toContain('═'.repeat(101));
+  });
+});

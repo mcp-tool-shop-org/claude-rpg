@@ -298,3 +298,77 @@ describe('wrapMenuLine (F-6ed5f350: narrow-width hang-indent)', () => {
     }
   });
 });
+
+// F-5f8defa0: promptMenu/promptMultiSelect rendered each row as a single
+// raw, unwrapped `    N. label — description` string with no width-aware
+// wrap, unlike this file's own promptGroupedMenu (tested above), which
+// already routes every row through wrapMenuLine(). builder.ts calls
+// promptMenu for archetype/background/discipline and promptMultiSelect for
+// traits -- both now get the same treatment as the grouped world-select menu.
+describe('promptMenu / promptMultiSelect row wrapping (F-5f8defa0)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+    vi.restoreAllMocks();
+  });
+
+  // Same label/description pair as the wrapMenuLine 'wraps a long line...'
+  // test above, so the wrap behavior itself is already proven correct there
+  // -- this only needs to prove promptMenu/promptMultiSelect actually route
+  // through it now.
+  const longLabel = 'A Very Long World Name Indeed';
+  const longDesc = 'a description that goes on for quite a while and will not fit on one narrow line';
+
+  it('promptMenu: a short row prints unwrapped at a comfortable width (unchanged)', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['1']);
+    await promptMenu(rl, 'Pick:', [{ label: 'Alpha', description: 'a fine choice' }]);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('    1. Alpha — a fine choice');
+  });
+
+  it('promptMenu: a long row wraps at a narrow width with a hanging indent, matching promptGroupedMenu', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['1']);
+    await promptMenu(rl, 'Pick:', [{ label: longLabel, description: longDesc }]);
+
+    // Row lines are the only console.log calls indented 4+ spaces (title and
+    // "please enter a number" messages sit at 2 spaces).
+    const rowLines = logSpy.mock.calls.map((c) => c.join(' ')).filter((l) => l.startsWith('    '));
+    expect(rowLines).not.toContain(`    1. ${longLabel} — ${longDesc}`);
+    expect(rowLines.length).toBeGreaterThan(1);
+    // A hanging-indented continuation row exists alongside the base-indented
+    // first row (4-space row indent + wrapMenuLine's own 2-space hang = 6).
+    expect(rowLines.some((l) => l.startsWith('      '))).toBe(true);
+    expect(rowLines.some((l) => !l.startsWith('      '))).toBe(true);
+    // Every word survives once the wrapped rows are rejoined.
+    const reassembled = rowLines.map((l) => l.trim()).join(' ');
+    expect(reassembled).toContain(longLabel);
+    expect(reassembled).toContain(longDesc);
+  });
+
+  it('promptMultiSelect: a short row prints unwrapped at a comfortable width (unchanged)', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['1']);
+    await promptMultiSelect(rl, 'Pick:', [{ label: 'Alpha', description: 'a fine choice' }], 1);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('    1. Alpha — a fine choice');
+  });
+
+  it('promptMultiSelect: a long row wraps at a narrow width with a hanging indent', async () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['1']);
+    await promptMultiSelect(rl, 'Pick:', [{ label: longLabel, description: longDesc }], 1);
+
+    const rowLines = logSpy.mock.calls.map((c) => c.join(' ')).filter((l) => l.startsWith('    '));
+    expect(rowLines).not.toContain(`    1. ${longLabel} — ${longDesc}`);
+    expect(rowLines.length).toBeGreaterThan(1);
+    expect(rowLines.some((l) => l.startsWith('      '))).toBe(true);
+    const reassembled = rowLines.map((l) => l.trim()).join(' ');
+    expect(reassembled).toContain(longLabel);
+    expect(reassembled).toContain(longDesc);
+  });
+});

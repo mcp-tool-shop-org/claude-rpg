@@ -5,6 +5,7 @@ import type { CampaignRecord } from '@ai-rpg-engine/campaign-memory';
 import type { CompactedChronicle, EraSummary } from '../session/chronicle.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
 import { dim } from '../cli/colors.js';
+import { wrapMenuLine } from './prompts.js';
 
 // F-3a024f07: were both a fixed 60-char divider, uncolored, unlike every
 // other divider in the display layer (play-renderer.ts's PFE-005, and
@@ -17,6 +18,30 @@ function divider(): string {
 }
 function heavyDivider(): string {
   return dim('═'.repeat(getTerminalWidth()));
+}
+
+/**
+ * F-dd7a85ca: none of this file's three render modes wrapped long content to
+ * terminal width -- renderRecordTimeline/renderRecordBardic/
+ * renderDirectorChronicle each pushed one unwrapped string per CampaignRecord,
+ * even though the file already imports getTerminalWidth() (used only for its
+ * dividers until now). Worst case was renderDirectorChronicle's data line,
+ * which appended JSON.stringify(record.data) with no length bound at all.
+ * Reuses prompts.ts's wrapMenuLine (one word-wrap+hanging-indent algorithm
+ * codebase-wide, not a second hand-rolled copy) rather than a dedicated
+ * helper. wrapMenuLine's own budget assumes a 4-space caller indent (its doc
+ * comment); this file's rows sit at a 2- or 4-space indent depending on
+ * caller, so at the narrower indent lines wrap a little earlier than the
+ * strict minimum requires -- the safe direction (never overflow), matching
+ * wrapStatusLine's own documented rationale for a similar over-count. Every
+ * returned line (first and continuation alike) gets `indent` prefixed, so
+ * continuation lines land `indent.length + 2` columns in -- a hanging indent
+ * relative to the first line, the same shape wrapMenuLine's own callers use.
+ */
+function wrapContentLine(indent: string, content: string): string {
+  return wrapMenuLine(content)
+    .map((line) => `${indent}${line}`)
+    .join('\n');
 }
 
 export type ChronicleRenderMode = 'timeline' | 'bardic' | 'director';
@@ -92,7 +117,7 @@ function renderTimeline(
 
 function renderRecordTimeline(record: CampaignRecord): string {
   const sig = record.significance >= 0.7 ? ' *' : '';
-  return `  [Tick ${record.tick}] ${record.description} (${record.category}${sig})`;
+  return wrapContentLine('  ', `[Tick ${record.tick}] ${record.description} (${record.category}${sig})`);
 }
 
 function renderEraTimeline(era: EraSummary): string {
@@ -205,7 +230,7 @@ function renderRecordBardic(record: CampaignRecord, name: string): string {
   const openerIndex = ((record.tick % openers.length) + openers.length) % openers.length;
   const opener = openers[openerIndex].replace('{name}', name);
   const desc = record.description.charAt(0).toLowerCase() + record.description.slice(1);
-  return `  ${capitalize(opener)} ${desc}.`;
+  return wrapContentLine('  ', `${capitalize(opener)} ${desc}.`);
 }
 
 function renderEraBardic(era: EraSummary, name: string): string {
@@ -255,13 +280,15 @@ function renderDirectorChronicle(chronicle: CompactedChronicle): string {
       ? ` witnesses:[${record.witnesses.join(',')}]`
       : '';
     lines.push(
-      `  ${record.id} | tick:${record.tick} | ${record.category} | actor:${record.actorId}${target}${zone}`,
+      wrapContentLine('  ', `${record.id} | tick:${record.tick} | ${record.category} | actor:${record.actorId}${target}${zone}`),
     );
     lines.push(
-      `    sig:${record.significance.toFixed(2)}${witnesses} | "${record.description}"`,
+      wrapContentLine('    ', `sig:${record.significance.toFixed(2)}${witnesses} | "${record.description}"`),
     );
     if (Object.keys(record.data).length > 0) {
-      lines.push(`    data:${JSON.stringify(record.data)}`);
+      // F-dd7a85ca: the worst case named by this finding -- an unbounded
+      // JSON.stringify(record.data) dump with no length cap at all.
+      lines.push(wrapContentLine('    ', `data:${JSON.stringify(record.data)}`));
     }
   }
 

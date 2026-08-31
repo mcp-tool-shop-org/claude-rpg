@@ -179,3 +179,101 @@ describe('renderChronicle timeline era-events indent (F-3a024f07)', () => {
     expect(result).not.toContain('    - found the old map');
   });
 });
+
+// F-dd7a85ca: none of this file's three render modes wrapped long content to
+// terminal width before this fix -- renderRecordTimeline/renderRecordBardic/
+// renderDirectorChronicle each pushed one unwrapped string per record, worst
+// case being renderDirectorChronicle's data line, which appended
+// JSON.stringify(record.data) with no length bound at all. All three now
+// route through a local wrapContentLine helper that reuses prompts.ts's
+// wrapMenuLine (word-wrap + hanging indent), the same helper this domain's
+// promptMenu/promptMultiSelect/promptGroupedMenu already use. Mirrors
+// wrapMenuLine's own test shape (fits-on-one-line unchanged /
+// wraps-with-hanging-indent-and-preserves-every-word when long).
+describe('renderChronicle content wrapping (F-dd7a85ca)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  it('timeline: a short record description is not wrapped at a comfortable width (unchanged)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const chronicle = makeChronicle([makeRecord({ tick: 5, category: 'kill', description: 'defeated a bandit' })]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+    expect(result).toContain('  [Tick 5] defeated a bandit (kill)');
+  });
+
+  it('timeline: a long record description wraps at a narrow width, hanging-indented, with every word preserved', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const longDesc = 'discovered a hidden passage beneath the old chapel leading to a forgotten shrine untouched for a hundred years';
+    const chronicle = makeChronicle([makeRecord({ tick: 5, category: 'kill', description: longDesc, significance: 0.3 })]);
+    const result = renderChronicle(chronicle, 'timeline', 'Kael');
+
+    // No longer one raw unwrapped line...
+    expect(result.split('\n')).not.toContain(`  [Tick 5] ${longDesc} (kill)`);
+    // ...but every word survives intact once the wrapped lines are rejoined.
+    const reassembled = result.split('\n').map((l) => l.trim()).join(' ').replace(/\s+/g, ' ');
+    expect(reassembled).toContain(`[Tick 5] ${longDesc} (kill)`);
+    // Continuation lines hang-indent deeper than a plain single-indent row.
+    expect(result).toContain('\n    ');
+    for (const line of result.split('\n')) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it('bardic: a short record description is not wrapped at a comfortable width (unchanged)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const chronicle = makeChronicle([makeRecord({ tick: 5, category: 'kill', description: 'defeated a bandit' })]);
+    const result = renderChronicle(chronicle, 'bardic', 'Kael');
+    // tick 5 % 3 openers.length(3) -> index 2 -> "fate demanded blood, and
+    // {name} answered — defeating"
+    expect(result).toContain('  Fate demanded blood, and Kael answered — defeating defeated a bandit.');
+  });
+
+  it('bardic: a long record description wraps at a narrow width with every word preserved', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const longDesc = 'stumbled upon a hidden passage beneath the old chapel leading to a forgotten shrine untouched for a hundred years';
+    const chronicle = makeChronicle([makeRecord({ tick: 5, category: 'discovery', description: longDesc, significance: 0.3 })]);
+    const result = renderChronicle(chronicle, 'bardic', 'Kael');
+
+    const reassembled = result.split('\n').map((l) => l.trim()).join(' ').replace(/\s+/g, ' ');
+    expect(reassembled).toContain(longDesc);
+    for (const line of result.split('\n')) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it('director: short id/sig lines are not wrapped at a comfortable width (unchanged)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+    const chronicle = makeChronicle([makeRecord()]);
+    const result = renderChronicle(chronicle, 'director');
+    expect(result).toContain('  rec-1 | tick:5 | kill | actor:player');
+    expect(result).toContain('    sig:0.50 | "defeated a bandit"');
+  });
+
+  it('director: a large data payload no longer renders as one unbounded JSON line -- the worst case this finding names', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const bigData = {
+      itemsFound: ['ancient coin', 'rusted key', 'tattered map', 'silver locket'],
+      location: 'the old cistern beneath the abandoned mill',
+    };
+    const rawJsonLine = `    data:${JSON.stringify(bigData)}`;
+    const chronicle = makeChronicle([makeRecord({ data: bigData })]);
+    const result = renderChronicle(chronicle, 'director');
+
+    // Before this fix this was rendered as ONE raw line well over 100 chars.
+    expect(rawJsonLine.length).toBeGreaterThan(100);
+    expect(result.split('\n')).not.toContain(rawJsonLine);
+    // Word-wrap only ever breaks BETWEEN space-separated tokens, never mid-
+    // token, but a two-word phrase like "ancient coin" could still land split
+    // across a line break -- reassemble before checking content survived, the
+    // same technique wrapMenuLine's own test suite uses, rather than
+    // asserting on the raw (possibly line-broken) result directly.
+    const reassembled = result.split('\n').map((l) => l.trim()).join(' ').replace(/\s+/g, ' ');
+    expect(reassembled).toContain('ancient coin');
+    expect(reassembled).toContain('cistern');
+
+    for (const line of result.split('\n')) {
+      expect(line.length).toBeLessThan(rawJsonLine.length);
+    }
+  });
+});

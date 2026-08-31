@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderSessionDelta, type SessionDelta } from './recap-delta.js';
 
 // --- renderSessionDelta (F-579e70a8: same incomplete-gate pattern as session-recap.ts) ---
@@ -119,5 +119,42 @@ describe('renderSessionDelta divider width (F-e475c46d)', () => {
     const result = renderSessionDelta(nonEmptyDelta);
     expect(result).toContain('─'.repeat(120));
     expect(result).not.toContain('─'.repeat(121));
+  });
+});
+
+// F-8e8ac939: divider() now wraps its rule in dim(), matching this same
+// wave's chronicle-renderer.ts precedent and the play-renderer.ts reference
+// pattern both already claimed to follow. dim() is a no-op in this file's
+// normal (non-TTY) test run (colors.ts's `enabled` gate, computed once at
+// module-load time), so proving the wrap actually happens needs a fresh
+// module import with isTTY forced true first -- mirrors
+// director-renderer.test.ts's established pattern for the same scenario.
+describe('renderSessionDelta divider color (F-8e8ac939)', () => {
+  const nonEmptyDelta: SessionDelta = {
+    xpGained: 0,
+    levelBefore: 1,
+    levelAfter: 1,
+    reputationChanges: [],
+    newMilestones: 1,
+    newInjuries: 0,
+    turnsPlayed: 0,
+  };
+
+  it('wraps the divider in dim() when color is enabled', async () => {
+    const originalIsTTY = process.stdout.isTTY;
+    const originalNoColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    try {
+      const mod = await import('./recap-delta.js');
+      const result = mod.renderSessionDelta(nonEmptyDelta);
+      expect(result).toContain('\x1b[2m'); // dim's SGR code
+    } finally {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+      if (originalNoColor === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = originalNoColor;
+      vi.resetModules();
+    }
   });
 });

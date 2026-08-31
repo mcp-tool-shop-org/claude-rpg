@@ -82,9 +82,18 @@ export async function promptMenu(
   items: Array<{ label: string; description?: string }>,
 ): Promise<number> {
   console.log(`\n  ${title}\n`);
+  // F-5f8defa0: rows used to print as a single unwrapped `    N. label — desc`
+  // string with no width-aware wrap, unlike this file's own promptGroupedMenu
+  // (below), which already routes every row through wrapMenuLine() at
+  // getTerminalWidth()-4 with a hanging indent. builder.ts calls this for
+  // archetype/background/discipline (3 of 7 character-creation steps every
+  // new player goes through) -- same row shape as the world-select menu that
+  // already got this fix, so it gets the same treatment.
   for (let i = 0; i < items.length; i++) {
     const desc = items[i].description ? ` — ${items[i].description}` : '';
-    console.log(`    ${i + 1}. ${items[i].label}${desc}`);
+    for (const rowLine of wrapMenuLine(`${i + 1}. ${items[i].label}${desc}`)) {
+      console.log(`    ${rowLine}`);
+    }
   }
   console.log('');
 
@@ -115,9 +124,13 @@ export async function promptMultiSelect(
   maxSelections: number,
 ): Promise<number[]> {
   console.log(`\n  ${title} (pick up to ${maxSelections})\n`);
+  // F-5f8defa0: same fix as promptMenu above -- route rows through
+  // wrapMenuLine() instead of a raw unwrapped `    N. label — desc` string.
   for (let i = 0; i < items.length; i++) {
     const desc = items[i].description ? ` — ${items[i].description}` : '';
-    console.log(`    ${i + 1}. ${items[i].label}${desc}`);
+    for (const rowLine of wrapMenuLine(`${i + 1}. ${items[i].label}${desc}`)) {
+      console.log(`    ${rowLine}`);
+    }
   }
   console.log('');
 
@@ -180,9 +193,11 @@ export type MenuGroup<T> = {
  * F-6ed5f350: neither this file nor builder.ts imported cli/colors.ts or a
  * terminal-width helper before this fix — a pre-existing, previously
  * unreported gap in this domain (not unique to the new grouped menu).
- * `-4` accounts for the 4-space indent promptGroupedMenu prints each row
- * with; a wider caller passing a differently-indented line would need its
- * own budget, but this file only ever calls it that one way.
+ * `-4` accounts for the 4-space indent every in-file caller prints each row
+ * with (originally just promptGroupedMenu; F-5f8defa0 brought promptMenu and
+ * promptMultiSelect's rows into the same convention); a caller passing a
+ * differently-indented line would need its own budget, but every caller in
+ * this file uses that one same 4-space shape.
  */
 export function wrapMenuLine(line: string): string[] {
   const width = Math.max(20, getTerminalWidth() - 4);

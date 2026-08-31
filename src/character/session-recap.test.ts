@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   computeFactionDeltas,
   computeRumorDelta,
@@ -432,5 +432,51 @@ describe('renderFullRecap divider width (F-4b8a3a39)', () => {
     expect(result).not.toContain('─'.repeat(121));
     expect(result).toContain('═'.repeat(120));
     expect(result).not.toContain('═'.repeat(121));
+  });
+});
+
+// F-8e8ac939: divider()/heavyDivider() now wrap their rules in dim(),
+// matching this same wave's chronicle-renderer.ts precedent and the
+// play-renderer.ts reference pattern both already claimed to follow. dim()
+// is a no-op in this file's normal (non-TTY) test run (colors.ts's
+// `enabled` gate, computed once at module-load time), so proving the wrap
+// actually happens needs a fresh module import with isTTY forced true first
+// -- mirrors director-renderer.test.ts's established pattern for the same
+// scenario.
+describe('renderFullRecap divider color (F-8e8ac939)', () => {
+  const nonEmptyCharacterDelta: SessionDelta = {
+    xpGained: 0,
+    levelBefore: 1,
+    levelAfter: 1,
+    reputationChanges: [],
+    newMilestones: 0,
+    newInjuries: 0,
+    turnsPlayed: 1,
+  };
+  const zeroWorldDelta: WorldDelta = {
+    pressuresSpawned: 0,
+    pressuresResolved: 0,
+    resolutionSummaries: [],
+    chainReactions: 0,
+    rumorsDelta: 0,
+  };
+  const zeroRumorDelta = { spawned: 0, mutated: 0, totalSpread: 0 };
+
+  it('wraps both the heavy and thin dividers in dim() when color is enabled', async () => {
+    const originalIsTTY = process.stdout.isTTY;
+    const originalNoColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    try {
+      const mod = await import('./session-recap.js');
+      const result = mod.renderFullRecap(nonEmptyCharacterDelta, zeroWorldDelta, [], zeroRumorDelta, []);
+      expect(result).toContain('\x1b[2m'); // dim's SGR code
+    } finally {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+      if (originalNoColor === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = originalNoColor;
+      vi.resetModules();
+    }
   });
 });

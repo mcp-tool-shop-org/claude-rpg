@@ -31,6 +31,21 @@ Rules:
   - merchant-blacklist: the NPC refuses trade or demands premium prices
   - faction-summons: the NPC insists the player comply, warns of consequences
   - revenge-attempt: the NPC is hostile, may ambush or betray
+  - heresy-whisper: religious NPCs grow suspicious, question the player's faith, may hedge their trust
+  - chapel-sanction: devout NPCs refuse aid or blessings, treat the player as spiritually unclean
+  - case-opened: the NPC (especially law-aligned) asks pointed questions, watches for inconsistencies
+  - witness-vanished: the NPC grows nervous discussing it, may suspect the player, answers cautiously
+  - mutiny-brewing: crew NPCs grumble, question orders, hint at taking matters into their own hands
+  - navy-bounty: NPCs eye the player as a wanted target, may inform on them or warn them to lie low
+  - infection-suspicion: the NPC keeps their distance, demands reassurance, may refuse close contact
+  - camp-panic: the NPC is on edge, hoards resources, may blame the player for the unrest
+  - corp-manhunt: the NPC is guarded and jumpy, may warn the player they're being hunted
+  - ice-escalation: net-savvy NPCs warn the digital space has grown more dangerous, urge caution
+  - supply-crisis: the NPC is anxious about shortages, may hoard, beg, or demand favors for scarce goods
+  - trade-war: the NPC is stressed over prices and instability, may take sides or complain about the factions
+  - black-market-boom: the NPC speaks carefully, may hint at illicit deals or warn the player to be discreet
+  - crafting-shortage: the NPC apologizes for being unable to craft or repair, may point to other sources
+  - Any pressure kind not listed above: infer NPC behavior from its urgency and the faction's relationship to the player
 - Pressures the NPC doesn't know about (hidden visibility) have no effect on dialogue
 - If the NPC has a current goal, steer conversation toward it subtly
 - Goal-aware speech: NPCs with a goal will try to advance it through dialogue (warn, bargain, accuse, recruit)

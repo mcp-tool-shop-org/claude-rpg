@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { formatPressureForDialogue, type WorldPressure } from '@ai-rpg-engine/modules';
 import {
   buildDialoguePrompt,
   buildDialogueSystemPrompt,
@@ -323,5 +324,117 @@ describe('buildDialoguePrompt voice style (FT-BR-005)', () => {
   it('should not inject voice when no archetype matches', () => {
     const prompt = buildDialoguePrompt({ ...baseInput, npcType: 'npc', npcTags: ['farmer'] });
     expect(prompt).not.toContain('Voice:');
+  });
+});
+
+// F-7459799a: activePressures now renders via the engine's own
+// formatPressureForDialogue instead of a hand-rolled copy of its
+// urgency-bucketing + line shape, and a new world-scoped worldPressureHint
+// line surfaces a pressure outside the speaker's own faction.
+describe('buildDialoguePrompt pressures (F-7459799a)', () => {
+  function makeFullPressure(overrides: Partial<WorldPressure> = {}): WorldPressure {
+    return {
+      id: 'wp-1',
+      kind: 'bounty-issued',
+      sourceFactionId: 'faction-1',
+      description: 'A bounty has been placed on your head.',
+      triggeredBy: 'milestone',
+      urgency: 0.8,
+      visibility: 'known',
+      turnsRemaining: 5,
+      potentialOutcomes: [],
+      tags: [],
+      createdAtTick: 1,
+      ...overrides,
+    } as WorldPressure;
+  }
+
+  it('renders a faction pressure line byte-identical to formatPressureForDialogue\'s own output', () => {
+    const fullPressure = makeFullPressure();
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      activePressures: [{
+        kind: fullPressure.kind,
+        description: fullPressure.description,
+        urgency: fullPressure.urgency,
+        visibility: fullPressure.visibility,
+      }],
+    });
+
+    expect(prompt).toContain(`  - ${formatPressureForDialogue(fullPressure)}`);
+  });
+
+  it('renders worldPressureHint under an "Elsewhere in the world:" section when present', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      worldPressureHint: 'trade-war (developing): Rival merchants are undercutting prices citywide.',
+    });
+
+    expect(prompt).toContain('Elsewhere in the world:');
+    expect(prompt).toContain('trade-war (developing): Rival merchants are undercutting prices citywide.');
+  });
+
+  it('does not render an "Elsewhere in the world" section when worldPressureHint is absent', () => {
+    const prompt = buildDialoguePrompt(baseInput);
+    expect(prompt).not.toContain('Elsewhere in the world');
+  });
+});
+
+// F-ff0b4af6: textureHint (zone-scoped body language, bare passthrough) and
+// partyPresence (mirrors narrate-scene.ts's "Party: " wording exactly).
+describe('buildDialoguePrompt textureHint and partyPresence (F-ff0b4af6)', () => {
+  it('renders textureHint verbatim when present', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      textureHint: 'The guard tenses, shifting weight foot to foot.',
+    });
+    expect(prompt).toContain('The guard tenses, shifting weight foot to foot.');
+  });
+
+  it('does not render anything extra when textureHint is absent', () => {
+    const withHint = buildDialoguePrompt({ ...baseInput, textureHint: 'x' });
+    const without = buildDialoguePrompt(baseInput);
+    expect(without).not.toContain('x');
+    expect(without.length).toBeLessThan(withHint.length);
+  });
+
+  it('renders partyPresence under "Party: ", matching narrate-scene.ts\'s wording', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      partyPresence: 'Accompanied by Rowan (fighter, confident)',
+    });
+    expect(prompt).toContain('Party: Accompanied by Rowan (fighter, confident)');
+  });
+
+  it('does not render a "Party:" line when partyPresence is absent', () => {
+    const prompt = buildDialoguePrompt(baseInput);
+    expect(prompt).not.toContain('Party:');
+  });
+});
+
+// F-d8184410: opportunityHint (speaker-scoped) renders as a distinct line
+// from the pre-existing world-scoped opportunityContext.
+describe('buildDialoguePrompt opportunityHint (F-d8184410)', () => {
+  it('renders opportunityHint under "Direct dealings with you:" when present', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      opportunityHint: 'contract (available): Recover the stolen ledger',
+    });
+    expect(prompt).toContain('Direct dealings with you: contract (available): Recover the stolen ledger');
+  });
+
+  it('renders opportunityHint alongside the existing world-scoped opportunityContext as two distinct lines', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      opportunityContext: 'escort quest (accepted)',
+      opportunityHint: 'contract (available): Recover the stolen ledger',
+    });
+    expect(prompt).toContain('Active commitment: escort quest (accepted)');
+    expect(prompt).toContain('Direct dealings with you: contract (available): Recover the stolen ledger');
+  });
+
+  it('does not render a "Direct dealings" line when opportunityHint is absent', () => {
+    const prompt = buildDialoguePrompt(baseInput);
+    expect(prompt).not.toContain('Direct dealings');
   });
 });

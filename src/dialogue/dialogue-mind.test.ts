@@ -449,3 +449,55 @@ describe('generateDialogue F-c3d1fcdf: consecutiveFallbacks escalates the stall 
     expect(seen.size).toBeGreaterThan(1);
   });
 });
+
+// F-d8184410 / F-ff0b4af6: activeOpportunities and partyPresence are new
+// trailing params generateDialogue forwards straight through to
+// buildNPCDialogueContext (mirroring how activePressures/lastNpcActions
+// already thread through) -- proving the plumbing is wired end-to-end within
+// this domain, ready for turn-loop.ts (outside this domain) to pass real
+// GameSession-tracked values the moment it's updated to do so.
+describe('generateDialogue F-d8184410/F-ff0b4af6: activeOpportunities/partyPresence passthrough', () => {
+  it('forwards activeOpportunities and partyPresence to buildNPCDialogueContext', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Welcome.');
+    const opportunities = [{ id: 'opp-1' }] as any;
+
+    await generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+      undefined, // playerPresence
+      undefined, // playerProfile
+      undefined, // playerRumors
+      undefined, // activePressures
+      undefined, // lastNpcActions
+      undefined, // economyContext
+      undefined, // craftingContext
+      undefined, // opportunityContext
+      undefined, // conversationHistory
+      undefined, // logger
+      undefined, // consecutiveFallbacks
+      opportunities,
+      'Accompanied by Test (fighter, confident)',
+    );
+
+    const forwardedArgs = mockedBuildContext.mock.calls[0];
+    expect(forwardedArgs[9]).toBe(opportunities); // activeOpportunities
+    expect(forwardedArgs[10]).toBe('Accompanied by Test (fighter, confident)'); // partyPresence
+  });
+
+  it('leaves both undefined when omitted, unchanged from before this fix', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Welcome.');
+
+    await generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy');
+
+    const forwardedArgs = mockedBuildContext.mock.calls[0];
+    expect(forwardedArgs[9]).toBeUndefined();
+    expect(forwardedArgs[10]).toBeUndefined();
+  });
+});

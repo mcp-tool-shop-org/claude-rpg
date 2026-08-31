@@ -13,11 +13,18 @@ import {
   getRumorsKnownToFaction,
   getPressuresForFaction,
   buildNpcProfile,
+  getPersistedNpcLastActions,
+  getVisiblePressures,
+  formatPressureForDialogue,
+  getOpportunitiesForNpc,
+  formatOpportunityForDialogue,
+  generateNpcTextures,
   type Belief,
   type Memory,
   type PlayerRumor,
   type WorldPressure,
   type NpcActionResult,
+  type OpportunityState,
 } from '@ai-rpg-engine/modules';
 import type { DialogueInput } from '../prompts/dialogue-npc.js';
 import { resolveVoiceArchetype } from '../prompts/dialogue-npc.js';
@@ -70,6 +77,28 @@ export function buildNPCDialogueContext(
   playerRumors?: PlayerRumor[],
   activePressures?: WorldPressure[],
   lastNpcActions?: NpcActionResult[],
+  /**
+   * F-d8184410: full opportunity roster, threaded the same way
+   * activePressures/playerRumors already are. NOT sourced via the engine's
+   * own getPersistedOpportunities(world) -- claude-rpg tracks opportunities
+   * as GameSession.activeOpportunities (game.ts), never calling
+   * setPersistedOpportunities, so world.modules['opportunity-core'] is
+   * never populated in this app's actual runtime. This param is the live
+   * data path; the caller (dialogue-mind.ts's generateDialogue) forwards it
+   * from wherever it's given one -- see that file's own matching param.
+   */
+  activeOpportunities?: OpportunityState[],
+  /**
+   * F-ff0b4af6 (party half): pre-formatted active-party-presence line, same
+   * contract as narrate-scene.ts's SceneNarrationInput.partyPresence. NOT
+   * computed here via getPartyState(world) -- claude-rpg tracks party state
+   * as GameSession.partyState (game.ts), never calling setPartyState, so
+   * world.modules['companion-core'] is never populated either. A caller
+   * that already has the formatted string (e.g. reusing game-state.ts's own
+   * getPartyPresence(world, partyState), which already calls the engine's
+   * formatPartyPresence) can pass it straight through.
+   */
+  partyPresence?: string,
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -128,6 +157,36 @@ export function buildNPCDialogueContext(
   // non-null cognition (it reads .suspicion/.morale unguarded); when this NPC
   // has no cognition state, substitute the same 50/30 defaults the returned
   // context uses for morale/suspicion below — keep the two in sync.
+  //
+  // F-962e800b (investigated, deliberately NOT switched to the engine's
+  // store): dialogue-core.ts's private dialogueBiasForSpeaker reads
+  // reputation from a DIFFERENT store -- (world.factions[factionId]
+  // ?.reputation ?? 0) + (world.globals['reputation_'+factionId] ?? 0) --
+  // than this line's getReputation(playerProfile, factionId), which reads
+  // CharacterProfile.reputation[]. Verified before "fixing" this: claude-rpg
+  // NEVER uses the engine's authored-dialogue-tree system (createDialogueCore
+  // is wired only for two scripted intro trees in starter content) or its
+  // 'reputation-adjust' effect -- grep across node_modules/@ai-rpg-engine and
+  // this app's own src/ finds zero writers of world.globals['reputation_*'].
+  // world.factions[factionId].reputation is a STATIC pack-authored baseline
+  // (e.g. starter-pirate ships -35/+15 per faction) never touched at
+  // runtime. Every reputation-affecting code path this app actually has --
+  // game.ts (x4), game/game-state.ts (x1), and this domain's own
+  // npc/agency.ts's 'reputation' NpcEffect handler -- calls
+  // @ai-rpg-engine/character-profile's adjustReputation, which writes ONLY
+  // to CharacterProfile.reputation[]. Switching this read to the
+  // world.factions/world.globals merge (as F-962e800b's fix spec's option
+  // (b) proposed) would therefore make dialogueBias permanently reflect each
+  // faction's static starting disposition and NEVER the player's actual
+  // in-game reputation swings -- a regression for this app, not a fix.
+  // Keeping the CharacterProfile read (option (a): document, don't switch)
+  // is the correct call for claude-rpg's actual architecture; see this
+  // file's npc-context.test.ts for the locked-in regression test. This DOES
+  // mean the engine's OTHER internal consumers of the world.factions/
+  // world.globals merge (trade-core.ts pricing, world-tick.ts pressure
+  // spawning) are themselves blind to the player's real reputation in this
+  // app -- that gap lives in game.ts/game-state.ts's write path, outside
+  // this domain, and is flagged separately rather than patched here.
   const repValue = factionId && playerProfile ? getReputation(playerProfile, factionId) : 0;
   const alertLevel = faction?.alertLevel ?? 0;
   const stance = deriveStance(repValue, cognition ?? { morale: 50, suspicion: 30 }, alertLevel);
@@ -172,6 +231,44 @@ export function buildNPCDialogueContext(
         }))
     : undefined;
 
+  // F-7459799a (scope half): world-scoped highest-urgency VISIBLE pressure,
+  // regardless of faction -- mirrors dialogue-core.ts's own private
+  // pressureHintForWorld exactly (getVisiblePressures + highest-urgency-first
+  // + formatPressureForDialogue), computed here against the FULL,
+  // untrimmed activePressures[] (before the faction-scoped trim above), so a
+  // rival faction's crisis the whole zone is talking about reaches the
+  // prompt even when it isn't the speaker's own faction's business.
+  let worldPressureHint: string | undefined;
+  if (activePressures) {
+    const visible = getVisiblePressures(activePressures);
+    if (visible.length > 0) {
+      let highest = visible[0];
+      for (let i = 1; i < visible.length; i++) {
+        if (visible[i].urgency > highest.urgency) highest = visible[i];
+      }
+      worldPressureHint = formatPressureForDialogue(highest);
+    }
+  }
+
+  // F-d8184410: speaker-scoped highest-urgency open opportunity -- mirrors
+  // dialogue-core.ts's own private opportunityHintForSpeaker's selection
+  // logic exactly (status 'available'|'accepted', visibility !== 'hidden',
+  // highest-urgency-first), sourced from the activeOpportunities param (see
+  // that param's own doc comment above for why this reads a threaded
+  // parameter rather than getPersistedOpportunities(world)).
+  let opportunityHint: string | undefined;
+  if (activeOpportunities) {
+    const open = getOpportunitiesForNpc(activeOpportunities, npcId)
+      .filter((o) => (o.status === 'available' || o.status === 'accepted') && o.visibility !== 'hidden');
+    if (open.length > 0) {
+      let highest = open[0];
+      for (let i = 1; i < open.length; i++) {
+        if (open[i].urgency > highest.urgency) highest = open[i];
+      }
+      opportunityHint = formatOpportunityForDialogue(highest);
+    }
+  }
+
   // v1.2: NPC agency context
   let npcGoal: string | undefined;
   let npcStance: string | undefined;
@@ -180,6 +277,8 @@ export function buildNPCDialogueContext(
   let isBargaining = false;
   let isWarning = false;
   let npcAgencyPresence: string | undefined;
+  // F-ff0b4af6 (texture half)
+  let textureHint: string | undefined;
 
   if (npc.ai) {
     const profile = buildNpcProfile(world, npcId, world.playerId, activePressures ?? [], playerRumors);
@@ -200,13 +299,38 @@ export function buildNPCDialogueContext(
     else if (rel.trust > 30) stanceParts.push('friendly');
     if (rel.greed > 60) stanceParts.push('mercenary');
     if (stanceParts.length > 0) npcStance = stanceParts.join(', ');
+
+    // F-ff0b4af6: zone-scoped body-language hint from the engine's own
+    // generateNpcTextures, fed the SAME profile just derived above (one
+    // buildNpcProfile call already paid for goal/stance derivation) --
+    // fully self-contained (no persisted-namespace dependency, unlike
+    // worldPressureHint/opportunityHint/partyPresence above): it reads only
+    // `profile` + `world.entities` (zone lookups) + `world.playerId`, all
+    // already live and required.
+    const textureHints = generateNpcTextures([profile], world, world.playerId);
+    if (textureHints.length > 0) textureHint = textureHints[0];
   }
 
-  // Check for recent NPC action
-  if (lastNpcActions) {
-    const hint = getNpcDialogueHint(npcId, lastNpcActions);
-    if (hint) npcRecentAction = hint;
-  }
+  // Check for recent NPC action.
+  // F-5c8be67d: source authoritatively from persisted world state (mirrors
+  // dialogue-core.ts's own private dialogueHintForSpeaker) when the caller
+  // doesn't explicitly pass one, instead of silently producing no hint the
+  // way an omitted optional param used to. NOTE (verified, not assumed):
+  // getPersistedNpcLastActions(world) reads world.modules['npc-agency'],
+  // which claude-rpg never populates today -- runNpcAgencyTick (this
+  // domain's own npc/agency.ts) returns its NpcActionResult[] directly to
+  // its caller and nothing in this app calls setPersistedNpcState -- so this
+  // fallback resolves to [] in production exactly like the old `undefined`
+  // did. The one production caller (dialogue-mind.ts's generateDialogue)
+  // still delivers real hints via its own explicit lastNpcActions argument,
+  // which takes precedence here (`??` only falls through when the caller
+  // omits it entirely). This removes the silent-omission failure mode for
+  // ANY caller that doesn't thread the array (this file's own tests
+  // included), and activates for free the moment a future write-side fix
+  // calls setPersistedNpcState.
+  const effectiveLastActions = lastNpcActions ?? getPersistedNpcLastActions(world);
+  const recentActionHint = getNpcDialogueHint(npcId, effectiveLastActions);
+  if (recentActionHint) npcRecentAction = recentActionHint;
 
   return {
     npcName: npc.name,
@@ -224,6 +348,10 @@ export function buildNPCDialogueContext(
     playerPresence,
     playerRumors: knownPlayerRumors,
     activePressures: factionPressures,
+    worldPressureHint,
+    opportunityHint,
+    textureHint,
+    partyPresence,
     npcGoal,
     npcStance,
     npcRecentAction,

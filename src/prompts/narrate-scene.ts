@@ -159,6 +159,21 @@ export type SceneNarrationInput = {
   presentationState?: string;
   characterPresence?: string;
   activePressures?: string[];
+  /**
+   * F-e003562f: expected to be formatDistrictMoodForNarrator's output
+   * (@ai-rpg-engine/modules) or byte-compatible with it -- i.e.
+   * `"${districtName}: ${mood.descriptor}"`. This field has no type-level or
+   * runtime way to enforce that contract (it's an opaque pre-formatted
+   * string by the time it reaches here); narrate-scene.test.ts pins a golden
+   * fixture proving buildNarratePrompt pipes a real
+   * formatDistrictMoodForNarrator output through losslessly, so a future
+   * change to this field's expected shape fails a test this domain owns.
+   * The upstream half -- whether the caller assembling SceneNarrationInput
+   * (game-core, outside this domain) actually sources this string FROM
+   * formatDistrictMoodForNarrator, or from one of its own independently
+   * hand-formatted alternatives -- is cross-domain and unverifiable from
+   * this file alone; see F-e003562f's own fix notes.
+   */
   districtDescriptor?: string;
   partyPresence?: string;
   economyContext?: string;
@@ -166,6 +181,15 @@ export type SceneNarrationInput = {
   opportunityContext?: string;
   arcContext?: string;
   endgameContext?: string;
+  /**
+   * F-2218267d: player-facing strategic-map line -- the engine's own
+   * MoveRecommendation.situationHint (@ai-rpg-engine/modules'
+   * move-advisor.ts), gated by the caller to only the 'pressured'/'crisis'
+   * situationTag bands (not 'safe'/'opportunity'), matching this domain's
+   * other hint fields' urgency-gated spirit. Rendered as its own labeled
+   * section, distinct from the director's on-demand /map-style screen.
+   */
+  situationHint?: string;
   /**
    * F-7815df9e (game-core seam contract): compact, pre-condensed long-term-memory
    * summary drawn from the campaign chronicle (e.g. past significant deeds).
@@ -275,5 +299,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
-Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${formatActivePressures(input.activePressures)}${stateHint}${chronicle}${recent}`;
+Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.situationHint ? `\n\nStrategic read: ${input.situationHint}` : ''}${formatActivePressures(input.activePressures)}${stateHint}${chronicle}${recent}`;
 }

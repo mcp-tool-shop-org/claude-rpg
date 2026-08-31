@@ -54,7 +54,7 @@ try {
     .split('\n')
     .filter(Boolean);
 } catch {
-  console.log('⚠ Could not determine changed files — skipping critical-path check.');
+  console.log(`${useColor ? '⚠' : '!'} Git diff failed — coverage check skipped. Verify manually with: npm run test:coverage`);
   process.exit(0);
 }
 
@@ -63,14 +63,14 @@ const criticalChanged = changedFiles.filter(
 );
 
 if (criticalChanged.length === 0) {
-  console.log('✓ No runtime-critical source files changed.');
+  console.log(`${useColor ? '✓' : '+'} No runtime-critical source files changed.`);
   process.exit(0);
 }
 
 // Read coverage-final.json (keyed by absolute path, contains per-file istanbul data)
 const coveragePath = 'coverage/coverage-final.json';
 if (!existsSync(coveragePath)) {
-  console.log('⚠ No coverage data found — run npm run test:coverage first.');
+  console.log(`${useColor ? '⚠' : '!'} No coverage data found — run npm run test:coverage first.`);
   process.exit(0);
 }
 
@@ -96,7 +96,7 @@ for (const file of criticalChanged) {
     // developers will re-run coverage if they see '?' — and a truly untested critical file
     // will fail the threshold check on subsequent runs. For strict validation, run with
     // npm run test:coverage before submitting the PR.
-    console.log(`  ? ${file} — not in coverage report`);
+    console.log(`  ? ${file} — not yet instrumented (expected for newly added files)`);
     continue;
   }
 
@@ -119,7 +119,7 @@ const failures = failingFiles.length;
 
 console.log('');
 if (failures > 0) {
-  console.log(`✗ Critical-path coverage check failed: ${failures} file(s) below threshold or not instrumented.`);
+  console.log(`${useColor ? '✗' : '-'} Critical-path coverage check failed: ${failures} file(s) below threshold or not instrumented.`);
   // Print unique failing files to reduce cognitive load for developers debugging CI failures
   const uniqueFailingFiles = [...new Set(failingFiles)];
   if (uniqueFailingFiles.length > 0) {
@@ -130,5 +130,5 @@ if (failures > 0) {
   }
   process.exit(1);
 } else {
-  console.log('✓ All touched critical files above thresholds.');
+  console.log(`${useColor ? '✓' : '+'} All touched critical files above thresholds.`);
 }

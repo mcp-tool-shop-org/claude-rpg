@@ -1,5 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
+  listArchivedCampaigns,
   loadPartyFromSession,
   loadObligationsFromSession,
   loadConsequenceChainsFromSession,
@@ -956,5 +960,116 @@ describe('loadFinaleFromSession (F-afe91227)', () => {
     const { factionFates: _factionFates, ...outlineMissingFactionFates } = validOutline;
     const session = makeSession({ finaleOutline: JSON.stringify(outlineMissingFactionFates) });
     expect(loadFinaleFromSession(session)).toBeNull();
+  });
+});
+
+// Spawn-task follow-up to F-afe91227 (wave-2, run swarm-1788171999-5dc0):
+// listArchivedCampaigns() re-implemented its own inline `JSON.parse(x) as T`
+// casts for finaleOutline / arcSnapshot / chronicleRecords instead of reusing
+// this file's guarded loaders. Because the whole per-file body sits in one
+// try/catch, a wrong-shape field didn't crash the command — it silently
+// DROPPED the entire completed campaign from the archive listing. These pin
+// the fixed behavior: degrade per-field, keep the entry listed.
+describe('listArchivedCampaigns', () => {
+  let dir: string | undefined;
+
+  afterEach(async () => {
+    if (dir) {
+      await rm(dir, { recursive: true, force: true });
+      dir = undefined;
+    }
+  });
+
+  async function writeSave(name: string, overrides: Record<string, unknown>): Promise<void> {
+    const session = {
+      schemaVersion: 14,
+      version: '1.4.0',
+      engineState: '{}',
+      turnHistory: { turns: [] },
+      tone: 'dramatic',
+      savedAt: new Date().toISOString(),
+      campaignStatus: 'completed',
+      characterName: 'Testa',
+      packId: 'chapel-threshold',
+      ...overrides,
+    };
+    await writeFile(join(dir!, name), JSON.stringify(session), 'utf-8');
+  }
+
+  it('lists a completed campaign whose finaleOutline is wrong-shape JSON instead of dropping it', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'claude-rpg-archive-badoutline-'));
+    // Syntactically valid JSON, wrong shape: companionFates is a number, and
+    // every field isValidFinaleOutline requires is absent. The old inline
+    // cast let `outline.companionFates?.map(...)` throw ("17.map is not a
+    // function"), and the per-file catch silently skipped the campaign.
+    await writeSave('done.json', { finaleOutline: '{"companionFates":17}' });
+
+    const results = await listArchivedCampaigns(dir);
+    expect(results).toHaveLength(1);
+    expect(results[0].title).toBe('Testa');
+    expect(results[0].companionFates).toEqual([]);
+    expect(results[0].dominantArc).toBeNull();
+    expect(results[0].resolutionClass).toBeNull();
+  });
+
+  it('lists a completed campaign whose chronicleRecords is a non-array instead of dropping it', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'claude-rpg-archive-badchron-'));
+    // `[...chronicle]` on a parsed object used to throw "not iterable" and
+    // the campaign vanished from the listing.
+    await writeSave('done.json', { chronicleRecords: '{}' });
+
+    const results = await listArchivedCampaigns(dir);
+    expect(results).toHaveLength(1);
+    expect(results[0].chronicleHighlights).toEqual([]);
+    expect(results[0].turnCount).toBe(0);
+  });
+
+  it('lists a well-formed completed campaign with its summary fields intact', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'claude-rpg-archive-good-'));
+    const journal = new CampaignJournal();
+    journal.record({ tick: 1, category: 'discovery', actorId: 'player', description: 'Found the crypt door', significance: 0.4, witnesses: [], data: {} });
+    journal.record({ tick: 2, category: 'kill', actorId: 'player', description: 'Slew the Crypt Warden', significance: 0.95, witnesses: [], data: {} });
+    journal.record({ tick: 3, category: 'gift', actorId: 'player', description: 'Gave bread to a pilgrim', significance: 0.1, witnesses: [], data: {} });
+    journal.record({ tick: 4, category: 'alliance', actorId: 'player', description: 'Won over Sister Maren', significance: 0.7, witnesses: [], data: {} });
+    const outline = {
+      resolutionClass: 'triumph',
+      dominantArc: 'redemption',
+      campaignDuration: 42,
+      totalChronicleEvents: 4,
+      keyMoments: [],
+      npcFates: [],
+      factionFates: [],
+      districtFates: [],
+      companionFates: [{ name: 'Mira', outcome: 'survived' }],
+      legacy: [],
+      epilogueSeeds: [],
+    };
+    await writeSave('done.json', {
+      finaleOutline: JSON.stringify(outline),
+      chronicleRecords: JSON.stringify(journal.serialize()),
+    });
+
+    const results = await listArchivedCampaigns(dir);
+    expect(results).toHaveLength(1);
+    expect(results[0].dominantArc).toBe('redemption');
+    expect(results[0].resolutionClass).toBe('triumph');
+    expect(results[0].turnCount).toBe(42);
+    expect(results[0].companionFates).toEqual(['Mira (survived)']);
+    // Top-3 by significance, descending.
+    expect(results[0].chronicleHighlights).toEqual([
+      'Slew the Crypt Warden',
+      'Won over Sister Maren',
+      'Found the crypt door',
+    ]);
+  });
+
+  it('skips non-completed campaigns, non-JSON files, and unparseable saves', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'claude-rpg-archive-skip-'));
+    await writeSave('active.json', { campaignStatus: undefined });
+    await writeFile(join(dir, 'notes.txt'), 'not a save', 'utf-8');
+    await writeFile(join(dir, 'corrupt.json'), '{truncated', 'utf-8');
+
+    const results = await listArchivedCampaigns(dir);
+    expect(results).toEqual([]);
   });
 });

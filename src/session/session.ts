@@ -1160,9 +1160,24 @@ export function loadNpcConversationsFromSession(
   }
 }
 
-/** List completed (archived) campaigns from save files. */
-export async function listArchivedCampaigns(): Promise<ArchivedCampaignSummary[]> {
-  const dir = getDefaultSaveDir();
+/**
+ * List completed (archived) campaigns from save files.
+ *
+ * Spawn-task follow-up to F-afe91227 (wave-2, run swarm-1788171999-5dc0):
+ * this function used to re-implement inline `JSON.parse(x) as T` casts for
+ * finaleOutline / arcSnapshot / chronicleRecords instead of reusing this
+ * file's guarded loaders. Because the whole per-file body sits in one
+ * try/catch, a syntactically-valid-but-wrong-shape field didn't crash the
+ * command — it silently DROPPED the entire completed campaign from the
+ * archive listing. The guarded loaders degrade per-field (null outline/
+ * snapshot, empty journal) so the entry stays listed. The old partyState
+ * parse was dead — parsed, never read — and is deleted rather than guarded.
+ *
+ * `dir` is a testability seam; production callers pass nothing.
+ */
+export async function listArchivedCampaigns(
+  dir: string = getDefaultSaveDir(),
+): Promise<ArchivedCampaignSummary[]> {
   let files: string[];
   try {
     files = await readdir(dir);
@@ -1178,13 +1193,12 @@ export async function listArchivedCampaigns(): Promise<ArchivedCampaignSummary[]
       const session = JSON.parse(raw) as SavedSession;
       if (session.campaignStatus !== 'completed') continue;
 
-      const outline = session.finaleOutline ? JSON.parse(session.finaleOutline) as FinaleOutline : null;
-      const arcSnap = session.arcSnapshot ? JSON.parse(session.arcSnapshot) as ArcSnapshot : null;
-      const chronicle = session.chronicleRecords ? JSON.parse(session.chronicleRecords) as CampaignRecord[] : [];
-      const party = session.partyState ? JSON.parse(session.partyState) as PartyState : null;
+      const outline = loadFinaleFromSession(session);
+      const arcSnap = loadArcSnapshotFromSession(session);
+      const journal = loadChronicleFromSession(session);
 
       // Top 3 most significant chronicle events as highlights
-      const highlights = [...chronicle]
+      const highlights = [...journal.query({})]
         .sort((a, b) => b.significance - a.significance)
         .slice(0, 3)
         .map((r) => r.description);
@@ -1216,7 +1230,7 @@ export async function listArchivedCampaigns(): Promise<ArchivedCampaignSummary[]
         title: session.characterName ?? session.packId ?? 'Unknown',
         dominantArc: outline?.dominantArc ?? arcSnap?.dominantArc ?? null,
         resolutionClass: outline?.resolutionClass ?? null,
-        turnCount: outline?.campaignDuration ?? chronicle.length,
+        turnCount: outline?.campaignDuration ?? journal.size(),
         chronicleHighlights: highlights,
         companionFates,
         relicNames,

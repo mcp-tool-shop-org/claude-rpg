@@ -20,7 +20,7 @@
 
 import * as esbuild from 'esbuild';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdtemp, rm, writeFile, mkdir, cp } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, mkdir, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
@@ -30,6 +30,7 @@ import { TurnHistory } from '../../src/session/history.js';
 import { saveSession } from '../../src/session/session.js';
 
 const REPO_ROOT = join(__dirname, '..', '..');
+const FIXTURES_SAVES_DIR = join(REPO_ROOT, 'test', 'fixtures', 'saves');
 
 /**
  * import.meta.url shim for esbuild's "cjs" output format. bin.ts does
@@ -232,6 +233,76 @@ export function startFlakyAnthropicServer(failCount = 1): Promise<MockAnthropicS
 }
 
 /**
+ * F-e44285c0: like startFlakyAnthropicServer, but the first `succeedCount`
+ * requests succeed unconditionally before the flaky window opens -- so an
+ * earlier, unavoidable request in the SAME real process (e.g. the opening
+ * narration every `load`/`play`/`new` run makes before reaching the
+ * interactive prompt, per runGameLoop() at bin.ts:834-843) completes
+ * cleanly and is never the request under test. Only requests
+ * (succeedCount + 1) through (succeedCount + failCount) get the retryable
+ * 429; every request outside that window, before OR after it, succeeds
+ * with a normal 200. Isolates the retry/backoff proof to one specific
+ * LATER latency path (dialogue, world-gen, finale) without also perturbing
+ * whichever call precedes it in the same process.
+ *
+ * `text` overrides the canned response body -- generateStructured()
+ * (world-gen's generateWorld()) needs the response to BE a bare JSON
+ * object matching WorldGenProposal (claude-adapter.ts's generateStructured
+ * regex-matches ```json .. ``` or a bare `{...}` out of the same
+ * extractText(response) every other call path uses, then JSON.parses it),
+ * not narrateScene's plain narrative sentence.
+ */
+export function startFlakyAfterAnthropicServer(
+  succeedCount: number,
+  failCount = 1,
+  text = 'The chapel holds its breath, waiting.',
+): Promise<MockAnthropicServer> {
+  let calls = 0;
+  const server: Server = createServer((req, res) => {
+    calls++;
+    req.resume();
+    req.on('end', () => {
+      const inFlakyWindow = calls > succeedCount && calls <= succeedCount + failCount;
+      if (inFlakyWindow) {
+        res.writeHead(429, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+          type: 'error',
+          error: { type: 'rate_limit_error', message: 'rate limited (forced by test)' },
+        }));
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        id: `msg_stub_${calls}`,
+        type: 'message',
+        role: 'assistant',
+        model: 'claude-sonnet-4-20250514',
+        content: [{ type: 'text', text }],
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: { input_tokens: 12, output_tokens: 8 },
+      }));
+    });
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        reject(new Error('flaky-after Anthropic server: could not read bound address'));
+        return;
+      }
+      resolve({
+        url: `http://127.0.0.1:${addr.port}`,
+        callCount: () => calls,
+        close: () => new Promise<void>((res) => server.close(() => res())),
+      });
+    });
+  });
+}
+
+/**
  * Writes a real, loadable save (via the app's own saveSession(), the same
  * path test/integration/session-persistence.test.ts exercises) so bin.ts's
  * `load` command has a save to select. packId must resolve via
@@ -296,6 +367,49 @@ export async function writeFantasySaveWithCharacterName(
     genre: 'fantasy',
     profile,
   });
+}
+
+/**
+ * F-95569ed3: writes migration.test.ts's own `future-v99.json` fixture
+ * (schemaVersion: 99) verbatim into a real save directory, under a normal
+ * `<filename>.json` name -- so bin.ts's `load` command lists and can select
+ * it through the actual interactive save-picker exactly like any other
+ * save. listSaves() (session.ts) never inspects schemaVersion when building
+ * that picker list (it only skips a file if JSON.parse itself throws), so
+ * this fixture is always listed; only loadSession()'s migrateSave() ->
+ * validateVersion() step (invoked once the player picks this slot) rejects
+ * it as newer than CURRENT_SCHEMA_VERSION. migration.test.ts already proves
+ * that unit -- loadSession(path) directly rejects with SaveValidationError
+ * containing 'newer version' -- this helper lets a real-process test drive
+ * the same fixture through the actual `load` command instead.
+ */
+export async function writeFutureVersionSave(saveDir: string, filename = 'test-save'): Promise<void> {
+  await mkdir(saveDir, { recursive: true });
+  const raw = await readFile(join(FIXTURES_SAVES_DIR, 'future-v99.json'), 'utf-8');
+  await writeFile(join(saveDir, `${filename}.json`), raw);
+}
+
+/**
+ * F-95569ed3: like writeFutureVersionSave, but writes migration.test.ts's
+ * `no-version.json` fixture -- syntactically valid JSON with every required
+ * SavedSession field EXCEPT version metadata (no `schemaVersion`, no legacy
+ * `version` string). Also always listed by listSaves() for the same reason
+ * as writeFutureVersionSave (it never checks version), and also only
+ * rejected once selected, this time by migrateSave() -> detectSchemaVersion()
+ * throwing SaveValidationError('... no recognizable version ...')
+ * (migration.test.ts's 'no-version is rejected' case proves this directly
+ * against loadSession()). Named `writeCorruptSave` (matching the routed
+ * finding's own naming) because a save with no version metadata at all is
+ * the most representative "this doesn't look like a real claude-rpg save"
+ * shape presentLoadError() has a dedicated branch for -- genuinely
+ * unparseable JSON would instead make listSaves() silently skip the file
+ * entirely (session.ts's per-file try/catch), so it could never reach the
+ * interactive picker this helper needs to select it through.
+ */
+export async function writeCorruptSave(saveDir: string, filename = 'test-save'): Promise<void> {
+  await mkdir(saveDir, { recursive: true });
+  const raw = await readFile(join(FIXTURES_SAVES_DIR, 'no-version.json'), 'utf-8');
+  await writeFile(join(saveDir, `${filename}.json`), raw);
 }
 
 /** Counts non-overlapping occurrences of a literal substring. */

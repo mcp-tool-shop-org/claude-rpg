@@ -153,7 +153,26 @@ export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig
       prompt: string;
       maxTokens?: number;
       onChunk: StreamCallback;
+      onStreamReset?: (info: { attempt: number; maxAttempts: number; kind: NarrationErrorKind; delayMs: number }) => void;
     }): Promise<GenerateResult> {
+      // F-f2e58ce0: a per-call RetryConfig that wraps the client-level `retry`
+      // (which callApi above also uses, unmodified) rather than mutating or
+      // replacing it. `retry.onRetry` still fires exactly as before for every
+      // call type -- this only ADDS opts.onStreamReset alongside it, scoped
+      // to this one generateStream call (a fresh closure per call, closing
+      // over this call's own opts), so a stream-aware caller isn't spuriously
+      // invoked by an unrelated non-streaming call's retry sharing the same
+      // client-level onRetry. Same invocation site and payload shape as
+      // onRetry (withRetry calls it immediately before each retried attempt's
+      // backoff delay -- see withRetry above) -- "mirroring" per this
+      // finding's fix, not a new retry-accounting mechanism.
+      const streamRetry: RetryConfig = {
+        ...retry,
+        onRetry: (info) => {
+          retry.onRetry?.(info);
+          opts.onStreamReset?.(info);
+        },
+      };
       return withRetry(async () => {
         try {
           const stream = anthropic.messages.stream({
@@ -181,7 +200,7 @@ export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig
         } catch (err) {
           throw classifyError(err);
         }
-      }, retry);
+      }, streamRetry);
     },
 
     async generateStructured<T>(opts: {
@@ -267,8 +286,44 @@ export function classifyError(err: unknown): NarrationError {
     });
   }
 
-  // Other API errors (5xx, etc.) — SDK retries these automatically,
-  // so if we see them here, retries were exhausted.
+  // F-4a6a8d31: InternalServerError (5xx, including the common 529
+  // "Overloaded") and ConflictError (409) are exactly the status classes
+  // the installed SDK's own default shouldRetry() (core.js) treats as
+  // transient. createAdaptedClient sets maxRetries: 0 specifically so
+  // withRetry (see this file's own doc comment above createAdaptedClient)
+  // is the one and only retry authority for this client -- the comment that
+  // used to sit here ("SDK retries these automatically") predates that
+  // maxRetries: 0 change and was stale: nothing retries these unless
+  // classifyError marks them retryable. Folded into the existing
+  // 'transport' kind rather than a new NarrationErrorKind variant:
+  // claude-errors.ts's userMessage() and cli/error-presenter.ts's
+  // presentNarrationError() (outside this domain's ownership) both switch
+  // exhaustively over NarrationErrorKind with no default case, so adding a
+  // variant would require changes there too.
+  if (err instanceof Anthropic.InternalServerError || err instanceof Anthropic.ConflictError) {
+    return new NarrationError({
+      kind: 'transport',
+      message: `Anthropic API error (${err.status}): ${err.message}`,
+      requestId: extractRequestId(err),
+      cause: err,
+    });
+  }
+
+  // Status 408 (request-timeout) has no dedicated SDK subclass -- it
+  // surfaces as a bare APIError -- but shouldRetry() treats it as transient
+  // too, same as 409/5xx above, so it gets the same retryable 'transport'
+  // kind rather than falling into 'unexpected' below.
+  if (err instanceof Anthropic.APIError && err.status === 408) {
+    return new NarrationError({
+      kind: 'transport',
+      message: `Anthropic API error (${err.status}): ${err.message}`,
+      requestId: extractRequestId(err),
+      cause: err,
+    });
+  }
+
+  // Any remaining APIError (404, 422, etc.) is not in the SDK's own
+  // default retry set either, so it stays non-retryable 'unexpected'.
   if (err instanceof Anthropic.APIError) {
     return new NarrationError({
       kind: 'unexpected',

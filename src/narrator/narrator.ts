@@ -226,7 +226,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     const result = await client.generate({ system: NARRATE_SYSTEM, prompt, maxTokens: 500 });
 
     // Try to parse as NarrationPlan JSON
-    const plan = parseNarrationPlan(result.text, logger);
+    const { plan, jsonLikeStructureFound } = parseNarrationPlan(result.text, logger);
 
     if (plan) {
       return {
@@ -237,7 +237,36 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
       };
     }
 
-    // Fallback: treat as plain text narration
+    // F-f18cc0d7: JSON-like structure was found (a fenced block or a
+    // brace-matched substring) but never turned into a usable plan -- JSON
+    // parsing threw, or the parsed object had no sceneText. NARRATE_SYSTEM
+    // always instructs the model to answer with NarrationPlan JSON, so this
+    // raw text is very likely broken/partial JSON scaffolding (field names,
+    // stray braces, an unterminated string cut off by maxTokens:500), not
+    // natural prose safe to show the player verbatim. Treat it exactly like
+    // a generation failure -- same FALLBACK_NARRATION/
+    // FALLBACK_NARRATION_REPEATED selection as the catch block below --
+    // instead of echoing result.text.trim() as if it were authored
+    // narration. Reserve the plain-text fallback below for the one
+    // remaining case: no JSON-like structure was detected at all.
+    if (jsonLikeStructureFound) {
+      const failureMessage = 'narrateScene: model response looked like JSON but could not be parsed into a usable NarrationPlan. Using fallback.';
+      console.warn(`[narrator] ${failureMessage}`);
+      logger?.warn('narrator', failureMessage);
+      const fallbackMessage = 'The narrator\'s response could not be parsed as valid narration. Your progress is safe — try again.';
+      const narration = (consecutiveFallbacks ?? 0) >= 1 ? FALLBACK_NARRATION_REPEATED : FALLBACK_NARRATION;
+      return {
+        narration,
+        plan: null,
+        sceneContext,
+        isFallback: true,
+        fallbackMessage,
+      };
+    }
+
+    // Fallback: no JSON-like structure was ever detected -- treat as plain
+    // text narration (a model that answered in natural prose instead of the
+    // instructed JSON mode).
     return {
       narration: result.text.trim(),
       plan: null,
@@ -346,6 +375,27 @@ export async function narrateSceneLegacy(
 }
 
 /**
+ * F-f18cc0d7: parseNarrationPlan's result, distinguishing "no JSON-like
+ * structure was even present" (plain-prose fallback is legitimate) from
+ * "JSON-like structure was found but couldn't be turned into a usable plan"
+ * (the raw text is very likely broken/partial JSON scaffolding -- field
+ * names, stray braces, an unterminated string -- since NARRATE_SYSTEM always
+ * instructs the model to answer with NarrationPlan JSON, not prose the raw
+ * text could safely fall back to).
+ */
+type ParsedNarrationPlan = {
+  plan: NarrationPlan | null;
+  /**
+   * True once a fenced code block or a brace-matched substring was found in
+   * the raw response (i.e. every return path below except the very first
+   * "no JSON structure found" one). When `plan` is null AND this is true,
+   * the caller must NOT echo the raw response as plain-text narration --
+   * see narrateScene's use of this flag below.
+   */
+  jsonLikeStructureFound: boolean;
+};
+
+/**
  * Try to parse Claude's response as a NarrationPlan JSON.
  *
  * @param logger F-fa65fe50: optional structured logger -- see
@@ -354,7 +404,7 @@ export async function narrateSceneLegacy(
  *   logger?.warn('narrator', ...), and the validation-fails-but-sceneText
  *   branch (previously silent on BOTH channels) now warns on both too.
  */
-function parseNarrationPlan(text: string, logger?: DebugLogger): NarrationPlan | null {
+function parseNarrationPlan(text: string, logger?: DebugLogger): ParsedNarrationPlan {
   let jsonStr = text.trim();
 
   const jsonBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -370,7 +420,7 @@ function parseNarrationPlan(text: string, logger?: DebugLogger): NarrationPlan |
       const raw = text.slice(0, 200);
       console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
       logger?.warn('narrator', message, { raw });
-      return null;
+      return { plan: null, jsonLikeStructureFound: false };
     }
   }
 
@@ -384,7 +434,7 @@ function parseNarrationPlan(text: string, logger?: DebugLogger): NarrationPlan |
     if (!parsed.interruptibility) parsed.interruptibility = 'free';
 
     if (isValidNarrationPlan(parsed)) {
-      return parsed;
+      return { plan: parsed, jsonLikeStructureFound: true };
     }
     // If validation fails but we have sceneText, still use it
     if (typeof parsed.sceneText === 'string') {
@@ -397,13 +447,16 @@ function parseNarrationPlan(text: string, logger?: DebugLogger): NarrationPlan |
       console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
       logger?.warn('narrator', message, { raw });
       return {
-        sceneText: parsed.sceneText,
-        tone: parsed.tone ?? 'calm',
-        urgency: parsed.urgency ?? 'normal',
-        sfx: parsed.sfx ?? [],
-        ambientLayers: parsed.ambientLayers ?? [],
-        uiEffects: parsed.uiEffects ?? [],
-        interruptibility: parsed.interruptibility ?? 'free',
+        plan: {
+          sceneText: parsed.sceneText,
+          tone: parsed.tone ?? 'calm',
+          urgency: parsed.urgency ?? 'normal',
+          sfx: parsed.sfx ?? [],
+          ambientLayers: parsed.ambientLayers ?? [],
+          uiEffects: parsed.uiEffects ?? [],
+          interruptibility: parsed.interruptibility ?? 'free',
+        },
+        jsonLikeStructureFound: true,
       };
     }
     // PBR-004: Log when parsed JSON doesn't match expected shape
@@ -411,13 +464,20 @@ function parseNarrationPlan(text: string, logger?: DebugLogger): NarrationPlan |
     const raw = text.slice(0, 200);
     console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
     logger?.warn('narrator', message, { raw });
-    return null;
+    // F-f18cc0d7: the parsed object is JSON with no sceneText (e.g. just
+    // {"tone":"calm","urgency":"normal"}) -- not natural prose -- so the
+    // caller must not fall back to echoing text.trim() as narration.
+    return { plan: null, jsonLikeStructureFound: true };
   } catch (err) {
     // PBR-004: Log JSON parse failures with truncated raw text
     const message = `parseNarrationPlan: JSON parse failed: ${err instanceof Error ? err.message : String(err)}`;
     const raw = text.slice(0, 200);
     console.warn(`[narrator] ${message}. Raw (truncated): "${raw}"`);
     logger?.warn('narrator', message, { raw });
-    return null;
+    // F-f18cc0d7: a brace/fence match was found (we got this far) but
+    // JSON.parse threw -- malformed/truncated JSON, e.g. cut off mid-string
+    // by maxTokens:500. The raw text is very likely broken JSON scaffolding,
+    // not prose; the caller must not echo it as narration.
+    return { plan: null, jsonLikeStructureFound: true };
   }
 }

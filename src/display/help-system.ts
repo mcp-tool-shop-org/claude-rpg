@@ -4,18 +4,25 @@
 import type { ResolutionClass, ArcKind, ArcMomentum } from '@ai-rpg-engine/modules';
 import { getTerminalWidth } from './play-renderer.js';
 import { PLAY_COMMANDS } from '../cli/slash-completer.js';
-import { bold, danger } from '../cli/colors.js';
+import { bold, danger, dim } from '../cli/colors.js';
 
 // F-38eb3dec: both were a fixed 60-char divider regardless of terminal
 // size, unlike play-renderer.ts's own dividers (PFE-005). Computed per
 // call (not a module-level constant) so they track the real terminal
 // width, matching play-renderer.ts's makeDivider()/makeThinDivider()
 // pattern.
+// F-624591cf: both were also missing the dim() wrap every other
+// divider-producing helper in this domain applies (play-renderer.ts's
+// makeDivider()/makeThinDivider(), director-renderer.ts's divider(),
+// status-compact.ts's divider(), usage.ts's rule) -- these were the other of
+// the two exceptions left in the whole domain (archive-browser.ts's
+// divider() was the first), despite this file already importing color
+// elsewhere (bold, danger below).
 function divider(): string {
-  return '\u2500'.repeat(getTerminalWidth());
+  return dim('\u2500'.repeat(getTerminalWidth()));
 }
 function thinDivider(): string {
-  return '\u00b7'.repeat(getTerminalWidth());
+  return dim('\u00b7'.repeat(getTerminalWidth()));
 }
 
 /**

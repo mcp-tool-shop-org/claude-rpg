@@ -201,3 +201,88 @@ describe('renderUsage Worlds section (F-7862c05d)', () => {
     expect(rowCount).toBeGreaterThan(0);
   });
 });
+
+/**
+ * F-9c2dbb5b: the Usage:/Global flags:/Commands in-game: blocks were raw
+ * hardcoded template lines, never measured against getTerminalWidth() --
+ * unlike this same function's divider and Worlds section, both already
+ * proven safe above. Routed through renderNameDescriptionRow so every row
+ * wraps with a hanging indent instead of hard-wrapping wherever the real
+ * terminal breaks it (ADDENDUM-COMMON's binding width-safety rule: hold at
+ * 40 and 120 columns).
+ *
+ * At the 40-column floor, USAGE_NAME_WIDTH (27) is wide enough that
+ * renderNameDescriptionRow's own available-width floor (never below 10,
+ * so a name column doesn't starve the description entirely) kicks in --
+ * required to preserve the pre-existing pinned wrap-split assertion below
+ * (nameWidth must stay in [24,27] for that split to land exactly where it
+ * does at 60 columns). Combined with "interactively)" being a single
+ * 14-character word that wrapWords leaves unsplit by design (never
+ * corrupted mid-word), a couple of Usage: rows land a few characters past
+ * the nominal 40-column width at that floor -- graceful degradation, not a
+ * crash or a corrupted word, and strictly better than the pre-fix template
+ * literal's unbounded hard-wrap-anywhere-mid-word behavior. The Commands
+ * in-game: table (narrower COMMANDS_NAME_WIDTH) does stay within 40 columns
+ * outright, so that section gets the stricter assertion.
+ */
+describe('renderUsage Usage:/Commands in-game: sections hold at width extremes (F-9c2dbb5b)', () => {
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
+  function rowsUnderHeader(lines: string[], header: string): string[] {
+    const headerIdx = lines.findIndex((l) => l.includes(header));
+    expect(headerIdx).toBeGreaterThan(-1);
+    const rows: string[] = [];
+    let i = headerIdx + 1;
+    while (i < lines.length && lines[i].trim() !== '') {
+      rows.push(lines[i]);
+      i++;
+    }
+    expect(rows.length).toBeGreaterThan(0);
+    return rows;
+  }
+
+  it('Commands in-game: rows stay within width at a 40-column floor', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const lines = renderUsage().split('\n');
+    for (const row of rowsUnderHeader(lines, 'Commands in-game:')) {
+      expect(row.length).toBeLessThanOrEqual(40);
+    }
+  });
+
+  it('every Usage:/Commands in-game: row stays within width at a 120-column ceiling', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 200, writable: true });
+    const lines = renderUsage().split('\n');
+    for (const row of [...rowsUnderHeader(lines, 'Usage:'), ...rowsUnderHeader(lines, 'Commands in-game:')]) {
+      expect(row.length).toBeLessThanOrEqual(120);
+    }
+  });
+
+  it('no command name or word is split mid-word at the 40-column floor, for either section', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const usage = renderUsage();
+    // Every command token still appears intact even once its description wraps.
+    expect(usage).toContain('claude-rpg play [--fast]');
+    expect(usage).toContain('claude-rpg new "<prompt>"');
+    expect(usage).toContain('/recruit');
+    expect(usage).toContain('quit');
+    // The one word long enough to itself land past the 40-column floor
+    // (14 chars) still renders whole, never corrupted mid-word.
+    expect(usage).toContain('interactively)');
+  });
+
+  it('Usage: rows still carry a hanging indent at the 40-column floor (degrade gracefully, not corrupt)', () => {
+    Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
+    const lines = renderUsage().split('\n');
+    const rows = rowsUnderHeader(lines, 'Usage:');
+    // Every continuation line (not starting a new "claude-rpg ..." entry)
+    // hangs indented under the name column, matching every other
+    // renderNameDescriptionRow table in this domain -- not flush left.
+    const continuationLines = rows.filter((r) => !r.trim().startsWith('claude-rpg'));
+    expect(continuationLines.length).toBeGreaterThan(0);
+    for (const line of continuationLines) {
+      expect(line.startsWith('    ' + ' '.repeat(27))).toBe(true);
+    }
+  });
+});

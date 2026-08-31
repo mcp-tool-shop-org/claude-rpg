@@ -73,6 +73,48 @@ describe('renderCompactStatus (F-478cbef8)', () => {
     });
   });
 
+  /**
+   * F-ae95efb8: the urgencyLabel above distinguishes 3 tiers (urgent/
+   * growing/distant), but colorFn only distinguished 2 -- 'distant' and
+   * 'growing' both rendered in identical plain yellow(), only 'urgent' got
+   * the bolder danger() treatment. 'distant' now gets dim(), so all 3 label
+   * tiers have a visually distinguishable color.
+   */
+  describe('topThreat urgency tiers use 3 distinguishable colors (F-ae95efb8)', () => {
+    let originalIsTTY: boolean | undefined;
+
+    afterEach(() => {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+      delete process.env.NO_COLOR;
+    });
+
+    it('urgent gets danger (bold yellow), growing gets plain yellow, distant gets dim -- 3 distinct treatments', async () => {
+      originalIsTTY = process.stdout.isTTY;
+      delete process.env.NO_COLOR;
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+      vi.resetModules();
+      const mod = await import('./status-compact.js');
+
+      const urgent = mod.renderCompactStatus(baseOpts({ topThreat: { description: 'Bandit raid', urgency: 0.7 } }));
+      const growing = mod.renderCompactStatus(baseOpts({ topThreat: { description: 'Rising unrest', urgency: 0.4 } }));
+      const distant = mod.renderCompactStatus(baseOpts({ topThreat: { description: 'Distant storm', urgency: 0.1 } }));
+
+      const urgentLine = urgent.split('\n').find((l) => l.includes('Threat:'))!;
+      const growingLine = growing.split('\n').find((l) => l.includes('Threat:'))!;
+      const distantLine = distant.split('\n').find((l) => l.includes('Threat:'))!;
+
+      // urgent: danger = bold yellow (both codes present)
+      expect(urgentLine).toContain('\x1b[1m');
+      expect(urgentLine).toContain('\x1b[33m');
+      // growing: plain yellow, NOT bold
+      expect(growingLine).toContain('\x1b[33m');
+      expect(growingLine).not.toContain('\x1b[1m');
+      // distant: dim, not yellow at all -- the fix under test
+      expect(distantLine).toContain('\x1b[2m');
+      expect(distantLine).not.toContain('\x1b[33m');
+    });
+  });
+
   describe('economySummary and opportunitySummary', () => {
     it('includes a Market line when economySummary is present', () => {
       const result = renderCompactStatus(baseOpts({ economySummary: 'grain scarce' }));

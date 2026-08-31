@@ -513,3 +513,40 @@ describe('help-system section headers and WARNING lines use colors.ts (F-bd0203e
     expect(quickstart).not.toContain('\x1b[');
   });
 });
+
+/**
+ * F-624591cf: this file's divider()/thinDivider() were two of the domain's
+ * only exceptions that returned a bare repeated rule character with no
+ * dim() wrap, even though play-renderer.ts/director-renderer.ts/
+ * status-compact.ts/usage.ts's own dividers all agree dividers get dim() --
+ * and even though this file already imports color elsewhere (bold, danger).
+ */
+describe('help-system dividers are dimmed (F-624591cf)', () => {
+  let originalIsTTY: boolean | undefined;
+
+  afterEach(() => {
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    delete process.env.NO_COLOR;
+  });
+
+  it('wraps divider() in dim() when colors are enabled (via renderPlayHelp)', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./help-system.js');
+    const text = mod.renderPlayHelp();
+    expect(text).toContain('\x1b[2m'); // dim
+  });
+
+  it('wraps thinDivider() in dim() when colors are enabled (via renderFirstTurnOrientation)', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./help-system.js');
+    const onboarding = mod.getPackOnboarding('chapel-threshold')!;
+    const text = mod.renderFirstTurnOrientation(onboarding);
+    expect(text).toContain('\x1b[2m'); // dim
+  });
+});

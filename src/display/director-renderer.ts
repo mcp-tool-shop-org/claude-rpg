@@ -285,16 +285,22 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
         ? getRumorsKnownToFaction(rumors, factionFilter)
         : rumors;
       if (filtered.length === 0) return `  No rumors known to faction "${factionFilter}".`;
+      // F-de13eb60: this was one of 8 section headers in this switch
+      // rendering plain, uncolored text -- unlike renderDirectorHelp's own
+      // `${bold('DIRECTOR MODE')}` treatment above, despite all 9 serving the
+      // identical structural role (a boxed title between two divider()
+      // calls) within this same director-views renderer family.
       const header = factionFilter
-        ? `  PLAYER RUMORS — faction "${factionFilter}" (${filtered.length})`
-        : `  PLAYER RUMORS (${filtered.length})`;
+        ? bold(`  PLAYER RUMORS — faction "${factionFilter}" (${filtered.length})`)
+        : bold(`  PLAYER RUMORS (${filtered.length})`);
       return `\n${divider()}\n${header}\n${divider()}\n\n${filtered.map(formatRumorForDirector).join('\n\n')}\n`;
     }
 
     case '/pressures': {
       const pressures = activePressures ?? [];
       if (pressures.length === 0) return '  No active world pressures.';
-      const header = `  WORLD PRESSURES (${pressures.length})`;
+      // F-de13eb60: see /rumors above.
+      const header = bold(`  WORLD PRESSURES (${pressures.length})`);
       return `\n${divider()}\n${header}\n${divider()}\n\n${pressures.map(formatPressureForDirector).join('\n\n')}\n`;
     }
 
@@ -302,7 +308,8 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     case '/aftermath': {
       const resolved = resolvedPressures ?? [];
       if (resolved.length === 0) return '  No pressures have been resolved yet.';
-      const header = `  RESOLUTION HISTORY (${resolved.length})`;
+      // F-de13eb60: see /rumors above.
+      const header = bold(`  RESOLUTION HISTORY (${resolved.length})`);
       return `\n${divider()}\n${header}\n${divider()}\n\n${resolved.map(formatFalloutForDirector).join('\n\n')}\n`;
     }
 
@@ -609,7 +616,8 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       if (!endgameTriggers || endgameTriggers.length === 0) {
         return '  No endgame triggers detected yet.';
       }
-      const lines: string[] = ['', `  ${divider()}`, '  ENDGAME TRIGGERS', `  ${divider()}`, ''];
+      // F-de13eb60: see /rumors above.
+      const lines: string[] = ['', `  ${divider()}`, `  ${bold('ENDGAME TRIGGERS')}`, `  ${divider()}`, ''];
       for (const trigger of endgameTriggers) {
         lines.push(formatEndgameForDirector(trigger));
         lines.push('');
@@ -641,7 +649,8 @@ function renderStats(custom: Record<string, string | number | boolean>): string 
   const lines: string[] = [];
   lines.push('');
   lines.push(divider());
-  lines.push('  SESSION STATS');
+  // F-de13eb60: see executeDirectorCommand's /rumors branch above.
+  lines.push(`  ${bold('SESSION STATS')}`);
   lines.push(divider());
 
   // Leverage action counts
@@ -680,7 +689,8 @@ function renderStats(custom: Record<string, string | number | boolean>): string 
 }
 
 function renderItemList(profile: CharacterProfile, catalog: ItemCatalog, tick: number): string {
-  const lines: string[] = ['', divider(), '  EQUIPMENT', divider(), ''];
+  // F-de13eb60: see executeDirectorCommand's /rumors branch above.
+  const lines: string[] = ['', divider(), `  ${bold('EQUIPMENT')}`, divider(), ''];
   for (const slot of EQUIPMENT_SLOTS) {
     const itemId = profile.loadout.equipped[slot];
     if (!itemId) {
@@ -719,7 +729,8 @@ function renderItemInspection(itemId: string, profile: CharacterProfile, catalog
   const isEquipped = Object.values(profile.loadout.equipped).includes(itemId);
 
   const lines: string[] = ['', divider()];
-  lines.push(`  ITEM: ${getRelicEpithet(item, relic)}`);
+  // F-de13eb60: see executeDirectorCommand's /rumors branch above.
+  lines.push(bold(`  ITEM: ${getRelicEpithet(item, relic)}`));
   lines.push(divider());
   lines.push('');
   lines.push(`  Slot: ${item.slot} | Rarity: ${item.rarity} | Equipped: ${isEquipped ? 'yes' : 'no'}`);
@@ -764,9 +775,10 @@ function renderItemInspection(itemId: string, profile: CharacterProfile, catalog
 }
 
 function renderSnapshot(snapshot: Record<string, unknown>): string {
+  // F-de13eb60: see executeDirectorCommand's /rumors branch above.
   const parts: string[] = [
     `${divider()}`,
-    `  SIMULATION SNAPSHOT — tick ${snapshot.tick ?? '?'}`,
+    bold(`  SIMULATION SNAPSHOT — tick ${snapshot.tick ?? '?'}`),
     `${divider()}`,
   ];
   if (snapshot.entityCount != null) parts.push(`  Entities: ${snapshot.entityCount}`);

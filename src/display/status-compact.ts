@@ -98,7 +98,14 @@ export function renderCompactStatus(opts: {
   // Threat line
   if (topThreat) {
     const urgencyLabel = topThreat.urgency >= 0.7 ? 'urgent' : topThreat.urgency >= 0.4 ? 'growing' : 'distant';
-    const colorFn = topThreat.urgency >= 0.7 ? danger : yellow;
+    // F-ae95efb8: urgencyLabel distinguishes 3 tiers, but colorFn used to
+    // only distinguish 2 (>=0.7 danger, else yellow) -- 'distant' and
+    // 'growing' rendered in identical plain yellow(), under-differentiating
+    // the label's 3-way split on the line meant to let a player triage
+    // threats at a glance. 'distant' now gets dim(), matching this domain's
+    // convention that the least-urgent tier of a scale reads as
+    // peripheral/secondary, not equal-weight with an active warning.
+    const colorFn = topThreat.urgency >= 0.7 ? danger : topThreat.urgency >= 0.4 ? yellow : dim;
     lines.push(`  Threat: ${colorFn(`${topThreat.description} (${urgencyLabel})`)}`);
   }
 

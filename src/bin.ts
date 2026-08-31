@@ -57,6 +57,8 @@ import { isPathInside } from './cli/path-guard.js';
 import { attemptExitAutosave } from './cli/exit-autosave.js';
 import { renderUsage } from './cli/usage.js';
 import { parseWorldFlag, formatValidWorlds } from './cli/world-flag.js';
+import { getTerminalWidth } from './display/play-renderer.js';
+import { bold, dim, red, yellow } from './cli/colors.js';
 import { TurnHistory } from './session/history.js';
 import { buildCharacter } from './character/builder.js';
 import { getPackById, type PackInfo } from './character/packs.js';
@@ -237,10 +239,21 @@ async function main(): Promise<void> {
   // player following it literally hits the same error again in a fresh
   // terminal window.
   if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY environment variable is required to narrate gameplay.');
-    console.error('Get your API key at https://console.anthropic.com, then add it permanently to');
-    console.error('your shell profile — e.g. on macOS/Linux: echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc');
-    console.error('(or ~/.zshrc on macOS). Restart your terminal, then run claude-rpg again.');
+    // F-f6983775: error-presenter.ts's own header comment says it is
+    // "Central CLI error rendering. All user-visible error output routes
+    // through this module" -- but this is plausibly the single most common
+    // first-run experience for anyone installing this CLI before
+    // configuring their key, and it bypassed that pipeline entirely with 4
+    // bare, uncolored console.error() lines. Now routed through the same
+    // renderError() every in-game error branch uses.
+    const presentation: ErrorPresentation = {
+      headline: 'ANTHROPIC_API_KEY required',
+      explanation: 'ANTHROPIC_API_KEY environment variable is required to narrate gameplay.',
+      preserved: 'No session was started.',
+      nextAction: 'Get your API key at https://console.anthropic.com, then add it permanently to your shell profile -- e.g. on macOS/Linux: echo "export ANTHROPIC_API_KEY=your-key-here" >> ~/.bashrc (or ~/.zshrc on macOS). Restart your terminal, then run claude-rpg again.',
+      exitCode: 1,
+    };
+    process.stderr.write(renderError(presentation, debugMode));
     process.exit(1);
   }
 
@@ -262,13 +275,29 @@ async function main(): Promise<void> {
       }
     }
     if (!prompt) {
-      console.error('Error: provide a world prompt. Example:');
-      console.error('  claude-rpg new "A flooded gothic trade city ruled by debt-priests"');
+      // F-f6983775: see the ANTHROPIC_API_KEY branch above -- same bypass,
+      // same fix.
+      const presentation: ErrorPresentation = {
+        headline: 'World prompt required',
+        explanation: 'claude-rpg new needs a prompt describing the world to generate.',
+        preserved: 'No session was started.',
+        nextAction: 'Example: claude-rpg new "A flooded gothic trade city ruled by debt-priests"',
+        exitCode: 1,
+      };
+      process.stderr.write(renderError(presentation, debugMode));
       process.exit(1);
     }
     await runNew(prompt);
   } else {
-    console.error(`Unknown command: ${command}`);
+    // F-f6983775: this headline sat immediately above the fully-boxed,
+    // styled renderUsage() output with zero color of its own -- red()
+    // matches error-presenter.ts's fatal-headline palette (process.exit(1)
+    // follows, same as every other fatal branch in this file). Full
+    // classifyForPresentation()/renderError() integration doesn't fit here
+    // (this isn't a caught exception, and the full usage screen that
+    // immediately follows already IS the "next action"), so this is the
+    // addendum's documented minimum: red() on the headline.
+    console.error(red(`Unknown command: ${command}`));
     console.log(renderUsage());
     process.exit(1);
   }
@@ -358,6 +387,16 @@ async function runPlay(args: string[]): Promise<void> {
   });
 }
 
+// F-135957de: matches every divider-producing helper elsewhere in this
+// domain (play-renderer.ts's makeDivider(), director-renderer.ts's
+// divider(), status-compact.ts's divider(), usage.ts's rule) -- dim()-wrapped
+// and tracking the real terminal width (PFE-005), used to give runLoad's
+// save listing the same divider()+bold() header treatment
+// renderArchiveBrowser/renderDirectorHelp/renderPlayHelp already use.
+function divider(): string {
+  return dim('─'.repeat(getTerminalWidth()));
+}
+
 async function runLoad(): Promise<void> {
   const saves = await listSaves();
   if (saves.length === 0) {
@@ -381,7 +420,16 @@ async function runLoad(): Promise<void> {
   // hands off to its own permanent SIGINT handler.
   const disposeEarlySigintGuard = installEarlySigintGuard();
 
-  console.log('\n  Saved Games:\n');
+  // F-135957de: this was the entire /load screen -- arguably the
+  // most-used returning-player entry point in the app -- built from raw,
+  // uncolored console.log calls with no framing, unlike its functionally
+  // parallel sibling archive-browser.ts's renderArchiveBrowser (boxed
+  // between two divider() calls with a title).
+  console.log('');
+  console.log(divider());
+  console.log(`  ${bold('SAVED GAMES')}`);
+  console.log(divider());
+  console.log('');
   // F-df387f5b: cap the printed/selectable listing to the most recent
   // SAVE_LISTING_CAP entries instead of every save ever written -- every
   // save action in this app names its file with a fresh Date.now() suffix
@@ -407,7 +455,10 @@ async function runLoad(): Promise<void> {
       // columns for slots 1-9, 8 once a 10th save exists) instead of a
       // hardcoded 7-space literal, so this nests under the identity text
       // above it regardless of how many digits the entry number has.
-      console.log(`${formatSaveSlotIndent(i)}${details.join(' | ')}`);
+      // F-135957de: dim() subordinates this detail line under the identity
+      // line above it, matching every other secondary-text treatment in
+      // this domain (ambient lines, presentation cue lines).
+      console.log(dim(`${formatSaveSlotIndent(i)}${details.join(' | ')}`));
     }
   }
   const olderSavesFooter = formatOlderSavesFooter(saves.length - visibleSaves.length);
@@ -699,7 +750,14 @@ async function runNew(worldPrompt: string): Promise<void> {
   }
 
   if (!result.ok || !result.engine) {
-    console.error('Failed to generate world:');
+    // F-f6983775: this listing is 0..N error strings (result.errors), not a
+    // single Error object, so it doesn't map cleanly onto
+    // ErrorPresentation's single-explanation shape -- red() on the headline
+    // matches error-presenter.ts's fatal palette (process.exit(1) follows),
+    // per the addendum's documented minimum. The bullets themselves stay
+    // plain, matching how renderError() itself leaves `explanation`
+    // uncolored (only headline/preserved/nextAction get color).
+    console.error(red('Failed to generate world:'));
     for (const err of result.errors) {
       console.error(`  - ${err}`);
     }
@@ -967,6 +1025,15 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       // moment (Ctrl+C mid-session) a player most needs to trust the save
       // worked or understand why not.
       presentError(outcome.error, 'save', debugMode);
+    } else if (outcome.status === 'rejected') {
+      // F-bfed3361: 'rejected' means the guard skipped the save entirely --
+      // the closest thing to a data-loss signal this exit flow produces --
+      // but used to fall through to the exact same plain console.log the
+      // routine 'saved' case gets. Now renders with the same severity
+      // signal genuine errors get, so it doesn't visually blend into a
+      // success message at the exact moment (process about to exit) a
+      // player has the least chance to notice and react.
+      console.log(yellow(outcome.message));
     } else {
       console.log(outcome.message);
     }
@@ -998,6 +1065,10 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
           // saved.") for the identical status, and neither ever showed
           // real error detail even under --debug.
           presentError(outcome.error, 'save', debugMode);
+        } else if (outcome.status === 'rejected') {
+          // F-bfed3361: same treatment as the SIGINT handler's autosave
+          // rejection above.
+          console.log(yellow(outcome.message));
         } else {
           console.log(outcome.message);
         }
@@ -1022,7 +1093,15 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
         // Guard against directory traversal in character names
         const expectedDir = resolve(getDefaultSaveDir());
         if (!isPathInside(savePath, expectedDir)) {
-          console.error('  Save path escapes save directory — aborting.');
+          // F-f6983775: this guard rejection sits 13 lines above its own
+          // sibling branch below (the catch block's presentError(err,
+          // 'save', debugMode) for this same command's OTHER failure mode)
+          // yet rendered with zero visual treatment. yellow() matches the
+          // non-fatal/reprompt severity error-presenter.ts uses (this
+          // `continue`s back to the input loop, same shape as a reprompt --
+          // not a fatal exit), and matches F-bfed3361's identical
+          // guard-rejected-the-path treatment in the exit-autosave paths.
+          console.error(yellow('  Save path escapes save directory — aborting.'));
           continue;
         }
         await saveSession(buildSaveInput(session, savePath, packId));

@@ -35,6 +35,29 @@ describe('stream-presenter: markInterrupted', () => {
     expect(output).toContain('[The narrator pauses...]');
   });
 
+  /**
+   * F-f615ff1d: this message used to write plain, uncolored text -- the one
+   * system-status aside in the domain with no color import at all, unlike
+   * play-renderer.ts's renderThinking() (dim(), same "brief aside" category).
+   */
+  it('dims the message when colors are enabled (F-f615ff1d)', async () => {
+    const originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    // Reuses the describe-level writeSpy (already mocking process.stdout.write
+    // via the outer beforeEach) -- vi.resetModules() clears the ES module
+    // registry, not this already-installed spy on the global object.
+    const mod = await import('./stream-presenter.js');
+    mod.renderStreamInterruption();
+    const output = writeSpy.mock.calls.map((c) => c[0]).join('');
+    expect(output).toContain('\x1b[2m'); // dim
+    expect(output).toContain('[The narrator pauses...]');
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    delete process.env.NO_COLOR;
+    vi.resetModules();
+  });
+
   // F-f6485d6c: onChunk used to open with '\n  ' (a 2-space indent), per
   // this line's own comment "match play-renderer narration style" -- but
   // play-renderer.ts's renderPlayScreen pushes opts.narration completely

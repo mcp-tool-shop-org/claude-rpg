@@ -6,7 +6,7 @@
 import { NarrationError } from '../llm/claude-errors.js';
 import { SaveLoadError } from '@ai-rpg-engine/core';
 import { SaveValidationError } from '../session/session.js';
-import { yellow, red, dim, cyan } from './colors.js';
+import { yellow, red, dim, cyan, isColorEnabled } from './colors.js';
 
 export type ErrorPresentation = {
   headline: string;
@@ -260,12 +260,21 @@ export function classifyForPresentation(err: unknown, context: ErrorContext): Er
 export function renderError(presentation: ErrorPresentation, debug: boolean, err?: unknown): string {
   const fatal = presentation.exitCode !== null;
   const headlineColor = fatal ? red : yellow;
+  // F-937c9399: \u26A0/\u2192 used to be baked into the template string
+  // unconditionally, unlike headlineColor/dim/cyan just below (which already
+  // no-op under NO_COLOR or a non-TTY stream) -- so the glyphs printed even
+  // when color was off, violating the POSIX no-color contract this wave's
+  // own addendum names scripts/check-critical-coverage.mjs (F-1a4feed0) as
+  // "the model" fix for. Both glyphs now gate on the same isColorEnabled()
+  // check, falling back to plain ASCII.
+  const warnGlyph = isColorEnabled() ? '\u26A0' : '!';
+  const arrowGlyph = isColorEnabled() ? '\u2192' : '->';
   const lines: string[] = [];
   lines.push('');
-  lines.push(headlineColor(`  \u26A0 ${presentation.headline}`));
+  lines.push(headlineColor(`  ${warnGlyph} ${presentation.headline}`));
   lines.push(`  ${presentation.explanation}`);
   lines.push(dim(`  ${presentation.preserved}`));
-  lines.push(cyan(`  \u2192 ${presentation.nextAction}`));
+  lines.push(cyan(`  ${arrowGlyph} ${presentation.nextAction}`));
   if (fatal) {
     lines.push(red('  Exiting.'));
   }

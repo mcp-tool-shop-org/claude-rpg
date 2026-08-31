@@ -391,3 +391,64 @@ describe('renderDirectorHelp documents the /aftermath alias (F-05e061ec)', () =>
     expect(aftermathLine).toContain('Alias for /world');
   });
 });
+
+/**
+ * F-de13eb60: 8 of the 9 section headers this director-views renderer
+ * produces (a boxed title between two divider() calls) rendered as plain,
+ * uncolored text -- only renderDirectorHelp's own "DIRECTOR MODE" title used
+ * bold(). Representative sample below (ENDGAME TRIGGERS, WORLD PRESSURES) --
+ * each of the 8 shares the identical one-line `bold(...)` wrap.
+ */
+describe('director-renderer section headers are bolded (F-de13eb60)', () => {
+  let originalIsTTY: boolean | undefined;
+
+  afterEach(() => {
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+    delete process.env.NO_COLOR;
+  });
+
+  it('bolds the ENDGAME TRIGGERS header when colors are enabled', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./director-renderer.js');
+
+    const endgameTriggers = [
+      { id: 'e1', resolutionClass: 'victory', detectedAtTick: 10, reason: '', evidence: {}, dominantArc: null, acknowledged: false },
+    ] as any;
+    const result = mod.executeDirectorCommand({ command: '/endgame', world: makeWorld(), endgameTriggers });
+    const headerLine = result.split('\n').find((l) => l.includes('ENDGAME TRIGGERS'));
+    expect(headerLine).toBeDefined();
+    expect(headerLine).toContain('\x1b[1m'); // bold
+  });
+
+  it('bolds the WORLD PRESSURES header when colors are enabled', async () => {
+    originalIsTTY = process.stdout.isTTY;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./director-renderer.js');
+
+    const activePressures = [
+      {
+        kind: 'political', description: 'A pressing threat', sourceFactionId: 'faction-1',
+        sourceNpcId: null, urgency: 0.5, visibility: 'known', turnsRemaining: 5,
+        triggeredBy: 'test', tags: [], potentialOutcomes: [],
+      },
+    ] as any;
+    const result = mod.executeDirectorCommand({ command: '/pressures', world: makeWorld(), activePressures });
+    const headerLine = result.split('\n').find((l) => l.includes('WORLD PRESSURES'));
+    expect(headerLine).toBeDefined();
+    expect(headerLine).toContain('\x1b[1m');
+  });
+
+  it('stays plain text with no escape codes when colors are disabled (default test env)', () => {
+    const endgameTriggers = [
+      { id: 'e1', resolutionClass: 'victory', detectedAtTick: 10, reason: '', evidence: {}, dominantArc: null, acknowledged: false },
+    ] as any;
+    const result = executeDirectorCommand({ command: '/endgame', world: makeWorld(), endgameTriggers });
+    expect(result).toContain('ENDGAME TRIGGERS');
+    expect(result).not.toContain('\x1b[');
+  });
+});

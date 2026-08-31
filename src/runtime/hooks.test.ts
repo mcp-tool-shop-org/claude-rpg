@@ -1,9 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Engine } from '@ai-rpg-engine/core';
+import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { HookManager, registerBuiltinHooks, type HookContext } from './hooks.js';
+
+// F-0ad073b8: a real @ai-rpg-engine Engine (createGame(), the same starter-fantasy
+// pack test/helpers/game-harness.ts and every test/integration/*.test.ts file already
+// use), rebuilt fresh before every test. makeContext()'s default `world` below reads
+// this live engine's own WorldState instead of a second, independently hand-typed
+// WorldState fragment -- so hook dispatch (immersion-runtime.ts, which passes a real
+// engine.world into HookContext) and these hook unit tests now share one real fixture
+// instead of two fixtures that could silently drift apart.
+let engine: Engine;
+
+beforeEach(() => {
+  engine = createGame();
+});
 
 const makeContext = (overrides: Partial<HookContext> = {}): HookContext => ({
   hookPoint: 'pre-narration',
-  world: { zones: {}, entities: {}, playerId: 'player', locationId: 'zone1' } as any,
+  world: engine.world,
   events: [],
   presentationState: 'exploration',
   ...overrides,
@@ -44,6 +59,64 @@ describe('HookManager', () => {
     expect(results.musicCue?.action).toBe('intensify');
   });
 
+  // F-8968741e: a single throwing hook must not abort the OTHER hooks registered
+  // at the same hookPoint -- mirrors the engine's own per-module
+  // ModuleManager.runRound() isolation (one module's throw does not skip the
+  // others). Before this fix, fire()'s bare for-loop had no per-hook try/catch, so
+  // the first throw aborted the loop entirely.
+  it('isolates a throwing hook so sibling hooks at the same hookPoint still run', () => {
+    const manager = new HookManager();
+    const order: string[] = [];
+    manager.register('pre-narration', () => {
+      order.push('first');
+      throw new Error('first hook exploded');
+    });
+    manager.register('pre-narration', () => {
+      order.push('second');
+      return { sfxCues: [{ effectId: 'survived', timing: 'immediate', intensity: 0.5 }] };
+    });
+
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const results = manager.fire(makeContext());
+    stderrSpy.mockRestore();
+
+    expect(order).toEqual(['first', 'second']);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('survived');
+  });
+
+  it('does not throw out of fire() when a registered hook throws', () => {
+    const manager = new HookManager();
+    manager.register('pre-narration', () => {
+      throw new Error('boom');
+    });
+
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(() => manager.fire(makeContext())).not.toThrow();
+    stderrSpy.mockRestore();
+  });
+
+  it('logs which hook and hookPoint failed so a debug session can identify the culprit', () => {
+    const manager = new HookManager();
+    function myBrokenHook() {
+      throw new Error('boom');
+    }
+    manager.register('combat-start', myBrokenHook);
+
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    manager.fire(makeContext({ hookPoint: 'combat-start' }));
+
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('myBrokenHook'),
+      expect.any(Error),
+    );
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('combat-start'),
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
+  });
+
   it('should fire nothing for unregistered hooks', () => {
     const manager = new HookManager();
     const results = manager.fire(makeContext({ hookPoint: 'idle' }));
@@ -56,15 +129,12 @@ describe('enter-room edge cases', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
-    // locationId points to a zone that doesn't exist in the zones map
+    // locationId points to a zone that doesn't exist in the zones map. Spreads the
+    // real engine's own world (F-0ad073b8) rather than hand-typing a whole WorldState
+    // fragment -- only the one field this test deliberately breaks is overridden.
     const ctx = makeContext({
       hookPoint: 'enter-room',
-      world: {
-        zones: {},
-        entities: {},
-        playerId: 'player',
-        locationId: 'nonexistent-zone',
-      } as any,
+      world: { ...engine.world, locationId: 'nonexistent-zone-xyz' },
       events: [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any,
     });
 
@@ -148,14 +218,12 @@ describe('Built-in hooks', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    // F-0ad073b8: uses the real engine's own 'crypt-chamber' zone (tags: interior,
+    // cursed, dark -- packages/starter-fantasy's actual content) instead of a
+    // hand-typed 'Dark Crypt' zone fragment.
     const ctx = makeContext({
       hookPoint: 'enter-room',
-      world: {
-        zones: { zone1: { name: 'Dark Crypt', tags: ['dark', 'cursed'] } },
-        entities: {},
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
+      world: { ...engine.world, locationId: 'crypt-chamber' },
       events: [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any,
     });
 
@@ -191,15 +259,11 @@ describe('deathHook hp-based detection (F-e57d6a60)', () => {
 
     // Mirrors world-gen.ts's environment-hazard effect: hp mutated directly to 0 via
     // entity.resources.hp = Math.max(0, ...), with the triggering event being
-    // world.zone.entered (not any hp/defeat-shaped event).
+    // world.zone.entered (not any hp/defeat-shaped event). F-0ad073b8: mutates the
+    // real engine's own player entity rather than hand-typing a WorldState fragment.
+    engine.world.entities[engine.world.playerId].resources.hp = 0;
     const ctx = makeContext({
       hookPoint: 'death',
-      world: {
-        zones: {},
-        entities: { player: { resources: { hp: 0 } } },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [{ type: 'world.zone.entered', tick: 1, payload: {} }] as any,
     });
 
@@ -213,14 +277,9 @@ describe('deathHook hp-based detection (F-e57d6a60)', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    // Real engine's player already starts at hp 20 > 0 (F-0ad073b8) -- no mutation needed.
     const ctx = makeContext({
       hookPoint: 'death',
-      world: {
-        zones: {},
-        entities: { player: { resources: { hp: 5 } } },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [],
     });
 
@@ -273,14 +332,11 @@ describe('combatEndHook hazard-zeroed-hp suppression (F-f1e475f0)', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    // F-0ad073b8: mutates the real engine's own player entity rather than hand-typing
+    // a WorldState fragment.
+    engine.world.entities[engine.world.playerId].resources.hp = 0;
     const ctx = makeContext({
       hookPoint: 'combat-end',
-      world: {
-        zones: {},
-        entities: { player: { resources: { hp: 0 } } },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
     });
 
@@ -292,14 +348,9 @@ describe('combatEndHook hazard-zeroed-hp suppression (F-f1e475f0)', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    // Real engine's player already starts at hp 20 > 0 (F-0ad073b8) -- no mutation needed.
     const ctx = makeContext({
       hookPoint: 'combat-end',
-      world: {
-        zones: {},
-        entities: { player: { resources: { hp: 5 } } },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
     });
 
@@ -313,22 +364,32 @@ describe('combatEndHook hazard-zeroed-hp suppression (F-f1e475f0)', () => {
 // after every individual kill in a multi-hostile fight ───
 
 describe('combatEndHook waits for the whole encounter (F-d9fc231c)', () => {
+  // F-0ad073b8: adds a hostile entity into the real engine via its own
+  // store.addEntity() (the same API world-gen.ts's NPC-add path uses) instead of
+  // hand-typing a WorldState.entities bag.
+  const addHostile = (id: string, hp: number, zoneId = engine.world.locationId): void => {
+    engine.store.addEntity({
+      id,
+      blueprintId: id,
+      type: 'enemy',
+      name: 'Goblin',
+      tags: ['hostile'],
+      stats: {},
+      resources: { hp },
+      statuses: [],
+      zoneId,
+    });
+  };
+
   it('does not fire the victory cue while another hostile is still alive in the same zone', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    addHostile('goblin-1', 5);
+    addHostile('goblin-2', 0);
+
     const ctx = makeContext({
       hookPoint: 'combat-end',
-      world: {
-        zones: {},
-        entities: {
-          player: { resources: { hp: 10 } },
-          'goblin-1': { tags: ['hostile'], resources: { hp: 5 }, zoneId: 'zone1' },
-          'goblin-2': { tags: ['hostile'], resources: { hp: 0 }, zoneId: 'zone1' },
-        },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-2' } }] as any,
     });
 
@@ -340,17 +401,10 @@ describe('combatEndHook waits for the whole encounter (F-d9fc231c)', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    addHostile('goblin-1', 0);
+
     const ctx = makeContext({
       hookPoint: 'combat-end',
-      world: {
-        zones: {},
-        entities: {
-          player: { resources: { hp: 10 } },
-          'goblin-1': { tags: ['hostile'], resources: { hp: 0 }, zoneId: 'zone1' },
-        },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
     });
 
@@ -363,18 +417,11 @@ describe('combatEndHook waits for the whole encounter (F-d9fc231c)', () => {
     const manager = new HookManager();
     registerBuiltinHooks(manager);
 
+    addHostile('goblin-1', 0);
+    addHostile('bandit-1', 20, 'zone-far-away');
+
     const ctx = makeContext({
       hookPoint: 'combat-end',
-      world: {
-        zones: {},
-        entities: {
-          player: { resources: { hp: 10 } },
-          'goblin-1': { tags: ['hostile'], resources: { hp: 0 }, zoneId: 'zone1' },
-          'bandit-1': { tags: ['hostile'], resources: { hp: 20 }, zoneId: 'zone-far-away' },
-        },
-        playerId: 'player',
-        locationId: 'zone1',
-      } as any,
       events: [{ type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'goblin-1' } }] as any,
     });
 

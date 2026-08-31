@@ -111,12 +111,31 @@ export class HookManager {
     this.hooks.set(point, existing);
   }
 
+  /**
+   * F-8968741e: each hook call is isolated in its own try/catch, mirroring the
+   * engine's own per-module ModuleManager.runRound() isolation (one module's throw
+   * does not skip the others). Before this, a single throwing hook aborted the
+   * whole loop, so any OTHER hook registered at the same hookPoint never ran that
+   * call -- and because ImmersionRuntime.fireEventHooks dispatches fire() up to 4
+   * times per turn in one uninterrupted synchronous sequence before its own single
+   * outer try/catch, a throw from the first of those also silently skipped the
+   * remaining, unrelated checks for that same turn. register() is a general-purpose
+   * extension point (this file's own header comment), so this isolation must hold
+   * for any future hook landing here, not just today's 5 well-behaved built-ins.
+   */
   fire(context: HookContext): HookResult[] {
     const hooks = this.hooks.get(context.hookPoint) ?? [];
     const results: HookResult[] = [];
     for (const hook of hooks) {
-      const result = hook(context);
-      if (result) results.push(result);
+      try {
+        const result = hook(context);
+        if (result) results.push(result);
+      } catch (err) {
+        console.error(
+          `[hooks] Hook "${hook.name || '<anonymous>'}" at hookPoint "${context.hookPoint}" threw and was skipped:`,
+          err,
+        );
+      }
     }
     return results;
   }

@@ -96,4 +96,61 @@ describe('VoiceSoundboardBridge', () => {
     expect(calls[0].tool).toBe('speak');
     expect(calls[1].tool).toBe('sound_effect');
   });
+
+  // F-de0fd739: the domain dispatch in executeCommands is an if/else-if chain, not a
+  // switch with compiler-enforced exhaustiveness -- a command matching none of the
+  // four known branches must fail visibly (an __unhandled_audio_domain__ marker,
+  // matching this file's existing __music_intent__/__ui_effect_intent__ convention)
+  // instead of silently vanishing with no push to pendingCalls at all.
+  it('emits an __unhandled_audio_domain__ marker for a command whose domain matches no known branch', async () => {
+    const bridge = createBridge();
+    const calls = await bridge.executeCommands([
+      {
+        domain: 'future-domain' as any,
+        action: 'play',
+        resourceId: 'mystery-cue',
+        priority: 50,
+        timing: 0,
+        params: {},
+      },
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].tool).toBe('__unhandled_audio_domain__');
+    expect(calls[0].params).toMatchObject({
+      domain: 'future-domain',
+      action: 'play',
+      resourceId: 'mystery-cue',
+    });
+  });
+
+  it('emits the marker for a KNOWN domain whose action is not "play" (voice/sfx only dispatch on action === "play")', async () => {
+    const bridge = createBridge();
+    const calls = await bridge.executeCommands([
+      {
+        domain: 'voice',
+        action: 'stop',
+        resourceId: 'am_adam',
+        priority: 50,
+        timing: 0,
+        params: {},
+      },
+    ]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].tool).toBe('__unhandled_audio_domain__');
+    expect(calls[0].params).toMatchObject({ domain: 'voice', action: 'stop' });
+  });
+
+  it('does not emit the marker for any of the four known, correctly-dispatched domains', async () => {
+    const bridge = createBridge();
+    const calls = await bridge.executeCommands([
+      { domain: 'voice', action: 'play', resourceId: 'am_adam', priority: 50, timing: 0, params: {} },
+      { domain: 'sfx', action: 'play', resourceId: 'ui_click', priority: 50, timing: 0, params: {} },
+      { domain: 'ambient', action: 'start', resourceId: 'ambient_rain', priority: 50, timing: 0, params: {} },
+      { domain: 'music', action: 'play', resourceId: 'theme', priority: 50, timing: 0, params: {} },
+    ]);
+
+    expect(calls.some((c) => c.tool === '__unhandled_audio_domain__')).toBe(false);
+  });
 });

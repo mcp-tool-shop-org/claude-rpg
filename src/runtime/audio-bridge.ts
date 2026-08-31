@@ -164,6 +164,25 @@ export class VoiceSoundboardBridge implements PresentationRenderer {
           trackId: cmd.resourceId || undefined,
           fadeMs: (cmd.params.fadeMs as number) ?? 1000,
         });
+      } else {
+        // F-de0fd739: this if/else-if chain is a runtime string comparison, not a
+        // switch with compiler-enforced exhaustiveness -- confirmed exhaustive
+        // against @ai-rpg-engine/audio-director's CURRENT AudioDomain union (exactly
+        // 'voice' | 'sfx' | 'ambient' | 'music'), but a future engine version adding
+        // a 5th domain (or a voice/sfx command whose action isn't 'play') would
+        // otherwise vanish here silently -- no push to pendingCalls, no signal at
+        // all, unlike every branch above which at least reaches a real tool call or
+        // (for music/uiEffects elsewhere in this file) an __*_intent__ marker.
+        // Matches this file's existing __music_intent__/__ui_effect_intent__
+        // convention so an unhandled command fails visibly instead of silently.
+        this.pendingCalls.push({
+          tool: '__unhandled_audio_domain__',
+          params: {
+            domain: cmd.domain,
+            action: cmd.action,
+            resourceId: cmd.resourceId,
+          },
+        });
       }
     }
     return this.flush();

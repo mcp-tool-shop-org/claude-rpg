@@ -327,15 +327,36 @@ export type CliHandle = {
    */
   waitForStdoutCount: (needle: string, minCount: number, timeoutMs?: number) => Promise<void>;
   waitForExit: (timeoutMs?: number) => Promise<number | null>;
+  /** Set if the child process or its stdin pipe ever emitted an 'error' event (e.g. EPIPE from a sendLine() after the process died). Undefined if none occurred yet. */
+  spawnError: () => Error | undefined;
 };
 
 /** Spawns the bundled bin.cjs as a real child process with piped stdio. */
 export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessEnv): CliHandle {
   let stdoutBuf = '';
   let stderrBuf = '';
+  let spawnErr: Error | undefined;
   const child = spawn(process.execPath, [entryPath, ...args], { env, stdio: ['pipe', 'pipe', 'pipe'] });
   child.stdout.on('data', (chunk: Buffer) => { stdoutBuf += chunk.toString('utf-8'); });
   child.stderr.on('data', (chunk: Buffer) => { stderrBuf += chunk.toString('utf-8'); });
+  // F-856ade7b: without these, an 'error' on the child process itself or on
+  // its stdin pipe (e.g. EPIPE from sendLine()'s child.stdin.write() firing
+  // after the real bin.ts process has already exited -- precisely the
+  // scenario a genuine bin.ts regression, the thing this harness exists to
+  // catch, would cause) has zero listeners. Per Node's EventEmitter
+  // contract, an unhandled 'error' event throws and crashes the whole
+  // vitest worker running this file, not just the one test. Mirrors this
+  // same file's own `server.once('error', reject)` pattern already used by
+  // startMockAnthropicServer/startFlakyAnthropicServer below. Captured onto
+  // stderrBuf (so it surfaces in the existing waitFor timeout diagnostics,
+  // which print stderrBuf) and onto a dedicated spawnError() getter so a
+  // test can also assert on it directly.
+  const captureSpawnError = (source: 'child' | 'stdin') => (err: Error) => {
+    spawnErr = err;
+    stderrBuf += `\n[spawnCli ${source} error]: ${err.stack ?? String(err)}\n`;
+  };
+  child.on('error', captureSpawnError('child'));
+  child.stdin.on('error', captureSpawnError('stdin'));
 
   function waitFor(getBuf: () => string, pattern: string | RegExp, timeoutMs: number, label: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -365,6 +386,7 @@ export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessE
     child,
     stdout: () => stdoutBuf,
     stderr: () => stderrBuf,
+    spawnError: () => spawnErr,
     sendLine: (line: string) => {
       child.stdin.write(`${line}\n`);
     },

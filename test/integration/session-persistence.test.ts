@@ -1,7 +1,47 @@
 // Persistence tests: save/load round-trip, corruption handling, write integrity.
 // Uses real filesystem via temp directories.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// F-b7e5bb95: control flags let individual tests force node:fs/promises's
+// rename() to fail at specific points inside saveSession()'s atomic-write
+// sequence (src/session/session.ts's Step 3 tmp -> save rename, and its
+// "best effort" backup-restore recovery attempt in that step's catch
+// block), while every other rename() call -- and every other fs/promises
+// function used by this file and by session.ts -- keeps its real behavior.
+// vi.hoisted() is required because vi.mock() factories run before normal
+// module-scope const/let bindings would otherwise be initialized.
+const renameControl = vi.hoisted(() => ({
+  failNextTmpRename: false,
+  failNextBakRestore: false,
+}));
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    rename: vi.fn(async (...args: Parameters<typeof actual.rename>) => {
+      const src = String(args[0]);
+      // session.ts's Step 3 is rename(tmpPath, savePath); tmpPath is always
+      // `${savePath}.tmp.${randomHex}`, so '.tmp.' in the source uniquely
+      // identifies this call versus the Step 2 backup rename (savePath ->
+      // .bak) and the backup-restore rename below, neither of which ever
+      // has '.tmp.' in its source path.
+      if (renameControl.failNextTmpRename && src.includes('.tmp.')) {
+        renameControl.failNextTmpRename = false;
+        throw new Error('simulated rename failure (tmp -> save)');
+      }
+      // The backup-restore rename (bakPath -> savePath, inside Step 3's own
+      // catch block) is the only rename() call whose source ends in '.bak'.
+      if (renameControl.failNextBakRestore && src.endsWith('.bak')) {
+        renameControl.failNextBakRestore = false;
+        throw new Error('simulated rename failure (backup restore)');
+      }
+      return actual.rename(...args);
+    }),
+  };
+});
+
 import { mkdtemp, rm, writeFile, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -28,6 +68,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // Defensive reset: the one-shot flags are cleared by the mock itself the
+  // moment they trigger, but a test that fails before triggering one (or an
+  // assertion that throws first) could otherwise leave a flag set and bleed
+  // into the next test.
+  renameControl.failNextTmpRename = false;
+  renameControl.failNextBakRestore = false;
   await rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -270,5 +316,86 @@ describe('write integrity', () => {
     await saveSession({ engine, history, tone: 'dark fantasy', savePath: deepPath });
     const result = await loadSession(deepPath);
     expect(result.session.schemaVersion).toBe(2);
+  });
+});
+
+// ─── Write Integrity — Rename-Failure Recovery (F-b7e5bb95) ───
+//
+// The success-path tests above never force a failure inside saveSession()'s
+// write-tmp -> rename-to-.bak -> rename-tmp-to-final sequence, so neither
+// direction of its recovery logic (src/session/session.ts:255-264) was ever
+// verified: does restoring the .bak actually put the original save back
+// when the final rename fails, and what happens to the player's save if
+// the restore-of-backup ALSO fails. Both cases mock only node:fs/promises's
+// rename() (see renameControl above) -- every other write in the sequence
+// runs against the real filesystem via the shared tmpDir.
+
+describe('write integrity: rename failure recovery', () => {
+  it('restores the previous save from .bak when the tmp -> save rename fails, and the failure surfaces to the caller', async () => {
+    const engine = createGame();
+    const history = new TurnHistory();
+    const path = savePath();
+
+    // Establish a real, successful first save to recover back to.
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
+    const firstContent = await readFile(path, 'utf-8');
+
+    // Force only this second save's Step 3 rename (tmp -> save) to fail.
+    // Step 2 (save -> .bak) and the Step-3-catch backup-restore rename
+    // (.bak -> save) both run for real and are expected to succeed.
+    history.record({ tick: 1, playerInput: 'look', verb: 'look', narration: 'test' });
+    renameControl.failNextTmpRename = true;
+
+    await expect(
+      saveSession({ engine, history, tone: 'dark fantasy', savePath: path }),
+    ).rejects.toThrow('simulated rename failure (tmp -> save)');
+
+    // The failed save must not have clobbered the original: session.ts's
+    // "Step 3 failed -- restore backup if we moved it" should have put the
+    // first save's content back at `path`.
+    const contentAfterFailure = await readFile(path, 'utf-8');
+    expect(contentAfterFailure).toBe(firstContent);
+
+    // And it must still be a valid, loadable save -- not just byte-identical.
+    const result = await loadSession(path);
+    expect(result.session.schemaVersion).toBe(2);
+
+    // No leaked tmp file from the failed attempt (session.ts's outer catch
+    // unlinks tmpPath on any failure).
+    const files = await readdir(tmpDir);
+    expect(files.filter((f) => f.includes('.tmp.'))).toHaveLength(0);
+  });
+
+  it('leaves the save discoverable at .bak, not silently lost, when the backup-restore rename also fails', async () => {
+    const engine = createGame();
+    const history = new TurnHistory();
+    const path = savePath();
+
+    await saveSession({ engine, history, tone: 'dark fantasy', savePath: path });
+    const firstContent = await readFile(path, 'utf-8');
+
+    history.record({ tick: 1, playerInput: 'look', verb: 'look', narration: 'test' });
+    renameControl.failNextTmpRename = true;
+    renameControl.failNextBakRestore = true;
+
+    // session.ts's backup-restore attempt is wrapped in an empty catch
+    // ("best effort", no re-throw/log) -- when it ALSO fails, the ORIGINAL
+    // Step 3 error must still be the one that reaches the caller, not
+    // something the restore failure swallows in its place.
+    await expect(
+      saveSession({ engine, history, tone: 'dark fantasy', savePath: path }),
+    ).rejects.toThrow('simulated rename failure (tmp -> save)');
+
+    // The content is not lost -- it survives at .bak, even though nothing
+    // is left at the primary path. This is the discoverability the finding
+    // calls for: a human (or recovery tooling) can find it at <path>.bak
+    // instead of it vanishing with no trace anywhere.
+    await expect(readFile(path, 'utf-8')).rejects.toThrow();
+    const bakContent = await readFile(path + '.bak', 'utf-8');
+    expect(bakContent).toBe(firstContent);
+
+    // No leaked tmp file even in this double-failure branch.
+    const files = await readdir(tmpDir);
+    expect(files.filter((f) => f.includes('.tmp.'))).toHaveLength(0);
   });
 });

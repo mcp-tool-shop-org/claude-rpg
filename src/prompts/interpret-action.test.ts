@@ -57,3 +57,26 @@ describe('interpret-action prompt (BR-002)', () => {
     expect(overResult).toContain('...[truncated]');
   });
 });
+
+// F-4fc952ae (narrative-llm half): game-core's SUPPORTED_VERBS allowlist
+// filters leverage/crafting verb names (bribe, intimidate, salvage, etc.) out
+// of the availableVerbs list reaching this prompt at runtime -- but this
+// prompt's own text still names those same words as subAction examples a few
+// lines above the fix below, which is exactly the wording that could invite
+// the LLM to emit one of them as the top-level "verb" instead of routing it
+// through its umbrella verb's subAction. These tests lock in the explicit
+// rule closing that gap, and confirm the Compound verbs block itself (still
+// authoritative for social/rumor/diplomacy/sabotage routing) is untouched.
+describe('INTERPRET_SYSTEM compound-verb / filtered-surface guidance (F-4fc952ae)', () => {
+  it('instructs the LLM to never emit a subAction name as the top-level verb', () => {
+    expect(INTERPRET_SYSTEM).toMatch(/subAction values only/i);
+    expect(INTERPRET_SYSTEM).toMatch(/never the subAction name itself/i);
+  });
+
+  it('still documents subAction routing for social/rumor/diplomacy/sabotage (unchanged by the filtered surface)', () => {
+    for (const name of ['bribe', 'seed', 'request-meeting', 'plant-evidence']) {
+      expect(INTERPRET_SYSTEM).toContain(name);
+    }
+    expect(INTERPRET_SYSTEM).toContain('"subAction"');
+  });
+});

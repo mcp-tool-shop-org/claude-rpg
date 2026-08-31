@@ -9,6 +9,7 @@ import {
   ENTITIES_MAX_COUNT,
   NARRATE_SYSTEM,
   SOUND_EFFECT_IDS,
+  UI_EFFECT_TYPES,
 } from './narrate-scene.js';
 
 function makeInput(overrides: Partial<SceneNarrationInput> = {}): SceneNarrationInput {
@@ -195,5 +196,28 @@ describe('SOUND_EFFECT_IDS (Coordinator Brief contract #7)', () => {
       expect(typeof gloss).toBe('string');
       expect(gloss.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// F-01127b93: NARRATE_SYSTEM's uiEffects[].type instruction is now rendered
+// FROM the exported UI_EFFECT_TYPES tuple (itself pinned to
+// @ai-rpg-engine/presentation's real UiEffectType via the two-way
+// compile-time check in narrate-scene.ts) instead of a third independent
+// hand-copied literal union. Asserting against the exported UI_EFFECT_TYPES
+// here -- not a re-hardcoded copy -- is what actually proves single-sourcing,
+// matching SOUND_EFFECT_IDS's precedent test above (this is the runtime half
+// of the fix; the typecheck step catches an engine-side rename/addition that
+// this file alone can't observe at vitest-run time since npm test doesn't
+// type-check).
+describe('NARRATE_SYSTEM uiEffects[].type guidance (F-01127b93)', () => {
+  it('renders the uiEffects type union from UI_EFFECT_TYPES, not a separate hardcoded copy', () => {
+    const expected = UI_EFFECT_TYPES.map((t) => `"${t}"`).join(' | ');
+    expect(NARRATE_SYSTEM).toContain(`"type": ${expected}`);
+  });
+
+  it('exports exactly the 5 uiEffect types the prompt has always advertised', () => {
+    expect([...UI_EFFECT_TYPES].sort()).toEqual(
+      ['border-pulse', 'fade-in', 'fade-out', 'flash', 'shake'].sort(),
+    );
   });
 });

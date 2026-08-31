@@ -34,6 +34,7 @@ Compound verbs: For "social", "rumor", "diplomacy", and "sabotage" verbs, includ
 - diplomacy: request-meeting, improve-standing, cash-milestone, negotiate-access, trade-secret, temporary-alliance, broker-truce
 - sabotage: sabotage, plant-evidence, blackmail-target
 Example: "bribe the guard" → { "verb": "social", "targetIds": ["guard-1"], "parameters": { "subAction": "bribe" } }
+The names listed above under each group (bribe, intimidate, seed, plant-evidence, and the rest) are subAction values only, never top-level verbs — only "social", "rumor", "diplomacy", and "sabotage" ever belong in the "verb" field for this group. Even when a subAction name matches the player's wording exactly, or reads as more precise than its umbrella verb, always emit the umbrella verb with that name in parameters.subAction — never the subAction name itself.
 
 Respond with JSON only, no other text:
 {

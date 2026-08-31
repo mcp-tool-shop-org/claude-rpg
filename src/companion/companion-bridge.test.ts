@@ -47,6 +47,13 @@ function makeEngine(
       playerId: 'player',
       entities,
       zones,
+      // F-7994dfff: setPartyState does an unguarded `world.modules[id] = party`
+      // (companion-core.ts:550, no defensive init) -- the real Engine
+      // constructor always initializes world.modules = {} unconditionally, so
+      // this mirrors production. Every recruit-success/dismiss-success/
+      // syncCompanionMorale test now reaches setPartyState and would throw a
+      // TypeError without this.
+      modules: {},
     },
   } as unknown as Engine;
 }
@@ -201,8 +208,9 @@ describe('recruitCompanion', () => {
 
   it('succeeds, tags the entity, and sets custom companion fields', () => {
     const npc = makeEntity();
+    const player = makeEntity({ id: 'player', zoneId: 'zone1' });
     const engine = makeEngine({
-      player: makeEntity({ id: 'player', zoneId: 'zone1' }),
+      player,
       'npc-1': npc,
     });
     const party = createPartyState();
@@ -215,10 +223,21 @@ describe('recruitCompanion', () => {
       expect(result.companion.role).toBe('healer');
       expect(result.companion.joinedAtTick).toBe(5);
       expect(result.companion.morale).toBe(60);
+      // F-7994dfff: Group C dual-write (a) -- party state reaches
+      // world.modules['companion-core'], the namespace getPartyState reads.
+      expect(engine.world.modules['companion-core']).toBe(result.party);
     }
     expect(npc.tags).toContain('companion');
+    // F-7994dfff: Group C dual-write (b) -- the namespaced role tag
+    // combat-core's INTERCEPT_ROLE_BONUS keys off, separate from the bare tag.
+    expect(npc.tags).toContain('companion:healer');
     expect(npc.custom?.companionMorale).toBe(60);
     expect(npc.custom?.companionRole).toBe('healer');
+    // F-7994dfff: Group C dual-write (c) -- actor + target share a truthy
+    // faction so targeting.ts's affiliationOf resolves them as allies instead
+    // of falling back to the type heuristic ('npc' vs 'player', never equal).
+    expect(npc.faction).toBeTruthy();
+    expect(npc.faction).toBe(player.faction);
   });
 
   it('infers ability tags and personal goal from entity custom data when not passed explicitly', () => {
@@ -257,7 +276,10 @@ describe('recruitCompanion', () => {
 describe('dismissCompanion', () => {
   it('removes the companion tag and custom fields when the companion is found', () => {
     const npc = makeEntity({
-      tags: ['recruitable', 'companion'],
+      // F-7994dfff: includes the namespaced role tag a real recruitCompanion
+      // call now pushes, so this test actually exercises its removal rather
+      // than trivially passing on a fixture that never had it.
+      tags: ['recruitable', 'companion', 'companion:scout'],
       custom: { companionMorale: 70, companionRole: 'scout' },
     });
     const engine = makeEngine({ player: makeEntity({ id: 'player' }), 'npc-1': npc });
@@ -269,8 +291,13 @@ describe('dismissCompanion', () => {
     expect(result.removed?.npcId).toBe('npc-1');
     expect(result.party.companions).toHaveLength(0);
     expect(npc.tags).not.toContain('companion');
+    // F-7994dfff: the namespaced role tag is stripped alongside the bare tag.
+    expect(npc.tags).not.toContain('companion:scout');
     expect(npc.custom?.companionMorale).toBeUndefined();
     expect(npc.custom?.companionRole).toBeUndefined();
+    // F-7994dfff: party state reaches world.modules['companion-core'],
+    // reflecting the post-removal (empty) party.
+    expect(engine.world.modules['companion-core']).toBe(result.party);
   });
 
   it('returns removed: undefined and leaves the entity untouched when the npc is not in the party', () => {

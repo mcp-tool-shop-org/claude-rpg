@@ -7,6 +7,8 @@ import {
   removeCompanion,
   getActiveCompanions,
   isCompanionRecruitable,
+  setPartyState,
+  companionRoleTag,
   type CompanionRole,
   type CompanionState,
   type PartyState,
@@ -121,6 +123,25 @@ export function recruitCompanion(
     };
   }
 
+  // F-7994dfff: Group C dual-writes -- a companion is never "half-real".
+  // Mirrors companion-core.ts's own recruitHandler (E:/AI/ai-rpg-engine
+  // /packages/modules/src/companion-core.ts:703-718): (a) party state must
+  // reach world.modules['companion-core'] or every engine-side reader
+  // (getPartyState, combat-core, npc-agency) degrades to a stale/empty
+  // party; (b) the namespaced 'companion:<role>' tag is what
+  // combat-core.ts's INTERCEPT_ROLE_BONUS keys off, separate from the bare
+  // 'companion' tag already pushed above; (c) actor + target must share a
+  // truthy faction or targeting.ts's affiliationOf falls back to the type
+  // heuristic ('npc' vs 'player'), which never matches -- every companion
+  // would resolve as an enemy in combat/ability targeting/NPC cognition.
+  setPartyState(engine.world, addResult.party);
+  entity.tags.push(companionRoleTag(role));
+  if (player) {
+    const partyFaction = player.faction ?? 'party';
+    player.faction = partyFaction;
+    entity.faction = partyFaction;
+  }
+
   return { ok: true, party: addResult.party, companion };
 }
 
@@ -140,12 +161,20 @@ export function dismissCompanion(
   if (result.removed) {
     const entity = engine.world.entities[npcId];
     if (entity) {
-      entity.tags = entity.tags.filter((t) => t !== 'companion');
+      // F-7994dfff: strip the namespaced role tag alongside the bare
+      // 'companion' tag -- otherwise combat-core's INTERCEPT_ROLE_BONUS
+      // keeps scoring a departed companion's role tag forever.
+      entity.tags = entity.tags.filter((t) => t !== 'companion' && t !== companionRoleTag(result.removed!.role));
       if (entity.custom) {
         delete entity.custom.companionMorale;
         delete entity.custom.companionRole;
       }
     }
+    // F-7994dfff: gated on result.removed so the reject path ("is not in
+    // your party") never fires a wasted write -- and runs even when the
+    // entity itself is already gone from world.entities, since the party
+    // roster change still needs to reach world.modules['companion-core'].
+    setPartyState(engine.world, result.party);
   }
 
   return result;
@@ -184,6 +213,11 @@ export function syncCompanionMorale(engine: Engine, party: PartyState): void {
       entity.custom.companionMorale = comp.morale;
     }
   }
+  // F-7994dfff: this is the one chokepoint game.ts already calls after every
+  // morale-affecting event -- without this, getPartyState keeps returning
+  // stale morale from world.modules['companion-core'] even after recruit/
+  // dismiss start writing it.
+  setPartyState(engine.world, party);
 }
 
 // --- Role Inference ---

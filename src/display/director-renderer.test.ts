@@ -14,6 +14,34 @@ function makeWorld(): any {
     },
     zones: {},
     state: {},
+    // F-6b72db54: a real WorldState always carries `.modules` (populated by
+    // buildWorldStack); this stub omitted it and nothing in this file
+    // exercised a module-state reader before. district-core.ts's
+    // getModuleState indexes `world.modules['district-core']` with no
+    // optional-chain on `.modules` itself, so an absent `.modules` throws
+    // rather than falling through to its own empty-state default.
+    modules: {},
+  };
+}
+
+// F-6b72db54: a world whose CURRENT district (world.locationId) has a
+// district-core definition carrying the given tags, for exercising
+// getAvailableRecipes' requiredTags filter via the '/craft' case. Shape
+// matches district-core.ts's own module-state fallback (getModuleState's
+// default: { districts: {}, zoneToDistrict: {}, definitions: {} }).
+function makeWorldWithDistrictTags(districtId: string, tags: string[]): any {
+  return {
+    ...makeWorld(),
+    locationId: districtId,
+    modules: {
+      'district-core': {
+        districts: {},
+        zoneToDistrict: {},
+        definitions: {
+          [districtId]: { id: districtId, name: 'Test District', zoneIds: [], tags },
+        },
+      },
+    },
   };
 }
 
@@ -204,6 +232,35 @@ describe('executeDirectorCommand', () => {
   it('should return "No finale generated" when finaleOutline is null', () => {
     const result = executeDirectorCommand({ command: '/finale', world: makeWorld(), finaleOutline: null });
     expect(result).toContain('No finale generated');
+  });
+
+  // --- /craft output ---
+
+  // F-6b72db54: getAvailableRecipes' requiredTags filter (crafting-recipes.ts)
+  // drops ANY tag-gated recipe when no tags are passed at all -- not shown
+  // as "missing requirements," just silently absent. 'Bless Item' (fantasy
+  // genre, requiredTags: ['sacred']) is one of exactly two recipes gated
+  // this way today. Before this fix, '/craft' called getAvailableRecipes
+  // with no tag arguments whatsoever, so this recipe could never appear in
+  // this preview in ANY world, sacred district or not.
+  it('includes a requiredTags-gated recipe when the current district carries the matching tag', () => {
+    const world = makeWorldWithDistrictTags('temple_quarter', ['sacred']);
+    const result = executeDirectorCommand({ command: '/craft', world, profileCustom: {} });
+    expect(result).toContain('Bless Item');
+  });
+
+  it('omits a requiredTags-gated recipe when the current district carries a different tag', () => {
+    const world = makeWorldWithDistrictTags('market_square', ['commerce']);
+    const result = executeDirectorCommand({ command: '/craft', world, profileCustom: {} });
+    expect(result).not.toContain('Bless Item');
+  });
+
+  it('omits a requiredTags-gated recipe when the current district has no district-core definition at all', () => {
+    const result = executeDirectorCommand({ command: '/craft', world: makeWorld(), profileCustom: {} });
+    expect(result).not.toContain('Bless Item');
+    // Sanity check this isn't a wholesale craft failure -- an ungated
+    // recipe in the same genre still shows.
+    expect(result).toContain('Brew Potion');
   });
 
   // --- /party output ---

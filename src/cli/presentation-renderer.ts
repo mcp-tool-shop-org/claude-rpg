@@ -134,6 +134,24 @@ function renderAmbientLine(params: Record<string, unknown>): string {
   return dim(`  · ambient: ${label}`);
 }
 
+/**
+ * F-53ca7db8: unmatched `action` values used to fall through to the same
+ * '  · music starts' text as an explicit 'play' -- honest for an actual
+ * unrecognized value, but wrong the moment AudioDirector.scheduleSting()
+ * (engine 3.9) starts firing: audio-bridge.ts's executeCommands() force-casts
+ * the runtime string 'sting' into MusicCue's action type via an `as` cast
+ * that lies to the type system without changing the value this function
+ * actually receives, so a victory/defeat combat sting would have silently
+ * rendered as generic "music starts" with no error. 'sting' now gets its own
+ * distinct phrasing. `action` is typed `string | undefined` (via
+ * stringParam), never MusicCue's narrower action union, so adding this case
+ * needed no `as` cast or other type-widening of its own.
+ *
+ * Also splits the old combined 'play'/default case: default no longer
+ * claims music "starts" for a value that isn't actually 'play' -- an
+ * as-yet-unknown future action now gets a neutral "music changes" instead of
+ * a specific claim this function has no evidence for.
+ */
 function renderMusicLine(params: Record<string, unknown>): string {
   const action = stringParam(params, 'action');
   switch (action) {
@@ -145,9 +163,12 @@ function renderMusicLine(params: Record<string, unknown>): string {
       return dim('  · music fades out');
     case 'crossfade':
       return dim('  · music shifts');
+    case 'sting':
+      return dim('  · a sting of music');
     case 'play':
-    default:
       return dim('  · music starts');
+    default:
+      return dim('  · music changes');
   }
 }
 

@@ -77,7 +77,20 @@ export function renderPlayScreen(opts: {
   narration: string;
   dialogue?: DialogueResult | null;
   world: WorldState;
-  availableActions: string[];
+  /**
+   * F-fa6524ec: this function body never reads opts.availableActions --
+   * every caller (in this domain and out of it) had to compute the full
+   * available-actions list purely to satisfy what was a REQUIRED field, for
+   * a value unconditionally discarded here. Engine 3.9 widens what that
+   * computation returns (~24 player-leverage verbs plus the new
+   * salvage/craft/repair/modify and quest/equip verbs), so callers were
+   * paying more to produce a value nothing here reads. Made optional rather
+   * than deleted so no caller in another domain needs an edit this wave.
+   * Wiring this into an actual rendered hint line (e.g. an "Available:
+   * ..." line) is a feature-pass candidate gated on a Director ruling, not
+   * decided here.
+   */
+  availableActions?: string[];
   profileStatus?: StatusData;
   leverageStatus?: string;
   partyStatusLine?: string;

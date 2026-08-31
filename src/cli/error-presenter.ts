@@ -4,6 +4,7 @@
 // v1.1: semantic terminal coloring
 
 import { NarrationError } from '../llm/claude-errors.js';
+import { SaveLoadError } from '@ai-rpg-engine/core';
 import { SaveValidationError } from '../session/session.js';
 import { yellow, red, dim, cyan } from './colors.js';
 
@@ -80,7 +81,36 @@ function presentSaveError(_err: Error): ErrorPresentation {
   };
 }
 
+/** Headline for a structured engine SaveLoadError, keyed off its `.code`. */
+function saveLoadErrorHeadline(code: SaveLoadError['code']): string {
+  switch (code) {
+    case 'SAVE_VERSION_UNSUPPORTED':
+      return 'Incompatible save version';
+    case 'SAVE_MODULE_MIGRATION_FAILED':
+      return 'Save migration failed';
+    case 'SAVE_MALFORMED':
+      return 'Save file corrupted';
+  }
+}
+
 function presentLoadError(err: Error): ErrorPresentation {
+  // F-0b17db86: @ai-rpg-engine/core's SaveLoadError (thrown by
+  // Engine.deserialize / WorldStore.deserialize) is a separate, structurally
+  // typed error from claude-rpg's own SaveValidationError below — checked
+  // first via instanceof + its `.code`/`.hint` fields (never message
+  // string-matching), so the engine team's purpose-written diagnostic
+  // survives instead of falling into the generic bucket at the end of this
+  // function once a caller adopts Engine.deserialize().
+  if (err instanceof SaveLoadError) {
+    return {
+      headline: saveLoadErrorHeadline(err.code),
+      explanation: err.message,
+      preserved: 'No session was started. The save file was not modified.',
+      nextAction: err.hint,
+      exitCode: 1,
+    };
+  }
+
   const isSaveValidation = err instanceof SaveValidationError;
   const isFutureVersion = isSaveValidation && err.message.includes('newer version');
   const isMissingVersion = isSaveValidation && err.message.includes('no recognizable version');

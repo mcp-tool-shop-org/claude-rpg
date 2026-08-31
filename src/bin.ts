@@ -977,9 +977,12 @@ function buildUnifiedRecap(
   );
 
   // Build faction names from engine world state
+  // F-50cab734: session.engine.world.factions is Record<string, FactionState>
+  // and FactionState.name is a required (non-optional) string at engine 3.9
+  // (packages/core/src/types.ts) — no cast needed to read it type-safely.
   const factionNames: Record<string, string> = {};
   for (const [id, faction] of Object.entries(session.engine.world.factions)) {
-    factionNames[id] = (faction as Record<string, unknown>).name as string ?? id;
+    factionNames[id] = faction.name ?? id;
   }
 
   const whatPeopleAreSaying = deriveWhatPeopleAreSaying(

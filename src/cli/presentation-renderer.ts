@@ -30,17 +30,20 @@
 // does not need its own separate color gate.
 
 import type { McpToolCall } from '../runtime/audio-bridge.js';
+// F-3e0274e7: UiEffectType used to be a hand-copied local union with a
+// comment claiming it mirrored @ai-rpg-engine/presentation's UiEffectType —
+// verified byte-identical, but with zero compile-time coupling to the
+// package it claimed to track, so an engine-side rename or added variant
+// would have desynced silently. Imported directly instead (a pure
+// string-literal type export, zero runtime cost): a future drift is now a
+// compile error here, not a silent one. The '__ui_effect_intent__' call's
+// `params.type` field carries this shape (see audio-bridge.ts's
+// applyUiEffect) but params is a loosely-typed Record<string, unknown> at
+// this boundary, so the value is narrowed defensively below (renderUiEffectLine)
+// rather than trusted outright.
+import type { UiEffectType } from '@ai-rpg-engine/presentation';
 import { dim, critical } from './colors.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
-
-/**
- * Mirrors @ai-rpg-engine/presentation's UiEffectType. The '__ui_effect_intent__'
- * call's `params.type` field carries this shape (see audio-bridge.ts's
- * applyUiEffect) but params is a loosely-typed Record<string, unknown> at
- * this boundary, so the value is narrowed defensively below rather than
- * trusted outright.
- */
-type UiEffectType = 'flash' | 'shake' | 'fade-in' | 'fade-out' | 'border-pulse';
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];

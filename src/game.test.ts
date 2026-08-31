@@ -1656,6 +1656,26 @@ describe('GameSession', () => {
       expect(output).toBe('__QUIT__');
     });
 
+    it("keeps stateMachine.current at 'menu' through quit's early return (F-84de6285 -- read-side value cli-display's bin.ts buildSaveInput fix depends on, since bin.ts sits outside this domain's owned files)", async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      h.session.immersion.stateMachine.transition('menu', 'test-setup');
+
+      const output = await h.play('quit');
+
+      expect(output).toBe('__QUIT__');
+      // processInput()'s quit branch returns '__QUIT__' before the immersion
+      // runtime or downed-gate is touched at all (see game.ts's early
+      // 'quit'/'exit' check, which runs ahead of the F-6bc0721e downed
+      // gate) -- so this locks in that stateMachine.current is still
+      // 'menu' at the exact moment quit resolves, not reset to
+      // 'exploration' or inferred to anything else as a side effect of the
+      // quit path. bin.ts's buildSaveInput reads this same
+      // session.immersion.stateMachine.current to populate
+      // presentationState on every quit/SIGINT/stdin-closed/manual save.
+      expect(h.session.immersion.stateMachine.current).toBe('menu');
+    });
+
     it('"continue" transitions back to exploration without consuming a turn, and the next ordinary turn proceeds normally', async () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
       const h = createHarness();

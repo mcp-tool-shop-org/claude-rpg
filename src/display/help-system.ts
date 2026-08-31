@@ -236,6 +236,36 @@ export const PACK_ONBOARDING: Record<string, PackOnboarding> = {
     ],
     dangerWarning: 'The colony AI tracks everything. High surveillance means high risk.',
   },
+  // F-385767ef: Group D registers two new packs in packs.ts's allPacks
+  // (salt-road-ledger / @ai-rpg-engine/starter-merchant, hue-and-cry /
+  // @ai-rpg-engine/starter-bounty-hunter) -- both entries below are the
+  // matching PACK_ONBOARDING halves the F-6c9e02d4 drift guard requires.
+  // Sourced from each pack's own packMeta.tagline/description/narratorTone
+  // and content.ts (NPCs, zones, granted verbs), not guessed.
+  'salt-road-ledger': {
+    quickstartTitle: 'Salt Road Ledger Quickstart',
+    flavorIntro: 'Every coin you are owed is a knife someone else is holding. You are trading on a house that is not yours.',
+    keyLeverageGuidance: [
+      'Liquidity is what you can spend without calling in a debt',
+      'Lien piles up on overdue obligations -- the Guild seizes an asset at 70',
+      'The ledger-book already grants audit; register with the Guild to earn the seal that grants consign',
+      'The Warrens pay better than the bonded Floor, with no recourse if you are shorted',
+    ],
+    suggestedFirstMoves: ['talk to corvane', 'inspect the house ledger', 'audit your books'],
+    dangerWarning: 'The Standing Account gets harder the deeper your lien runs. Keep your books clean before the audit.',
+  },
+  'hue-and-cry': {
+    quickstartTitle: 'Hue and Cry Quickstart',
+    flavorIntro: 'There is no law here. There is a price, and there is you.',
+    keyLeverageGuidance: [
+      'Warrant is your legal cover from the office -- spend it on collars, not grudges',
+      'Infamy buys a hearing in the Rookery, where warrant means nothing',
+      'Bring marks in breathing -- the board does not pay for meat',
+      'An informant sells the truth once; the second telling costs more',
+    ],
+    suggestedFirstMoves: ['talk to hesper', 'inspect the board of hue', 'sign for a ticket'],
+    dangerWarning: 'Jonathan Quill is the strongest fight in the ward. He does not get harder to hit -- he gets harder to face.',
+  },
 };
 
 export function getPackOnboarding(packId: string): PackOnboarding | undefined {
@@ -258,6 +288,12 @@ export const GENRE_TO_PACK: Record<string, string> = {
   gladiator: 'iron-colosseum',
   ronin: 'jade-veil',
   vampire: 'crimson-court',
+  // F-385767ef: Group D's two new PackGenre values (packMeta.genres), each
+  // confirmed unclaimed by every existing pack -- no collision, so a plain
+  // addition suffices (unlike the Record<string,string> shape-rethink the
+  // F-6c9e02d4 fix note warned a genre collision would force).
+  mercantile: 'salt-road-ledger',
+  pursuit: 'hue-and-cry',
 };
 
 /** Get onboarding data by genre (for first-turn guidance). */

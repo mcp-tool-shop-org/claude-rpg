@@ -460,16 +460,26 @@ describe('renderDeathScreen (F-7484bd2e, SLATE-6, director ruling R3: setback no
   it('offers a continue-first affordance (a setback, not an ending) and only promises real commands', () => {
     const output = renderDeathScreen({ narration: 'Darkness takes you.' });
     expect(output).toContain('"continue"');
-    // F-7d57bf98 (wave-6 amend): the previous pin here asserted
-    // '"quit" will save and exit.' on the theory that "saving happens on
-    // quit/autosave, so the copy promises exactly that" -- that theory is
-    // false. "save" IS a real dispatchable command (bin.ts:819,
-    // `if (trimmed === 'save')`), separate from quit, and neither
-    // game.ts's __QUIT__ sentinel nor bin.ts's __QUIT__ handler
-    // (bin.ts:904-913) ever calls it. Inverted to pin the honest copy and
-    // guard against the false promise regressing.
-    expect(output).toContain('"quit" exits without saving');
-    expect(output).toContain('"save" first');
+    // F-c6da7ad9 (wave-13 amend): inverts F-7d57bf98's pin in the other
+    // direction. F-7d57bf98 pinned '"quit" exits without saving -- type
+    // "save" first' because at the time nothing on the quit path saved --
+    // neither game.ts's __QUIT__ sentinel nor bin.ts's __QUIT__ handler ever
+    // called saveSession. This wave wires bin.ts's __QUIT__ handler through
+    // the same guarded attemptExitAutosave contract the SIGINT and
+    // stdin-closed/EOF paths already use, so quit really does save now --
+    // re-pinned to the new copy, with F-7d57bf98's old wording guarded
+    // against regressing back.
+    //
+    // The blunt, unconditional '"quit" will save and exit.' phrasing stays
+    // guarded too: attemptExitAutosave can still return 'rejected' (path
+    // guard) or 'failed' (write error), so that absolute a promise would
+    // again be false -- the new copy's "like Ctrl+C" phrasing states the
+    // common case without guaranteeing it. The '"save" and "quit"' guard
+    // also stays: "save" remains its own separate dispatchable command
+    // (bin.ts's `if (trimmed === 'save')`), not merged into quit.
+    expect(output).toContain('"quit" now saves your progress automatically, like Ctrl+C.');
+    expect(output).not.toContain('"quit" exits without saving');
+    expect(output).not.toContain('"save" first');
     expect(output).not.toContain('"quit" will save and exit.');
     expect(output).not.toContain('"save" and "quit"');
   });

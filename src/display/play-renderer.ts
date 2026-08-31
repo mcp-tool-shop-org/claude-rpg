@@ -338,14 +338,18 @@ export function renderDeathScreen(opts: { narration: string; characterName?: str
   parts.push('');
   parts.push(dim('─'.repeat(getTerminalWidth())));
   parts.push(hint('  Type "continue" when you are ready to rise.'));
-  // F-7d57bf98: this used to promise '"quit" will save and exit.', but
-  // nothing on the actual quit path saves -- game.ts's processInput()
-  // returns the __QUIT__ sentinel with no save call, and bin.ts's
-  // __QUIT__ handler only prints the recap and exits. Fixed the COPY to
-  // match reality (per coordinator ruling, quit's behavior is unchanged
-  // this wave) -- ' "save" first' matches the house voice already used
-  // by error-presenter.ts's 'type "save" to keep your progress.'
-  parts.push(hint('  "quit" exits without saving -- type "save" first to keep this.'));
+  // F-7d57bf98 (superseded by F-c6da7ad9): this line used to promise '"quit"
+  // will save and exit.' when nothing on the quit path actually saved --
+  // game.ts's processInput() returned the __QUIT__ sentinel with no save
+  // call, and bin.ts's __QUIT__ handler only printed the recap and exited.
+  // F-7d57bf98 flipped the copy to the honest '"quit" exits without saving'.
+  // F-c6da7ad9 (this wave) wires bin.ts's __QUIT__ handler through the same
+  // guarded attemptExitAutosave contract the SIGINT and stdin-closed/EOF
+  // paths already use, making the original promise true again -- flipped
+  // back to match the new reality. attemptExitAutosave can still return
+  // 'rejected'/'failed' (path-guard rejection, write error), so this states
+  // the common case without over-promising a guarantee.
+  parts.push(hint('  "quit" now saves your progress automatically, like Ctrl+C.'));
   parts.push('');
   return parts.join('\n');
 }

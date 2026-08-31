@@ -61,6 +61,48 @@ export function isCriticalHp(hp: number, maxHp?: number): boolean {
 }
 
 /**
+ * F-7eff9b3a: wrap a " | "-joined status line at segment boundaries once it
+ * exceeds getTerminalWidth(), instead of raw string concatenation that the
+ * terminal then hard-wraps wherever it falls, mid-word, with no hanging
+ * indent -- the same overflow bug class this domain's reference tables
+ * (help-system.ts's renderNameDescriptionRow) already got dedicated
+ * treatment for (three prior fixes: F-a17315ac/F-d36903d0/F-1367afd9).
+ * Segments are treated as atomic units (never split mid-segment) -- this
+ * matters specifically here because a segment may already carry an ANSI
+ * color wrapper (bold()/critical()/red()); splitting inside one would
+ * corrupt the escape sequence. Segment width is measured via plain
+ * `.length`, which over-counts when a segment is colored (the escape codes
+ * inflate it) -- that only wraps a little earlier than the true visual
+ * width strictly requires, never later (the safe failure direction); with
+ * color disabled (NO_COLOR, non-TTY -- this file's default test env)
+ * `.length` is exact. Behavior-preserving when every segment fits on one
+ * line: the output is byte-identical to the old
+ * `${leadIndent}${segments.join(' | ')}` template it replaces. Exported for
+ * testing and for status-compact.ts's identical-shaped character line.
+ */
+export function wrapStatusLine(leadIndent: string, segments: string[]): string {
+  const width = getTerminalWidth();
+  const contIndent = '    '; // hanging indent, matching renderNameDescriptionRow's convention
+  const lines: string[] = [];
+  let current = '';
+  for (const seg of segments) {
+    if (current === '') {
+      current = `${leadIndent}${seg}`;
+      continue;
+    }
+    const candidate = `${current} | ${seg}`;
+    if (candidate.length > width) {
+      lines.push(current);
+      current = `${contIndent}${seg}`;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== '') lines.push(current);
+  return lines.join('\n');
+}
+
+/**
  * F-61e67d85: src/npc/ambient-dialogue.ts's generateZoneAmbience can return
  * up to 3 lines for a busy multi-NPC zone -- showing all 3 every single turn
  * would compete with and drown out the status footer below. A defensive
@@ -156,7 +198,14 @@ export function renderPlayScreen(opts: {
     const nameLine = `${ps.name}${titlePart} (Lv${ps.level} ${ps.archetypeName})`;
 
     const statParts: string[] = [];
-    const hpText = `HP: ${ps.hp}`;
+    // F-d386d9df: interpolate maxHp when known, mirroring status-compact.ts's
+    // own hpText (`s.maxHp ? 'HP: x/max' : 'HP: x'`) -- this used to read
+    // 'HP: 5' identically whether HP was critical or full; the ONLY signal a
+    // critical player got was the critical() color wrap around that same
+    // bare number, a total loss of the warning under NO_COLOR, piped/
+    // non-TTY output, or for a colorblind player. ps.maxHp is already read
+    // on the very next line (isCriticalHp), so this costs nothing new.
+    const hpText = ps.maxHp ? `HP: ${ps.hp}/${ps.maxHp}` : `HP: ${ps.hp}`;
     statParts.push(isCriticalHp(ps.hp, ps.maxHp) ? critical(hpText) : hpText);
     if (ps.weaponName) statParts.push(ps.weaponName);
     if (ps.armorName) statParts.push(ps.armorName);
@@ -164,7 +213,7 @@ export function renderPlayScreen(opts: {
       statParts.push(red(`[${ps.injuryTags.join(', ')}]`));
     }
 
-    parts.push(`  ${bold(nameLine)} | ${statParts.join(' | ')}`);
+    parts.push(wrapStatusLine('  ', [bold(nameLine), ...statParts]));
   } else {
     // Legacy status bar
     const player = opts.world.entities[opts.world.playerId];

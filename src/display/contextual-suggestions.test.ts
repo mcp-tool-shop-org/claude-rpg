@@ -218,3 +218,27 @@ describe('generateSuggestions', () => {
     expect(result.length).toBeLessThanOrEqual(2);
   });
 });
+
+/**
+ * F-d6f7107e: this nudge used to tell players to 'type "craft" or "salvage"'
+ * even though F-4fc952ae's coordinator-locked verb allowlist (turn-loop.ts)
+ * suppresses 'salvage' from the interpreter's visible surface, and
+ * renderPlayHelp's CRAFTING section (help-system.ts) only ever documented
+ * 'craft' -- a real "game nudges a verb its own help screen never
+ * documents, and the interpreter won't even accept" gap, with no regression
+ * coverage guarding the exact string before this test.
+ */
+describe('crafting-hint text does not suggest a suppressed verb (F-d6f7107e)', () => {
+  it('suggests "craft" only, not "salvage" (F-4fc952ae suppresses salvage from the interpreter surface)', () => {
+    const result = generateSuggestions(defaults({
+      turnCount: 5,
+      hasUsedLeverage: true,
+      hasCraftableMaterials: true,
+      hasCraftingShortage: false,
+    }));
+    const craftHint = result.find((s) => s.trigger === 'crafting-hint');
+    expect(craftHint).toBeTruthy();
+    expect(craftHint!.text).toBe('You have materials — type "craft" to use them');
+    expect(craftHint!.text).not.toContain('salvage');
+  });
+});

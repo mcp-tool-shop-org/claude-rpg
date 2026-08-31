@@ -25,7 +25,16 @@ function presentNarrationError(err: NarrationError): ErrorPresentation {
         headline: 'API key error',
         explanation: 'Your API key is invalid, expired, or missing.',
         preserved: 'Your session was not modified.',
-        nextAction: 'Check ANTHROPIC_API_KEY and restart.',
+        // F-9eefaf97: this was the only one of the five NarrationError
+        // kinds whose nextAction didn't mention saving first -- 'rate-limit',
+        // 'timeout', 'transport', and 'unexpected' all end with a "...or
+        // type \"save\"" clause. An auth failure (invalid/expired/revoked
+        // key) can happen mid-turn just as easily as at startup -- this
+        // case's own `preserved` text implies a live session, not just
+        // pre-game -- and 'restart' is advice a player might follow
+        // literally, exiting the live process without being told "save"
+        // (which needs no API call) is available first.
+        nextAction: 'Check ANTHROPIC_API_KEY and restart, or type "save" to keep your progress.',
         exitCode: null,
       };
     case 'rate-limit':
@@ -119,6 +128,30 @@ function presentLoadError(err: Error): ErrorPresentation {
   // its own branch so the failing pack id survives into the non-debug
   // explanation line, instead of falling into the generic bucket below.
   const isUnknownPack = err.message.includes('unknown pack');
+
+  // F-e58b49ed: bin.ts's runLoad() raises this when validateEngineState()
+  // (cli/engine-state-validator.ts) rejects a save's serialized engine
+  // state -- previously rendered as two raw, uncolored console.error() lines
+  // plus a bare process.exit(1), the only fatal branch in that function that
+  // bypassed this classify/render pipeline entirely (no headline/
+  // explanation/preserved/nextAction shape, no red-vs-yellow severity
+  // signal, no [debug] block). Keyed on message prefix (same
+  // message-substring convention as isUnknownPack above, since bin.ts
+  // constructs a plain Error here rather than a dedicated error class) so
+  // the validator's own specific diagnostic ('not valid JSON' / 'missing
+  // world.state' / 'missing world.state.meta') survives into the rendered
+  // explanation instead of a bespoke two-line print.
+  const isEngineStateInvalid = err.message.startsWith('Save file has invalid engine state:');
+
+  if (isEngineStateInvalid) {
+    return {
+      headline: 'Invalid save data',
+      explanation: err.message,
+      preserved: 'No session was started. The save file was not modified.',
+      nextAction: 'Your save may be corrupted. Check for a .bak backup, or start a new game.',
+      exitCode: 1,
+    };
+  }
 
   if (isFutureVersion) {
     return {

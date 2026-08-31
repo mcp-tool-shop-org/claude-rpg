@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { SaveSlotSummary } from '../session/session.js';
-import { formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent } from './save-listing.js';
+import {
+  formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent,
+  SAVE_LISTING_CAP, formatOlderSavesFooter,
+} from './save-listing.js';
 
 /**
  * FT-FE-007: Enriched save listing tests.
@@ -138,5 +141,39 @@ describe('formatSaveSlotPrefix / formatSaveSlotIndent (F-01e3acfc)', () => {
     const indent = formatSaveSlotIndent(9); // the 10th save, i = 9
     expect(indent.length).toBe(formatSaveSlotPrefix(9).length);
     expect(indent.length).toBe(8); // one column more than the 1-9 case
+  });
+});
+
+/**
+ * F-df387f5b: runLoad()'s /load listing printed every entry with no cap --
+ * over a long campaign accumulating dozens-to-hundreds of never-overwritten
+ * autosave files, a player had to scroll back through the entire unbroken
+ * list to find the entry they wanted. SAVE_LISTING_CAP + the "N older saves
+ * not shown" footer are the extracted, testable pieces of bin.ts's runLoad()
+ * fix (bin.ts itself has no exports -- see this file's own top comment for
+ * why the pattern extracts here instead).
+ */
+describe('SAVE_LISTING_CAP / formatOlderSavesFooter (F-df387f5b)', () => {
+  it('SAVE_LISTING_CAP is a positive, sane cap', () => {
+    expect(SAVE_LISTING_CAP).toBeGreaterThan(0);
+  });
+
+  it('returns null when nothing was truncated (hiddenCount 0)', () => {
+    expect(formatOlderSavesFooter(0)).toBeNull();
+  });
+
+  it('returns null for a negative hiddenCount (defensive -- never truncated less than nothing)', () => {
+    expect(formatOlderSavesFooter(-1)).toBeNull();
+  });
+
+  it('uses singular "save" for exactly one hidden entry', () => {
+    const footer = formatOlderSavesFooter(1);
+    expect(footer).toContain('1 older save');
+    expect(footer).not.toContain('1 older saves');
+  });
+
+  it('uses plural "saves" for more than one hidden entry', () => {
+    const footer = formatOlderSavesFooter(12);
+    expect(footer).toBe('  + 12 older saves not shown.');
   });
 });

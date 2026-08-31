@@ -49,7 +49,10 @@ import { createStreamPresenter } from './cli/stream-presenter.js';
 import { renderPresentationCues, insertCuesBeforePrompt } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
 import { parseSaveSelection, formatSaveSelectionPrompt, formatInvalidSelectionMessage } from './cli/save-selection.js';
-import { formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent } from './cli/save-listing.js';
+import {
+  formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent,
+  SAVE_LISTING_CAP, formatOlderSavesFooter,
+} from './cli/save-listing.js';
 import { isPathInside } from './cli/path-guard.js';
 import { attemptExitAutosave } from './cli/exit-autosave.js';
 import { renderUsage } from './cli/usage.js';
@@ -379,8 +382,19 @@ async function runLoad(): Promise<void> {
   const disposeEarlySigintGuard = installEarlySigintGuard();
 
   console.log('\n  Saved Games:\n');
-  for (let i = 0; i < saves.length; i++) {
-    const s = saves[i];
+  // F-df387f5b: cap the printed/selectable listing to the most recent
+  // SAVE_LISTING_CAP entries instead of every save ever written -- every
+  // save action in this app names its file with a fresh Date.now() suffix
+  // (saves are never overwritten, only added), so a long campaign
+  // realistically accumulates dozens-to-hundreds of entries with no
+  // cleanup path anywhere in this domain. listSaves() (session/session.ts)
+  // already returns entries newest-first, so this is exactly "most recent
+  // N" with no extra sort needed here. Selection below indexes into this
+  // same capped array (not the full `saves`), so the printed numbers and
+  // the selectable range always agree.
+  const visibleSaves = saves.slice(0, SAVE_LISTING_CAP);
+  for (let i = 0; i < visibleSaves.length; i++) {
+    const s = visibleSaves[i];
     const identity = s.characterName
       ? `${s.characterName}${s.characterTitle ? `, "${s.characterTitle}"` : ''} (Lv${s.characterLevel ?? '?'})`
       : 'Unknown character';
@@ -396,6 +410,8 @@ async function runLoad(): Promise<void> {
       console.log(`${formatSaveSlotIndent(i)}${details.join(' | ')}`);
     }
   }
+  const olderSavesFooter = formatOlderSavesFooter(saves.length - visibleSaves.length);
+  if (olderSavesFooter) console.log(olderSavesFooter);
   console.log('');
 
   // F-d01d16f6: a typo'd/out-of-range number, an empty Enter-press, or stray
@@ -415,7 +431,7 @@ async function runLoad(): Promise<void> {
     // hung indefinitely with no error and no exit code.
     let answer: string;
     try {
-      answer = await question(rl, formatSaveSelectionPrompt(saves.length));
+      answer = await question(rl, formatSaveSelectionPrompt(visibleSaves.length));
     } catch (err) {
       if (err instanceof Error && err.message === '__STDIN_CLOSED__') {
         // No session exists yet at this point (still choosing a save), so
@@ -434,13 +450,13 @@ async function runLoad(): Promise<void> {
       process.exit(0);
     }
 
-    idx = parseSaveSelection(answer, saves.length);
+    idx = parseSaveSelection(answer, visibleSaves.length);
     if (idx === null) {
-      console.log(formatInvalidSelectionMessage(saves.length));
+      console.log(formatInvalidSelectionMessage(visibleSaves.length));
     }
   }
 
-  const savePath = join(getDefaultSaveDir(), saves[idx].filename);
+  const savePath = join(getDefaultSaveDir(), visibleSaves[idx].filename);
   const loadResult = await loadSession(savePath);
   const savedSession = loadResult.session;
   if (loadResult.migrated) {
@@ -464,12 +480,21 @@ async function runLoad(): Promise<void> {
         // Explicitly rejects world.state === null (F-1b8be73f); see cli/engine-state-validator.ts.
         const validation = validateEngineState(savedSession.engineState);
         if (!validation.valid) {
-          if (validation.error === 'not valid JSON') {
-            console.error('  Save file engine state is not valid JSON.');
-          } else {
-            console.error(`  Save file has invalid engine state structure (${validation.error}).`);
-          }
-          console.error('  Your save may be corrupted. Check for a .bak backup.');
+          // F-e58b49ed: previously two raw, uncolored console.error() lines
+          // plus a bare process.exit(1) -- the only fatal branch in this
+          // function that bypassed presentError()/classifyForPresentation
+          // (no headline/explanation/preserved/nextAction shape, no
+          // red-vs-yellow severity signal, no [debug] block even under
+          // --debug). Routes through the same pipeline the adjacent catch
+          // block and the "!engine" branch below already use;
+          // error-presenter.ts's presentLoadError has a matching branch
+          // keyed on this exact message prefix so validation.error survives
+          // into the rendered explanation.
+          presentError(
+            new Error(`Save file has invalid engine state: ${validation.error}.`),
+            'load',
+            debugMode,
+          );
           rl.close();
           process.exit(1);
         }
@@ -832,11 +857,60 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
   console.log(session.getWelcome());
 
   // Opening narration
+  // F-51852e69: session.getOpeningNarration() -- the very first LLM call of
+  // every session (new game, play, and load all reach it) -- used to be
+  // awaited with zero waiting feedback: no spinner (unlike runNew's
+  // world-gen call, F-b1c363e3) and no streaming (streamBox.current was
+  // still null here; it's only armed inside the per-turn loop below, after
+  // this call already returned and printed). Wrapped the same way the
+  // per-turn loop wraps processInput() just below: spinnerBox reuses the
+  // EXISTING retry-spinner infrastructure (the same box the client's
+  // onRetry callback already targets in runPlay/runLoad/runNew) instead of
+  // inventing a second spinner, and streamBox is armed for the call's
+  // duration so any chunks getOpeningNarration() streams reach the player
+  // progressively -- erased via openingStream.clear() before the full
+  // `opening` string prints, the same double-print guard the per-turn loop
+  // uses.
+  //
+  // Streaming seam note: getOpeningNarration() (game.ts, game-core domain,
+  // not owned here) does not yet forward an onChunk callback into
+  // generateOpeningNarration() the way the per-turn executeTurn() path
+  // forwards onNarrationChunk -- so streamBox.current currently has no
+  // chunks to relay for this specific call. Wiring that is a game-core
+  // change outside cli-display's scope this wave (mirrors the
+  // withPresentationHook/withStreamingHook seam-contract precedent above:
+  // cli-display lands its half of a seam independently of game-core's
+  // half). The spinner alone already removes the "is this hung?" risk this
+  // finding flags; streaming activates automatically, with no further
+  // cli-display change, once that seam's other half lands.
+  const openingStream = createStreamPresenter();
   try {
-    const opening = await session.getOpeningNarration();
+    const openingSpinner = createSpinner('thinking');
+    spinnerBox.current = openingSpinner;
+    openingSpinner.start();
+    if (process.stdout.isTTY) {
+      let openingSpinnerLive = true;
+      streamBox.current = (chunk: string) => {
+        if (openingSpinnerLive) {
+          openingSpinner.stop();
+          openingSpinnerLive = false;
+        }
+        openingStream.onChunk(chunk);
+      };
+    }
+    let opening: string;
+    try {
+      opening = await session.getOpeningNarration();
+    } finally {
+      openingSpinner.stop();
+      streamBox.current = null;
+      spinnerBox.current = null;
+    }
+    if (openingStream.chunkCount > 0) openingStream.clear();
     console.log(opening);
     flushPresentationCues(presentationBox);
   } catch (err) {
+    if (openingStream.chunkCount > 0) openingStream.markInterrupted();
     const exitCode = presentError(err, 'opening', debugMode);
     rl.close();
     process.exit(exitCode ?? 1);

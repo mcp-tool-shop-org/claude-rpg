@@ -124,6 +124,35 @@ describe('renderUsage (F-d36903d0)', () => {
 });
 
 /**
+ * F-a5396488: `[--debug]` used to render nested directly under
+ * `claude-rpg play [--fast]` as if it were a play-only flag, even though
+ * main() parses it globally (before command dispatch) and every subcommand's
+ * error rendering honors it. Moved to its own "Global flags:" section below
+ * the per-command list.
+ */
+describe('renderUsage --debug is documented as a global flag (F-a5396488)', () => {
+  it('lists --debug under its own "Global flags:" section, not nested under play', () => {
+    const usage = renderUsage();
+    expect(usage).toContain('Global flags:');
+    expect(usage).toContain('--debug');
+    expect(usage).toContain('Show structured error details');
+
+    const lines = usage.split('\n');
+    const playIdx = lines.findIndex((l) => l.includes('claude-rpg play [--fast]'));
+    const globalFlagsIdx = lines.findIndex((l) => l.includes('Global flags:'));
+    const debugIdx = lines.findIndex((l) => l.includes('--debug'));
+    expect(playIdx).toBeGreaterThan(-1);
+    expect(globalFlagsIdx).toBeGreaterThan(playIdx);
+    // --debug sits under its own section header, not immediately under play.
+    expect(debugIdx).toBeGreaterThan(globalFlagsIdx);
+    // The line directly below the play command's two-line description is
+    // now `load`, not `[--debug]` -- confirms it was removed from that spot.
+    const continuationIdx = lines.findIndex((l) => l.includes('from 10 worlds interactively)'));
+    expect(lines[continuationIdx + 1]).toContain('claude-rpg load');
+  });
+});
+
+/**
  * F-7862c05d: --world <name> was imported (resolveWorldFlag) but never
  * wired to a real flag -- a player had no way to discover the 10 valid
  * values short of reading source. Reuses help-system.ts's already-exported,

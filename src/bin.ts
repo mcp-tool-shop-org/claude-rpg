@@ -1178,6 +1178,31 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
       }
 
       if (output === '__QUIT__') {
+        // F-c6da7ad9: the third of three "session about to exit" paths.
+        // The SIGINT handler (~line 1012) and the stdin-closed/EOF handler
+        // (~line 1054) already route through the guarded attemptExitAutosave
+        // contract; typing "quit" used to skip it entirely and go straight
+        // to the recap, silently dropping progress the other two paths
+        // already protected. Mirrors the SIGINT block's shape/branching
+        // exactly so all three exit paths present a save outcome
+        // consistently. play-renderer.ts's renderDeathScreen hint (this same
+        // wave) is updated in step to match.
+        console.log('\n  Saving your progress...');
+        const saveName = session.profile
+          ? `${session.profile.build.name}-autosave-${Date.now()}`
+          : `autosave-${Date.now()}`;
+        const savePath = getSavePath(saveName);
+        const outcome = await attemptExitAutosave(savePath, getDefaultSaveDir(), (p) =>
+          saveSession(buildSaveInput(session, p, packId)),
+        );
+        if (outcome.status === 'failed') {
+          presentError(outcome.error, 'save', debugMode);
+        } else if (outcome.status === 'rejected') {
+          console.log(yellow(outcome.message));
+        } else {
+          console.log(outcome.message);
+        }
+
         // Show unified session recap
         const recapText = buildUnifiedRecap(
           session, initialSnapshot, initialWorldSnapshot, initialDistrictMoods, initialPartyState, initialItemChronicle, initialEconomies, initialCustom, initialOpportunities,

@@ -1,4 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { parseWorldFlag, formatValidWorlds } from './world-flag.js';
+import { WORLD_FLAG_MAP } from '../character/packs.js';
 
 /**
  * F-7862c05d: bin.ts imported resolveWorldFlag from character/packs.ts but
@@ -17,34 +19,22 @@ import { describe, it, expect, vi } from 'vitest';
  * alternative is overruled. bin.ts owns the reject-and-exit decision; this
  * module only classifies the input.
  *
- * Isolation discipline: WORLD_FLAG_MAP is narrative-llm's hoist of packs.ts's
- * inline resolveWorldFlag map (packs.ts:119-130), landing the same wave --
- * it does not exist in this worktree yet. Partially mocked below with the
- * EXACT content of the inline map it replaces, so resolveWorldFlag/
- * getPackById/allPacks stay real and this test exercises actual resolution
- * logic instead of a fully-mocked stand-in. Proven end-to-end against the
- * real hoisted export at the coordinator's merge-time serial verify.
+ * F-752c7e2f: this suite used to vi.mock('../character/packs.js', ...) with
+ * a hand-copied, hardcoded snapshot of WORLD_FLAG_MAP -- authored when the
+ * real export "does not exist in this worktree yet" (wave-18), true at the
+ * time but stale from the moment WORLD_FLAG_MAP actually landed. Because the
+ * mock fully replaced the module's export, this suite kept passing unchanged
+ * forever, silently exercising only the original 10-world snapshot no matter
+ * how many packs packs.ts later registered -- exactly the "two independently
+ * maintained copies of one list" drift class this codebase's doc comments
+ * say has been fixed 7+ times already (F-223de079, F-8da2e6f7, F-f1eb58cb,
+ * F-5cc4d0d9, F-623e763f, F-c5ff2a5c, F-aaaa105f), just relocated into the
+ * regression test meant to catch it. Importing the real WORLD_FLAG_MAP and
+ * deriving every assertion from its actual keys means this suite now proves
+ * whatever is really registered resolves end-to-end, and automatically
+ * extends to cover the next pack addition instead of silently going stale.
  */
-vi.mock('../character/packs.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../character/packs.js')>();
-  return {
-    ...actual,
-    WORLD_FLAG_MAP: {
-      fantasy: 'chapel-threshold',
-      gladiator: 'iron-colosseum',
-      ronin: 'jade-veil',
-      vampire: 'crimson-court',
-      cyberpunk: 'neon-lockbox',
-      detective: 'gaslight-detective',
-      pirate: 'black-flag-requiem',
-      'weird-west': 'dust-devils-bargain',
-      zombie: 'ashfall-dead',
-      colony: 'signal-loss',
-    },
-  };
-});
-
-import { parseWorldFlag, formatValidWorlds } from './world-flag.js';
+const shortNames = Object.keys(WORLD_FLAG_MAP);
 
 describe('parseWorldFlag (F-7862c05d)', () => {
   it('returns an empty result when --world is not present', () => {
@@ -60,10 +50,6 @@ describe('parseWorldFlag (F-7862c05d)', () => {
   });
 
   it('resolves every WORLD_FLAG_MAP short name to a real registered pack', () => {
-    const shortNames = [
-      'fantasy', 'gladiator', 'ronin', 'vampire', 'cyberpunk',
-      'detective', 'pirate', 'weird-west', 'zombie', 'colony',
-    ];
     for (const name of shortNames) {
       const { packInfo, errorMessage } = parseWorldFlag(['--world', name]);
       expect(errorMessage, `"${name}" should resolve cleanly`).toBeUndefined();
@@ -107,10 +93,7 @@ describe('parseWorldFlag (F-7862c05d)', () => {
 describe('formatValidWorlds (F-7862c05d)', () => {
   it('lists every WORLD_FLAG_MAP key, comma-separated -- the single source parseWorldFlag itself uses', () => {
     const list = formatValidWorlds();
-    for (const name of [
-      'fantasy', 'gladiator', 'ronin', 'vampire', 'cyberpunk',
-      'detective', 'pirate', 'weird-west', 'zombie', 'colony',
-    ]) {
+    for (const name of shortNames) {
       expect(list).toContain(name);
     }
   });

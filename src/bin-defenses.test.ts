@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { resolve } from 'node:path';
 import { validateEngineState } from './cli/engine-state-validator.js';
+import { attemptExitAutosave, type ExitAutosaveOutcome } from './cli/exit-autosave.js';
 
 // ─── PFE-001: stdin close detection ────────────────────────
 // ─── PFE-002: SIGINT handling contract ─────────────────────
@@ -147,6 +149,60 @@ describe('bin defenses: SIGINT contract (PFE-002)', () => {
     };
     expect(handleSigint()).toBe('save-and-exit');
     expect(handleSigint()).toBe('force-exit');
+  });
+});
+
+describe('bin defenses: __QUIT__ autosave contract (F-c6da7ad9)', () => {
+  const saveDir = resolve('/base/saves');
+
+  // bin.ts's __QUIT__ branch (session.processInput() returning the __QUIT__
+  // sentinel, when the player types "quit"/"exit") used to skip straight to
+  // the recap/Farewell/exit with no save call at all -- the one of the
+  // three "session about to exit" paths (SIGINT above, stdin-closed/EOF,
+  // __QUIT__) that never routed through attemptExitAutosave. bin.ts itself
+  // still can't be imported directly (no exports, main() runs
+  // unconditionally on load), so this documents the __QUIT__ branch's
+  // contract the same way PFE-002 above documents the SIGINT counter's --
+  // but drives the REAL attemptExitAutosave (cli/exit-autosave.ts) bin.ts's
+  // __QUIT__ branch now calls, rather than a hand-reimplemented stand-in,
+  // since (unlike the inline SIGINT counter) that function is its own
+  // importable module with its own dedicated outcome-shape tests
+  // (exit-autosave.test.ts). This test's job is only to pin that __QUIT__'s
+  // branching on the outcome matches the SIGINT handler's -- failed
+  // presents an error, rejected prints a warning, saved prints the save
+  // message -- in all three cases before falling through to the recap/
+  // Farewell/exit.
+  function dispatchLikeQuitHandler(
+    outcome: ExitAutosaveOutcome,
+  ): 'presented-error' | 'printed-rejection' | 'printed-saved' {
+    if (outcome.status === 'failed') return 'presented-error';
+    if (outcome.status === 'rejected') return 'printed-rejection';
+    return 'printed-saved';
+  }
+
+  it('a successful autosave prints the save message, same as SIGINT (contract documentation)', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const savePath = resolve('/base/saves/hero-autosave-1.json');
+    const outcome = await attemptExitAutosave(savePath, saveDir, save);
+    expect(save).toHaveBeenCalledWith(savePath);
+    expect(dispatchLikeQuitHandler(outcome)).toBe('printed-saved');
+  });
+
+  it('a path-guard rejection prints the rejection warning without calling save, same as SIGINT (contract documentation)', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    // Shares saveDir's name as a string prefix but is a sibling directory --
+    // the same traversal shape isPathInside itself guards against.
+    const savePath = resolve('/base/saves-archive/evil-autosave-1.json');
+    const outcome = await attemptExitAutosave(savePath, saveDir, save);
+    expect(save).not.toHaveBeenCalled();
+    expect(dispatchLikeQuitHandler(outcome)).toBe('printed-rejection');
+  });
+
+  it('a save failure routes through presentError instead of a bare string, same as SIGINT (contract documentation)', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('disk full'));
+    const savePath = resolve('/base/saves/hero-autosave-2.json');
+    const outcome = await attemptExitAutosave(savePath, saveDir, save);
+    expect(dispatchLikeQuitHandler(outcome)).toBe('presented-error');
   });
 });
 

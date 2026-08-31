@@ -92,8 +92,14 @@ const USAGE_NAME_WIDTH = 27;
 const COMMANDS_NAME_WIDTH = 15;
 
 function renderUsageSection(): string {
+  // F-752c7e2f: the world count used to be a hand-typed '10', independent of
+  // WORLD_FLAG_MAP/the Worlds: section below it (which both already derive
+  // from the map). The moment allPacks/WORLD_FLAG_MAP grew past 10 entries,
+  // --help would read '10 worlds' directly above a Worlds: section listing
+  // more than 10 -- an internal inconsistency on the first screen most
+  // players see. Derived here so it can't independently drift again.
   const rows: [string, string][] = [
-    ['claude-rpg play [--fast]', 'Play a starter world (choose from 10 worlds interactively)'],
+    ['claude-rpg play [--fast]', `Play a starter world (choose from ${Object.keys(WORLD_FLAG_MAP).length} worlds interactively)`],
     ['claude-rpg load', 'Load a saved game'],
     ['claude-rpg new "<prompt>"', 'Generate a world from a prompt'],
     ['claude-rpg archive', 'Browse completed campaigns'],

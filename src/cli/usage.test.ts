@@ -1,35 +1,29 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { renderUsage } from './usage.js';
+import { WORLD_FLAG_MAP } from '../character/packs.js';
 
 /**
  * F-7862c05d (wave-18/cli-display.md): WORLD_FLAG_MAP is narrative-llm's
- * hoist of packs.ts's inline resolveWorldFlag map (packs.ts:119-130),
- * landing the same wave -- it does not exist in this worktree yet
- * (isolation discipline). Mocked here with the EXACT content of the inline
- * map it replaces, so getPackById/allPacks stay real and renderUsage's new
- * Worlds section resolves real pack titles, not a fully mocked stand-in.
- * Proven end-to-end against the real hoisted export at the coordinator's
- * merge-time serial verify.
+ * hoist of packs.ts's inline resolveWorldFlag map (packs.ts:119-130).
+ *
+ * F-752c7e2f: this suite used to vi.mock('../character/packs.js', ...) with
+ * a hand-copied, hardcoded snapshot of WORLD_FLAG_MAP -- authored when the
+ * real export "does not exist in this worktree yet" (wave-18), true at the
+ * time but stale from the moment WORLD_FLAG_MAP actually landed. Because the
+ * mock fully replaced the module's export, this suite kept passing unchanged
+ * forever, silently exercising only the original 10-world snapshot no matter
+ * how many packs packs.ts later registered -- the same "two independently
+ * maintained copies of one list" drift class this codebase's doc comments
+ * say has been fixed 7+ times already (F-223de079, F-8da2e6f7, F-f1eb58cb,
+ * F-5cc4d0d9, F-623e763f, F-c5ff2a5c, F-aaaa105f), just relocated into the
+ * regression test meant to catch it. Importing the real WORLD_FLAG_MAP (and
+ * deriving the world-count text below from its actual length, matching
+ * usage.ts's own F-752c7e2f fix) means this suite now proves whatever is
+ * really registered renders correctly end-to-end, instead of silently going
+ * stale the next time a pack is added.
  */
-vi.mock('../character/packs.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../character/packs.js')>();
-  return {
-    ...actual,
-    WORLD_FLAG_MAP: {
-      fantasy: 'chapel-threshold',
-      gladiator: 'iron-colosseum',
-      ronin: 'jade-veil',
-      vampire: 'crimson-court',
-      cyberpunk: 'neon-lockbox',
-      detective: 'gaslight-detective',
-      pirate: 'black-flag-requiem',
-      'weird-west': 'dust-devils-bargain',
-      zombie: 'ashfall-dead',
-      colony: 'signal-loss',
-    },
-  };
-});
-
-import { renderUsage } from './usage.js';
+const worldShortNames = Object.keys(WORLD_FLAG_MAP);
+const worldsPhrase = `from ${worldShortNames.length} worlds interactively)`;
 
 /**
  * F-d36903d0: bin.ts's USAGE block (shown on bare `claude-rpg`, `--help`/
@@ -115,10 +109,10 @@ describe('renderUsage (F-d36903d0)', () => {
     const firstLineIdx = lines.findIndex((l) => l.includes('Play a starter world'));
     expect(firstLineIdx).toBeGreaterThan(-1);
     const continuationIdx = firstLineIdx + 1;
-    expect(lines[continuationIdx]).toContain('from 10 worlds interactively)');
+    expect(lines[continuationIdx]).toContain(worldsPhrase);
 
     const firstCol = lines[firstLineIdx].indexOf('Play a starter world');
-    const continuationCol = lines[continuationIdx].indexOf('from 10 worlds interactively)');
+    const continuationCol = lines[continuationIdx].indexOf(worldsPhrase);
     expect(continuationCol).toBe(firstCol);
   });
 });
@@ -147,7 +141,7 @@ describe('renderUsage --debug is documented as a global flag (F-a5396488)', () =
     expect(debugIdx).toBeGreaterThan(globalFlagsIdx);
     // The line directly below the play command's two-line description is
     // now `load`, not `[--debug]` -- confirms it was removed from that spot.
-    const continuationIdx = lines.findIndex((l) => l.includes('from 10 worlds interactively)'));
+    const continuationIdx = lines.findIndex((l) => l.includes(worldsPhrase));
     expect(lines[continuationIdx + 1]).toContain('claude-rpg load');
   });
 });
@@ -174,12 +168,9 @@ describe('renderUsage Worlds section (F-7862c05d)', () => {
     expect(usage).toContain('Neon Lockbox');
   });
 
-  it('lists all 10 WORLD_FLAG_MAP short names', () => {
+  it('lists every WORLD_FLAG_MAP short name', () => {
     const usage = renderUsage();
-    for (const name of [
-      'fantasy', 'gladiator', 'ronin', 'vampire', 'cyberpunk',
-      'detective', 'pirate', 'weird-west', 'zombie', 'colony',
-    ]) {
+    for (const name of worldShortNames) {
       expect(usage).toContain(name);
     }
   });

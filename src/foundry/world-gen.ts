@@ -20,6 +20,7 @@ import {
 } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
 import { WORLDGEN_SYSTEM, buildWorldGenPrompt } from '../prompts/world-gen.js';
+import type { DebugLogger } from '../game/debug-logger.js';
 
 export type WorldGenProposal = {
   title: string;
@@ -91,6 +92,19 @@ export type WorldGenProposal = {
  * cause differs.
  */
 export type WorldGenErrorKind = 'transient' | 'validation';
+
+/**
+ * F-9da15f24: passed to generateWorld's optional `onAttempt` callback, shape
+ * mirroring ClaudeClient.generateStream's onStreamReset (claude-client.ts:
+ * `{attempt, maxAttempts, kind, delayMs}`, minus delayMs -- this loop has no
+ * inter-attempt delay of its own to report). `kind` is the errorKind of the
+ * attempt that just failed, i.e. the reason THIS retry is happening.
+ */
+export type WorldGenAttemptInfo = {
+  attempt: number;
+  maxAttempts: number;
+  kind: WorldGenErrorKind;
+};
 
 export type WorldGenResult = {
   ok: boolean;
@@ -243,12 +257,29 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
  * @param worldPrompt - Creative world description
  * @param seed - Optional deterministic seed for reproducible world generation.
  *               When omitted, a random seed is used.
+ * @param opts.onAttempt - F-9da15f24: optional callback fired immediately before
+ *               each RETRIED attempt (never the initial one), so a caller (e.g.
+ *               bin.ts's spinner) can distinguish a validation/transient retry
+ *               from one slow call. Omitted by every current caller -- behavior
+ *               is unchanged when absent.
+ * @param opts.logger - F-e23cc3ac: optional structured logger (src/game/debug-logger.ts).
+ *               When provided (and enabled), the routine LLM-variance diagnostics
+ *               below (missing NPC stats, resolved id collisions, skipped
+ *               malformed NPCs, etc.) are recorded through it instead of printing
+ *               unconditionally, mirroring immersion-runtime.ts's debugMode gating
+ *               in this same domain. Omitted entirely, a normal (non-debug) run
+ *               stays silent on these expected, already-handled cases.
  */
 export async function generateWorld(
   client: ClaudeClient,
   worldPrompt: string,
   seed?: number,
+  opts?: {
+    onAttempt?: (info: WorldGenAttemptInfo) => void;
+    logger?: DebugLogger;
+  },
 ): Promise<WorldGenResult> {
+  const { onAttempt, logger } = opts ?? {};
   const prompt = buildWorldGenPrompt(worldPrompt);
 
   // F-cbc186cb: generate-plus-validate is retried internally before surfacing anything
@@ -269,8 +300,30 @@ export async function generateWorld(
   let attemptProposal: WorldGenProposal | null = null;
   let errors: string[] = [];
   let errorKind: WorldGenErrorKind = 'transient';
+  // F-9da15f24: accumulate (not overwrite) errors across attempts, deduped in
+  // insertion order, so a final failure report after e.g. attempt 1 failing
+  // shape validation for reason A and attempt 2 failing for a DIFFERENT
+  // reason B shows both -- previously `errors` was reassigned each iteration,
+  // so only the LAST attempt's reasons ever reached the player, with nothing
+  // indicating 3 separate generations were even attempted.
+  const allErrors: string[] = [];
+  const pushErrors = (attemptErrors: string[]): void => {
+    for (const e of attemptErrors) {
+      if (!allErrors.includes(e)) allErrors.push(e);
+    }
+  };
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      // F-9da15f24: fired only immediately before a RETRIED attempt (never the
+      // initial one), mirroring generateStream's onStreamReset timing/shape
+      // (claude-client.ts) -- `kind` is the errorKind the PRECEDING attempt
+      // just failed with, so a caller's spinner can show "retrying (invalid
+      // response)" instead of leaving an unchanging "thinking" label across
+      // what is silently a second or third LLM call.
+      onAttempt?.({ attempt, maxAttempts: MAX_ATTEMPTS, kind: errorKind });
+    }
+
     const result = await client.generateStructured<WorldGenProposal>({
       system: WORLDGEN_SYSTEM,
       prompt,
@@ -281,6 +334,7 @@ export async function generateWorld(
       attemptProposal = null;
       errors = [result.error ?? 'Failed to generate world proposal'];
       errorKind = 'transient';
+      pushErrors(errors);
       continue;
     }
 
@@ -289,6 +343,7 @@ export async function generateWorld(
       attemptProposal = result.data;
       errors = shapeErrors;
       errorKind = 'validation';
+      pushErrors(errors);
       continue;
     }
 
@@ -303,7 +358,7 @@ export async function generateWorld(
       engine: null,
       proposal: attemptProposal,
       tone: attemptProposal?.toneGuide ?? '',
-      errors,
+      errors: allErrors,
       errorKind,
       quests: attemptProposal?.quests ?? [],
     };
@@ -453,12 +508,17 @@ export async function generateWorld(
   for (const npc of proposal.npcs) {
     try {
       // PBR-001: Defensive coercion for missing stats/resources
+      // F-e23cc3ac: routine, already-handled LLM stochastic variance -- gated
+      // behind the optional logger (mirroring immersion-runtime.ts's debugMode
+      // convention in this same domain) instead of an unconditional
+      // console.warn, so a normal (non-debug) player no longer sees raw
+      // implementation-detail strings at the "World ... created!" moment.
       if (!npc.stats || typeof npc.stats !== 'object') {
-        console.warn(`[world-gen] NPC "${npc.id}" has missing/invalid stats — defaulting to {}`);
+        logger?.warn('world-gen', `NPC "${npc.id}" has missing/invalid stats — defaulting to {}`, { npcId: npc.id });
         npc.stats = {};
       }
       if (!npc.resources || typeof npc.resources !== 'object') {
-        console.warn(`[world-gen] NPC "${npc.id}" has missing/invalid resources — defaulting to {}`);
+        logger?.warn('world-gen', `NPC "${npc.id}" has missing/invalid resources — defaulting to {}`, { npcId: npc.id });
         npc.resources = {};
       }
       if (!npc.tags || !Array.isArray(npc.tags)) {
@@ -472,7 +532,11 @@ export async function generateWorld(
       }
       // Shape check: skip NPCs missing critical identity fields
       if (!npc.id || !npc.name || !npc.zoneId) {
-        console.warn(`[world-gen] Skipping NPC with missing identity fields: id="${npc.id}", name="${npc.name}", zoneId="${npc.zoneId}"`);
+        logger?.warn('world-gen', `Skipping NPC with missing identity fields: id="${npc.id}", name="${npc.name}", zoneId="${npc.zoneId}"`, {
+          npcId: npc.id,
+          npcName: npc.name,
+          zoneId: npc.zoneId,
+        });
         continue;
       }
 
@@ -482,7 +546,10 @@ export async function generateWorld(
         let suffix = 2;
         while (usedEntityIds.has(`${npc.id}-${suffix}`)) suffix++;
         entityId = `${npc.id}-${suffix}`;
-        console.warn(`[world-gen] NPC ID collision: "${npc.id}" already exists. Using "${entityId}" instead.`);
+        logger?.warn('world-gen', `NPC ID collision: "${npc.id}" already exists. Using "${entityId}" instead.`, {
+          originalId: npc.id,
+          resolvedId: entityId,
+        });
       }
       usedEntityIds.add(entityId);
       npcIdRemap.set(npc.id, entityId);
@@ -521,14 +588,19 @@ export async function generateWorld(
             0,
           );
         } else {
-          console.warn(
-            `[world-gen] Cannot set belief for NPC "${entityId}": cognition not initialized. ` +
+          logger?.warn(
+            'world-gen',
+            `Cannot set belief for NPC "${entityId}": cognition not initialized. ` +
             `Belief "${belief.key}" on subject "${belief.subject}" was skipped.`,
+            { entityId, subject: belief.subject, key: belief.key },
           );
         }
       }
     } catch (err) {
-      console.warn(`[world-gen] Failed to add NPC "${npc.id}": ${err instanceof Error ? err.message : String(err)}. Skipping.`);
+      logger?.warn('world-gen', `Failed to add NPC "${npc.id}": ${err instanceof Error ? err.message : String(err)}. Skipping.`, {
+        npcId: npc.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -576,10 +648,12 @@ export async function generateWorld(
       }
     }
   } catch (err) {
-    console.warn(
-      `[world-gen] Failed to reconcile faction-cognition membership for factions ` +
+    logger?.warn(
+      'world-gen',
+      `Failed to reconcile faction-cognition membership for factions ` +
       `[${proposal.factions.map((f) => f.id).join(', ')}]: ` +
       `${err instanceof Error ? err.message : String(err)}. Skipping reconciliation.`,
+      { factionIds: proposal.factions.map((f) => f.id), error: err instanceof Error ? err.message : String(err) },
     );
   }
 

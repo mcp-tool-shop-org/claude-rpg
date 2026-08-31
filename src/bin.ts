@@ -403,8 +403,11 @@ async function runLoad(): Promise<void> {
     // F-46026cfc: matches archive-browser.ts's renderArchiveBrowser() empty
     // state, which orients the player with a concrete next step instead of
     // just naming what's missing.
-    console.log('\n  No saved games found.');
-    console.log('  Run `claude-rpg play` to start a new game, or `claude-rpg new "<prompt>"` to generate one.\n');
+    // One atomic write, not two: a console.log immediately before
+    // process.exit can be lost in the exit flush race (observed
+    // intermittently in the spawned-CLI suite — and a player piping output
+    // would lose the guidance line the same way).
+    console.log('\n  No saved games found.\n  Run `claude-rpg play` to start a new game, or `claude-rpg new "<prompt>"` to generate one.\n');
     process.exit(0);
   }
 

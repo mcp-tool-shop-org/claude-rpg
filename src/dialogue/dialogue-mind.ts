@@ -2,7 +2,7 @@
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { PlayerRumor, WorldPressure, NpcActionResult } from '@ai-rpg-engine/modules';
+import type { PlayerRumor, WorldPressure, NpcActionResult, OpportunityState } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
@@ -142,6 +142,20 @@ function pickRepeatedStallLine(consecutiveFallbacks: number): string {
  *   scope) owns counting this; omitted, behavior is unchanged from before
  *   this fix. Trailing positional parameter after `logger`, for the same
  *   reason `logger` itself trails everything else.
+ * @param activeOpportunities F-d8184410: full opportunity roster, forwarded
+ *   straight through to buildNPCDialogueContext (npc-context.ts), which
+ *   derives a speaker-scoped opportunityHint from it -- see that file's own
+ *   doc comment for why this is a threaded param rather than a
+ *   getPersistedOpportunities(world) read. The caller that owns the live
+ *   array (GameSession.activeOpportunities, game-core, outside this
+ *   domain's scope) must pass it for the hint to activate; omitted, behavior
+ *   is unchanged from before this fix.
+ * @param partyPresence F-ff0b4af6 (party half): pre-formatted active-party
+ *   line, forwarded straight through to buildNPCDialogueContext. Same
+ *   contract as narrate-scene.ts's own partyPresence field -- a caller that
+ *   already computes one for scene narration (e.g. via game-state.ts's
+ *   getPartyPresence) can reuse the identical string here. Omitted, behavior
+ *   is unchanged from before this fix.
  */
 export async function generateDialogue(
   client: ClaudeClient,
@@ -160,8 +174,10 @@ export async function generateDialogue(
   conversationHistory?: ConversationExchange[],
   logger?: DebugLogger,
   consecutiveFallbacks?: number,
+  activeOpportunities?: OpportunityState[],
+  partyPresence?: string,
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence);
   if (context && economyContext) context.economyContext = economyContext;
   if (context && craftingContext) context.craftingContext = craftingContext;
   if (context && opportunityContext) context.opportunityContext = opportunityContext;

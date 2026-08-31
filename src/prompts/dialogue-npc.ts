@@ -1,5 +1,8 @@
 // Prompt template: NPC dialogue grounded in cognition state
 
+import type { WorldPressure } from '@ai-rpg-engine/modules';
+import { formatPressureForDialogue } from '@ai-rpg-engine/modules';
+
 /** Base system prompt for NPC dialogue (~400 tokens). Always included. */
 export const DIALOGUE_SYSTEM_BASE = `You are roleplaying an NPC in a text RPG. You respond as this character would, given their beliefs, memories, faction loyalty, and emotional state.
 
@@ -177,17 +180,59 @@ export type DialogueInput = {
   voiceStyle?: VoiceArchetype;
   // v2.0: NPC tags for voice resolution
   npcTags?: string[];
+  // F-7459799a: highest-urgency VISIBLE pressure anywhere in the world
+  // (not just this speaker's faction), pre-formatted by npc-context.ts via
+  // the engine's own formatPressureForDialogue. Distinct from
+  // activePressures below (faction-scoped, capped at 2) -- a rival
+  // faction's crisis the whole zone is talking about now reaches the
+  // prompt even when it isn't the speaker's own faction's business.
+  worldPressureHint?: string;
+  // F-d8184410: highest-urgency available/accepted, non-hidden opportunity
+  // LINKED TO THIS SPEAKER specifically (via getOpportunitiesForNpc +
+  // formatOpportunityForDialogue), pre-formatted by npc-context.ts. Distinct
+  // from opportunityContext above, which is world-scoped (first accepted
+  // opportunity overall, regardless of which NPC it belongs to).
+  opportunityHint?: string;
+  // F-ff0b4af6: zone-scoped body-language/demeanor line from the engine's
+  // generateNpcTextures, keyed to this NPC's own goal/relationship state.
+  textureHint?: string;
+  // F-ff0b4af6: pre-formatted active-party-presence line (engine's
+  // formatPartyPresence output) -- companions the player is currently
+  // travelling with, so an NPC in the same room can acknowledge them the
+  // way scene narration already does (narrate-scene.ts's own partyPresence
+  // field).
+  partyPresence?: string;
 };
 
+/**
+ * F-7459799a: NPC-facing pressure line, reusing the engine's own
+ * formatPressureForDialogue instead of a hand-rolled copy of its
+ * urgency-bucketing + line shape. The cast is safe in the direction used
+ * here: DialogueInput['activePressures'] elements carry every field
+ * formatPressureForDialogue actually reads (kind/description/urgency), and
+ * a real WorldPressure value satisfies this narrower local shape too --
+ * that mutual overlap is what makes `as WorldPressure` valid (not
+ * `as unknown as WorldPressure`).
+ */
 function formatActivePressures(
   pressures?: DialogueInput['activePressures'],
 ): string {
   if (!pressures || pressures.length === 0) return '';
-  const lines = pressures.map((p) => {
-    const urgency = p.urgency >= 0.7 ? 'imminent' : p.urgency >= 0.4 ? 'developing' : 'emerging';
-    return `  - ${p.kind} (${urgency}): ${p.description}`;
-  });
+  const lines = pressures.map((p) => `  - ${formatPressureForDialogue(p as WorldPressure)}`);
   return `\nFaction pressures involving the player:\n${lines.join('\n')}\n`;
+}
+
+/**
+ * F-7459799a (scope half): the world-scoped sibling of formatActivePressures
+ * above -- a single highest-urgency pressure visible ANYWHERE in the world,
+ * regardless of faction, clearly labeled as distinct from "this NPC's
+ * faction is dealing with X". `hint` is already formatPressureForDialogue's
+ * output (computed in npc-context.ts against the full, untrimmed
+ * WorldPressure[]); this function only owns the header/wrapper.
+ */
+function formatWorldPressureHint(hint?: string): string {
+  if (!hint) return '';
+  return `\nElsewhere in the world:\n  - ${hint}\n`;
 }
 
 function formatPlayerRumors(
@@ -291,7 +336,7 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${formatVoiceStyle(input)}${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatNpcAgencyContext(input)}${formatConversationHistory(input.conversationHistory)}
+${formatVoiceStyle(input)}${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.textureHint ? `\n${input.textureHint}\n` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${input.opportunityHint ? `\nDirect dealings with you: ${input.opportunityHint}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatWorldPressureHint(input.worldPressureHint)}${formatNpcAgencyContext(input)}${formatConversationHistory(input.conversationHistory)}
 Player says:
 <player_speech>
 ${sanitizePlayerUtterance(input.playerUtterance)}

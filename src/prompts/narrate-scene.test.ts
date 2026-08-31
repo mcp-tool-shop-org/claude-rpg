@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { formatDistrictMoodForNarrator, type DistrictMood } from '@ai-rpg-engine/modules';
 import {
   buildNarratePrompt,
   type SceneNarrationInput,
@@ -219,5 +220,50 @@ describe('NARRATE_SYSTEM uiEffects[].type guidance (F-01127b93)', () => {
     expect([...UI_EFFECT_TYPES].sort()).toEqual(
       ['border-pulse', 'fade-in', 'fade-out', 'flash', 'shake'].sort(),
     );
+  });
+});
+
+// F-2218267d: situationHint -- the engine's MoveRecommendation.situationHint,
+// gated by the caller to 'pressured'/'crisis' rounds (see scene-context.ts's
+// own wiring). This file only owns the template half: render under a
+// "Strategic read:" section when present, add zero prompt text when absent
+// (matching every sibling hint field's byte-identical-when-absent contract).
+describe('buildNarratePrompt situationHint (F-2218267d)', () => {
+  it('renders situationHint under a "Strategic read:" section when present', () => {
+    const prompt = buildNarratePrompt(
+      makeInput({ situationHint: 'The Ashfall cartel is mobilizing near the docks.' }),
+    );
+    expect(prompt).toContain('Strategic read:');
+    expect(prompt).toContain('The Ashfall cartel is mobilizing near the docks.');
+  });
+
+  it('stays byte-identical to the no-situationHint prompt when situationHint is absent', () => {
+    const withoutHint = buildNarratePrompt(makeInput());
+    const explicitlyUndefined = buildNarratePrompt(makeInput({ situationHint: undefined }));
+    expect(withoutHint).not.toContain('Strategic read');
+    expect(explicitlyUndefined).toBe(withoutHint);
+  });
+});
+
+// F-e003562f: districtDescriptor's doc comment (narrate-scene.ts) documents
+// the expected contract -- formatDistrictMoodForNarrator's output, or
+// byte-compatible with it. This golden-string test feeds the REAL formatter's
+// actual output through buildNarratePrompt and asserts a lossless pipe-through,
+// so a future change to either side (the formatter's shape, or this file's
+// own District: line) fails a test this domain owns.
+describe('buildNarratePrompt districtDescriptor contract (F-e003562f)', () => {
+  it('pipes formatDistrictMoodForNarrator\'s actual output through losslessly under "District:"', () => {
+    const mood: DistrictMood = {
+      safety: 40,
+      prosperity: 55,
+      spirit: 30,
+      descriptor: 'tense and watchful',
+      tone: 'tense',
+    };
+    const formatted = formatDistrictMoodForNarrator(mood, 'Chapel Grounds');
+    expect(formatted).toBe('Chapel Grounds: tense and watchful');
+
+    const prompt = buildNarratePrompt(makeInput({ districtDescriptor: formatted }));
+    expect(prompt).toContain(`District: ${formatted}`);
   });
 });

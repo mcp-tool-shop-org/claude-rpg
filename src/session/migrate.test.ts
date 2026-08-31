@@ -3,13 +3,19 @@ import { migrateSave } from './migrate.js';
 
 // F-c5ff2a5c: migrateV1toV2 shallow-spread the raw save object and never
 // transformed the *content* of legacy nested-JSON-string fields
-// (playerRumors/activePressures). session.ts's loadRumorsFromSession/
-// loadPressuresFromSession then do an unchecked `JSON.parse(...) as X[]`
-// cast — a pre-shape-change v1 save deserializes into objects typed as
-// current-shape but missing required fields (e.g. `.claim`), which
-// downstream NPC dialogue/session-recap prompts interpolate as the literal
-// string 'undefined' for the rest of the campaign. These entries mirror the
-// real legacy shape recorded in test/fixtures/saves/v1-rich.json.
+// (playerRumors/activePressures). Before F-b6456823 hardened them,
+// session.ts's loadRumorsFromSession/loadPressuresFromSession did an
+// unchecked `JSON.parse(...) as X[]` cast — a pre-shape-change v1 save
+// deserialized into objects typed as current-shape but missing required
+// fields (e.g. `.claim`), which downstream NPC dialogue/session-recap
+// prompts interpolated as the literal string 'undefined' for the rest of the
+// campaign. Those loaders are now guarded (isValidPlayerRumor/
+// isValidWorldPressure, shared from this file) and would just DROP an
+// unrecognized-shape entry instead of crashing — but this migration step is
+// still what PRESERVES the player's earned rumor/pressure content instead of
+// discarding it, by mapping legacy fields onto the current shape before the
+// loader ever sees them. These entries mirror the real legacy shape recorded
+// in test/fixtures/saves/v1-rich.json.
 describe('migrateSave — legacy rumor/pressure normalization (F-c5ff2a5c)', () => {
   it('normalizes a legacy-shaped playerRumors entry to the current PlayerRumor field shape', () => {
     const raw = {

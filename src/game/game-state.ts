@@ -441,6 +441,37 @@ export function propagateRumors(
   return updated;
 }
 
+/**
+ * F-fd5e8eec: hard ceiling on retained playerRumors, mirroring
+ * GameSession's MAX_RESOLVED_FALLOUT_ENTRIES/MAX_ENDGAME_TRIGGERS precedent
+ * (game.ts, F-51e110b9) — playerRumors was the one growth-prone,
+ * save-persisted, action-spawned array in this domain that never got a cap.
+ * Exported so session.ts's loadRumorsFromSession can apply the identical
+ * bound on load (self-healing an already-oversized save), not just on new
+ * growth from this point on.
+ */
+export const MAX_PLAYER_RUMORS = 200;
+
+/**
+ * F-fd5e8eec: evict rumors once `rumors` exceeds MAX_PLAYER_RUMORS,
+ * preferring the oldest INERT rumor (confidence <= 0.3) — propagateRumors
+ * above already treats confidence<=0.3 as "no longer worth propagating"
+ * (its own `if (rumor.confidence <= 0.3) continue`), so those are the
+ * cheapest to drop without the player losing anything they'd notice. Falls
+ * back to the oldest rumor overall (index 0) only once every retained rumor
+ * is still "hot" (confidence > 0.3) — mirrors GameSession.capOldestFirst's
+ * oldest-first discipline for that fallback case.
+ */
+export function capPlayerRumors(rumors: PlayerRumor[]): PlayerRumor[] {
+  if (rumors.length <= MAX_PLAYER_RUMORS) return rumors;
+  const trimmed = [...rumors];
+  while (trimmed.length > MAX_PLAYER_RUMORS) {
+    const inertIndex = trimmed.findIndex((r) => r.confidence <= 0.3);
+    trimmed.splice(inertIndex >= 0 ? inertIndex : 0, 1);
+  }
+  return trimmed;
+}
+
 /** Add a rumor, applying companion rumor-suppression if applicable. */
 export function addRumor(
   rumor: PlayerRumor,
@@ -460,7 +491,8 @@ export function addRumor(
       }
     }
   }
-  return [...playerRumors, rumor];
+  // F-fd5e8eec: cap after append — see capPlayerRumors' doc comment above.
+  return capPlayerRumors([...playerRumors, rumor]);
 }
 
 // ─── Faction Cognition ───────────────────────────────────────

@@ -21,9 +21,10 @@ import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
-import type { OpportunityState } from '@ai-rpg-engine/modules';
+import type { OpportunityState, PlayerRumor } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { loadNpcAgencyFromSession, type SavedSession } from './session/session.js';
+import { MAX_PLAYER_RUMORS } from './game/game-state.js';
 
 /**
  * F-4ec3609b (ORDERING contract, cross-domain): turn-loop.ts's executeTurn()
@@ -866,6 +867,45 @@ describe('GameSession', () => {
       await h.play('look around');
 
       expect(h.session.journal.size()).toBeLessThan(510);
+    });
+
+    // F-fd5e8eec: playerRumors was the one growth-prone, save-persisted,
+    // action-spawned array in this domain that never got a cap. addRumor()
+    // (private method, wraps game-state.ts's capPlayerRumors) now enforces
+    // MAX_PLAYER_RUMORS, and warns once per session via debugLog — not
+    // inside game-state.ts, which is documented "No console IO".
+    it('addRumor caps playerRumors at MAX_PLAYER_RUMORS and warns once via debugLog on first eviction', () => {
+      const engine = createGame();
+      const logger = createTestLogger();
+      const session = new GameSession({
+        engine, title: 'Test Game', clientConfig: { apiKey: 'test-key' }, debugLogger: logger,
+      });
+
+      function makeRumor(id: string, confidence: number): PlayerRumor {
+        return {
+          id, claim: `claim-${id}`, subjectDescriptor: 'a stranger', sourceEvent: 'test',
+          confidence, distortion: 0, mutationCount: 0, valence: 'mysterious',
+          spreadTo: [], originTick: 0,
+        };
+      }
+
+      // Seed directly to MAX_PLAYER_RUMORS (cheaper than MAX_PLAYER_RUMORS
+      // real addRumor calls) so the very next call is the first to overflow.
+      session.playerRumors = Array.from({ length: MAX_PLAYER_RUMORS }, (_, i) => makeRumor(`r${i}`, 0.9));
+
+      const addRumorPrivate = (session as unknown as { addRumor: (rumor: PlayerRumor) => void }).addRumor.bind(session);
+
+      addRumorPrivate(makeRumor('overflow-1', 0.9));
+      expect(session.playerRumors).toHaveLength(MAX_PLAYER_RUMORS);
+      expect(session.playerRumors.some((r) => r.id === 'overflow-1')).toBe(true);
+
+      const warnEntries = logger.getEntries().filter((e) => e.level === 'warn' && e.subsystem === 'rumors');
+      expect(warnEntries).toHaveLength(1);
+
+      // A second overflow must not repeat the notice.
+      addRumorPrivate(makeRumor('overflow-2', 0.9));
+      expect(session.playerRumors).toHaveLength(MAX_PLAYER_RUMORS);
+      expect(logger.getEntries().filter((e) => e.level === 'warn' && e.subsystem === 'rumors')).toHaveLength(1);
     });
   });
 

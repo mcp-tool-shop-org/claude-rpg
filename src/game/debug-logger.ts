@@ -29,10 +29,33 @@ export interface DebugLogger {
   getEntries(): readonly LogEntry[];
 }
 
+/**
+ * F-654b626a: ring-buffer cap for GameDebugLogger.entries. Every debug()/
+ * info()/warn()/error() call pushed into `entries` unconditionally regardless
+ * of `enabled` — only the stderr write below was ever gated — and nothing
+ * evicted. A developer running an extended --debug/CLAUDE_RPG_DEBUG soak
+ * session (the exact scenario --debug exists for, and the one most likely to
+ * run long precisely because something intermittent is being chased)
+ * accumulated an ever-growing in-memory array — each entry's optional `data`
+ * payload can carry a full error stack (e.g. game.ts's `errStack`) — with no
+ * bound for that session's entire lifetime. Mirrors this domain's
+ * established oldest-evicted-first discipline (TurnHistory's
+ * MAX_COMPACTED_CHUNKS, GameSession's capOldestFirst / MAX_JOURNAL_RECORDS /
+ * MAX_RESOLVED_FALLOUT_ENTRIES / MAX_ENDGAME_TRIGGERS /
+ * MAX_SUBSYSTEM_FAILURE_RECORDS).
+ */
+const MAX_LOG_ENTRIES = 1000;
+
 class GameDebugLogger implements DebugLogger {
   readonly enabled: boolean;
   private tick = 0;
   private entries: LogEntry[] = [];
+  /**
+   * F-654b626a: fires the ring-buffer-full notice at most once per logger
+   * instance — a soak session that stays over the cap for its remaining
+   * lifetime shouldn't get one warning per turn.
+   */
+  private warnedAtCap = false;
 
   constructor(enabled: boolean) {
     this.enabled = enabled;
@@ -65,6 +88,21 @@ class GameDebugLogger implements DebugLogger {
   private log(level: LogLevel, subsystem: string, message: string, data?: Record<string, unknown>): void {
     const entry: LogEntry = { level, subsystem, message, tick: this.tick, data };
     this.entries.push(entry);
+    // F-654b626a: oldest-evicted-first once the ring buffer fills, mirroring
+    // GameSession.capOldestFirst's while-loop discipline — a single push can
+    // only ever exceed the cap by one, but the loop shape matches the
+    // established sibling pattern exactly.
+    if (this.entries.length > MAX_LOG_ENTRIES) {
+      while (this.entries.length > MAX_LOG_ENTRIES) {
+        this.entries.shift();
+      }
+      if (this.enabled && !this.warnedAtCap) {
+        this.warnedAtCap = true;
+        console.warn(
+          `[debug-logger] entries ring buffer hit MAX_LOG_ENTRIES=${MAX_LOG_ENTRIES} — oldest entries are now being dropped; getEntries() reflects only the most recent ${MAX_LOG_ENTRIES}.`,
+        );
+      }
+    }
     if (this.enabled) {
       const prefix = `[${level.toUpperCase()}][tick:${this.tick}][${subsystem}]`;
       const suffix = data ? ' ' + JSON.stringify(data) : '';

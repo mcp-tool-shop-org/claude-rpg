@@ -17,10 +17,14 @@ import {
   loadResolvedOpportunitiesFromSession,
   loadEndgameTriggersFromSession,
   loadFinaleFromSession,
+  loadRumorsFromSession,
+  loadPressuresFromSession,
+  loadResolvedPressuresFromSession,
   type SavedSession,
 } from './session.js';
 import { createPartyState } from '@ai-rpg-engine/modules';
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
+import { MAX_PLAYER_RUMORS } from '../game/game-state.js';
 
 function makeSession(overrides: Partial<SavedSession> = {}): SavedSession {
   return {
@@ -960,6 +964,130 @@ describe('loadFinaleFromSession (F-afe91227)', () => {
     const { factionFates: _factionFates, ...outlineMissingFactionFates } = validOutline;
     const session = makeSession({ finaleOutline: JSON.stringify(outlineMissingFactionFates) });
     expect(loadFinaleFromSession(session)).toBeNull();
+  });
+});
+
+// F-b6456823: loadRumorsFromSession, loadPressuresFromSession, and
+// loadResolvedPressuresFromSession were the last loaders in this file still
+// using the pre-hardening bare-cast pattern (`JSON.parse(x) as T[]` with
+// zero shape check) — migrate.test.ts's own header comment named them
+// explicitly. Same compact-coverage style as the F-afe91227 sibling pass
+// above: absent/corrupt-JSON falls back to [], a malformed element is
+// dropped, a well-shaped element survives untouched.
+describe('loadRumorsFromSession (F-b6456823)', () => {
+  const validRumor = {
+    id: 'r1', claim: 'defeated the Bone Collector', subjectDescriptor: 'a lone stranger',
+    sourceEvent: 'boss-kill', confidence: 0.8, distortion: 0, mutationCount: 0,
+    valence: 'heroic', spreadTo: [], originTick: 5,
+  };
+
+  it('returns [] when playerRumors is absent or not valid JSON', () => {
+    expect(loadRumorsFromSession(makeSession())).toEqual([]);
+    expect(loadRumorsFromSession(makeSession({ playerRumors: 'NOT JSON' }))).toEqual([]);
+  });
+
+  it('keeps a well-shaped rumor', () => {
+    const session = makeSession({ playerRumors: JSON.stringify([validRumor]) });
+    expect(loadRumorsFromSession(session)).toEqual([validRumor]);
+  });
+
+  it('drops a malformed element (null) while keeping a well-shaped sibling', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      playerRumors: JSON.stringify([validRumor, null]),
+    });
+    expect(loadRumorsFromSession(session)).toEqual([validRumor]);
+    warnSpy.mockRestore();
+  });
+
+  it('drops an element missing required fields (wrong shape, not null)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      playerRumors: JSON.stringify([{ id: 'r-bad' }]),
+    });
+    expect(loadRumorsFromSession(session)).toEqual([]);
+    warnSpy.mockRestore();
+  });
+
+  // F-fd5e8eec: self-healing trim on load, mirroring TurnHistory.fromJSON
+  // applying trimCompactedChunks() (F-dfd125bb) — a save already over
+  // MAX_PLAYER_RUMORS (written before the cap existed) heals immediately on
+  // load instead of carrying its unbounded growth forward.
+  it('trims an already-oversized playerRumors array down to MAX_PLAYER_RUMORS on load (F-fd5e8eec)', () => {
+    const oversized = Array.from({ length: MAX_PLAYER_RUMORS + 10 }, (_, i) => ({
+      ...validRumor,
+      id: `r${i}`,
+      confidence: 0.8,
+    }));
+    const session = makeSession({ playerRumors: JSON.stringify(oversized) });
+    expect(loadRumorsFromSession(session)).toHaveLength(MAX_PLAYER_RUMORS);
+  });
+});
+
+describe('loadPressuresFromSession (F-b6456823)', () => {
+  const validPressure = {
+    id: 'p1', kind: 'bounty-issued', sourceFactionId: 'chapel-guard',
+    description: 'A bounty has been placed.', triggeredBy: 'milestone:boss-kill',
+    urgency: 0.6, visibility: 'known', turnsRemaining: 5,
+    potentialOutcomes: [], tags: [], createdAtTick: 3,
+  };
+
+  it('returns [] when activePressures is absent or not valid JSON', () => {
+    expect(loadPressuresFromSession(makeSession())).toEqual([]);
+    expect(loadPressuresFromSession(makeSession({ activePressures: 'NOT JSON' }))).toEqual([]);
+  });
+
+  it('keeps a well-shaped pressure', () => {
+    const session = makeSession({ activePressures: JSON.stringify([validPressure]) });
+    expect(loadPressuresFromSession(session)).toEqual([validPressure]);
+  });
+
+  it("drops a malformed element (null) while keeping a well-shaped sibling — game.ts's /status handler reads activePressures[0].description/.urgency unguarded", () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      activePressures: JSON.stringify([validPressure, null]),
+    });
+    expect(loadPressuresFromSession(session)).toEqual([validPressure]);
+    warnSpy.mockRestore();
+  });
+
+  it('drops an element missing required fields (wrong shape, not null)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      activePressures: JSON.stringify([{ id: 'p-bad' }]),
+    });
+    expect(loadPressuresFromSession(session)).toEqual([]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('loadResolvedPressuresFromSession (F-b6456823)', () => {
+  const validFallout = {
+    resolution: {
+      pressureId: 'p1', pressureKind: 'bounty-issued', resolutionType: 'resolved-by-player',
+      resolvedBy: 'player', resolvedAtTick: 6, resolutionVisibility: 'known',
+    },
+    effects: [],
+    summary: 'Paid off the bounty.',
+  };
+
+  it('returns [] when resolvedPressures is absent or not valid JSON', () => {
+    expect(loadResolvedPressuresFromSession(makeSession())).toEqual([]);
+    expect(loadResolvedPressuresFromSession(makeSession({ resolvedPressures: 'NOT JSON' }))).toEqual([]);
+  });
+
+  it('keeps a well-shaped fallout entry', () => {
+    const session = makeSession({ resolvedPressures: JSON.stringify([validFallout]) });
+    expect(loadResolvedPressuresFromSession(session)).toEqual([validFallout]);
+  });
+
+  it('drops an entry whose .resolution is missing — computeFactionDeltas (character/session-recap.ts) reads f.resolution.resolvedBy unguarded', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      resolvedPressures: JSON.stringify([{ effects: [], summary: 'no resolution field' }]),
+    });
+    expect(loadResolvedPressuresFromSession(session)).toEqual([]);
+    warnSpy.mockRestore();
   });
 });
 

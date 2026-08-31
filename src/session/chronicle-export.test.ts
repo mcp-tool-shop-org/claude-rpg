@@ -100,6 +100,11 @@ describe('exportChronicleMarkdown', () => {
     expect(idxTurn3).toBeLessThan(idxTurn45);
   });
 
+  it('does not crash when chronicleRecords is a non-array (F-5d6fe829) — the old parseChronicle cast trusted it unexamined and getTopEvents([...nonArray]) threw "not iterable"', () => {
+    const md = exportChronicleMarkdown(makeSession({ chronicleRecords: '{}' }));
+    expect(md).toContain('No significant events recorded');
+  });
+
   it('renders epilogue seeds from finale outline', () => {
     const outline = {
       dominantArc: 'redemption',
@@ -157,6 +162,14 @@ describe('exportChronicleJSON', () => {
     })) as { summary: { campaignDuration: number; totalChronicleEvents: number } };
     expect(result.summary.campaignDuration).toBe(2);
     expect(result.summary.totalChronicleEvents).toBe(2);
+  });
+
+  it('does not crash when chronicleRecords is a non-array (F-5d6fe829)', () => {
+    const result = exportChronicleJSON(makeSession({ chronicleRecords: '{}' })) as {
+      summary: { campaignDuration: number; totalChronicleEvents: number };
+    };
+    expect(result.summary.campaignDuration).toBe(0);
+    expect(result.summary.totalChronicleEvents).toBe(0);
   });
 
   it('orders keyMoments chronologically by tick, not by significance (F-934b1183)', () => {

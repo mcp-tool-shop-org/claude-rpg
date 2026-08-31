@@ -3,19 +3,35 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import type { SavedSession } from './session.js';
+import { loadArcSnapshotFromSession, loadChronicleFromSession, loadFinaleFromSession } from './session.js';
 import type { CampaignRecord } from '@ai-rpg-engine/campaign-memory';
 import type { FinaleOutline, NpcFate, FactionFate, DistrictFate, LegacyEntry } from '@ai-rpg-engine/campaign-memory';
-import type { ArcSnapshot } from '@ai-rpg-engine/modules';
-import type { PartyState } from '@ai-rpg-engine/modules';
 
 // --- Markdown Export ---
 
+/**
+ * F-5d6fe829: outline/arcSnapshot/chronicle now load through session.ts's
+ * guarded loaders (loadFinaleFromSession/loadArcSnapshotFromSession/
+ * loadChronicleFromSession) instead of this file's own private
+ * parseFinaleOutline/parseArcSnapshot/parseChronicle — those re-implemented
+ * bare `JSON.parse(x) as T` casts with a silent empty catch: a second,
+ * independently-maintained, unvalidated copy of parsing session.ts's loaders
+ * already perform, with none of the isValidFinaleOutline/isValidArcSnapshot/
+ * CampaignJournal.deserialize validation those loaders carry today. A
+ * malformed chronicleRecords value (e.g. a non-array) used to survive the
+ * bare cast and throw inside getTopEvents()'s `[...records]` spread the
+ * moment `/export` ran, on a save that loaded and played fine right up to
+ * that instant. The export path now inherits the same validation the load
+ * path has, and automatically inherits any future fix to those loaders
+ * instead of needing a third parallel patch. The old parseParty was
+ * additionally dead code (parsed, never read) and is deleted outright rather
+ * than migrated — companion data is covered by outline.companionFates.
+ */
 export function exportChronicleMarkdown(session: SavedSession): string {
   const packName = session.packId ?? session.characterName ?? 'Campaign';
-  const outline = parseFinaleOutline(session);
-  const arcSnapshot = parseArcSnapshot(session);
-  const chronicle = parseChronicle(session);
-  // parseParty intentionally not called here — companion data is covered by outline.companionFates
+  const outline = loadFinaleFromSession(session);
+  const arcSnapshot = loadArcSnapshotFromSession(session);
+  const chronicle = loadChronicleFromSession(session).query({});
 
   const lines: string[] = [];
 
@@ -130,10 +146,11 @@ export function exportChronicleMarkdown(session: SavedSession): string {
 
 // --- JSON Export ---
 
+/** F-5d6fe829: see exportChronicleMarkdown's doc comment — same guarded-loader fix. */
 export function exportChronicleJSON(session: SavedSession): object {
-  const outline = parseFinaleOutline(session);
-  const arcSnapshot = parseArcSnapshot(session);
-  const chronicle = parseChronicle(session);
+  const outline = loadFinaleFromSession(session);
+  const arcSnapshot = loadArcSnapshotFromSession(session);
+  const chronicle = loadChronicleFromSession(session).query({});
 
   return {
     meta: {
@@ -257,42 +274,6 @@ export async function writeExport(filename: string, content: string): Promise<st
 }
 
 // --- Internal helpers ---
-
-function parseFinaleOutline(session: SavedSession): FinaleOutline | null {
-  if (!session.finaleOutline) return null;
-  try {
-    return JSON.parse(session.finaleOutline) as FinaleOutline;
-  } catch {
-    return null;
-  }
-}
-
-function parseArcSnapshot(session: SavedSession): ArcSnapshot | null {
-  if (!session.arcSnapshot) return null;
-  try {
-    return JSON.parse(session.arcSnapshot) as ArcSnapshot;
-  } catch {
-    return null;
-  }
-}
-
-function parseChronicle(session: SavedSession): CampaignRecord[] {
-  if (!session.chronicleRecords) return [];
-  try {
-    return JSON.parse(session.chronicleRecords) as CampaignRecord[];
-  } catch {
-    return [];
-  }
-}
-
-function parseParty(session: SavedSession): PartyState | null {
-  if (!session.partyState) return null;
-  try {
-    return JSON.parse(session.partyState) as PartyState;
-  } catch {
-    return null;
-  }
-}
 
 function getTopEvents(records: CampaignRecord[], limit: number): CampaignRecord[] {
   const top = [...records]

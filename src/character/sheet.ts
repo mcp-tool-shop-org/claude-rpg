@@ -9,6 +9,7 @@ import {
   getActiveInjuries,
 } from '@ai-rpg-engine/character-profile';
 import { getTerminalWidth } from '../display/play-renderer.js';
+import { dim } from '../cli/colors.js';
 import { resolveArchetypeName, resolveBackgroundName, resolveDisciplineName } from './catalog-names.js';
 
 // F-e475c46d: was a fixed 60-char divider regardless of terminal size,
@@ -17,11 +18,17 @@ import { resolveArchetypeName, resolveBackgroundName, resolveDisciplineName } fr
 // play-renderer.ts's makeDivider()/makeThinDivider() pattern (F-38eb3dec
 // precedent: director-renderer.ts, status-compact.ts, archive-browser.ts,
 // help-system.ts).
+// F-8e8ac939: both also wrapped in dim() -- colors.ts documents dim as the
+// semantic choice for "dividers and secondary text", and the reference
+// implementation this comment already claims to match
+// (play-renderer.ts's makeDivider()/makeThinDivider(), and this same
+// six-file family's own chronicle-renderer.ts sibling) both wrap every
+// divider in dim(). This file rendered its rules bright/undimmed until now.
 function divider(): string {
-  return '═'.repeat(getTerminalWidth());
+  return dim('═'.repeat(getTerminalWidth()));
 }
 function thinDivider(): string {
-  return '─'.repeat(getTerminalWidth());
+  return dim('─'.repeat(getTerminalWidth()));
 }
 
 /**

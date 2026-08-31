@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderRecap } from './recap.js';
 import { TurnHistory, type TurnRecord } from '../session/history.js';
 import { FALLBACK_NARRATION, FATAL_NARRATION_FALLBACK } from '../narrator/narrator.js';
@@ -204,5 +204,33 @@ describe('renderRecap divider width (F-e475c46d)', () => {
     const result = renderRecap(null, makeHistory([]));
     expect(result).toContain('═'.repeat(120));
     expect(result).not.toContain('═'.repeat(121));
+  });
+});
+
+// F-8e8ac939: divider() now wraps its rule in dim(), matching this same
+// wave's chronicle-renderer.ts precedent and the play-renderer.ts reference
+// pattern both already claimed to follow. colors.ts's `enabled` gate is
+// computed once at module-load time from process.stdout.isTTY, so dim() is a
+// no-op in this file's normal (non-TTY) test run -- proving the wrap
+// actually happens needs a fresh module import with isTTY forced true first,
+// mirroring director-renderer.test.ts's established pattern for the same
+// color-enabled scenario.
+describe('renderRecap divider color (F-8e8ac939)', () => {
+  it('wraps the divider in dim() when color is enabled', async () => {
+    const originalIsTTY = process.stdout.isTTY;
+    const originalNoColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    try {
+      const mod = await import('./recap.js');
+      const result = mod.renderRecap(null, makeHistory([]));
+      expect(result).toContain('\x1b[2m'); // dim's SGR code
+    } finally {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+      if (originalNoColor === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = originalNoColor;
+      vi.resetModules();
+    }
   });
 });

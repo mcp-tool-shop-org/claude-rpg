@@ -6,6 +6,7 @@ import type { WorldDelta } from './world-delta.js';
 import type { PlayerRumor, PressureFallout, NpcRecapEntry, CompanionRole, PartyState, DistrictEconomy, OpportunityState, OpportunityFallout } from '@ai-rpg-engine/modules';
 import { deriveEconomyDescriptor, type SupplyCategory } from '@ai-rpg-engine/modules';
 import { getTerminalWidth } from '../display/play-renderer.js';
+import { dim } from '../cli/colors.js';
 
 // F-4b8a3a39: DIVIDER/HEAVY_DIVIDER used to be hardcoded 60-char module constants,
 // unlike play-renderer.ts's own dividers (PFE-005) and this file's five
@@ -13,11 +14,19 @@ import { getTerminalWidth } from '../display/play-renderer.js';
 // world-delta.ts — all already fixed under F-e475c46d/F-38eb3dec). Computed
 // per call (not a module-level constant) so it tracks the real terminal
 // width, matching play-renderer.ts's makeDivider()/makeThinDivider() pattern.
+// F-8e8ac939: both also wrapped in dim() -- colors.ts documents dim as the
+// semantic choice for "dividers and secondary text", and the reference
+// implementation this comment already claims to match
+// (play-renderer.ts's makeDivider()/makeThinDivider(), and this same
+// six-file family's own chronicle-renderer.ts sibling) both wrap every
+// divider in dim(). This file rendered its rules bright/undimmed until now
+// -- this end-of-session SESSION SUMMARY screen is shown after every play
+// session ends, one of the two or three most-seen screens in the app.
 function divider(): string {
-  return '─'.repeat(getTerminalWidth());
+  return dim('─'.repeat(getTerminalWidth()));
 }
 function heavyDivider(): string {
-  return '═'.repeat(getTerminalWidth());
+  return dim('═'.repeat(getTerminalWidth()));
 }
 
 // --- Types ---

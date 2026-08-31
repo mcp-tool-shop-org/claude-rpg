@@ -22,6 +22,31 @@ import {
 import { promptText, promptMenu, promptMultiSelect, promptConfirm, promptGroupedMenu, PromptCancelled, CANCEL_KEYWORD, type MenuGroup } from './prompts.js';
 import { allPacks, type PackInfo } from './packs.js';
 import type { PackDifficulty } from '@ai-rpg-engine/pack-registry';
+import { getTerminalWidth } from '../display/play-renderer.js';
+import { dim } from '../cli/colors.js';
+
+/**
+ * F-7360c1a0: the Character Summary header used to be a bare
+ * `\n  ── Character Summary ──` line matching neither of this domain's two
+ * established header idioms -- not the full-width, getTerminalWidth()-driven
+ * divider()+ALL-CAPS convention every peer summary screen uses (recap.ts's
+ * LAST TIME ON CLAUDE RPG, sheet.ts's CHARACTER SHEET, session-recap.ts's
+ * SESSION SUMMARY, chronicle-renderer.ts's three headers -- all framed top
+ * and bottom by full-width rules), nor the short colored inline-marker idiom
+ * used elsewhere for a similar bracketed aside (play-renderer.ts's
+ * yellow-wrapped '── approaching conclusion ──' banner). Promoted to the
+ * full convention here -- Character Summary is a full-screen recap of a
+ * completed character, functionally closest to sheet.ts's CHARACTER SHEET
+ * (hence the same heavy '═' weight, not world-delta.ts's/recap-delta.ts's
+ * thinner '─'). dim()-wrapped from the outset to match this same wave's
+ * F-8e8ac939 fix (recap.ts/recap-delta.ts/sheet.ts/world-delta.ts/
+ * session-recap.ts's dividers all gained dim() this wave) -- introducing a
+ * sixth undimmed divider the moment after fixing the other five would just
+ * relocate the exact gap being closed.
+ */
+function divider(): string {
+  return dim('═'.repeat(getTerminalWidth()));
+}
 
 export type BuildResult = {
   build: CharacterBuild;
@@ -211,7 +236,11 @@ export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInf
 
   // Show summary
   const title = disciplineId ? resolveTitle(archetype.id, disciplineId, catalog) : undefined;
-  console.log('\n  ── Character Summary ──');
+  console.log('');
+  console.log(divider());
+  console.log('  CHARACTER SUMMARY');
+  console.log(divider());
+  console.log('');
   console.log(`  Name: ${name}`);
   console.log(`  Archetype: ${archetype.name}`);
   console.log(`  Background: ${background.name}`);
@@ -226,6 +255,8 @@ export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInf
   if (title) console.log(`  Title: ${title}`);
   console.log(`  Stats: ${Object.entries(playerEntity.stats).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
   console.log(`  Resources: ${Object.entries(playerEntity.resources).map(([k, v]) => `${k}: ${v}`).join(', ')}`);
+  console.log('');
+  console.log(divider());
   console.log('');
 
   const confirmed = await promptConfirm(rl, 'Accept this character?');

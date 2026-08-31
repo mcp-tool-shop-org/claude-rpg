@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { renderCharacterSheet } from './sheet.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
@@ -127,5 +127,33 @@ describe('renderCharacterSheet divider width (F-e475c46d)', () => {
     const result = renderCharacterSheet(makeMinimalProfile(), emptyCatalog);
     expect(result).toContain('─'.repeat(40));
     expect(result).not.toContain('─'.repeat(60));
+  });
+});
+
+// F-8e8ac939: divider()/thinDivider() now wrap their rules in dim(),
+// matching this same wave's chronicle-renderer.ts precedent and the
+// play-renderer.ts reference pattern both already claimed to follow. dim()
+// is a no-op in this file's normal (non-TTY) test run (colors.ts's
+// `enabled` gate, computed once at module-load time), so proving the wrap
+// actually happens needs a fresh module import with isTTY forced true first
+// -- mirrors director-renderer.test.ts's established pattern for the same
+// scenario.
+describe('renderCharacterSheet divider color (F-8e8ac939)', () => {
+  it('wraps both the heavy and thin dividers in dim() when color is enabled', async () => {
+    const originalIsTTY = process.stdout.isTTY;
+    const originalNoColor = process.env.NO_COLOR;
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    try {
+      const mod = await import('./sheet.js');
+      const result = mod.renderCharacterSheet(makeMinimalProfile(), emptyCatalog);
+      expect(result).toContain('\x1b[2m'); // dim's SGR code
+    } finally {
+      (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = originalIsTTY;
+      if (originalNoColor === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = originalNoColor;
+      vi.resetModules();
+    }
   });
 });

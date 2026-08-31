@@ -349,7 +349,12 @@ export async function generateWorld(
       id: proposal.title.toLowerCase().replace(/\s+/g, '-'),
       title: proposal.title,
       version: '1.0.0',
-      engineVersion: '2.0.0',
+      // F-f28c3098 (3.9 slice): a semver RANGE, per the engine's own
+      // GameManifest.engineVersion doctrine (core/types.ts — a bare pinned
+      // version hardcoded in an exporter is the drift anti-pattern its C0
+      // incident documents). Not read by this direct-construction path
+      // today; kept honest for anything that starts reading it.
+      engineVersion: '>=3.9.0 <4.0.0',
       ruleset: ruleset.id,
       modules: [],
       contentPacks: [],

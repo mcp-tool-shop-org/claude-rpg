@@ -1000,6 +1000,67 @@ describe('GameSession', () => {
       expect(records.some((r) => r.description.includes('Accepted contract'))).toBe(true);
       expect(records.some((r) => r.description.includes('Completed contract'))).toBe(true);
     });
+
+    it('surfaces a player-facing notice instead of a silent no-op when no opportunity is available (edge case, F-7c44396e)', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+      // No opportunity was ever pushed onto activeOpportunities — this is
+      // the finding's own cited reachability example: ordinary phrasing
+      // ("decline the offer") fast-matches the opportunity verb on syntax
+      // alone with zero check that a matching opportunity exists.
+      const output = await h.play('decline the offer');
+
+      expect(output).toContain('No opportunity is available to decline');
+      expect(h.session.activeOpportunities).toHaveLength(0);
+      expect(h.session.resolvedOpportunities).toHaveLength(0);
+    });
+  });
+
+  // F-88570323: /recruit and /dismiss used to index the raw entity table
+  // directly (this.engine.world.entities[npcId]), requiring the exact
+  // internal id verbatim -- inconsistent with every other targeting command
+  // in this domain (attack/speak/inspect/use), which all resolve through
+  // findEntityByName's tiered case-insensitive exact-name -> substring-name
+  // -> substring-id matching. Entity ids aren't reliably derivable from what
+  // a player sees: starter-fantasy's 'brother-aldric' displays everywhere
+  // else as "Brother Aldric".
+  describe('recruit/dismiss by display name (F-88570323)', () => {
+    it('recruits and dismisses by a spoken display-name fragment, not just the exact internal id', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('go to chapel-nave');
+      // Original code required npcId === 'brother-aldric' exactly; this now
+      // resolves 'aldric' via the same substring-name tier attack/speak/
+      // inspect already use, scoped to the player's current zone.
+      const recruitOutput = await h.play('/recruit aldric');
+      expect(recruitOutput).toContain('Brother Aldric has joined your party');
+      expect(h.session.partyState.companions.some((c) => c.npcId === 'brother-aldric')).toBe(true);
+
+      // Dismiss by the same spoken fragment -- resolved against the party
+      // roster's display names this time, not every entity in the world.
+      const dismissOutput = await h.play('/dismiss aldric');
+      expect(dismissOutput).toContain('Brother Aldric has left your party');
+      expect(h.session.partyState.companions.some((c) => c.npcId === 'brother-aldric')).toBe(false);
+    });
+
+    it('still falls back to the exact internal id for power users', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('go to chapel-nave');
+      const output = await h.play('/recruit brother-aldric');
+      expect(output).toContain('Brother Aldric has joined your party');
+    });
+
+    it('reports no one by that name instead of the raw "Entity ... not found" engineer copy', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      const output = await h.play('/recruit nobody-here-xyz');
+      expect(output).toContain('No one named "nobody-here-xyz" is here to recruit');
+      expect(output).not.toContain('Entity "nobody-here-xyz" not found');
+    });
   });
 
   // F-c4332895: engine.submitAction() inside executeTurn() mutates world state

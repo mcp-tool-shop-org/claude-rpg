@@ -129,3 +129,72 @@ describe('scene-context situationHint wiring (F-2218267d, ruling b)', () => {
     expect(context.narrationInput.situationHint).toBeUndefined();
   });
 });
+
+// F-88c8848b: 3.10's engagement-core emits 'combat.encounter.cleared' when
+// the last hostile in the player's zone is defeated (engagement-core.ts
+// :296-312), payload {zoneId, outcome:'victory', finalDefeatEventId,
+// participants:{survivors, finalOpponent:{id,name}}}. describeEvent() had
+// no case for it and fell through to the bare default arm, rendering the
+// context-free fragment 'cleared' into the narration prompt's 'Recent
+// events:' section at exactly the moment (winning a fight) narration
+// should read strongest. Added a payload-driven case matching the
+// combat.entity.defeated house style, with a fallback for when the final
+// opponent's name is unavailable.
+describe('describeEvent combat.encounter.cleared (F-88c8848b)', () => {
+  it('names the final opponent when the payload provides one', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'combat.encounter.cleared',
+        tick: 1,
+        payload: {
+          zoneId: engine.world.locationId,
+          outcome: 'victory',
+          finalDefeatEventId: 'evt-defeat-1',
+          participants: {
+            survivors: [],
+            finalOpponent: { id: 'goblin-1', name: 'Goblin Raider' },
+          },
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Encounter cleared: Goblin Raider defeated',
+    ]);
+  });
+
+  it('falls back to a generic message when the final opponent has no name', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'combat.encounter.cleared',
+        tick: 1,
+        payload: {
+          zoneId: engine.world.locationId,
+          outcome: 'victory',
+          finalDefeatEventId: 'evt-defeat-2',
+          participants: {
+            survivors: [],
+            finalOpponent: { id: 'goblin-2' },
+          },
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual(['Encounter cleared']);
+  });
+
+  it('still falls through to the default arm for a genuinely unknown event type', () => {
+    const engine = createGame();
+    const events = [{ type: 'some.made.up.event', tick: 1, payload: {} }] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual(['event']);
+  });
+});

@@ -138,6 +138,17 @@ function describeEvent(event: ResolvedEvent): string {
       return `${p.damage ?? '?'} damage dealt`;
     case 'combat.entity.defeated':
       return `${p.entityId ?? 'An entity'} defeated`;
+    case 'combat.encounter.cleared': {
+      // F-88c8848b: new in engine 3.10 (engagement-core.ts:296-312), fired
+      // when the last hostile in the player's zone is defeated. Payload-
+      // driven with a sensible fallback, matching combat.entity.defeated's
+      // house style above.
+      const participants = p.participants as
+        | { finalOpponent?: { name?: string } }
+        | undefined;
+      const name = participants?.finalOpponent?.name;
+      return name ? `Encounter cleared: ${name} defeated` : 'Encounter cleared';
+    }
     case 'world.zone.entered':
       return `Entered ${p.zoneName ?? p.zoneId ?? 'a new area'}`;
     case 'resource.changed':

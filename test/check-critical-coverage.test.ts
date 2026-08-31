@@ -7,7 +7,56 @@ import {
   getApplicableThreshold,
   branchesPercent,
   coverageReportLine,
+  failsCoverageGate,
 } from '../scripts/check-coverage-utils.mjs';
+
+// Coordinator stitch, wave 2 (run swarm-1788171999-5dc0): gate-goes-RED
+// proofs for the ci-tooling amend — a gate is not verified until a mutation
+// of the protected thing makes it fire.
+describe('src/display/ per-path threshold (F-bb735a0b)', () => {
+  it('display paths resolve to the 55 floor instead of falling through to the global default', () => {
+    const thresholds = getPerPathThresholds();
+    expect(getApplicableThreshold('src/display/play-renderer.ts', thresholds)).toBe(55);
+  });
+
+  it('fires on a below-floor display file (the gate can go red)', () => {
+    const thresholds = getPerPathThresholds();
+    const t = getApplicableThreshold('src/display/help-system.ts', thresholds);
+    expect(failsCoverageGate(t - 1, undefined, t, 60)).toBe(true);
+  });
+
+  it('passes an at-floor display file', () => {
+    const thresholds = getPerPathThresholds();
+    const t = getApplicableThreshold('src/display/help-system.ts', thresholds);
+    expect(failsCoverageGate(t, undefined, t, 60)).toBe(false);
+  });
+});
+
+describe('failsCoverageGate single-verdict contract (F-5c3345ff)', () => {
+  it('a file failing BOTH statements and branches yields one boolean, not an axis count', () => {
+    expect(failsCoverageGate(10, 10, 55, 60)).toBe(true);
+  });
+
+  it('fires on statements alone', () => {
+    expect(failsCoverageGate(10, 99, 55, 60)).toBe(true);
+  });
+
+  it('fires on branches alone', () => {
+    expect(failsCoverageGate(99, 10, 55, 60)).toBe(true);
+  });
+
+  it('uninstrumented statements fail (undefined is not a pass)', () => {
+    expect(failsCoverageGate(undefined, 99, 55, 60)).toBe(true);
+  });
+
+  it('missing branch data does not fail on the branch axis', () => {
+    expect(failsCoverageGate(99, undefined, 55, 60)).toBe(false);
+  });
+
+  it('holds green when both axes clear their floors', () => {
+    expect(failsCoverageGate(80, 75, 55, 60)).toBe(false);
+  });
+});
 
 describe('statementsPercent', () => {
   it('returns undefined when s is missing', () => {

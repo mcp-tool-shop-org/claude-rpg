@@ -656,7 +656,14 @@ export function tickDistrictEconomies(
   }
 }
 
-const VALID_SUPPLY_CATEGORIES: ReadonlySet<string> = new Set([
+/**
+ * F-afe91227: exported (was module-private) so session.ts's
+ * loadEconomiesFromSession shape guard can validate a restored
+ * DistrictEconomy's `.supplies` against the SAME set tickDistrictEconomy
+ * iterates unguarded, instead of a re-declared copy that could drift from
+ * it.
+ */
+export const VALID_SUPPLY_CATEGORIES: ReadonlySet<string> = new Set([
   'medicine', 'weapons', 'ammunition', 'food', 'fuel', 'luxuries', 'components', 'contraband',
 ]);
 

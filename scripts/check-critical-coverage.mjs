@@ -28,6 +28,7 @@ import {
   getGlobalBranchThreshold,
   normalizePath,
   coverageReportLine,
+  failsCoverageGate,
 } from './check-coverage-utils.mjs';
 
 // Respect NO_COLOR environment variable and terminal capability
@@ -72,7 +73,6 @@ if (!existsSync(coveragePath)) {
 }
 
 const coverage = JSON.parse(readFileSync(coveragePath, 'utf8'));
-let failures = 0;
 
 console.log(`${bold('── Runtime-Critical Changed Files ──')}\n`);
 
@@ -106,34 +106,14 @@ for (const file of criticalChanged) {
   const reportLine = coverageReportLine(file, stmtsPct, branchPct, threshold);
   console.log(reportLine);
 
-  // Check if statements pass threshold
-  let passStmts = false;
-  if (stmtsPct === undefined) {
-    // Treat as failure: if not instrumented, it's not covered
-    failures++;
+  // F-5c3345ff: a single gate check per file rather than one increment per
+  // axis — a file failing both statements AND branches still counts once.
+  if (failsCoverageGate(stmtsPct, branchPct, threshold, BRANCH_THRESHOLD)) {
     failingFiles.push(file);
-  } else {
-    passStmts = stmtsPct >= threshold;
-    if (!passStmts) {
-      failures++;
-      failingFiles.push(file);
-    }
-  }
-
-  // Check if branches pass the global threshold (only if branches were instrumented)
-  if (branchPct !== undefined) {
-    const passBranches = branchPct >= BRANCH_THRESHOLD;
-    if (!passBranches) {
-      if (!failingFiles.includes(file)) {
-        failures++;
-        failingFiles.push(file);
-      } else {
-        // Already counted in failures above; don't double-count
-        failures++;
-      }
-    }
   }
 }
+
+const failures = failingFiles.length;
 
 console.log('');
 if (failures > 0) {

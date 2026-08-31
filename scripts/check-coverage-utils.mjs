@@ -77,6 +77,9 @@ export function getGlobalFunctionThreshold() {
  * - src/session/: 58
  * - src/game.ts: 30 (specific file floor, per vitest.config.ts measurement)
  * - src/game/: 55 (directory floor)
+ * - src/display/: 55 (F-bb735a0b: was missing here though vitest.config.ts
+ *   has carried this floor since F-26ec045e; kept this script's PR-diff
+ *   gate blind to display-path regressions until now)
  *
  * Note: Keys use forward slashes without ** because getApplicableThreshold()
  * uses startsWith() matching, not glob expansion. The src/game.ts entry provides
@@ -91,6 +94,7 @@ export function getPerPathThresholds() {
     'src/session/': 58,
     'src/game.ts': 30,
     'src/game/': 55,
+    'src/display/': 55,
   };
 }
 
@@ -131,6 +135,28 @@ export function getApplicableThreshold(filePath, thresholds) {
 export function isAboveThreshold(coverage, threshold) {
   if (coverage === undefined) return false;
   return coverage >= threshold;
+}
+
+/**
+ * Whether a file fails the critical-path coverage gate: its statements are
+ * below the applicable per-path threshold (or not instrumented at all), OR
+ * — when branch data was collected — its branches are below the global
+ * branch floor. Deliberately returns one boolean rather than a count: a
+ * file failing on BOTH axes still fails once. A caller accumulating a
+ * failure count across files must call this exactly once per file and
+ * increment on `true`, never once per axis — incrementing per axis is what
+ * caused F-5c3345ff (a file failing both statements and branches was
+ * counted as two failures instead of one).
+ * @param {number | undefined} statements
+ * @param {number | undefined} branches
+ * @param {number} threshold - applicable per-path statement threshold
+ * @param {number} branchThreshold - global branch threshold
+ * @returns {boolean}
+ */
+export function failsCoverageGate(statements, branches, threshold, branchThreshold) {
+  if (!isAboveThreshold(statements, threshold)) return true;
+  if (branches !== undefined && branches < branchThreshold) return true;
+  return false;
 }
 
 /**

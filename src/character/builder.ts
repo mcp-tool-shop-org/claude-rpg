@@ -19,7 +19,7 @@ import {
   equipItem,
   addToInventory,
 } from '@ai-rpg-engine/equipment';
-import { promptText, promptMenu, promptMultiSelect, promptConfirm, promptGroupedMenu, type MenuGroup } from './prompts.js';
+import { promptText, promptMenu, promptMultiSelect, promptConfirm, promptGroupedMenu, PromptCancelled, CANCEL_KEYWORD, type MenuGroup } from './prompts.js';
 import { allPacks, type PackInfo } from './packs.js';
 import type { PackDifficulty } from '@ai-rpg-engine/pack-registry';
 
@@ -71,6 +71,11 @@ export function buildDifficultyGroups(packs: PackInfo[]): MenuGroup<PackInfo>[] 
  *   --world) -- there is no in-session escape hatch by design.
  */
 export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInfo): Promise<BuildResult> {
+  // F-f480fef1: printed once, before the flow starts (not re-printed on a
+  // reject-and-retry pass) -- see PromptCancelled's doc comment (prompts.ts)
+  // for the full contract this hint advertises.
+  console.log(`  Type "${CANCEL_KEYWORD}" at any prompt to stop character creation.`);
+  try {
   // Loop instead of recursion to avoid unbounded stack growth on repeated rejections
   while (true) {
   // Step 1: Select pack.
@@ -156,8 +161,31 @@ export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInf
     let remaining = budget;
     for (const stat of ruleset.stats) {
       if (remaining <= 0) break;
-      const answer = await promptText(rl, `  ${stat.name} (${stat.id}, max ${remaining})`);
-      const points = Math.min(Math.max(0, parseInt(answer, 10) || 0), remaining);
+      // F-86c50a80: this was the one step in the whole 7-step flow that
+      // silently absorbed bad input instead of re-prompting like every
+      // promptMenu-based step elsewhere here (archetype, background,
+      // discipline, world/trait selection) -- a non-numeric answer became
+      // NaN || 0 = 0 points with zero feedback, a negative number was
+      // clamped to 0 the same silent way, and an over-budget number was
+      // silently capped with no notice at all. Now: reject non-numeric/
+      // negative input and re-ask (mirroring promptMenu's message), and
+      // print an explicit notice when an over-budget number is scaled down
+      // instead of silently substituting a smaller value.
+      let points: number | undefined;
+      while (points === undefined) {
+        const answer = await promptText(rl, `  ${stat.name} (${stat.id}, max ${remaining})`);
+        const parsed = parseInt(answer, 10);
+        if (Number.isNaN(parsed) || parsed < 0) {
+          console.log(`  Please enter a number between 0 and ${remaining}.`);
+          continue;
+        }
+        if (parsed > remaining) {
+          points = remaining;
+          console.log(`  Only ${remaining} left. Allocating ${remaining} to ${stat.name}.`);
+        } else {
+          points = parsed;
+        }
+      }
       if (points > 0) {
         statAllocations[stat.id] = points;
         remaining -= points;
@@ -239,4 +267,15 @@ export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInf
 
   return { build, profile: profileWithLoadout, playerEntity, pack };
   } // end while
+  } catch (err) {
+    // F-f480fef1: PromptCancelled seam contract -- see its doc comment in
+    // prompts.ts. This is the one piece of graceful handling fully owned by
+    // this domain: print a clean, in-voice confirmation immediately, then
+    // rethrow unchanged so bin.ts's runPlay (outside this domain's globs)
+    // can decide what happens next.
+    if (err instanceof PromptCancelled) {
+      console.log(`\n  ${err.message}\n`);
+    }
+    throw err;
+  }
 }

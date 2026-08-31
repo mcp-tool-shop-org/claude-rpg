@@ -5,7 +5,7 @@ import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { NarrationPlan, PresentationState } from '@ai-rpg-engine/presentation';
 import { isValidNarrationPlan } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient, StreamCallback } from '../claude-client.js';
-import { NarrationError, userMessage } from '../llm/claude-errors.js';
+import { NarrationError, userMessage, type NarrationErrorKind } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
 import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt } from '../prompts/narrate-scene.js';
 import { buildSceneContext, type SceneContext } from './scene-context.js';
@@ -115,6 +115,21 @@ export type NarrateSceneOpts = {
   chronicleContext?: string;
   onChunk?: StreamCallback;
   /**
+   * F-9213c697: forwarded straight into client.generateStream's own
+   * onStreamReset (see its doc comment in claude-client.ts, which names this
+   * exact call site as the reason the parameter exists). narrateScene is the
+   * only caller of client.generateStream anywhere in src/**, and previously
+   * had no field to receive one from its own caller in the first place --
+   * so a mid-stream retry during narration always rendered the exact broken
+   * sequence F-f2e58ce0 fixed at the adapter layer: a partial sentence
+   * immediately followed by the same narration silently restarting from
+   * scratch, with no visual cue distinguishing a retry from a duplicated or
+   * garbled response. Omitted by every current caller (bin.ts doesn't pass
+   * one here yet, a cross-domain follow-up outside this domain's globs) --
+   * behavior is unchanged when absent.
+   */
+  onStreamReset?: (info: { attempt: number; maxAttempts: number; kind: NarrationErrorKind; delayMs: number }) => void;
+  /**
    * F-681d3382: count of consecutive non-fatal LLM fallbacks immediately
    * preceding this turn (0 or omitted = none / unknown). When >= 1 — i.e.
    * this call's own fallback, if it happens, would be the 2nd+ in a row —
@@ -158,7 +173,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onChunk, logger,
-    consecutiveFallbacks,
+    consecutiveFallbacks, onStreamReset,
   } = opts;
 
   // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
@@ -214,6 +229,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
         prompt,
         maxTokens: 300,
         onChunk,
+        onStreamReset,
       });
       return {
         narration: result.text.trim(),

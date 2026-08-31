@@ -649,6 +649,37 @@ describe('narrateScene streaming with LEGACY prompt (FT-BR-004)', () => {
     );
   });
 
+  // F-9213c697: narrateScene is the only caller of client.generateStream in
+  // src/**, and previously had no field on NarrateSceneOpts to receive an
+  // onStreamReset from its own caller -- so it could never forward one
+  // through, even though claude-adapter.ts's generateStream (F-f2e58ce0)
+  // fully implements and uses it. A caller-supplied handler must reach the
+  // generateStream call unchanged.
+  it('forwards a caller-supplied onStreamReset straight into client.generateStream (F-9213c697)', async () => {
+    const onChunk = () => {};
+    const onStreamReset = vi.fn();
+    const streamClient = makeClient('unused', 'A cool breeze greets you.');
+
+    const opts = makeOpts({ client: streamClient, onChunk, onStreamReset });
+    await narrateScene(opts);
+
+    expect(streamClient.generateStream).toHaveBeenCalledWith(
+      expect.objectContaining({ onStreamReset }),
+    );
+  });
+
+  it('passes onStreamReset as undefined when the caller omits it (unchanged default)', async () => {
+    const onChunk = () => {};
+    const streamClient = makeClient('unused', 'A cool breeze greets you.');
+
+    const opts = makeOpts({ client: streamClient, onChunk });
+    await narrateScene(opts);
+
+    expect(streamClient.generateStream).toHaveBeenCalledWith(
+      expect.objectContaining({ onStreamReset: undefined }),
+    );
+  });
+
   it('should return null plan when streaming (plain text mode)', async () => {
     const chunks: string[] = [];
     const onChunk = (chunk: string) => chunks.push(chunk);

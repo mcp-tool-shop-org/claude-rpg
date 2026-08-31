@@ -640,18 +640,28 @@ describe('renderConcludeOutput — the /conclude terminal screen (F-4905e69f)', 
   // summary for the cross-worktree divergence note; do not weaken this
   // assertion to match the current buggy output.
   it('header and footer rules render as a single solid character at a terminal-safe width <= 80 (F-4905e69f)', () => {
-    const output = renderConcludeOutput({
-      deterministicSummary: '  Resolution: QUIET RETIREMENT',
-      worldAfter: '  === WORLD AFTER ===',
-    });
-    const lines = output.split('\n');
-    const headerTop = lines[1];
-    const headerBottom = lines[3];
-    const footerRule = lines[lines.length - 2];
+    // F-3e8bd7ed: the divider width is play-renderer.ts's getTerminalWidth(),
+    // which reads process.stdout.columns (clamped 40-120, fallback 60) --
+    // so this assertion is only TTY-independent if columns is stubbed, the
+    // same pattern src/display/play-renderer-divider.test.ts already
+    // establishes. Restored in `finally` regardless of test outcome.
+    Object.defineProperty(process.stdout, 'columns', { value: 80, writable: true });
+    try {
+      const output = renderConcludeOutput({
+        deterministicSummary: '  Resolution: QUIET RETIREMENT',
+        worldAfter: '  === WORLD AFTER ===',
+      });
+      const lines = output.split('\n');
+      const headerTop = lines[1];
+      const headerBottom = lines[3];
+      const footerRule = lines[lines.length - 2];
 
-    for (const rule of [headerTop, headerBottom, footerRule]) {
-      expect(rule.trimStart()).toMatch(/^[═─]+$/);
-      expect(rule.length).toBeLessThanOrEqual(80);
+      for (const rule of [headerTop, headerBottom, footerRule]) {
+        expect(rule.trimStart()).toMatch(/^[═─]+$/);
+        expect(rule.length).toBeLessThanOrEqual(80);
+      }
+    } finally {
+      Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
     }
   });
 });

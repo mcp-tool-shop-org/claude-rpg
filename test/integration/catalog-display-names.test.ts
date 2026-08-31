@@ -2,18 +2,14 @@
 // proving player-visible output resolves catalog archetype/discipline/
 // background ids to their display names instead of the raw kebab-case id.
 //
-// Confirmed live bug: src/character/recap.ts:53 renders
+// Originally-confirmed live bug: src/character/recap.ts rendered
 // `${profile.build.name}, level ${level} ${profile.build.archetypeId}`
-// verbatim -- 'penitent-knight' instead of 'Penitent Knight'. The
-// Coordinator Brief pins the fix's landing signature as
-// `renderRecap(profile, history, catalog?)` (a new 3rd optional param,
-// added by another domain this same wave; src/character/recap.ts is
-// out of this domain's edit scope -- see "Do NOT edit src/**" in the
-// brief). This worktree's recap.ts is still the OLD 2-arg version, so
-// calling it with a 3rd argument is a harmless no-op at runtime (JS
-// ignores extra args) -- these tests are RED in-worktree for exactly that
-// reason and are expected to go GREEN once the other domain's catalog-
-// threading lands and this wave's branches merge.
+// verbatim -- 'penitent-knight' instead of 'Penitent Knight'. The fix
+// landed as a new 3rd optional param, `renderRecap(profile, history,
+// catalog?)` (src/character/recap.ts:46-49 -- out of this domain's edit
+// scope, see "Do NOT edit src/**" in the brief). The catalog-threading has
+// landed, so these tests call the real 3-arg signature directly and let
+// tsc check it as declared -- no cast needed.
 //
 // The unit-level fixture rebuild the routed finding also describes for
 // src/character/recap.test.ts is a co-located src/**.test.ts file --
@@ -48,17 +44,10 @@ function makeProfile(archetypeId: string, backgroundId = 'oath-breaker') {
 // ─── recap.ts: the confirmed live bug ─────────────────────────
 
 describe('renderRecap resolves catalog display names (F-256bb64a)', () => {
-  it('red in-worktree, green expected at merge: resolves archetypeId to its catalog display name instead of the raw id', () => {
+  it('resolves archetypeId to its catalog display name instead of the raw id', () => {
     const profile = makeProfile('penitent-knight');
     const history = new TurnHistory();
-    // 3rd arg is the pinned-but-not-yet-wired `catalog` param -- see file
-    // header. Cast through `any` so this worktree's 2-arg .d.ts (if tsc
-    // were run) doesn't block the call; vitest itself doesn't type-check.
-    const output = (renderRecap as (p: typeof profile, h: TurnHistory, c?: typeof catalog) => string)(
-      profile,
-      history,
-      catalog,
-    );
+    const output = renderRecap(profile, history, catalog);
     expect(output).toContain('Penitent Knight');
     expect(output).not.toContain('penitent-knight');
   });
@@ -74,11 +63,7 @@ describe('renderRecap resolves catalog display names (F-256bb64a)', () => {
     const profile = makeProfile('a-stale-archetype-from-a-removed-pack');
     const history = new TurnHistory();
     expect(() => {
-      const output = (renderRecap as (p: typeof profile, h: TurnHistory, c?: typeof catalog) => string)(
-        profile,
-        history,
-        catalog,
-      );
+      const output = renderRecap(profile, history, catalog);
       expect(output).toContain('a-stale-archetype-from-a-removed-pack');
       expect(output).not.toContain('undefined');
     }).not.toThrow();

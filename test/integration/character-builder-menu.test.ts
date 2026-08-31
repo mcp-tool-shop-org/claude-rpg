@@ -163,7 +163,10 @@ describe('world-selection menu wraps within the real terminal width, at both cla
     for (const group of groups) {
       for (const entry of group.items) {
         num += 1;
-        const expected = `${num}. ${entry.label}${entry.description ? ` — ${entry.description}` : ''}`;
+        // Coordinator stitch (wave 10, F-f43330d8): promptGroupedMenu pads
+        // the index against the flat total, so the expectation mirrors it.
+        const padded = String(num).padStart(String(groups.reduce((n, g) => n + g.items.length, 0)).length);
+        const expected = `${padded}. ${entry.label}${entry.description ? ` — ${entry.description}` : ''}`;
 
         expect(rowLines[cursor], `expected a rendered row for entry ${num} at ${columns} cols`).toBeDefined();
         const entryLines: string[] = [rowLines[cursor]];
@@ -171,7 +174,10 @@ describe('world-selection menu wraps within the real terminal width, at both cla
         // A hanging-indented continuation line carries wrapMenuLine's extra
         // 2-space indent (6 total), so it never matches the numbered-row
         // shape a fresh entry's own first line has.
-        while (cursor < rowLines.length && !/^ {4}\d+\. /.test(rowLines[cursor])) {
+        // {4,5}: a padStart'ed single-digit row carries one pad space after
+        // the 4-space console indent (F-f43330d8); a 6-space continuation
+        // line still never matches (digit would sit past the bound).
+        while (cursor < rowLines.length && !/^ {4,5}\d+\. /.test(rowLines[cursor])) {
           entryLines.push(rowLines[cursor]);
           cursor += 1;
         }

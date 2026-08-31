@@ -250,7 +250,13 @@ describe('renderChronicle content wrapping (F-dd7a85ca)', () => {
     expect(result).toContain('    sig:0.50 | "defeated a bandit"');
   });
 
-  it('director: a large data payload no longer renders as one unbounded JSON line -- the worst case this finding names', () => {
+  // Coordinator stitch (wave 10), deliberate INVERSION of this pin's
+  // original wrap contract: director mode is a debug surface, and JSON
+  // hard-wrapped mid-token cannot be copy-pasted — a single long line the
+  // terminal soft-wraps still can. The F-dd7a85ca "unbounded" complaint is
+  // answered with a LENGTH cap instead: intact JSON up to 500 chars, then
+  // truncation with an explicit `… (+N chars)` marker.
+  it('director: a data payload renders as ONE intact copy-pasteable JSON line, length-capped with a marker when huge', () => {
     Object.defineProperty(process.stdout, 'columns', { value: 40, writable: true });
     const bigData = {
       itemsFound: ['ancient coin', 'rusted key', 'tattered map', 'silver locket'],
@@ -260,20 +266,18 @@ describe('renderChronicle content wrapping (F-dd7a85ca)', () => {
     const chronicle = makeChronicle([makeRecord({ data: bigData })]);
     const result = renderChronicle(chronicle, 'director');
 
-    // Before this fix this was rendered as ONE raw line well over 100 chars.
+    // Under the 500-char cap: the full JSON stays on one intact line —
+    // parseable straight off a copy-paste.
     expect(rawJsonLine.length).toBeGreaterThan(100);
-    expect(result.split('\n')).not.toContain(rawJsonLine);
-    // Word-wrap only ever breaks BETWEEN space-separated tokens, never mid-
-    // token, but a two-word phrase like "ancient coin" could still land split
-    // across a line break -- reassemble before checking content survived, the
-    // same technique wrapMenuLine's own test suite uses, rather than
-    // asserting on the raw (possibly line-broken) result directly.
-    const reassembled = result.split('\n').map((l) => l.trim()).join(' ').replace(/\s+/g, ' ');
-    expect(reassembled).toContain('ancient coin');
-    expect(reassembled).toContain('cistern');
+    const dataLine = result.split('\n').find((l) => l.trimStart().startsWith('data:'));
+    expect(dataLine).toBe(rawJsonLine);
+    expect(() => JSON.parse((dataLine as string).trim().slice('data:'.length))).not.toThrow();
 
-    for (const line of result.split('\n')) {
-      expect(line.length).toBeLessThan(rawJsonLine.length);
-    }
+    // Over the cap: truncated with the explicit marker, total bounded.
+    const huge = { blob: 'x'.repeat(900) };
+    const hugeResult = renderChronicle(makeChronicle([makeRecord({ data: huge })]), 'director');
+    const hugeLine = hugeResult.split('\n').find((l) => l.trimStart().startsWith('data:')) as string;
+    expect(hugeLine).toContain('… (+');
+    expect(hugeLine.length).toBeLessThan(560);
   });
 });

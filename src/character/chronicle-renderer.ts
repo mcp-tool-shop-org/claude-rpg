@@ -286,9 +286,15 @@ function renderDirectorChronicle(chronicle: CompactedChronicle): string {
       wrapContentLine('    ', `sig:${record.significance.toFixed(2)}${witnesses} | "${record.description}"`),
     );
     if (Object.keys(record.data).length > 0) {
-      // F-dd7a85ca: the worst case named by this finding -- an unbounded
-      // JSON.stringify(record.data) dump with no length cap at all.
-      lines.push(wrapContentLine('    ', `data:${JSON.stringify(record.data)}`));
+      // F-dd7a85ca + coordinator stitch (wave 10): the unbounded
+      // JSON.stringify dump gets a LENGTH cap, not a hard wrap — this is a
+      // director/debug surface, and JSON broken mid-token across wrapped
+      // lines can't be copy-pasted; a single long line the terminal
+      // soft-wraps still can. Cap keeps a flood of data{} from burying the
+      // timeline.
+      const json = JSON.stringify(record.data);
+      const capped = json.length > 500 ? `${json.slice(0, 500)}… (+${json.length - 500} chars)` : json;
+      lines.push(`    data:${capped}`);
     }
   }
 

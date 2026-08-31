@@ -91,7 +91,10 @@ export async function promptMenu(
   // already got this fix, so it gets the same treatment.
   for (let i = 0; i < items.length; i++) {
     const desc = items[i].description ? ` — ${items[i].description}` : '';
-    for (const rowLine of wrapMenuLine(`${i + 1}. ${items[i].label}${desc}`)) {
+    // F-f43330d8 (coordinator stitch, wave 10): pad the index so 1-9 align
+    // with 10+ in double-digit menus (the ten-world menu was the live case).
+    const num = String(i + 1).padStart(String(items.length).length);
+    for (const rowLine of wrapMenuLine(`${num}. ${items[i].label}${desc}`)) {
       console.log(`    ${rowLine}`);
     }
   }
@@ -128,7 +131,10 @@ export async function promptMultiSelect(
   // wrapMenuLine() instead of a raw unwrapped `    N. label — desc` string.
   for (let i = 0; i < items.length; i++) {
     const desc = items[i].description ? ` — ${items[i].description}` : '';
-    for (const rowLine of wrapMenuLine(`${i + 1}. ${items[i].label}${desc}`)) {
+    // F-f43330d8 (coordinator stitch, wave 10): pad the index so 1-9 align
+    // with 10+ in double-digit menus (the ten-world menu was the live case).
+    const num = String(i + 1).padStart(String(items.length).length);
+    for (const rowLine of wrapMenuLine(`${num}. ${items[i].label}${desc}`)) {
       console.log(`    ${rowLine}`);
     }
   }
@@ -203,7 +209,12 @@ export function wrapMenuLine(line: string): string[] {
   const width = Math.max(20, getTerminalWidth() - 4);
   if (line.length <= width) return [line];
 
-  const words = line.split(' ');
+  // Coordinator stitch (wave 10, F-f43330d8): split(' ') swallowed a
+  // leading pad space (the padStart'ed menu index), so alignment survived
+  // only on unwrapped lines. Preserve the lead and restore it on the first
+  // wrapped line.
+  const lead = (line.match(/^ */) as RegExpMatchArray)[0];
+  const words = line.slice(lead.length).split(' ');
   const wrapped: string[] = [];
   let current = '';
   for (const word of words) {
@@ -219,7 +230,8 @@ export function wrapMenuLine(line: string): string[] {
 
   // Hanging indent: every continuation line gets 2 extra spaces so it reads
   // as a continuation of the numbered first line, not a new sibling row.
-  return wrapped.map((l, i) => (i === 0 ? l : `  ${l}`));
+  // The preserved lead (pad spaces) returns to the first line only.
+  return wrapped.map((l, i) => (i === 0 ? `${lead}${l}` : `  ${l}`));
 }
 
 /**
@@ -242,13 +254,16 @@ export async function promptGroupedMenu<T>(
 ): Promise<T> {
   console.log(`\n  ${title}\n`);
 
+  const totalEntries = groups.reduce((n, g) => n + g.items.length, 0);
   const flatItems: Array<{ item: T; label: string; description?: string }> = [];
   for (const group of groups) {
     if (group.items.length === 0) continue;
     console.log(`  ${bold(group.label)}`);
     for (const entry of group.items) {
       flatItems.push(entry);
-      const num = flatItems.length;
+      // F-f43330d8 (coordinator stitch): same alignment as promptMenu — pad
+      // against the TOTAL across groups, computed before rendering began.
+      const num = String(flatItems.length).padStart(String(totalEntries).length);
       const desc = entry.description ? ` — ${entry.description}` : '';
       const rowLines = wrapMenuLine(`${num}. ${entry.label}${desc}`);
       for (const rowLine of rowLines) {

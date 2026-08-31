@@ -2,7 +2,7 @@
 // Uses a fake Claude client so no real API calls are made.
 // Validates state transitions, history, output structure, and failure behavior.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createProfile } from '@ai-rpg-engine/character-profile';
 import { createHarness } from '../helpers/game-harness.js';
 import { NarrationError } from '../../src/llm/claude-errors.js';
@@ -589,6 +589,19 @@ describe('play mode /help — renderPlayHelp receives real GameSession dispatch 
 // own nested formatting, which embeds its own 'CAMPAIGN CONCLUSION'
 // sub-header and dividers inside deterministicSummary).
 describe('renderConcludeOutput — the /conclude terminal screen (F-4905e69f)', () => {
+  // Coordinator stitch (wave 10): these pins assert STRUCTURE (section
+  // order, blank-line discipline) via exact line indices. game-core's
+  // F-2e80b14b now wraps the conclude trailer below ~86 cols, so the
+  // unstubbed 60-col fallback splits it and shifts every index. Pin the
+  // width wide so the structural intent stays the subject under test;
+  // wrapping behavior has its own coverage in game-presenter's suite.
+  beforeEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: 120, writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+  });
+
   it('/conclude reaches renderConcludeOutput end-to-end with a real generated epilogue', async () => {
     const h = createHarness({
       clientOpts: { narration: 'The bells of the chapel ring once more, and then fall silent.' },
@@ -689,12 +702,14 @@ describe('renderConcludeOutput — the /conclude terminal screen (F-4905e69f)', 
         worldAfter: '  === WORLD AFTER ===',
       });
       const lines = output.split('\n');
-      const headerTop = lines[1];
-      const headerBottom = lines[3];
-      const footerRule = lines[lines.length - 2];
-
-      for (const rule of [headerTop, headerBottom, footerRule]) {
-        expect(rule.trimStart()).toMatch(/^[═─]+$/);
+      // Coordinator stitch (wave 10): the footer rule's fixed index
+      // (length-2) predated game-core's F-2e80b14b trailer wrap, which at
+      // 80 cols splits the trailer and shifts the tail. Locate every solid
+      // rule instead — the invariant under test is "rules are solid and
+      // terminal-safe", not "the footer sits at a fixed offset".
+      const rules = lines.filter((l) => l.trim().length > 0 && /^[═─]+$/.test(l.trimStart()));
+      expect(rules.length).toBeGreaterThanOrEqual(3);
+      for (const rule of rules) {
         expect(rule.length).toBeLessThanOrEqual(80);
       }
     } finally {

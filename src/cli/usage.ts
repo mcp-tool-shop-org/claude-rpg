@@ -67,7 +67,11 @@ function renderWorldsSection(): string {
  * to be a raw hardcoded template literal, hand-aligned to a fixed column and
  * never measured against getTerminalWidth() -- unlike this same function's
  * own divider and renderWorldsSection() above, both of which already adapt
- * via getTerminalWidth()/renderNameDescriptionRow. At the addendum's
+ * via getTerminalWidth() and renderNameDescriptionRow. (Word choice
+ * matters here: slash-completer.test.ts's doc-reconciliation parser scans
+ * this file's source for slash-prefixed command tokens, so writing a
+ * function name directly after a solidus would read as a documented
+ * command.) At the addendum's
  * 40-column floor every one of these lines hard-wrapped wherever the real
  * terminal broke it, with no hanging indent -- the exact bug class already
  * fixed three times elsewhere in this domain (F-a17315ac/F-d36903d0/

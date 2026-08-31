@@ -38,27 +38,37 @@ export function recruitCompanion(
   abilityTags?: string[],
   personalGoal?: string,
 ): RecruitResult {
+  // F-bdfa6640: every refusal below appends a concrete next step, reusing this
+  // exact feature's engine-native equivalent's own hint vocabulary where the
+  // failure mode matches (companion-core.ts's recruitHandler, E:/AI/ai-rpg-engine
+  // /packages/modules/src/companion-core.ts:638-699) instead of a bare reason
+  // sentence with nothing telling the player what to do next.
   const entity = engine.world.entities[npcId];
-  if (!entity) return { ok: false, error: `Entity "${npcId}" not found.` };
+  if (!entity) return { ok: false, error: `Entity "${npcId}" not found. Type "look" to see who's here.` };
 
   const hp = entity.resources.hp ?? entity.resources.health;
-  if (hp !== undefined && hp <= 0) return { ok: false, error: `${entity.name} is not alive.` };
+  if (hp !== undefined && hp <= 0) return { ok: false, error: `${entity.name} is not alive. Find another ally to recruit.` };
 
   if (!isCompanionRecruitable(entity)) {
-    return { ok: false, error: `${entity.name} cannot be recruited.` };
+    return { ok: false, error: `${entity.name} cannot be recruited — they aren't looking for a traveling companion.` };
   }
 
   const player = engine.world.entities[engine.world.playerId];
   if (player?.zoneId !== entity.zoneId) {
-    return { ok: false, error: `${entity.name} is not in the same zone.` };
+    // F-bdfa6640: names the target's actual zone (previously it did not),
+    // falling back to the raw zoneId when no zone record exists to name it
+    // (mirrors play-renderer.ts/scene-context.ts's established
+    // `zones[id]?.name ?? id` display-name fallback).
+    const zoneName = engine.world.zones?.[entity.zoneId]?.name ?? entity.zoneId;
+    return { ok: false, error: `${entity.name} is not in the same zone. They're in ${zoneName} — stand with them first.` };
   }
 
   if (party.companions.length >= party.maxSize) {
-    return { ok: false, error: `Party is full (${party.maxSize}/${party.maxSize}).` };
+    return { ok: false, error: `Party is full (${party.maxSize}/${party.maxSize}). Type "/dismiss <npc-id>" to make room.` };
   }
 
   if (party.companions.some((c) => c.npcId === npcId)) {
-    return { ok: false, error: `${entity.name} is already in your party.` };
+    return { ok: false, error: `${entity.name} is already traveling with you.` };
   }
 
   // Infer ability tags from entity custom data if not provided
@@ -100,7 +110,7 @@ export function recruitCompanion(
     return {
       ok: false,
       error: addResult.reason === 'party-full'
-        ? 'The party is already at full strength.'
+        ? 'The party is already at full strength. Type "/dismiss <npc-id>" to make room.'
         : 'They are already traveling with you.',
     };
   }

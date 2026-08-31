@@ -38,11 +38,15 @@ function makeCompanion(overrides: Partial<CompanionState> = {}): CompanionState 
   };
 }
 
-function makeEngine(entities: Record<string, EntityState>): Engine {
+function makeEngine(
+  entities: Record<string, EntityState>,
+  zones: Record<string, { id: string; name: string }> = {},
+): Engine {
   return {
     world: {
       playerId: 'player',
       entities,
+      zones,
     },
   } as unknown as Engine;
 }
@@ -55,7 +59,11 @@ describe('recruitCompanion', () => {
     const result = recruitCompanion(engine, party, 'ghost', 'fighter', 1);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('not found');
+    // F-bdfa6640: appends a concrete next step instead of a bare reason.
+    if (!result.ok) {
+      expect(result.error).toContain('not found');
+      expect(result.error).toContain('look');
+    }
   });
 
   it('fails when the entity has 0 hp (not alive)', () => {
@@ -69,7 +77,10 @@ describe('recruitCompanion', () => {
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('not alive');
+    if (!result.ok) {
+      expect(result.error).toContain('not alive');
+      expect(result.error).toContain('Find another ally');
+    }
   });
 
   it('treats a negative "health" resource (fallback field) as not alive too', () => {
@@ -98,7 +109,12 @@ describe('recruitCompanion', () => {
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('cannot be recruited');
+    // F-bdfa6640: reuses companion-core.ts's recruitHandler's own not-recruitable
+    // hint verbatim ("They aren't looking for a traveling companion.").
+    if (!result.ok) {
+      expect(result.error).toContain('cannot be recruited');
+      expect(result.error).toContain("aren't looking for a traveling companion");
+    }
   });
 
   it('fails when the entity is in a different zone from the player', () => {
@@ -112,7 +128,36 @@ describe('recruitCompanion', () => {
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('same zone');
+    if (!result.ok) {
+      expect(result.error).toContain('same zone');
+      // F-bdfa6640: falls back to the raw zoneId when no zone record exists
+      // to name it (no `zones` map passed to makeEngine here).
+      expect(result.error).toContain('zone2');
+      expect(result.error).toContain('stand with them first');
+    }
+  });
+
+  // F-bdfa6640: the zone-mismatch message previously never named which zone
+  // the target was actually in -- with a real zone record available, the
+  // friendly `.name` must be used instead of the raw id.
+  it('names the target\'s actual zone (not just the raw zoneId) when a zone record exists', () => {
+    const npc = makeEntity({ zoneId: 'zone2' });
+    const engine = makeEngine(
+      {
+        player: makeEntity({ id: 'player', zoneId: 'zone1' }),
+        'npc-1': npc,
+      },
+      {
+        zone1: { id: 'zone1', name: 'Town Square' },
+        zone2: { id: 'zone2', name: 'The Old Mill' },
+      },
+    );
+    const party = createPartyState();
+
+    const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain('The Old Mill');
   });
 
   it('fails when the party is already full', () => {
@@ -127,7 +172,11 @@ describe('recruitCompanion', () => {
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('full');
+    if (!result.ok) {
+      expect(result.error).toContain('full');
+      // F-bdfa6640: names the concrete next keystroke to make room.
+      expect(result.error).toContain('/dismiss');
+    }
   });
 
   it('fails when the NPC is already in the party', () => {
@@ -142,7 +191,10 @@ describe('recruitCompanion', () => {
     const result = recruitCompanion(engine, party, 'npc-1', 'fighter', 1);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toContain('already in your party');
+    // F-bdfa6640: reworded to reuse companion-core.ts's own established
+    // "already traveling with you" phrasing (the same text the addCompanion
+    // -rejection branch below already used before this fix).
+    if (!result.ok) expect(result.error).toContain('already traveling with you');
   });
 
   it('succeeds, tags the entity, and sets custom companion fields', () => {

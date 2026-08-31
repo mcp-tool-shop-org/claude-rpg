@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { validateWorldGenProposal, generateWorld } from './world-gen.js';
-import type { WorldGenProposal } from './world-gen.js';
+import type { WorldGenProposal, WorldGenAttemptInfo } from './world-gen.js';
 import type { ClaudeClient } from '../claude-client.js';
 import { getFactionMembers } from '@ai-rpg-engine/modules';
+import { createTestLogger } from '../game/debug-logger.js';
 
 function makeValidProposal(): WorldGenProposal {
   return {
@@ -327,8 +328,6 @@ describe('generateWorld (BR-018)', () => {
   });
 
   it('should warn when NPC beliefs fail due to missing cognition (BR-010)', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
     const proposal = makeValidProposal();
     proposal.npcs[0].beliefs = [
       { subject: 'player', key: 'trust', value: 'low', confidence: 0.5 },
@@ -341,8 +340,10 @@ describe('generateWorld (BR-018)', () => {
     expect(result.ok).toBe(true);
 
     // The cognition module is included so beliefs likely succeed,
-    // but the code path handles both cases without crashing.
-    warnSpy.mockRestore();
+    // but the code path handles both cases without crashing. F-e23cc3ac: the
+    // diagnostic itself is now gated behind the optional DebugLogger (see the
+    // "world-gen PBR-001"/"PBR-007" describe blocks below for direct
+    // coverage), so no console spy is needed just to keep this test quiet.
   });
 
   it('should return errors when LLM client fails', async () => {
@@ -414,15 +415,24 @@ describe('generateWorld PBR-007: NPC ID collision guard', () => {
       beliefs: [],
     });
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // F-e23cc3ac: this routine-variance diagnostic no longer prints
+    // unconditionally -- it now goes through the optional DebugLogger, so
+    // assert against a test logger's queryable entries instead of spying on
+    // console.warn (mirrors narrator.test.ts's F-fa65fe50 convention).
+    const logger = createTestLogger();
 
-    const result = await generateWorld(client, 'test', 1);
+    const result = await generateWorld(client, 'test', 1, { logger });
     expect(result.ok).toBe(true);
     const ids = Object.keys(result.engine!.world.entities);
     expect(ids).toContain('guard-1');
     expect(ids).toContain('guard-1-2');
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('NPC ID collision'));
-    warnSpy.mockRestore();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('NPC ID collision'),
+      }),
+    );
   });
 
   it('should handle triple NPC ID collision', async () => {
@@ -442,7 +452,6 @@ describe('generateWorld PBR-007: NPC ID collision guard', () => {
       });
     }
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await generateWorld(client, 'test', 1);
     expect(result.ok).toBe(true);
@@ -450,7 +459,6 @@ describe('generateWorld PBR-007: NPC ID collision guard', () => {
     expect(ids).toContain('guard-1');
     expect(ids).toContain('guard-1-2');
     expect(ids).toContain('guard-1-3');
-    warnSpy.mockRestore();
   });
 
   it('should not abort world creation if one NPC throws', async () => {
@@ -468,12 +476,10 @@ describe('generateWorld PBR-007: NPC ID collision guard', () => {
       beliefs: [],
     });
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await generateWorld(client, 'test', 1);
     expect(result.ok).toBe(true);
     expect(Object.keys(result.engine!.world.entities)).toContain('merchant');
-    warnSpy.mockRestore();
   });
 });
 
@@ -499,7 +505,6 @@ describe('generateWorld F-105a5718: faction memberIds reconciled after NPC id co
     });
 
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await generateWorld(client, 'test', 1);
     expect(result.ok).toBe(true);
@@ -513,8 +518,6 @@ describe('generateWorld F-105a5718: faction memberIds reconciled after NPC id co
     // (which now belongs to the unrelated Random Villager).
     expect(members).toEqual(['guard-1-2']);
     expect(members.every((id) => id in result.engine!.world.entities)).toBe(true);
-
-    warnSpy.mockRestore();
   });
 });
 
@@ -631,6 +634,73 @@ describe('generateWorld F-cbc186cb: retries + errorKind discriminant', () => {
     expect(result.ok).toBe(true);
     expect(result.errorKind).toBeUndefined();
   });
+
+  // F-9da15f24: generateWorld had no way to tell a caller (bin.ts's spinner) that
+  // it was on a validation-triggered internal retry rather than one slow call.
+  it('invokes onAttempt before each RETRIED attempt (never the initial one), with the PRECEDING attempt\'s errorKind', async () => {
+    const badMemberIdsProposal = makeValidProposal();
+    (badMemberIdsProposal.factions[0] as any).memberIds = undefined;
+    const goodProposal = makeValidProposal();
+    const generateStructured = vi.fn()
+      .mockResolvedValueOnce({ ok: false, data: null, raw: '', error: 'No JSON found in response' })
+      .mockResolvedValueOnce({ ok: true, data: badMemberIdsProposal, raw: '' })
+      .mockResolvedValueOnce({ ok: true, data: goodProposal, raw: '' });
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured,
+    };
+    const attempts: WorldGenAttemptInfo[] = [];
+    const onAttempt = vi.fn((info: WorldGenAttemptInfo) => attempts.push(info));
+
+    const result = await generateWorld(client, 'A test world', 1, { onAttempt });
+
+    expect(result.ok).toBe(true);
+    expect(attempts).toEqual([
+      { attempt: 2, maxAttempts: 3, kind: 'transient' }, // retrying because attempt 1's LLM call failed
+      { attempt: 3, maxAttempts: 3, kind: 'validation' }, // retrying because attempt 2 failed shape validation
+    ]);
+  });
+
+  it('does not invoke onAttempt when the first attempt succeeds', async () => {
+    const proposal = makeValidProposal();
+    const client = makeMockClient(proposal);
+    const onAttempt = vi.fn();
+
+    const result = await generateWorld(client, 'A test world', 1, { onAttempt });
+
+    expect(result.ok).toBe(true);
+    expect(onAttempt).not.toHaveBeenCalled();
+  });
+
+  it('accumulates distinct error reasons across attempts instead of keeping only the last attempt\'s', async () => {
+    const missingRuleset = makeValidProposal();
+    (missingRuleset as any).ruleset = undefined;
+    const missingMemberIds = makeValidProposal();
+    (missingMemberIds.factions[0] as any).memberIds = undefined;
+    const missingZones = makeValidProposal();
+    (missingZones as any).zones = [];
+    const generateStructured = vi.fn()
+      .mockResolvedValueOnce({ ok: true, data: missingRuleset, raw: '' })
+      .mockResolvedValueOnce({ ok: true, data: missingMemberIds, raw: '' })
+      .mockResolvedValueOnce({ ok: true, data: missingZones, raw: '' });
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured,
+    };
+
+    const result = await generateWorld(client, 'A test world', 1);
+
+    expect(result.ok).toBe(false);
+    // All three attempts' distinct failure reasons must survive to the final
+    // report -- previously `errors` was reassigned (not accumulated) each
+    // iteration, so only attempt 3's "No zones generated" would have appeared,
+    // with nothing indicating 3 separate generations were even attempted.
+    expect(result.errors).toContain('No ruleset generated');
+    expect(result.errors.some((e) => e.includes('memberIds'))).toBe(true);
+    expect(result.errors).toContain('No zones generated');
+  });
 });
 
 describe('generateWorld PBR-001: defensive NPC coercion', () => {
@@ -638,24 +708,36 @@ describe('generateWorld PBR-001: defensive NPC coercion', () => {
     const proposal = makeValidProposal();
     (proposal.npcs[0] as any).stats = undefined;
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // F-e23cc3ac: gated behind the optional DebugLogger now, not console.warn.
+    const logger = createTestLogger();
 
-    const result = await generateWorld(client, 'test', 1);
+    const result = await generateWorld(client, 'test', 1, { logger });
     expect(result.ok).toBe(true);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing/invalid stats'));
-    warnSpy.mockRestore();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('missing/invalid stats'),
+      }),
+    );
   });
 
   it('should default missing resources to empty object', async () => {
     const proposal = makeValidProposal();
     (proposal.npcs[0] as any).resources = null;
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // F-e23cc3ac: gated behind the optional DebugLogger now, not console.warn.
+    const logger = createTestLogger();
 
-    const result = await generateWorld(client, 'test', 1);
+    const result = await generateWorld(client, 'test', 1, { logger });
     expect(result.ok).toBe(true);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing/invalid resources'));
-    warnSpy.mockRestore();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('missing/invalid resources'),
+      }),
+    );
   });
 
   it('should skip NPCs missing critical identity fields (validation catches empty id)', async () => {
@@ -686,10 +768,8 @@ describe('generateWorld PBR-001: defensive NPC coercion', () => {
     (proposal.npcs[0] as any).beliefs = null;
     (proposal.npcs[0] as any).goals = 'not-an-array';
     const client = makeMockClient(proposal);
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await generateWorld(client, 'test', 1);
     expect(result.ok).toBe(true);
-    warnSpy.mockRestore();
   });
 });

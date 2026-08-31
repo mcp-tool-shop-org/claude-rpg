@@ -85,7 +85,19 @@ export class VoiceSoundboardBridge implements PresentationRenderer {
     if (!this.enabled) return;
 
     if (cue.action === 'stop') {
-      // No direct stop in voice-soundboard — just don't play
+      // No direct stop in voice-soundboard — nothing to actually play. But every
+      // other "can't do this yet" path in this file (setMusic's __music_intent__,
+      // applyUiEffect's __ui_effect_intent__, executeCommands' catch-all
+      // __unhandled_audio_domain__) pushes a visible marker instead of vanishing
+      // silently -- F-5f4834cd: this stop branch was the one exception, dropping
+      // e.g. deathHook's ambient-stop cues with no trace. Match the convention.
+      this.pendingCalls.push({
+        tool: '__ambient_stop_intent__',
+        params: {
+          layerId: cue.layerId,
+          fadeMs: cue.fadeMs,
+        },
+      });
       return;
     }
 

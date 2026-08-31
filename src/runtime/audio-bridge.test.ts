@@ -50,6 +50,26 @@ describe('VoiceSoundboardBridge', () => {
     expect(calls[0].params.effect).toBe('rain');
   });
 
+  // F-5f4834cd: setAmbient's stop branch used to return with zero pendingCalls
+  // push and no marker of any kind -- the one cue-emission path in this file
+  // that dropped a request with no trace. Every other "can't actually do this
+  // yet" path (__music_intent__, __ui_effect_intent__, __unhandled_audio_domain__)
+  // pushes a visible marker; this brings setAmbient's stop branch in line.
+  it('emits an __ambient_stop_intent__ marker for an ambient stop cue', async () => {
+    const bridge = createBridge();
+    await bridge.setAmbient({
+      layerId: 'ambient_rain',
+      action: 'stop',
+      volume: 0.4,
+      fadeMs: 1500,
+    });
+
+    const calls = bridge.flush();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].tool).toBe('__ambient_stop_intent__');
+    expect(calls[0].params).toMatchObject({ layerId: 'ambient_rain', fadeMs: 1500 });
+  });
+
   it('should not generate calls when disabled', async () => {
     const bridge = createBridge(false);
     await bridge.playVoice({

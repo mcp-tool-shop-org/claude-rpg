@@ -3,7 +3,6 @@
 
 import type { Engine } from '@ai-rpg-engine/core';
 import {
-  createPartyState,
   addCompanion,
   removeCompanion,
   getActiveCompanions,

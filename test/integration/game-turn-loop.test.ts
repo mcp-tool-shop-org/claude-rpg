@@ -531,6 +531,43 @@ describe('director mode — executeDirectorCommand receives real live session st
   });
 });
 
+// ─── Play Mode /help — QUICK REFERENCE Screen (F-b3bc04fb) ────
+
+// Every other reachable screen in this describe block earned its own
+// end-to-end proof once it turned out cross-domain unit coverage in
+// isolation "cannot prove GameSession wires its own live state through
+// correctly end-to-end" (F-b54e8238, line 509): Welcome (F-d665f2ef), Play
+// Screen sections (F-3595c07b), Director Mode (F-b54e8238). /help never
+// got the same treatment -- grepping test/** for the literal string
+// '/help' only ever turns up the welcome screen's own hint-text assertion
+// (line 408), never a real h.play('/help') invocation. /help is a real
+// GameSession slash-command dispatch (src/game.ts:909) reachable from this
+// file's own createHarness() with zero new infrastructure, and renders
+// renderPlayHelp() -- per this repo's own already-fixed findings
+// (F-1036ff43, F-92c348e1, F-d6f7107e, F-a17315ac), the single richest,
+// most content-dense screen in the game. This proves the real command
+// actually reaches that content end-to-end, the same way director mode
+// was proven above, instead of only being covered by
+// help-system.test.ts's isolated cross-domain unit calls.
+describe('play mode /help — renderPlayHelp receives real GameSession dispatch (F-b3bc04fb)', () => {
+  it('a real /help command reaches renderPlayHelp() end-to-end with real content, not a canned stub', async () => {
+    const h = createHarness();
+
+    const help = await h.play('/help');
+
+    expect(help).toContain('QUICK REFERENCE');
+    // F-92c348e1's fixed CRAFTING row -- proves the live PLAY_COMMANDS-
+    // derived content actually flows through this real dispatch, not a
+    // stale hand-rolled double.
+    expect(help).toContain('craft <recipe>');
+    // A real slash-command table entry (COMMANDS section).
+    expect(help).toContain('/help leverage');
+    // Mirrors the file's own established 'slash commands do not consume
+    // turns' contract (line 120) for this specific command.
+    expect(h.turnCount()).toBe(0);
+  });
+});
+
 // ─── Campaign Conclusion Screen (F-4905e69f) ──────────────────
 
 // renderConcludeOutput (src/game/game-presenter.ts:80-105) is the terminal

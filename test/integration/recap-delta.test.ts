@@ -126,6 +126,58 @@ describe('renderSessionDelta', () => {
     expect(text).toContain('SESSION SUMMARY');
     expect(text).toContain('+20 XP');
   });
+
+  // F-bb804e2f: hasAnyContent (recap-delta.ts:111-117, F-579e70a8) gates
+  // SESSION SUMMARY on 5 OR'd triggers, but the XP case above is the only
+  // populated-output regression lock in this block -- it exercises exactly
+  // 1 of the 5. The remaining 4 (reputation-only, milestone-only,
+  // injury-only, title-only) had zero coverage proving they individually
+  // produce non-empty output; only the all-zero empty-string case above
+  // exercised the rest of the gate. Each case below holds turnsPlayed and
+  // xpGained at 0 on both snapshots (makeSnapshot's own defaults, left
+  // un-overridden) so only the one named field can be what flips
+  // hasAnyContent true -- isolating each OR-branch the same way the
+  // XP-gained case isolates its own.
+
+  it('renders non-empty string when only reputation changed', () => {
+    const before = makeSnapshot({ reputation: [{ factionId: 'guardians', value: 10 }] });
+    const after = makeSnapshot({ reputation: [{ factionId: 'guardians', value: 25 }] });
+    const delta = computeSessionDelta(before, after);
+    const text = renderSessionDelta(delta);
+    expect(text).not.toBe('');
+    expect(text).toContain('SESSION SUMMARY');
+    expect(text).toContain('guardians: +15 (now +25)');
+  });
+
+  it('renders non-empty string when only a milestone was gained', () => {
+    const before = makeSnapshot({ milestoneCount: 2 });
+    const after = makeSnapshot({ milestoneCount: 3 });
+    const delta = computeSessionDelta(before, after);
+    const text = renderSessionDelta(delta);
+    expect(text).not.toBe('');
+    expect(text).toContain('SESSION SUMMARY');
+    expect(text).toContain('1 new milestone');
+  });
+
+  it('renders non-empty string when only a new injury was recorded', () => {
+    const before = makeSnapshot({ injuryCount: 0 });
+    const after = makeSnapshot({ injuryCount: 1 });
+    const delta = computeSessionDelta(before, after);
+    const text = renderSessionDelta(delta);
+    expect(text).not.toBe('');
+    expect(text).toContain('SESSION SUMMARY');
+    expect(text).toContain('1 new injury');
+  });
+
+  it('renders non-empty string when only the title changed', () => {
+    const before = makeSnapshot({ title: 'Wanderer' });
+    const after = makeSnapshot({ title: 'the Bloodied' });
+    const delta = computeSessionDelta(before, after);
+    const text = renderSessionDelta(delta);
+    expect(text).not.toBe('');
+    expect(text).toContain('SESSION SUMMARY');
+    expect(text).toContain('Title: Wanderer → the Bloodied');
+  });
 });
 
 // ─── Faction Deltas ───────────────────────────────────────────

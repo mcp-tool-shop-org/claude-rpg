@@ -106,3 +106,103 @@ describe('world-selection menu — real grouped pipeline (F-44c11c9b: buildDiffi
     expect(selectedAdvanced.meta.difficulty).toBe('advanced');
   });
 });
+
+// ─── Grouped Menu Wrapping — Real Terminal Width Safety (F-cbdea35a) ──
+
+// This file drives the real buildDifficultyGroups(allPacks) -> real
+// promptGroupedMenu pipeline end-to-end above, but never stubs
+// process.stdout.columns, so wrapMenuLine's width-clamped hanging-indent
+// wrapping (src/character/prompts.ts:187-208, Math.max(20,
+// getTerminalWidth() - 4), itself clamped 40-120 by getTerminalWidth) is
+// only ever exercised at whatever process.stdout.columns happens to be in
+// the real test runner's environment, never at the addendum's explicitly
+// named 40-col floor or 120-col ceiling. The only place wrapMenuLine's
+// wrapping mechanics ARE deliberately tested is the cross-domain synthetic
+// unit file src/character/prompts.test.ts:266-296 (short/long synthetic
+// strings, not real pack descriptions) -- per this codebase's own
+// established reasoning elsewhere (F-b54e8238 on director mode), an
+// isolated unit test "cannot prove the real pipeline wires through
+// correctly end-to-end." This stubs process.stdout.columns to 40 then to
+// 120 (try/finally, mirroring game-turn-loop.test.ts:648-664's existing
+// pattern) around a real promptGroupedMenu(rl, title,
+// buildDifficultyGroups(allPacks)) call, and proves every captured row
+// line: (a) never exceeds the width wrapMenuLine itself budgets for at
+// that clamp value (derived structurally from prompts.ts's own formula, not
+// guessed at, so this holds regardless of what the real pack roster's
+// taglines happen to contain), and (b) reconstructs its entry's exact
+// original unwrapped text when its wrap segments are rejoined -- which is
+// only possible if every wrap point fell on a word boundary, i.e. it never
+// broke mid-word.
+describe('world-selection menu wraps within the real terminal width, at both clamp boundaries (F-cbdea35a)', () => {
+  async function wrapsCleanlyAt(columns: number): Promise<void> {
+    const groups = buildDifficultyGroups(allPacks);
+
+    Object.defineProperty(process.stdout, 'columns', { value: columns, writable: true });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    let lines: string[];
+    try {
+      const rl = createFakeReadline(['1']);
+      await promptGroupedMenu(rl, 'Choose your world:', groups);
+      lines = logSpy.mock.calls.map((args) => String(args[0]));
+    } finally {
+      logSpy.mockRestore();
+      Object.defineProperty(process.stdout, 'columns', { value: undefined, writable: true });
+    }
+
+    // Mirrors wrapMenuLine's own budget (prompts.ts:188) exactly.
+    const internalWidth = Math.max(20, columns - 4);
+    // promptGroupedMenu prints every wrapped row (first line or hanging
+    // continuation) with a fixed 4-space indent -- the title line opens
+    // with '\n', group headers use a 2-space indent, and the blank
+    // between-group line is empty -- so this filter selects exactly the
+    // row lines wrapMenuLine produced and nothing else.
+    const rowLines = lines.filter((l) => l.startsWith('    '));
+
+    let cursor = 0;
+    let num = 0;
+    for (const group of groups) {
+      for (const entry of group.items) {
+        num += 1;
+        const expected = `${num}. ${entry.label}${entry.description ? ` — ${entry.description}` : ''}`;
+
+        expect(rowLines[cursor], `expected a rendered row for entry ${num} at ${columns} cols`).toBeDefined();
+        const entryLines: string[] = [rowLines[cursor]];
+        cursor += 1;
+        // A hanging-indented continuation line carries wrapMenuLine's extra
+        // 2-space indent (6 total), so it never matches the numbered-row
+        // shape a fresh entry's own first line has.
+        while (cursor < rowLines.length && !/^ {4}\d+\. /.test(rowLines[cursor])) {
+          entryLines.push(rowLines[cursor]);
+          cursor += 1;
+        }
+
+        for (const line of entryLines) {
+          // (a) width safety: strip the fixed 4-space console indent. Every
+          // physical row must fit wrapMenuLine's own budget -- +2 covers a
+          // hanging-indented continuation line, whose 2-space indent
+          // (prompts.ts:207) is applied AFTER the width check, not before.
+          expect(line.length - 4).toBeLessThanOrEqual(internalWidth + 2);
+        }
+
+        // (b) no mid-word breaks: strip the fixed 4-space console indent
+        // (first line) or the 4-space indent plus wrapMenuLine's own
+        // 2-space hanging indent (continuations), then rejoin with single
+        // spaces. This reconstructs the exact original unwrapped text only
+        // if every wrap point landed on a space -- never inside a word.
+        const rejoined = entryLines.map((line, i) => (i === 0 ? line.slice(4) : line.slice(6))).join(' ');
+        expect(rejoined).toBe(expected);
+      }
+    }
+    // Every captured row line was claimed by exactly one entry above -- no
+    // stray or unaccounted-for output.
+    expect(cursor).toBe(rowLines.length);
+  }
+
+  it('wraps cleanly at the 40-column clamp floor', async () => {
+    await wrapsCleanlyAt(40);
+  });
+
+  it('wraps cleanly at the 120-column clamp ceiling', async () => {
+    await wrapsCleanlyAt(120);
+  });
+});

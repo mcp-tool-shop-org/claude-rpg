@@ -96,8 +96,13 @@ describe('HookManager', () => {
     stderrSpy.mockRestore();
   });
 
-  it('logs which hook and hookPoint failed so a debug session can identify the culprit', () => {
+  it('logs which hook and hookPoint failed so a debug session can identify the culprit (when debugMode is enabled)', () => {
     const manager = new HookManager();
+    // F-9ba5f482: fire()'s hook-threw diagnostic is now gated on debugMode
+    // (previously unconditional) — opt in explicitly so this test still
+    // exercises the log line itself; see the sibling test below for the
+    // now-default (debugMode: false) silent path.
+    manager.debugMode = true;
     // Coordinator stitch (wave 6): `never` return, not the inferred `void` —
     // a function that only throws doesn't satisfy Hook's
     // `HookResult | null` return under tsc, and vitest runs alone don't
@@ -119,6 +124,30 @@ describe('HookManager', () => {
       expect.any(Error),
     );
     stderrSpy.mockRestore();
+  });
+
+  // F-9ba5f482: HookManager.fire() previously printed a raw hook name,
+  // hookPoint string, and full Error/stack to a NON-debug player's terminal
+  // unconditionally -- the one diagnostic call site in this domain with no
+  // gate of any kind (contrast every other diagnostic in this domain, which
+  // was already gated behind ImmersionRuntime's debugMode). debugMode now
+  // defaults to false (mirroring ImmersionRuntime's own field), so a default
+  // HookManager must stay silent on a hook throw.
+  it('does not log a hook failure when debugMode is disabled (the default)', () => {
+    const manager = new HookManager();
+    function myBrokenHook(): never {
+      throw new Error('boom');
+    }
+    manager.register('combat-start', myBrokenHook);
+
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const results = manager.fire(makeContext({ hookPoint: 'combat-start' }));
+    stderrSpy.mockRestore();
+
+    expect(stderrSpy).not.toHaveBeenCalled();
+    // The isolation contract (F-8968741e) still holds — the throw is still
+    // caught and skipped, just silently now.
+    expect(results).toHaveLength(0);
   });
 
   it('should fire nothing for unregistered hooks', () => {

@@ -216,6 +216,25 @@ describe('immersion-runtime: degraded-stage escalation logging (F-251bd7d7)', ()
   });
 });
 
+// ─── F-06fffa64: ImmersionRuntime.debugMode and HookManager.debugMode share one
+// gating mechanism. Before this, HookManager had no debugMode/gate concept at all
+// (F-9ba5f482), so it was impossible to reach that sibling gate from the flag every
+// production caller and test in this domain already sets. ───
+
+describe('immersion-runtime: debugMode propagates to hookManager (F-06fffa64)', () => {
+  it('setting runtime.debugMode also sets hookManager.debugMode', () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    expect(runtime.hookManager.debugMode).toBe(false);
+
+    runtime.debugMode = true;
+    expect(runtime.debugMode).toBe(true);
+    expect(runtime.hookManager.debugMode).toBe(true);
+
+    runtime.debugMode = false;
+    expect(runtime.hookManager.debugMode).toBe(false);
+  });
+});
+
 // ─── F-3fce4373: non-debug players get a distinguishable marker instead of pure
 // silence when a presentation-pipeline stage throws and degrades. All four of
 // processPresentation's guarded stages (pre-narration hooks, event hooks, audio
@@ -233,8 +252,11 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
 
   // F-8968741e superseded these two: HookManager.fire() now isolates each hook's
   // own exception INSIDE the loop (per-hook try/catch, logged via hooks.ts's own
-  // unconditional "[hooks] Hook ... threw and was skipped" line) so it never
-  // reaches processPresentation's pre-narration/event-hooks outer catch at all.
+  // "[hooks] Hook ... threw and was skipped" line -- F-9ba5f482, this wave: that
+  // line is now gated on debugMode instead of unconditional, mirroring every
+  // other diagnostic in this domain, so these tests opt into debugMode to keep
+  // exercising it) so it never reaches processPresentation's
+  // pre-narration/event-hooks outer catch at all.
   // Per F-8968741e's own routed fix text, this is intentional: a debug session now
   // identifies the SPECIFIC culprit hook "instead of seeing only a generic
   // event-hooks degraded-stage marker". These two tests now assert that new
@@ -242,7 +264,8 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
   // cleanly, hook-level log fires instead -- rather than the superseded behavior.
   it('does not push a stage-level marker when a pre-narration hook throws -- F-8968741e isolates and logs it at the hook level instead', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
-    runtime.debugMode = false;
+    // F-9ba5f482: the hooks.ts log this test asserts below is now debugMode-gated.
+    runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     runtime.hookManager.register('pre-narration', () => {
       throw new Error('Hook exploded');
@@ -265,7 +288,8 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
 
   it('does not push a stage-level marker when an event hook throws -- F-8968741e isolates and logs it at the hook level instead', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
-    runtime.debugMode = false;
+    // F-9ba5f482: the hooks.ts log this test asserts below is now debugMode-gated.
+    runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     runtime.hookManager.register('enter-room', () => {
       throw new Error('enter-room exploded');
@@ -328,7 +352,8 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
 
   it('does not push a stage-level marker when a post-narration hook throws -- F-8968741e isolates and logs it at the hook level instead', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
-    runtime.debugMode = false;
+    // F-9ba5f482: the hooks.ts log this test asserts below is now debugMode-gated.
+    runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     runtime.hookManager.register('post-narration', () => {
       throw new Error('post-narration exploded');
@@ -340,6 +365,33 @@ describe('immersion-runtime: non-debug degradation markers (F-3fce4373)', () => 
     expect(markers).toHaveLength(0);
     expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining('hookPoint "post-narration" threw and was skipped'),
+      expect.any(Error),
+    );
+    stderrSpy.mockRestore();
+  });
+
+  // F-9ba5f482/F-06fffa64: a non-debug turn must not print the raw hook name,
+  // hookPoint, and Error/stack to the player's terminal at all -- this was
+  // previously unconditional (see the block comment above). Exercises the real
+  // production path (runtime.debugMode propagating into hookManager.debugMode,
+  // immersion-runtime.ts's accessor) rather than HookManager in isolation
+  // (hooks.test.ts already covers HookManager directly).
+  it('does not log the hook-threw diagnostic at all when debugMode is disabled (F-9ba5f482)', async () => {
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    runtime.debugMode = false;
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    runtime.hookManager.register('pre-narration', () => {
+      throw new Error('Hook exploded');
+    });
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'world.zone.entered', payload: {} } as any],
+      'look',
+    );
+
+    expect(stderrSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('threw and was skipped'),
       expect.any(Error),
     );
     stderrSpy.mockRestore();
@@ -388,15 +440,19 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
   });
 
   // F-8968741e superseded these three: a hook's own exception is now caught INSIDE
-  // HookManager.fire()'s per-hook loop (hooks.ts) and logged there unconditionally
+  // HookManager.fire()'s per-hook loop (hooks.ts) and logged there
   // ("[hooks] Hook ... threw and was skipped"), so it never reaches
   // processPresentation's own debugMode-gated per-stage lines below anymore -- per
   // F-8968741e's own routed fix text, a debug session now identifies the SPECIFIC
   // culprit hook "instead of seeing only a generic event-hooks degraded-stage
   // marker". This domain's Contract B coverage still holds (debugMode wiring
   // produces SOME diagnostic for a hook failure); the exact message + call site
-  // moved from immersion-runtime.ts to hooks.ts.
-  it('a pre-narration hook error is diagnosable via hooks.ts\'s own unconditional log', async () => {
+  // moved from immersion-runtime.ts to hooks.ts. F-9ba5f482 (this wave): that
+  // hooks.ts log is now itself gated on debugMode (previously unconditional,
+  // the one diagnostic in this domain with no gate) -- these three tests already
+  // set `runtime.debugMode = true` below, so they keep exercising the log; see
+  // the F-9ba5f482 describe block above for the now-default (false) silent case.
+  it('a pre-narration hook error is diagnosable via hooks.ts\'s own debugMode-gated log', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -418,7 +474,7 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
     stderrSpy.mockRestore();
   });
 
-  it('an event-hook error (e.g. enter-room) is diagnosable via hooks.ts\'s own unconditional log', async () => {
+  it('an event-hook error (e.g. enter-room) is diagnosable via hooks.ts\'s own debugMode-gated log', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -440,7 +496,7 @@ describe('immersion-runtime: debug diagnostics coverage (F-023ad9ad / Contract B
     stderrSpy.mockRestore();
   });
 
-  it('a post-narration hook error is diagnosable via hooks.ts\'s own unconditional log', async () => {
+  it('a post-narration hook error is diagnosable via hooks.ts\'s own debugMode-gated log', async () => {
     const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
     runtime.debugMode = true;
     const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

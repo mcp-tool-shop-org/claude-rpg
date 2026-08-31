@@ -8,6 +8,11 @@ import {
   loadPresentationStateFromSession,
   loadChronicleFromSession,
   loadNpcConversationsFromSession,
+  loadEconomiesFromSession,
+  loadOpportunitiesFromSession,
+  loadResolvedOpportunitiesFromSession,
+  loadEndgameTriggersFromSession,
+  loadFinaleFromSession,
   type SavedSession,
 } from './session.js';
 import { createPartyState } from '@ai-rpg-engine/modules';
@@ -709,5 +714,247 @@ describe('loadNpcConversationsFromSession (F-462792bb)', () => {
     expect(result.has('npc-bad')).toBe(false);
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+// F-afe91227: loadEconomiesFromSession's `JSON.parse(x) as Record<string,
+// DistrictEconomy>` cast trusted a syntactically valid but wrong-shape
+// entry unexamined. The compiled @ai-rpg-engine/modules tickDistrictEconomy
+// — called every turn via game-state.ts's tickDistrictEconomies() over
+// every Map entry — iterates its own fixed 8-category list and does
+// `economy.supplies[cat].level` UNGUARDED for each, so a `.supplies`
+// missing even one category (or holding a non-object/non-numeric-level at
+// one) throws building the very next turn.
+describe('loadEconomiesFromSession (F-afe91227)', () => {
+  const SUPPLY_CATEGORIES = [
+    'medicine', 'weapons', 'ammunition', 'food', 'fuel', 'luxuries', 'components', 'contraband',
+  ] as const;
+  const validSupplies = Object.fromEntries(
+    SUPPLY_CATEGORIES.map((category) => [category, { category, level: 50, trend: 'stable' }]),
+  );
+  const validEconomy = {
+    supplies: validSupplies,
+    tradeVolume: 40,
+    blackMarketActive: false,
+    lastUpdateTick: 3,
+  };
+
+  it('returns an empty Map when districtEconomies is absent', () => {
+    const session = makeSession();
+    expect(loadEconomiesFromSession(session)).toEqual(new Map());
+  });
+
+  it('falls back to an empty Map when districtEconomies is not valid JSON', () => {
+    const session = makeSession({ districtEconomies: 'NOT VALID JSON!!' });
+    expect(loadEconomiesFromSession(session)).toEqual(new Map());
+  });
+
+  it('falls back to an empty Map when the parsed value is not an object at all (e.g. a bare number)', () => {
+    const session = makeSession({ districtEconomies: '42' });
+    expect(loadEconomiesFromSession(session)).toEqual(new Map());
+  });
+
+  it('keeps a well-shaped economy entry', () => {
+    const session = makeSession({
+      districtEconomies: JSON.stringify({ 'district-1': validEconomy }),
+    });
+    const result = loadEconomiesFromSession(session);
+    expect(result.get('district-1')).toEqual(validEconomy);
+  });
+
+  it("drops an entry whose supplies field is missing a category — the exact shape that crashes tickDistrictEconomy's per-category .level read, with a console.warn when debug is enabled", () => {
+    vi.stubEnv('CLAUDE_RPG_DEBUG', '1');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { contraband: _contraband, ...suppliesMissingContraband } = validSupplies;
+    const session = makeSession({
+      districtEconomies: JSON.stringify({
+        'district-bad': { ...validEconomy, supplies: suppliesMissingContraband },
+      }),
+    });
+    const result = loadEconomiesFromSession(session);
+    expect(result.has('district-bad')).toBe(false);
+    expect(result.size).toBe(0);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it('drops an entry whose supplies field is missing entirely', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      districtEconomies: JSON.stringify({
+        'district-bad': { tradeVolume: 40, blackMarketActive: false, lastUpdateTick: 3 },
+      }),
+    });
+    const result = loadEconomiesFromSession(session);
+    expect(result.has('district-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('drops an entry whose supply category holds a non-numeric level', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      districtEconomies: JSON.stringify({
+        'district-bad': {
+          ...validEconomy,
+          supplies: { ...validSupplies, medicine: { category: 'medicine', level: '50', trend: 'stable' } },
+        },
+      }),
+    });
+    const result = loadEconomiesFromSession(session);
+    expect(result.has('district-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('keeps valid entries while dropping invalid ones in the same save (mixed batch)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      districtEconomies: JSON.stringify({
+        'district-good': validEconomy,
+        'district-bad': { ...validEconomy, supplies: null },
+      }),
+    });
+    const result = loadEconomiesFromSession(session);
+    expect(result.size).toBe(1);
+    expect(result.has('district-good')).toBe(true);
+    expect(result.has('district-bad')).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT console.warn by default (no --debug/CLAUDE_RPG_DEBUG) when dropping a malformed entry', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      districtEconomies: JSON.stringify({ 'district-bad': { supplies: null } }),
+    });
+    const result = loadEconomiesFromSession(session);
+    expect(result.has('district-bad')).toBe(false);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+// F-afe91227 (sibling pass): the coordinator brief named
+// loadOpportunitiesFromSession, loadResolvedOpportunitiesFromSession,
+// loadEndgameTriggersFromSession and loadFinaleFromSession as sharing
+// loadEconomiesFromSession's exact unguarded-cast shape
+// (`JSON.parse(x) as T` with zero shape check) — probed and confirmed each
+// has a real unguarded downstream consumer (see each isValidXxx's doc
+// comment in session.ts). Compact coverage per loader below: absent/
+// corrupt-JSON falls back to the empty value, a malformed element is
+// dropped (or the whole value discarded, for the singular FinaleOutline
+// loader), and a well-shaped value survives untouched.
+describe('loadOpportunitiesFromSession (F-afe91227)', () => {
+  const validOpportunity = {
+    id: 'opp-1', kind: 'contract', status: 'available', title: 'Test contract',
+    turnsRemaining: 5, createdAtTick: 1, visibility: 'known',
+  };
+
+  it('returns [] when activeOpportunities is absent or not valid JSON', () => {
+    expect(loadOpportunitiesFromSession(makeSession())).toEqual([]);
+    expect(loadOpportunitiesFromSession(makeSession({ activeOpportunities: 'NOT JSON' }))).toEqual([]);
+  });
+
+  it('keeps a well-shaped opportunity', () => {
+    const session = makeSession({ activeOpportunities: JSON.stringify([validOpportunity]) });
+    expect(loadOpportunitiesFromSession(session)).toEqual([validOpportunity]);
+  });
+
+  it("drops a malformed element (null) while keeping a well-shaped sibling — formatOpportunityForDirector's opp.kind.toUpperCase() would throw on the null entry unguarded", () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      activeOpportunities: JSON.stringify([validOpportunity, null]),
+    });
+    expect(loadOpportunitiesFromSession(session)).toEqual([validOpportunity]);
+    warnSpy.mockRestore();
+  });
+
+  it('drops an element missing required fields (wrong shape, not null)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      activeOpportunities: JSON.stringify([{ id: 'opp-bad' }]),
+    });
+    expect(loadOpportunitiesFromSession(session)).toEqual([]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('loadResolvedOpportunitiesFromSession (F-afe91227)', () => {
+  const validFallout = {
+    resolution: {
+      opportunityId: 'opp-1', opportunityKind: 'contract',
+      resolutionType: 'completed', resolvedAtTick: 4,
+    },
+    effects: [],
+    summary: 'Completed a contract.',
+  };
+
+  it('returns [] when resolvedOpportunities is absent or not valid JSON', () => {
+    expect(loadResolvedOpportunitiesFromSession(makeSession())).toEqual([]);
+    expect(loadResolvedOpportunitiesFromSession(makeSession({ resolvedOpportunities: 'NOT JSON' }))).toEqual([]);
+  });
+
+  it('keeps a well-shaped fallout entry', () => {
+    const session = makeSession({ resolvedOpportunities: JSON.stringify([validFallout]) });
+    expect(loadResolvedOpportunitiesFromSession(session)).toEqual([validFallout]);
+  });
+
+  it('drops an entry whose .resolution is missing — computeOpportunityRecapEntries reads fallout.resolution.resolutionType unguarded, two levels deep', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const session = makeSession({
+      resolvedOpportunities: JSON.stringify([{ effects: [], summary: 'no resolution field' }]),
+    });
+    expect(loadResolvedOpportunitiesFromSession(session)).toEqual([]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('loadEndgameTriggersFromSession (F-afe91227)', () => {
+  const validTrigger = {
+    id: 'trig-1', resolutionClass: 'victory', detectedAtTick: 10,
+    reason: 'test', evidence: {}, dominantArc: null, acknowledged: false,
+  };
+
+  it('returns [] when endgameTriggers is absent or not valid JSON', () => {
+    expect(loadEndgameTriggersFromSession(makeSession())).toEqual([]);
+    expect(loadEndgameTriggersFromSession(makeSession({ endgameTriggers: 'NOT JSON' }))).toEqual([]);
+  });
+
+  it('keeps a well-shaped trigger', () => {
+    const session = makeSession({ endgameTriggers: JSON.stringify([validTrigger]) });
+    expect(loadEndgameTriggersFromSession(session)).toEqual([validTrigger]);
+  });
+
+  it("drops an entry with a missing resolutionClass — formatEndgameForNarrator does trigger.resolutionClass.replace(...) unguarded", () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { resolutionClass: _resolutionClass, ...triggerMissingResolutionClass } = validTrigger;
+    const session = makeSession({
+      endgameTriggers: JSON.stringify([triggerMissingResolutionClass]),
+    });
+    expect(loadEndgameTriggersFromSession(session)).toEqual([]);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('loadFinaleFromSession (F-afe91227)', () => {
+  const validOutline = {
+    resolutionClass: 'victory', dominantArc: 'ambition', campaignDuration: 40,
+    totalChronicleEvents: 12, keyMoments: [], npcFates: [], factionFates: [],
+    districtFates: [], companionFates: [], legacy: [], epilogueSeeds: [],
+  };
+
+  it('returns null when finaleOutline is absent or not valid JSON', () => {
+    expect(loadFinaleFromSession(makeSession())).toBeNull();
+    expect(loadFinaleFromSession(makeSession({ finaleOutline: 'NOT JSON' }))).toBeNull();
+  });
+
+  it('returns the parsed outline when it matches the FinaleOutline shape', () => {
+    const session = makeSession({ finaleOutline: JSON.stringify(validOutline) });
+    expect(loadFinaleFromSession(session)).toEqual(validOutline);
+  });
+
+  it('falls back to null when a required array field (factionFates) is missing — finale-narrator.ts reads outline.factionFates.length unguarded', () => {
+    const { factionFates: _factionFates, ...outlineMissingFactionFates } = validOutline;
+    const session = makeSession({ finaleOutline: JSON.stringify(outlineMissingFactionFates) });
+    expect(loadFinaleFromSession(session)).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { CURRENT_SCHEMA_VERSION, migrateSave } from './migrate.js';
 import { isDebugEnabled } from '../game/debug-logger.js';
+import { VALID_SUPPLY_CATEGORIES } from '../game/game-state.js';
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
@@ -755,34 +756,192 @@ export function loadPartyFromSession(session: SavedSession): PartyState {
   }
 }
 
-/** Load district economies from a saved session. */
+/**
+ * F-afe91227: shape guard for a single SupplyLevel entry within a parsed
+ * DistrictEconomy's `.supplies` map — just the field tickDistrictEconomy
+ * dereferences unguarded (see isValidDistrictEconomy below).
+ */
+function isValidSupplyLevel(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  return typeof (value as Record<string, unknown>).level === 'number';
+}
+
+/**
+ * F-afe91227: shape guard for a single DistrictEconomy entry (one Map
+ * value). The compiled @ai-rpg-engine/modules tickDistrictEconomy — called
+ * every turn via game-state.ts's tickDistrictEconomies() over every Map
+ * entry — iterates its own fixed 8-category ALL_CATEGORIES list (not
+ * Object.keys(economy.supplies)) and does `const prev =
+ * economy.supplies[cat]; let level = prev.level;` UNGUARDED for each. A
+ * `.supplies` missing even one category, or holding a non-object at one,
+ * throws "Cannot read properties of undefined (reading 'level')" — and
+ * because tickDistrictEconomies runs inside game.ts's single PB-001
+ * try/catch, that throw doesn't crash the session, it recurs every
+ * subsequent turn and silently skips every subsystem listed after it in
+ * that try block (NPC agency, item recognition, companion reactions, rumor
+ * propagation, pressure/opportunity/arc/endgame evaluation). Validated
+ * against VALID_SUPPLY_CATEGORIES (game-state.ts) rather than a re-declared
+ * list, so the two can't drift apart.
+ */
+function isValidDistrictEconomy(value: unknown): value is DistrictEconomy {
+  if (value == null || typeof value !== 'object') return false;
+  const e = value as Record<string, unknown>;
+  if (e.supplies == null || typeof e.supplies !== 'object') return false;
+  const supplies = e.supplies as Record<string, unknown>;
+  for (const cat of VALID_SUPPLY_CATEGORIES) {
+    if (!isValidSupplyLevel(supplies[cat])) return false;
+  }
+  return (
+    typeof e.tradeVolume === 'number' &&
+    typeof e.blackMarketActive === 'boolean' &&
+    typeof e.lastUpdateTick === 'number'
+  );
+}
+
+/**
+ * Load district economies from a saved session.
+ *
+ * F-afe91227: the previous `JSON.parse(x) as Record<string, DistrictEconomy>`
+ * cast trusted a syntactically valid but wrong-shape entry unexamined into
+ * tickDistrictEconomies()'s per-category `.level` read (see
+ * isValidDistrictEconomy's doc comment). Mirrors
+ * loadObligationsFromSession's per-entry try/validate/drop-with-warning
+ * discipline: a malformed entry is dropped individually instead of
+ * poisoning the whole Map or the whole load.
+ */
 export function loadEconomiesFromSession(
   session: SavedSession,
 ): Map<string, DistrictEconomy> {
   if (!session.districtEconomies) return new Map();
   try {
-    const obj = JSON.parse(session.districtEconomies) as Record<string, DistrictEconomy>;
-    return new Map(Object.entries(obj));
+    const parsed: unknown = JSON.parse(session.districtEconomies);
+    if (parsed == null || typeof parsed !== 'object') return new Map();
+    const result = new Map<string, DistrictEconomy>();
+    for (const [districtId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isValidDistrictEconomy(value)) {
+        result.set(districtId, value);
+      } else {
+        if (isDebugEnabled()) {
+          console.warn(`[session] Dropping malformed districtEconomies entry for "${districtId}" on load — shape mismatch.`);
+        }
+      }
+    }
+    return result;
   } catch {
     return new Map();
   }
 }
 
-/** Load active opportunities from a saved session. */
+/**
+ * F-afe91227: shape guard for a single OpportunityState entry within a
+ * parsed activeOpportunities array. Validates the fields dereferenced
+ * unguarded downstream: tickOpportunities (compiled @ai-rpg-engine/modules,
+ * run every turn over the whole array via game.ts's opportunity tick) reads
+ * `.status`/`.turnsRemaining`/`.createdAtTick`/`.visibility` on every entry
+ * with no object-shape check first — a `null`/non-object entry throws
+ * inside that per-turn loop; formatOpportunityForDirector (game.ts's
+ * '/director' path, formatOpportunityListForDirector) does
+ * `opp.kind.toUpperCase()` unguarded, so a missing/wrong-type `.kind`
+ * throws whenever director mode lists the opportunity board.
+ */
+function isValidOpportunityState(value: unknown): value is OpportunityState {
+  if (value == null || typeof value !== 'object') return false;
+  const o = value as Record<string, unknown>;
+  return (
+    typeof o.id === 'string' &&
+    typeof o.kind === 'string' &&
+    typeof o.status === 'string' &&
+    typeof o.title === 'string' &&
+    (o.turnsRemaining === null || typeof o.turnsRemaining === 'number') &&
+    typeof o.createdAtTick === 'number' &&
+    typeof o.visibility === 'string'
+  );
+}
+
+/**
+ * Load active opportunities from a saved session.
+ *
+ * F-afe91227: the previous `JSON.parse(x) as OpportunityState[]` cast
+ * trusted a syntactically valid but wrong-shape element unexamined into
+ * every downstream per-entry read (see isValidOpportunityState's doc
+ * comment). A malformed element is dropped individually — same discipline
+ * as every Map-shaped loader in this file, applied here to an array.
+ */
 export function loadOpportunitiesFromSession(session: SavedSession): OpportunityState[] {
   if (!session.activeOpportunities) return [];
   try {
-    return JSON.parse(session.activeOpportunities) as OpportunityState[];
+    const parsed: unknown = JSON.parse(session.activeOpportunities);
+    if (!Array.isArray(parsed)) return [];
+    const result: OpportunityState[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (isValidOpportunityState(value)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed activeOpportunities entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return [];
   }
 }
 
-/** Load resolved opportunities (fallout history) from a saved session. */
+/**
+ * F-afe91227: shape guard for a single OpportunityResolution embedded
+ * within a parsed OpportunityFallout entry.
+ */
+function isValidOpportunityResolution(value: unknown): boolean {
+  if (value == null || typeof value !== 'object') return false;
+  const r = value as Record<string, unknown>;
+  return (
+    typeof r.opportunityId === 'string' &&
+    typeof r.opportunityKind === 'string' &&
+    typeof r.resolutionType === 'string' &&
+    typeof r.resolvedAtTick === 'number'
+  );
+}
+
+/**
+ * F-afe91227: shape guard for a single OpportunityFallout entry within a
+ * parsed resolvedOpportunities array. character/session-recap.ts's
+ * computeOpportunityRecapEntries does `fallout.resolution` then
+ * `res.resolutionType`/`res.opportunityId`/`res.opportunityKind` two levels
+ * deep, fully unguarded — a fallout entry whose `.resolution` is missing or
+ * the wrong shape throws "Cannot read properties of undefined" building the
+ * post-session recap. Nested one level, mirroring isValidConsequenceChain's
+ * per-step validation depth in this same file.
+ */
+function isValidOpportunityFallout(value: unknown): value is OpportunityFallout {
+  if (value == null || typeof value !== 'object') return false;
+  const f = value as Record<string, unknown>;
+  return (
+    isValidOpportunityResolution(f.resolution) &&
+    Array.isArray(f.effects) &&
+    typeof f.summary === 'string'
+  );
+}
+
+/**
+ * Load resolved opportunities (fallout history) from a saved session.
+ *
+ * F-afe91227: shares the unguarded-cast shape loadEconomiesFromSession had
+ * (see its doc comment) — same per-entry validate/drop-with-warning fix,
+ * applied to this array.
+ */
 export function loadResolvedOpportunitiesFromSession(session: SavedSession): OpportunityFallout[] {
   if (!session.resolvedOpportunities) return [];
   try {
-    return JSON.parse(session.resolvedOpportunities) as OpportunityFallout[];
+    const parsed: unknown = JSON.parse(session.resolvedOpportunities);
+    if (!Array.isArray(parsed)) return [];
+    const result: OpportunityFallout[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (isValidOpportunityFallout(value)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed resolvedOpportunities entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return [];
   }
@@ -854,21 +1013,101 @@ export function loadArcSnapshotFromSession(session: SavedSession): ArcSnapshot |
   }
 }
 
-/** Load endgame triggers from a saved session. */
+/**
+ * F-afe91227: shape guard for a single EndgameTrigger entry within a parsed
+ * endgameTriggers array. formatEndgameForNarrator (compiled
+ * @ai-rpg-engine/modules, reached every turn via game-state.ts's
+ * getEndgameContext whenever an unacknowledged trigger exists) does
+ * `trigger.resolutionClass.replace(/-/g, ' ')` unguarded — a missing or
+ * wrong-type `.resolutionClass` throws "Cannot read properties of undefined
+ * (reading 'replace')" building the narrator context on every subsequent
+ * turn. evaluateEndgame also maps `.resolutionClass` over the full
+ * `previousTriggers` array on every turn (endgame-detection.ts).
+ */
+function isValidEndgameTrigger(value: unknown): value is EndgameTrigger {
+  if (value == null || typeof value !== 'object') return false;
+  const t = value as Record<string, unknown>;
+  return (
+    typeof t.id === 'string' &&
+    typeof t.resolutionClass === 'string' &&
+    typeof t.detectedAtTick === 'number' &&
+    typeof t.reason === 'string' &&
+    (t.dominantArc === null || typeof t.dominantArc === 'string') &&
+    typeof t.acknowledged === 'boolean'
+  );
+}
+
+/**
+ * Load endgame triggers from a saved session.
+ *
+ * F-afe91227: shares the unguarded-cast shape loadEconomiesFromSession had
+ * (see its doc comment) — same per-entry validate/drop-with-warning fix,
+ * applied to this array.
+ */
 export function loadEndgameTriggersFromSession(session: SavedSession): EndgameTrigger[] {
   if (!session.endgameTriggers) return [];
   try {
-    return JSON.parse(session.endgameTriggers) as EndgameTrigger[];
+    const parsed: unknown = JSON.parse(session.endgameTriggers);
+    if (!Array.isArray(parsed)) return [];
+    const result: EndgameTrigger[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (isValidEndgameTrigger(value)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed endgameTriggers entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return result;
   } catch {
     return [];
   }
 }
 
-/** Load finale outline from a saved session. */
+/**
+ * F-afe91227: shape guard for a parsed FinaleOutline. finale-narrator.ts's
+ * narrateFinale does `outline.factionFates.length` / `.districtFates.length`
+ * / `.companionFates.length` unguarded — a missing array field throws
+ * "Cannot read properties of undefined (reading 'length')" the moment a
+ * resumed-and-completed campaign's /conclude runs. Only the top-level shape
+ * is validated (array-ness of the array fields, primitive types of the
+ * scalars) — mirrors this file's existing depth for single-object guards
+ * (isValidArcSnapshot, isValidPartyState): enough to keep a
+ * syntactically-valid-but-wrong-shape save from reaching an unguarded
+ * top-level read, without re-validating every nested
+ * NpcFate/FactionFate/DistrictFate/LegacyEntry field.
+ */
+function isValidFinaleOutline(value: unknown): value is FinaleOutline {
+  if (value == null || typeof value !== 'object') return false;
+  const f = value as Record<string, unknown>;
+  return (
+    typeof f.resolutionClass === 'string' &&
+    (f.dominantArc === null || typeof f.dominantArc === 'string') &&
+    typeof f.campaignDuration === 'number' &&
+    typeof f.totalChronicleEvents === 'number' &&
+    Array.isArray(f.keyMoments) &&
+    Array.isArray(f.npcFates) &&
+    Array.isArray(f.factionFates) &&
+    Array.isArray(f.districtFates) &&
+    Array.isArray(f.companionFates) &&
+    Array.isArray(f.legacy) &&
+    Array.isArray(f.epilogueSeeds)
+  );
+}
+
+/**
+ * Load finale outline from a saved session.
+ *
+ * F-afe91227: the previous `JSON.parse(x) as FinaleOutline` cast trusted a
+ * syntactically valid but wrong-shape value unexamined (see
+ * isValidFinaleOutline's doc comment) — falls back to null, mirroring
+ * loadArcSnapshotFromSession's fallback, so handleConclude() never receives
+ * a malformed outline.
+ */
 export function loadFinaleFromSession(session: SavedSession): FinaleOutline | null {
   if (!session.finaleOutline) return null;
   try {
-    return JSON.parse(session.finaleOutline) as FinaleOutline;
+    const parsed: unknown = JSON.parse(session.finaleOutline);
+    return isValidFinaleOutline(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -1002,6 +1241,27 @@ export type ArchivedCampaignSummary = {
   relicNames: string[];
 };
 
+/**
+ * F-5feeb5af: the exact shape read from a save's parsed engineState when
+ * listSaves() peeks a save's current zone name. This is the ONE place in
+ * this domain that reaches into @ai-rpg-engine/core's Engine.serialize()
+ * internal output shape ({ world: { state, rngState }, actionLog } —
+ * engine.ts:462-468) instead of a supported public accessor — no "read a
+ * save's headline fields without reconstructing modules" peek API exists
+ * today (engine-side ask filed in the slice plan). Verified NOT broken by
+ * the 3.9 bump: this shape is unchanged 2.9->3.9. But neither this cast nor
+ * the analogous rngState reach in bin.ts's runLoad (outside this domain) is
+ * covered by any type contract, only informal shape agreement — if a future
+ * engine bump changes WorldStore.serialize()'s internal shape, grep this
+ * file for `.world?.state?` before assuming save-listing still works.
+ * Narrowed to exactly the two fields read below (locationId, and one
+ * zones[id].name) so this cast can't silently claim to trust more than it
+ * does.
+ */
+type EngineStateZonePeek = {
+  world?: { state?: { locationId?: string; zones?: Record<string, { name?: string }> } };
+};
+
 /** List all saves with summary info for display. */
 export async function listSaves(): Promise<SaveSlotSummary[]> {
   const dir = getDefaultSaveDir();
@@ -1060,12 +1320,11 @@ export async function listSaves(): Promise<SaveSlotSummary[]> {
         }
       }
 
-      // Extract last zone name from engine state
+      // Extract last zone name from engine state (F-5feeb5af: see
+      // EngineStateZonePeek's doc comment above for why this cast exists).
       let lastZoneName: string | undefined;
       try {
-        const engineData = JSON.parse(session.engineState) as {
-          world?: { state?: { locationId?: string; zones?: Record<string, { name?: string }> } };
-        };
+        const engineData = JSON.parse(session.engineState) as EngineStateZonePeek;
         const locationId = engineData?.world?.state?.locationId;
         const zones = engineData?.world?.state?.zones;
         if (locationId && zones && zones[locationId]?.name) {

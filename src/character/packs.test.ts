@@ -33,6 +33,17 @@ const require = createRequire(import.meta.url);
 // the block, the way the original gladiator/ronin/vampire entry did.
 const KNOWN_BLOCKED_STARTER_PACKS: string[] = [];
 
+// Coordinator (run swarm-1788171999-5dc0, Director-approved Group D): a
+// SEPARATE state from blocked — these deps landed ahead of their
+// registration on purpose, and the feature-execute wave wires registry/
+// menu/--world/PACK_VOICES surfaces and MUST empty this list as it does.
+// Deliberately not in KNOWN_BLOCKED_STARTER_PACKS: that list's forward-
+// entry gate exists for permanently-unregistered packs needing legacy
+// finale voices, which does not describe a pack registering next wave.
+// The companion tripwire is the pending-registration test at the bottom
+// of the drift-gate describe.
+const PENDING_REGISTRATION_STARTER_PACKS: string[] = ['merchant', 'bounty-hunter'];
+
 describe('packs registry (F-00ddfc68 drift gate)', () => {
   const pkg = require('../../package.json') as {
     dependencies?: Record<string, string>;
@@ -44,7 +55,9 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
   // e.g. '@ai-rpg-engine/starter-weird-west' -> 'weird-west'
   const allShortNames = starterDepNames.map((name) => name.slice(starterPrefix.length));
   const registerableShortNames = allShortNames.filter(
-    (name) => !KNOWN_BLOCKED_STARTER_PACKS.includes(name),
+    (name) =>
+      !KNOWN_BLOCKED_STARTER_PACKS.includes(name) &&
+      !PENDING_REGISTRATION_STARTER_PACKS.includes(name),
   );
 
   it('finds starter-* dependencies in package.json (sanity-checks the probe itself)', () => {
@@ -87,8 +100,20 @@ describe('packs registry (F-00ddfc68 drift gate)', () => {
     for (const name of allShortNames) {
       const isRegistered = registerableShortNames.includes(name);
       const isDocumentedBlocked = KNOWN_BLOCKED_STARTER_PACKS.includes(name);
-      expect(isRegistered || isDocumentedBlocked).toBe(true);
+      const isDocumentedPending = PENDING_REGISTRATION_STARTER_PACKS.includes(name);
+      expect(isRegistered || isDocumentedBlocked || isDocumentedPending).toBe(true);
     }
+  });
+
+  // Pending-registration TRIPWIRE (coordinator, Director-approved Group D):
+  // merchant + bounty-hunter deps are installed but deliberately not yet
+  // registered. This pins today's 10-pack registry so the wave-12
+  // registration flips it red — at that moment, empty
+  // PENDING_REGISTRATION_STARTER_PACKS and DELETE this test; the drift
+  // gate above then enforces the full 12-pack wiring (menu, --world,
+  // PACK_VOICES).
+  it('pending-registration tripwire: the registry holds exactly 10 packs until the approved merchant/bounty-hunter wiring lands', () => {
+    expect(allPacks).toHaveLength(10);
   });
 });
 

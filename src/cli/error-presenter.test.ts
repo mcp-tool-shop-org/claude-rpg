@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { classifyForPresentation, renderError, type ErrorPresentation } from './error-presenter.js';
 import { NarrationError } from '../llm/claude-errors.js';
+import { SaveLoadError } from '@ai-rpg-engine/core';
 import { SaveValidationError } from '../session/session.js';
 
 // ─── Helper ─────────────────────────────────────────────────
@@ -295,6 +296,70 @@ describe('error-presenter: unknown pack on load', () => {
     const err = new Error('ENOENT: file not found');
     const p = classifyForPresentation(err, 'load');
     expect(p.headline).toBe('Could not load save');
+  });
+});
+
+// ─── Engine SaveLoadError on Load (F-0b17db86) ───────────────
+
+/**
+ * F-0b17db86: @ai-rpg-engine/core's SaveLoadError (Engine.deserialize /
+ * WorldStore.deserialize) carries a structured `.code` and a purpose-written
+ * `.hint` the engine team authored per failure. Before this branch existed,
+ * any SaveLoadError reaching presentLoadError() fell through to the generic
+ * "missing, corrupted, or incompatible" bucket, discarding that diagnostic —
+ * these tests pin that the engine's own message/hint now survive instead.
+ */
+describe('error-presenter: engine SaveLoadError on load (F-0b17db86)', () => {
+  it('SAVE_VERSION_UNSUPPORTED surfaces the engine hint as next action', () => {
+    const err = new SaveLoadError({
+      code: 'SAVE_VERSION_UNSUPPORTED',
+      message: 'Save version 9.9.9 is newer than this engine supports (3.9.0).',
+      hint: 'Upgrade @ai-rpg-engine to a build that supports save version 9.9.9 or newer.',
+    });
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Incompatible save version');
+    expect(p.explanation).toBe(err.message);
+    expect(p.nextAction).toBe(err.hint);
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('SAVE_MALFORMED surfaces the engine hint instead of the generic fallback', () => {
+    const err = new SaveLoadError({
+      code: 'SAVE_MALFORMED',
+      message: 'Save rngState must be a finite number, got a non-finite number.',
+      hint: 'Without a valid rngState the RNG would silently restart from the seed position, breaking replay determinism. The save is corrupt or was produced by an incompatible tool.',
+    });
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Save file corrupted');
+    expect(p.headline).not.toBe('Could not load save'); // must not hit the generic bucket
+    expect(p.explanation).toBe(err.message);
+    expect(p.nextAction).toBe(err.hint);
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('SAVE_MODULE_MIGRATION_FAILED gets its own headline', () => {
+    const err = new SaveLoadError({
+      code: 'SAVE_MODULE_MIGRATION_FAILED',
+      message: 'Module "npc-agency" failed to migrate its saved state from version 1.0.0 to 2.0.0: boom',
+      hint: 'The "npc-agency" module\'s migrateState hook threw while upgrading this save.',
+    });
+    const p = classifyForPresentation(err, 'load');
+    expect(p.headline).toBe('Save migration failed');
+    expect(p.nextAction).toBe(err.hint);
+    expect(p.exitCode).toBe(1);
+  });
+
+  it('debug mode shows SaveLoadError type and message', () => {
+    const err = new SaveLoadError({
+      code: 'SAVE_MALFORMED',
+      message: 'Save file is not valid JSON.',
+      hint: 'The save may be truncated or corrupted. Restore from a backup.',
+    });
+    const p = classifyForPresentation(err, 'load');
+    const output = rendered(p, true, err);
+    expect(output).toContain('[debug]');
+    expect(output).toContain('type: SaveLoadError');
+    expect(output).toContain('Save file is not valid JSON.');
   });
 });
 

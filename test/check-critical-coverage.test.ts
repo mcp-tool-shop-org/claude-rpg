@@ -248,3 +248,60 @@ describe('coverageReportLine', () => {
     expect(line).toContain('(no statements instrumented)');
   });
 });
+
+// F-ae59b90a: the three cases above certify the ungated glyph as correct
+// output with no NO_COLOR variant -- the exact accessibility gap F-1a4feed0
+// already fixed for check-critical-coverage.mjs's own top-level lines
+// (useColor ? '✓' : '+', useColor ? '✗' : '-', useColor ? '⚠' : '!' --
+// check-critical-coverage.mjs:38,57,66,73,122,133), never applied to
+// coverageReportLine even though it formats the single highest-volume line
+// in that script's CI output (console.log(reportLine),
+// check-critical-coverage.mjs:108-109). Routed per the coordinator's
+// wave-10 split (ADDENDUM-COMMON.md): ci-tooling threads a useColor param
+// into coverageReportLine (scripts/check-coverage-utils.mjs, outside this
+// domain's test/**-only globs) and applies the same ternary-to-ASCII
+// fallback already used at the call sites above; this proof test asserts
+// the NO_COLOR output shape once that lands. useColor defaults truthy
+// (matching the 3 pre-existing calls above, which omit the new 5th arg and
+// must keep passing unchanged), so `false` here is what selects the
+// NO_COLOR fallback.
+//
+// Parallel-wave caveat (mirrors game-turn-loop.test.ts:631-641's own
+// disclaimer for the identical cross-worktree shape): EXPECTED TO FAIL in
+// THIS worktree, in isolation, until ci-tooling's sibling fix to
+// coverageReportLine's signature lands in the cumulative tree at collect
+// time -- do not weaken these assertions to match the current ungated
+// output.
+describe('coverageReportLine NO_COLOR parity (F-ae59b90a)', () => {
+  it('formats a passing file report under NO_COLOR with the ASCII fallback', () => {
+    // Before (ungated):  '  ✓ src/llm/test.ts — 75.0% statements, 60.0% branches'
+    // After (NO_COLOR):  '  + src/llm/test.ts — 75.0% statements, 60.0% branches'
+    const line = coverageReportLine('src/llm/test.ts', 75, 60, 70, false);
+    expect(line).toContain('+');
+    expect(line).not.toContain('✓');
+    expect(line).not.toContain('✗');
+    expect(line).toContain('75.0% statements');
+    expect(line).toContain('60.0% branches');
+  });
+
+  it('formats a failing file report under NO_COLOR with the ASCII fallback', () => {
+    // Before (ungated):  '  ✗ src/llm/test.ts — 65.0% statements, 50.0% branches (below 70%)'
+    // After (NO_COLOR):  '  - src/llm/test.ts — 65.0% statements, 50.0% branches (below 70%)'
+    const line = coverageReportLine('src/llm/test.ts', 65, 50, 70, false);
+    expect(line).toContain('-');
+    expect(line).not.toContain('✓');
+    expect(line).not.toContain('✗');
+    expect(line).toContain('65.0% statements');
+    expect(line).toContain('(below 70%)');
+  });
+
+  it('formats a file with no statements under NO_COLOR with the ASCII fallback', () => {
+    // Before (ungated):  '  ✗ src/game/test.ts — (no statements instrumented)'
+    // After (NO_COLOR):  '  - src/game/test.ts — (no statements instrumented)'
+    const line = coverageReportLine('src/game/test.ts', undefined, undefined, 25, false);
+    expect(line).toContain('-');
+    expect(line).not.toContain('✓');
+    expect(line).not.toContain('✗');
+    expect(line).toContain('(no statements instrumented)');
+  });
+});

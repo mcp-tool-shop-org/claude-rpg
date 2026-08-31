@@ -166,13 +166,15 @@ export function failsCoverageGate(statements, branches, threshold, branchThresho
  * @param {number | undefined} statements
  * @param {number | undefined} branches
  * @param {number} threshold
+ * @param {boolean} useColor - whether to use Unicode symbols and colored output
  * @returns {string}
  */
-export function coverageReportLine(filePath, statements, branches, threshold) {
+export function coverageReportLine(filePath, statements, branches, threshold, useColor = true) {
   const pass = isAboveThreshold(statements, threshold);
-  const icon = pass ? '✓' : '✗';
+  const icon = pass ? (useColor ? '✓' : '+') : (useColor ? '✗' : '-');
+  const separator = useColor ? ' — ' : ' - ';
 
-  let report = `  ${icon} ${filePath} — `;
+  let report = `  ${icon} ${filePath}${separator}`;
   if (statements === undefined) {
     report += '(no statements instrumented)';
   } else {

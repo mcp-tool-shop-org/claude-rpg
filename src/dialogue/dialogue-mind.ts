@@ -48,6 +48,46 @@ export type DialogueResult = {
   fallbackMessage?: string;
 };
 
+// F-304fc328: the stall line shown for the FIRST non-fatal fallback in a run.
+// Unchanged by F-c3d1fcdf below -- existing callers/tests that assert this
+// exact string for a one-off failure keep passing.
+const STALL_LINE = 'The NPC pauses, gathering their thoughts...';
+
+// F-c3d1fcdf: shown from the 2nd consecutive non-fatal fallback onward (see
+// the `consecutiveFallbacks` param on generateDialogue below), instead of
+// repeating STALL_LINE unchanged every turn for the outage's entire
+// duration -- the same repeated-silent-sentence gap F-681d3382 already
+// closed for narrator.ts's narrateScene, carried over to this named sibling.
+// Unlike narrateScene's FALLBACK_NARRATION_REPEATED, this stays fully
+// in-character (no out-of-fiction marker) per this file's own
+// immersion-preserving design intent (F-6480985e) -- a transient hiccup, or
+// even a real outage, shouldn't break the fourth wall for NPC dialogue the
+// way it's allowed to for narration. A small rotating set instead of one
+// fixed second line, so a multi-turn outage doesn't just trade "identical
+// every turn" for "identical every turn after the 1st." Each variant leans
+// on "again"/"still"/"another" to read as a continuation of the same stall,
+// not a fresh unrelated hesitation.
+const REPEATED_STALL_LINES: readonly string[] = [
+  'The NPC pauses again, still gathering their thoughts.',
+  'The NPC hesitates once more, the words slow to come.',
+  'The NPC\'s attention drifts before settling back on you.',
+  'The NPC takes another long moment before answering.',
+];
+
+/**
+ * F-c3d1fcdf: deterministic variant pick, keyed off consecutiveFallbacks
+ * itself rather than Math.random() -- this file's LLM-failure branch has no
+ * other per-turn seed to draw from, and a random choice would make the same
+ * outage-turn produce a different line on every test run. `consecutiveFallbacks`
+ * is guaranteed >= 1 by the only call site below (REPEATED_STALL_LINES is
+ * only consulted once `(consecutiveFallbacks ?? 0) >= 1`), so `- 1` keeps the
+ * very first escalation (the 2nd consecutive fallback overall) on index 0.
+ */
+function pickRepeatedStallLine(consecutiveFallbacks: number): string {
+  const idx = (consecutiveFallbacks - 1) % REPEATED_STALL_LINES.length;
+  return REPEATED_STALL_LINES[idx];
+}
+
 /**
  * F-35969d3a (SLATE-2): `conversationHistory` below is already fully wired —
  * threaded into context.conversationHistory (see the assignment a few lines
@@ -93,6 +133,15 @@ export type DialogueResult = {
  *   (matching narrateSceneLegacy's identical reasoning in narrator.ts) since
  *   this function predates any opts-object shape. Omitted by every current
  *   caller — behavior is unchanged when absent.
+ * @param consecutiveFallbacks F-c3d1fcdf: count of consecutive non-fatal LLM
+ *   fallbacks immediately preceding this call (0 or omitted = none/unknown),
+ *   same contract as narrator.ts's NarrateSceneOpts.consecutiveFallbacks
+ *   (F-681d3382). When >= 1, the non-fatal catch branch below picks from
+ *   REPEATED_STALL_LINES instead of repeating STALL_LINE. The caller that
+ *   tracks the actual run of turns per NPC (game-core, outside this domain's
+ *   scope) owns counting this; omitted, behavior is unchanged from before
+ *   this fix. Trailing positional parameter after `logger`, for the same
+ *   reason `logger` itself trails everything else.
  */
 export async function generateDialogue(
   client: ClaudeClient,
@@ -110,6 +159,7 @@ export async function generateDialogue(
   opportunityContext?: string,
   conversationHistory?: ConversationExchange[],
   logger?: DebugLogger,
+  consecutiveFallbacks?: number,
 ): Promise<DialogueResult | null> {
   const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions);
   if (context && economyContext) context.economyContext = economyContext;
@@ -155,10 +205,17 @@ export async function generateDialogue(
     console.warn(`[dialogue-mind] ${failureMessage}`);
     logger?.warn('dialogue-mind', failureMessage);
     const npc = world.entities[npcId];
+    // F-c3d1fcdf: from the 2nd consecutive fallback onward, rotate through
+    // REPEATED_STALL_LINES instead of repeating STALL_LINE unchanged for the
+    // outage's entire duration -- same escalation trigger narrator.ts uses
+    // for FALLBACK_NARRATION_REPEATED (F-681d3382).
+    const text = (consecutiveFallbacks ?? 0) >= 1
+      ? pickRepeatedStallLine(consecutiveFallbacks ?? 0)
+      : STALL_LINE;
     return {
       speakerId: npcId,
       speakerName: npc?.name ?? npcId,
-      text: 'The NPC pauses, gathering their thoughts...',
+      text,
       grounding: {
         beliefCount: context.beliefs.length,
         memoryCount: context.recentMemories.length,

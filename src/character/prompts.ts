@@ -4,6 +4,42 @@ import type { Interface as ReadlineInterface } from 'node:readline';
 import { getTerminalWidth } from '../display/play-renderer.js';
 import { bold } from '../cli/colors.js';
 
+/**
+ * F-f480fef1: the single recognized cancel keyword, checked case-insensitively
+ * against every trimmed promptText answer (see promptText below, the one
+ * choke point every helper in this file awaits for its raw input). "cancel"
+ * over "back" -- the finding names either -- because this implements one
+ * full abort out of the flow, not per-step back-navigation to the previous
+ * prompt; "back" would over-promise the latter.
+ */
+export const CANCEL_KEYWORD = 'cancel';
+
+/**
+ * F-f480fef1: thrown by promptText when the player types CANCEL_KEYWORD
+ * instead of answering. Before this fix, builder.ts's buildCharacter (the
+ * only consumer of this file) chained promptText/promptMenu/promptConfirm/
+ * promptMultiSelect/promptGroupedMenu across ~7 linear steps with no way to
+ * back out to the caller short of Ctrl+C -- which, per F-4997779f, hits
+ * Node's raw default SIGINT disposition during this exact window (immediate
+ * termination, exit 130, no "Farewell." message), since the graceful
+ * first-Ctrl+C-saves handler isn't registered until runGameLoop() starts,
+ * well after character creation completes. buildCharacter catches this
+ * specifically, prints `.message` as a clean confirmation, and rethrows it
+ * unchanged so its own caller (bin.ts's runPlay, outside this domain's
+ * globs) can define what happens next -- the same typed-error contract
+ * cli/error-presenter.ts already uses for NarrationError/SaveLoadError, not
+ * yet added to that switch (a cross-domain follow-up; unmodified, an
+ * uncaught PromptCancelled still falls through to bin.ts's generic
+ * unhandledRejection handler, which exits(1) with a generic box -- a known,
+ * documented gap, not a silent one).
+ */
+export class PromptCancelled extends Error {
+  constructor() {
+    super('Character creation cancelled. No character was created.');
+    this.name = 'PromptCancelled';
+  }
+}
+
 /** Prompt for freeform text input. */
 export function promptText(
   rl: ReadlineInterface,
@@ -25,7 +61,16 @@ export function promptText(
     rl.once('close', onClose);
     rl.question(`  ${question}: `, (answer) => {
       rl.off('close', onClose);
-      resolve(answer.trim());
+      const trimmed = answer.trim();
+      // F-f480fef1: single choke point for the cancel keyword -- every
+      // helper in this file (promptMenu, promptConfirm, promptMultiSelect,
+      // promptGroupedMenu) awaits promptText for its raw input, so checking
+      // here covers all five without touching each one individually.
+      if (trimmed.toLowerCase() === CANCEL_KEYWORD) {
+        reject(new PromptCancelled());
+        return;
+      }
+      resolve(trimmed);
     });
   });
 }
@@ -86,7 +131,17 @@ export async function promptMultiSelect(
       rl,
       `Choose (1-${items.length}, or "done")${remaining < maxSelections ? ` [${selected.length} selected]` : ''}`,
     );
-    if (answer.toLowerCase() === 'done' && selected.length > 0) break;
+    const isDone = answer.toLowerCase() === 'done';
+    if (isDone && selected.length > 0) break;
+    // F-0d1f3d37: typing "done" before selecting anything used to fall
+    // through to parseInt('done', 10) = NaN, fail the range check below, and
+    // hit no other branch -- the loop silently re-printed the identical
+    // prompt with no acknowledgment "done" requires at least one selection
+    // first.
+    if (isDone) {
+      console.log(`  Pick at least one before typing "done".`);
+      continue;
+    }
 
     const num = parseInt(answer, 10);
     if (num >= 1 && num <= items.length) {
@@ -97,6 +152,12 @@ export async function promptMultiSelect(
         selected.push(idx);
         console.log(`  Selected: ${items[idx].label}`);
       }
+    } else {
+      // F-0d1f3d37: any other non-numeric or out-of-range answer (a typo, an
+      // accidental keystroke) used to hit no branch at all -- unlike this
+      // file's own promptMenu/promptGroupedMenu, which both print a
+      // please-enter-a-number-in-range message on any rejection.
+      console.log(`  Please enter a number between 1 and ${items.length}, or type "done".`);
     }
   }
   return selected;

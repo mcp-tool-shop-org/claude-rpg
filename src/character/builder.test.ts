@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Interface as ReadlineInterface } from 'node:readline';
 import { buildCharacter, buildDifficultyGroups } from './builder.js';
 import { allPacks, type PackInfo } from './packs.js';
+import { PromptCancelled } from './prompts.js';
 
 // F-ef4a283d (SLATE-4) / F-6ed5f350 (SLATE-3): builder.ts had no test file
 // before this wave (2 of the 8 character/** files F-8d11d865 already
@@ -21,9 +22,16 @@ import { allPacks, type PackInfo } from './packs.js';
  * (1..N, wrapping) instead of ever answering "done with 0 selected", which
  * would stall promptMultiSelect's loop forever.
  */
-function makeScriptedRl(opts: { acceptAnswers?: string[] } = {}): { rl: ReadlineInterface; prompts: string[] } {
+function makeScriptedRl(opts: { acceptAnswers?: string[]; statAnswers?: string[] } = {}): { rl: ReadlineInterface; prompts: string[] } {
   const prompts: string[] = [];
   const acceptAnswers = opts.acceptAnswers ?? ['y'];
+  // F-86c50a80: scripted per-call queue for stat-allocation prompts (shape
+  // "<name> (<id>, max <remaining>)"). Draining via shift() lets a test
+  // script an invalid answer followed by a valid retry for the SAME stat --
+  // the re-prompt reuses this exact prompt text (only `remaining` could
+  // differ, and it doesn't change on a rejected answer) -- while every
+  // other/unscripted stat prompt keeps the pre-existing safe '0' default.
+  const statAnswers = opts.statAnswers ? [...opts.statAnswers] : undefined;
   let acceptIdx = 0;
   let traitCounter = 0;
 
@@ -38,6 +46,10 @@ function makeScriptedRl(opts: { acceptAnswers?: string[] } = {}): { rl: Readline
         acceptIdx++;
       } else if (prompt.includes('Choose a secondary discipline?')) {
         answer = 'n';
+      } else if (prompt.includes(', max ')) {
+        if (statAnswers && statAnswers.length > 0) {
+          answer = statAnswers.shift()!;
+        }
       } else if (prompt.includes('Choose (1-') && prompt.includes('"done"')) {
         // The "[N selected]" suffix is absent only on the FIRST question of
         // a fresh promptMultiSelect call (remaining === maxSelections) --
@@ -170,5 +182,118 @@ describe('buildDifficultyGroups (F-6ed5f350 test plan item e: difficulty-split d
   it('preserves fixed beginner -> intermediate -> advanced group ordering', () => {
     const groups = buildDifficultyGroups(allPacks);
     expect(groups.map((g) => g.label)).toEqual(['BEGINNER-FRIENDLY', 'STANDARD', 'ADVANCED']);
+  });
+});
+
+// F-86c50a80: stat allocation was the one step in the 7-step flow that
+// silently absorbed bad input (NaN/negative -> 0 points, over-budget ->
+// silently capped) instead of re-prompting like every promptMenu-based step
+// elsewhere in this same flow. allPacks[0] (fantasy) has a 3-point budget
+// across 3 stats (vigor/instinct/will) -- see ruleset.ts -- so its very
+// first stat prompt always has `max 3`.
+describe('buildCharacter stat allocation (F-86c50a80)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('rejects a non-numeric answer, re-prompts, and accepts a valid retry for the same stat', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { rl } = makeScriptedRl({ statAnswers: ['abc', '3'] });
+
+    await expect(buildCharacter(rl)).resolves.toBeDefined();
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/Please enter a number between 0 and \d+\./);
+  });
+
+  it('rejects a negative answer the same way as a non-numeric one', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { rl } = makeScriptedRl({ statAnswers: ['-5', '1'] });
+
+    await expect(buildCharacter(rl)).resolves.toBeDefined();
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/Please enter a number between 0 and \d+\./);
+  });
+
+  it('clamps an over-budget answer to the remaining budget AND prints an explicit notice (not silent)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { rl } = makeScriptedRl({ statAnswers: ['9999'] });
+
+    await expect(buildCharacter(rl)).resolves.toBeDefined();
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/Only \d+ left\. Allocating \d+ to/);
+  });
+
+  it('keeps accepting an explicit "0" silently, with no rejection message (unchanged default behavior)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // Default scripted answer for every stat prompt is '0' -- see makeScriptedRl.
+    const { rl } = makeScriptedRl();
+
+    await expect(buildCharacter(rl)).resolves.toBeDefined();
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).not.toMatch(/Please enter a number between/);
+    expect(printed).not.toMatch(/Only \d+ left\. Allocating/);
+  });
+});
+
+// F-f480fef1: character creation's ~7 linear prompts had no way to back out
+// to the caller short of Ctrl+C, which (per F-4997779f) hits Node's raw
+// default SIGINT disposition during this exact window. promptText (the
+// choke point every helper in prompts.ts awaits) now throws PromptCancelled
+// when the player types "cancel"; buildCharacter catches it, prints a clean
+// confirmation, and rethrows so its own caller can define what happens next.
+describe('buildCharacter cancel keyword (F-f480fef1)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Answers 'cancel' on the Nth rl.question() call (0-indexed), '1' on every other call. */
+  function makeCancelingRl(cancelOnCallIndex: number, cancelWord = 'cancel'): ReadlineInterface {
+    let callIndex = 0;
+    return {
+      question: (_prompt: string, cb: (answer: string) => void) => {
+        const answer = callIndex === cancelOnCallIndex ? cancelWord : '1';
+        callIndex++;
+        cb(answer);
+      },
+      once: () => {},
+      off: () => {},
+    } as unknown as ReadlineInterface;
+  }
+
+  it('rejects with PromptCancelled when the player types "cancel" at the very first prompt', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeCancelingRl(0);
+
+    await expect(buildCharacter(rl)).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('is case-insensitive -- "CANCEL" also cancels', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeCancelingRl(0, 'CANCEL');
+
+    await expect(buildCharacter(rl)).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('cancels partway through the flow (at character name), not just at the very first prompt', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    // Call 0: world-select menu -> '1'. Call 1: character name -> 'cancel'.
+    const rl = makeCancelingRl(1);
+
+    await expect(buildCharacter(rl)).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('prints the cancel hint up front and a clean confirmation line on cancellation', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeCancelingRl(0);
+
+    await expect(buildCharacter(rl)).rejects.toThrow('Character creation cancelled. No character was created.');
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toContain('Type "cancel" at any prompt to stop character creation.');
+    expect(printed).toContain('Character creation cancelled. No character was created.');
   });
 });

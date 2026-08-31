@@ -91,6 +91,18 @@ export function renderRecap(
       parts.push(`  "${truncated}"`);
     }
     parts.push('');
+  } else if (recentTurns.length > 0) {
+    // F-08c1896e: recentTurns is non-empty but every turn in the window was
+    // a non-fatal LLM fallback, so recentNarration filtered down to nothing.
+    // The section used to be skipped entirely here -- visually identical to
+    // the genuinely-no-history case above (a fresh character) -- leaving a
+    // player who saved during an outage with no re-orientation at all on
+    // load. Kept in the same out-of-fiction parenthetical convention as
+    // FALLBACK_NARRATION/FALLBACK_NARRATION_REPEATED (narrator.ts, imported
+    // above) rather than a quoted line, since this is a system notice about
+    // missing narration, not narration itself.
+    parts.push('  (Recent events are unclear — the last few moments didn\'t come through cleanly.)');
+    parts.push('');
   }
 
   parts.push(divider());

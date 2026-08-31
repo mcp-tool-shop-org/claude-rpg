@@ -369,3 +369,83 @@ describe('generateDialogue F-e2ef2c38: optional DebugLogger threading', () => {
     warnSpy.mockRestore();
   });
 });
+
+// F-c3d1fcdf: generateDialogue always returned the identical hardcoded
+// STALL_LINE on every non-fatal failure, with no escalation for a run of
+// consecutive fallbacks -- unlike its named sibling narrator.ts's
+// narrateScene (F-681d3382). consecutiveFallbacks is the 16th positional
+// parameter (after playerPresence..logger), matching narrateSceneLegacy's
+// identical trailing-parameter precedent in narrator.ts.
+describe('generateDialogue F-c3d1fcdf: consecutiveFallbacks escalates the stall line', () => {
+  function callWithConsecutiveFallbacks(client: ClaudeClient, consecutiveFallbacks?: number) {
+    return generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+      undefined, // playerPresence
+      undefined, // playerProfile
+      undefined, // playerRumors
+      undefined, // activePressures
+      undefined, // lastNpcActions
+      undefined, // economyContext
+      undefined, // craftingContext
+      undefined, // opportunityContext
+      undefined, // conversationHistory
+      undefined, // logger
+      consecutiveFallbacks,
+    );
+  }
+
+  it('still uses the plain STALL_LINE when consecutiveFallbacks is 0 or omitted', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const omitted = await callWithConsecutiveFallbacks(makeFailingClient(new Error('x')), undefined);
+    expect(omitted!.text).toBe('The NPC pauses, gathering their thoughts...');
+
+    const zero = await callWithConsecutiveFallbacks(makeFailingClient(new Error('x')), 0);
+    expect(zero!.text).toBe('The NPC pauses, gathering their thoughts...');
+  });
+
+  it('switches to a different, still in-character line from the 2nd consecutive fallback onward', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await callWithConsecutiveFallbacks(makeFailingClient(new Error('x')), 1);
+
+    expect(result!.text).not.toBe('The NPC pauses, gathering their thoughts...');
+    // Stays in-character: no out-of-fiction parenthetical marker the way
+    // narrator.ts's FALLBACK_NARRATION_REPEATED uses (F-6480985e intent).
+    expect(result!.text).not.toMatch(/^\(/);
+    expect(result!.text.toLowerCase()).toContain('npc');
+  });
+
+  it('is deterministic: the same consecutiveFallbacks value always produces the same line', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const first = await callWithConsecutiveFallbacks(makeFailingClient(new Error('x')), 3);
+    const second = await callWithConsecutiveFallbacks(makeFailingClient(new Error('x')), 3);
+
+    expect(first!.text).toBe(second!.text);
+  });
+
+  it('rotates across at least two distinct lines over a run of consecutive fallbacks', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const seen = new Set<string>();
+    for (let n = 1; n <= 5; n++) {
+      const result = await callWithConsecutiveFallbacks(makeFailingClient(new Error('x')), n);
+      seen.add(result!.text);
+    }
+
+    expect(seen.size).toBeGreaterThan(1);
+  });
+});

@@ -115,6 +115,22 @@ describe('renderRecap F-b6915850: fallback sentinel is never quoted as real narr
     const result = renderRecap(null, history);
     expect(result).not.toContain(FALLBACK_NARRATION);
   });
+
+  // F-08c1896e: omitting the section entirely (the assertion above) reads
+  // identically to a fresh character with no turns played yet -- a player
+  // resuming right after an outage got no re-orientation at all. There must
+  // be SOME honest placeholder line instead of silence, distinguishable from
+  // both a real quoted narration line and from the fresh-character case.
+  it('should show an honest placeholder (not silence) when every one of the last 3 turns is a fallback', () => {
+    const history = makeHistory([FALLBACK_NARRATION, FALLBACK_NARRATION, FALLBACK_NARRATION]);
+    const result = renderRecap(null, history);
+    expect(result).toMatch(/recent events are unclear/i);
+  });
+
+  it('should NOT show the fallback placeholder when there is no history at all (fresh character)', () => {
+    const result = renderRecap(null, makeHistory([]));
+    expect(result).not.toMatch(/recent events are unclear/i);
+  });
 });
 
 // F-18f4dd88 (seam contract, wave 6): the fallback-sentinel filter above only

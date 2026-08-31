@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Interface as ReadlineInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
-import { promptGroupedMenu, promptText, wrapMenuLine, type MenuGroup } from './prompts.js';
+import { promptGroupedMenu, promptText, promptMultiSelect, promptMenu, promptConfirm, wrapMenuLine, PromptCancelled, CANCEL_KEYWORD, type MenuGroup } from './prompts.js';
 
 // F-6ed5f350 (SLATE-3): prompts.ts had no test file before this wave (2 of
 // the 8 character/** files F-8d11d865 already flagged as untested).
@@ -140,6 +140,123 @@ describe('promptText (F-3a8ccf9c: stdin close guard)', () => {
   it('trims whitespace from the answer (pre-existing behavior, unaffected by the close guard)', async () => {
     const rl = makeFakeRl(['   padded   ']);
     await expect(promptText(rl, 'X')).resolves.toBe('padded');
+  });
+});
+
+// F-f480fef1: before this fix, none of this file's five prompt primitives
+// recognized any cancel/back/quit keyword -- a player partway through
+// character creation had no way to back out short of Ctrl+C. promptText is
+// the single choke point every other helper awaits, so checking here covers
+// all of them without touching each individually.
+describe('promptText cancel keyword (F-f480fef1)', () => {
+  it('rejects with PromptCancelled when the answer is CANCEL_KEYWORD', async () => {
+    const rl = makeFakeRl([CANCEL_KEYWORD]);
+    await expect(promptText(rl, 'Anything')).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('is case-insensitive and tolerant of surrounding whitespace', async () => {
+    const rl = makeFakeRl(['  CaNcEl  ']);
+    await expect(promptText(rl, 'Anything')).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('does not leave a dangling close listener on the cancel path either', async () => {
+    const rl = makeFakeRl(['cancel']);
+    await expect(promptText(rl, 'Anything')).rejects.toBeInstanceOf(PromptCancelled);
+    expect(rl.listenerCount('close')).toBe(0);
+  });
+
+  it('a normal answer that merely CONTAINS the keyword is not treated as a cancel (exact match only)', async () => {
+    const rl = makeFakeRl(['cancellation']);
+    await expect(promptText(rl, 'Anything')).resolves.toBe('cancellation');
+  });
+
+  it('propagates the cancellation through promptMenu with no special-case code of its own', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['cancel']);
+    await expect(promptMenu(rl, 'Pick:', [{ label: 'A' }, { label: 'B' }])).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('propagates the cancellation through promptConfirm', async () => {
+    const rl = makeFakeRl(['cancel']);
+    await expect(promptConfirm(rl, 'Sure?')).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('propagates the cancellation through promptMultiSelect', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['cancel']);
+    await expect(promptMultiSelect(rl, 'Pick:', [{ label: 'A' }], 1)).rejects.toBeInstanceOf(PromptCancelled);
+  });
+
+  it('propagates the cancellation through promptGroupedMenu', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['cancel']);
+    const groups: MenuGroup<string>[] = [{ label: 'G', items: [{ item: 'x', label: 'X' }] }];
+    await expect(promptGroupedMenu(rl, 'Pick:', groups)).rejects.toBeInstanceOf(PromptCancelled);
+  });
+});
+
+// F-0d1f3d37: promptMultiSelect's input loop gave no feedback at all for the
+// two most likely invalid inputs, unlike its sibling promptMenu/
+// promptGroupedMenu (both already print a please-enter-a-number-in-range
+// message on any rejection).
+describe('promptMultiSelect invalid-input feedback (F-0d1f3d37)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeItems(n: number): Array<{ label: string }> {
+    return Array.from({ length: n }, (_, i) => ({ label: `Item ${i + 1}` }));
+  }
+
+  it('rejects "done" before any selection with an explicit message, then keeps looping', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['done', '1', 'done']);
+
+    const selected = await promptMultiSelect(rl, 'Pick:', makeItems(3), 2);
+
+    expect(selected).toEqual([0]);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/pick at least one/i);
+  });
+
+  it('rejects a non-numeric, non-"done" answer with an explicit message instead of silent re-prompting', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['banana', '1', 'done']);
+
+    const selected = await promptMultiSelect(rl, 'Pick:', makeItems(3), 2);
+
+    expect(selected).toEqual([0]);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/please enter a number between 1 and 3/i);
+  });
+
+  it('rejects an out-of-range number the same way', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['99', '1', 'done']);
+
+    const selected = await promptMultiSelect(rl, 'Pick:', makeItems(3), 2);
+
+    expect(selected).toEqual([0]);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/please enter a number between 1 and 3/i);
+  });
+
+  it('still returns an empty array when maxSelections is 0 (unaffected by this fix)', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl([]);
+    const selected = await promptMultiSelect(rl, 'Pick:', makeItems(3), 0);
+    expect(selected).toEqual([]);
+  });
+
+  it('an already-selected index still gets its own distinct message (pre-existing behavior, unaffected)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const rl = makeFakeRl(['1', '1', 'done']);
+
+    const selected = await promptMultiSelect(rl, 'Pick:', makeItems(3), 2);
+
+    expect(selected).toEqual([0]);
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/already selected/i);
   });
 });
 

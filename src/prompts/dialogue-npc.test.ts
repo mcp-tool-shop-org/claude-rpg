@@ -245,6 +245,68 @@ describe('resolveVoiceArchetype (FT-BR-005)', () => {
   });
 });
 
+// === F-3b1d3704: Pressure-kind dialogue coverage ===
+describe('DIALOGUE_SYSTEM_BASE pressure-kind coverage (F-3b1d3704)', () => {
+  // Mirrors the full PressureKind union from @ai-rpg-engine
+  // (packages/modules/src/pressure-system.ts:15-42). Before this fix, only
+  // the 5 "Universal" kinds had behavioral guidance; the 14 genre-specific
+  // kinds below — reachable through claude-rpg's own starter packs — got no
+  // coaching at all. This list intentionally duplicates the engine's kinds
+  // as plain strings so a future engine PressureKind addition that isn't
+  // mirrored here fails loudly instead of silently degrading dialogue.
+  const ALL_PRESSURE_KINDS = [
+    // Universal (all genres)
+    'bounty-issued',
+    'faction-summons',
+    'merchant-blacklist',
+    'revenge-attempt',
+    'investigation-opened',
+    // Fantasy
+    'heresy-whisper',
+    'chapel-sanction',
+    // Mystery / Detective
+    'case-opened',
+    'witness-vanished',
+    // Pirate
+    'mutiny-brewing',
+    'navy-bounty',
+    // Horror / Post-Apocalyptic
+    'infection-suspicion',
+    'camp-panic',
+    // Cyberpunk
+    'corp-manhunt',
+    'ice-escalation',
+    // Economy
+    'supply-crisis',
+    'trade-war',
+    'black-market-boom',
+    // Crafting
+    'crafting-shortage',
+  ] as const;
+
+  it('gives every engine PressureKind an explicit behavioral bullet', () => {
+    for (const kind of ALL_PRESSURE_KINDS) {
+      expect(DIALOGUE_SYSTEM_BASE).toContain(`- ${kind}:`);
+    }
+  });
+
+  it('has a genre-agnostic fallback bullet for any kind not explicitly listed', () => {
+    expect(DIALOGUE_SYSTEM_BASE).toContain('Any pressure kind not listed above');
+  });
+
+  it('composed prompt still contains the required top-level sections after the extension', () => {
+    // Guards against prompt-shape drift: the pressure-kind list grew
+    // substantially in this fix, so confirm the surrounding sections
+    // (injection guard, rules intro, goal/fear guidance) are all intact.
+    const prompt = buildDialogueSystemPrompt({});
+    expect(prompt).toContain('<player_speech>');
+    expect(prompt).toContain('Rules:');
+    expect(prompt).toContain("active pressure from the NPC's faction");
+    expect(prompt).toContain('If the NPC has a current goal');
+    expect(prompt).toContain('betraying their faction');
+  });
+});
+
 describe('buildDialoguePrompt voice style (FT-BR-005)', () => {
   it('should inject voice style when voiceStyle is explicitly set', () => {
     const prompt = buildDialoguePrompt({ ...baseInput, voiceStyle: 'merchant' });

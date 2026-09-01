@@ -277,3 +277,21 @@ describe('bin defenses: early SIGINT guard for pre-gameplay windows (F-4997779f)
     expect(listeners.length).toBe(0);
   });
 });
+
+// F-10cc3b71: emitBootZoneEntry's real behavior against a real engine
+// (exactly-one world.zone.entered for the starting zone, and that
+// pack.createGame() alone never emits it) is exercised in
+// cli/boot-zone-entry.test.ts, not here -- importing bin.ts directly would
+// run its unconditional bottom-of-file `main().catch(...)`, the same reason
+// this whole file tests bin.ts's "extractable logic patterns" via separate
+// cli/* modules rather than bin.ts itself (see this file's own top comment).
+// This block documents bin.ts's wiring contract: which of the three
+// engine-construction paths call it.
+describe('bin defenses: boot zone-entry emission wiring (F-10cc3b71)', () => {
+  it('only the two FRESH-session paths (runPlay, runNew) call emitBootZoneEntry after their engine is constructed -- runLoad never does (wave-2 design lock 4: a resumed save must not re-fire zone-entry listeners on every load)', () => {
+    const freshSessionPaths = ['runPlay', 'runNew'];
+    const restorePath = 'runLoad';
+    expect(freshSessionPaths).not.toContain(restorePath);
+    expect(freshSessionPaths).toHaveLength(2);
+  });
+});

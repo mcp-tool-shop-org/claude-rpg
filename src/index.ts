@@ -90,3 +90,8 @@ export { loadChronicleFromSession, loadObligationsFromSession, loadConsequenceCh
 export { buildNpcProfilesForDirector } from './npc/agency.js';
 export { buildNpcPresenceForDialogue, buildNpcPresenceForNarrator, getNpcDialogueHint } from './npc/presence.js';
 // NpcProfile, NpcAction, NpcActionResult, NpcGoal, NpcRelationship, NpcActionVerb, NpcEffect available via @ai-rpg-engine/modules
+
+// A2-truth (slice A2 §8, WO-A2T-1): load-time seed of world truth from 1.x
+// SavedSession fields. cli-display's bin.ts owns the call site (runLoad /
+// resumeHarness, after initializeNamespaces, before the first turn).
+export { seedWorldTruthFromSession, STORES_SEEDED_KEY, type WorldTruthSeedReport } from './game/world-truth-seed.js';

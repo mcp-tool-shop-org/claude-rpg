@@ -22,9 +22,25 @@ import {
   loadResolvedPressuresFromSession,
   type SavedSession,
 } from './session.js';
-import { createPartyState } from '@ai-rpg-engine/modules';
+import {
+  createPartyState,
+  getActivePressures,
+  getWorldTickState,
+  getPersistedOpportunities,
+  getPersistedNpcProfiles,
+  getPersistedNpcLastActions,
+  getPersistedFactionProfiles,
+  getPersistedFactionLastActions,
+  getEconomyCoreState,
+  getPlayerRumorState,
+} from '@ai-rpg-engine/modules';
 import { CampaignJournal } from '@ai-rpg-engine/campaign-memory';
 import { MAX_PLAYER_RUMORS } from '../game/game-state.js';
+// WO-A2T-1 (slice A2 §8): the load-time seed of world truth from 1.x
+// SavedSession fields — game-core's own new module.
+import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import { createProfile, type CharacterProfile } from '@ai-rpg-engine/character-profile';
+import { seedWorldTruthFromSession, STORES_SEEDED_KEY } from '../game/world-truth-seed.js';
 
 function makeSession(overrides: Partial<SavedSession> = {}): SavedSession {
   return {
@@ -1199,5 +1215,165 @@ describe('listArchivedCampaigns', () => {
 
     const results = await listArchivedCampaigns(dir);
     expect(results).toEqual([]);
+  });
+});
+
+// WO-A2T-1 (slice A2 §8, run swarm-1788288802-f5a0, wave 5): load-time seed
+// of world truth from 1.x SavedSession fields. seedWorldTruthFromSession
+// takes a real Engine + SavedSession (not a GameSession), so this suite
+// builds fixtures with makeSession() exactly like every loader test above,
+// rather than standing up a live GameSession harness.
+describe('seedWorldTruthFromSession (WO-A2T-1, slice A2 §8)', () => {
+  const CHAPEL_UNDEAD = 'chapel-undead'; // starter-fantasy's only registered faction
+
+  const validPressure = {
+    id: 'p1', kind: 'bounty-issued', sourceFactionId: CHAPEL_UNDEAD,
+    description: 'A legacy bounty carried only in the 1.x save field.', triggeredBy: 'milestone:boss-kill',
+    urgency: 0.6, visibility: 'known', turnsRemaining: 5,
+    potentialOutcomes: [], tags: [], createdAtTick: 3,
+  };
+  const validFallout = {
+    resolution: {
+      pressureId: 'p0', pressureKind: 'bounty-issued', resolutionType: 'resolved-by-player',
+      resolvedBy: 'player', resolvedAtTick: 2, resolutionVisibility: 'known',
+    },
+    effects: [],
+    summary: 'Paid off an earlier bounty before adoption.',
+  };
+  const validOpportunity = {
+    id: 'opp-1', kind: 'contract', status: 'available', title: 'Test contract',
+    turnsRemaining: 5, createdAtTick: 1, visibility: 'known',
+  };
+  const validRumor = {
+    id: 'r1', claim: 'defeated the Bone Collector', subjectDescriptor: 'a lone stranger',
+    sourceEvent: 'boss-kill', confidence: 0.8, distortion: 0, mutationCount: 0,
+    valence: 'heroic', spreadTo: [], originTick: 5,
+  };
+  const SUPPLY_CATEGORIES = ['medicine', 'weapons', 'ammunition', 'food', 'fuel', 'luxuries', 'components', 'contraband'] as const;
+  const validSupplies = Object.fromEntries(
+    SUPPLY_CATEGORIES.map((category) => [category, { category, level: 50, trend: 'stable' }]),
+  );
+  const validEconomy = { supplies: validSupplies, tradeVolume: 40, blackMarketActive: false, lastUpdateTick: 3 };
+  const validNpcProfile = {
+    npcId: 'npc-1', name: 'Old Man Winters', factionId: null,
+    goals: [{ id: 'g1', label: 'survive', priority: 1, verb: 'flee', reason: 'scared' }],
+    relationship: { trust: 0, fear: 0, greed: 0, loyalty: 0 },
+    breakpoint: 'wavering', dominantAxis: 'fear', leverageAngle: 'appeal to fear',
+    knownRumors: [], underPressure: false,
+  };
+  const validNpcAction = {
+    action: { npcId: 'npc-1', verb: 'flee', description: 'flees' },
+    effects: [], narratorHint: 'Winters bolts for the door.',
+  };
+
+  function makeTestProfile(reputation: { factionId: string; value: number }[] = []): CharacterProfile {
+    const profile = createProfile(
+      { name: 'Aldric', archetypeId: 'penitent-knight', backgroundId: 'oath-breaker', traitIds: [] },
+      { vigor: 5, instinct: 5, will: 5 },
+      { hp: 20, stamina: 8 },
+      [],
+      'chapel-threshold',
+    );
+    return { ...profile, reputation };
+  }
+
+  function makePopulatedSession(overrides: Partial<SavedSession> = {}): SavedSession {
+    return makeSession({
+      activePressures: JSON.stringify([validPressure]),
+      resolvedPressures: JSON.stringify([validFallout]),
+      activeOpportunities: JSON.stringify([validOpportunity]),
+      playerRumors: JSON.stringify([validRumor]),
+      districtEconomies: JSON.stringify({ 'district-1': validEconomy }),
+      npcAgencySnapshot: JSON.stringify({ profiles: [validNpcProfile], actions: [validNpcAction] }),
+      ...overrides,
+    });
+  }
+
+  it('writes every 1.x field into its world-truth namespace and stamps the marker', () => {
+    const engine = createGame();
+    const session = makePopulatedSession();
+    const profile = makeTestProfile([{ factionId: CHAPEL_UNDEAD, value: 20 }]);
+
+    const report = seedWorldTruthFromSession(engine, session, profile, 'test-engine-1.2.3');
+
+    expect(report.seeded).toBe(true);
+    expect(report.stores).toEqual(
+      expect.arrayContaining(['pressures', 'opportunities', 'npc', 'faction', 'economies', 'rumors', 'reputation-baseline']),
+    );
+
+    expect(getActivePressures(engine.world)).toEqual([validPressure]);
+    expect(getWorldTickState(engine.world).resolvedPressures).toEqual([validFallout]);
+    expect(getPersistedOpportunities(engine.world)).toEqual([validOpportunity]);
+    expect(getPersistedNpcProfiles(engine.world)).toEqual([validNpcProfile]);
+    expect(getPersistedNpcLastActions(engine.world)).toEqual([validNpcAction]);
+    expect(getPlayerRumorState(engine.world).rumors).toEqual([validRumor]);
+    expect(getEconomyCoreState(engine.world).districts['district-1']).toEqual(validEconomy);
+    // No 1.x SavedSession field has ever carried faction-agency state
+    // (design doc §8's own honesty note) — seeded as an honest "no
+    // history", not silently skipped.
+    expect(getPersistedFactionProfiles(engine.world)).toEqual([]);
+    expect(getPersistedFactionLastActions(engine.world)).toEqual([]);
+
+    expect(engine.world.globals[STORES_SEEDED_KEY]).toBe(`${session.schemaVersion}@test-engine-1.2.3`);
+    // R1 (§9): the profile's pre-adoption reputation value is stamped as
+    // the baseline for the composed view.
+    expect(engine.world.globals[`claude_rpg.rep_baseline_${CHAPEL_UNDEAD}`]).toBe(20);
+  });
+
+  it('is idempotent: a second call on the same world is a no-op and returns seeded:false', () => {
+    const engine = createGame();
+    const session = makePopulatedSession();
+    const profile = makeTestProfile();
+
+    const first = seedWorldTruthFromSession(engine, session, profile, 'test-engine-1.2.3');
+    expect(first.seeded).toBe(true);
+
+    // Mutate the live namespace after the first seed, the way a real round
+    // would — proves the second call truly SKIPS (not merely "produces the
+    // same result by coincidence").
+    getWorldTickState(engine.world).pressures = [];
+
+    const second = seedWorldTruthFromSession(engine, session, profile, 'a-different-engine-version-should-be-ignored');
+    expect(second).toEqual({ seeded: false, stores: [] });
+    // Confirms the second call never touched the namespace: still empty
+    // from the manual mutation above, not re-populated from `session`.
+    expect(getActivePressures(engine.world)).toEqual([]);
+    // The marker keeps its FIRST-seed value; a second, different
+    // engineVersion argument never overwrites it.
+    expect(engine.world.globals[STORES_SEEDED_KEY]).toBe(`${session.schemaVersion}@test-engine-1.2.3`);
+  });
+
+  it("R1: a veteran world's pre-existing reputation_<faction> accrual (kill history predating this seed) survives seeding untouched, ready to compose", () => {
+    const engine = createGame();
+    // Kill history that accrued BEFORE adoption — exactly what
+    // defeat-fallout has written into world.globals since 3.9, independent
+    // of anything this seed function itself writes.
+    engine.world.globals[`reputation_${CHAPEL_UNDEAD}`] = -30;
+    const session = makePopulatedSession();
+    // The profile's own pre-adoption reputation for this faction (whatever
+    // the OLD adjustReputation-direct-write path had accumulated by save
+    // time).
+    const profile = makeTestProfile([{ factionId: CHAPEL_UNDEAD, value: 10 }]);
+
+    seedWorldTruthFromSession(engine, session, profile, 'test-engine-1.2.3');
+
+    expect(engine.world.globals[`claude_rpg.rep_baseline_${CHAPEL_UNDEAD}`]).toBe(10);
+    // The composed view (baseline + accrued) is exercised directly by
+    // reputation-view.test.ts's own refreshReputationProfile coverage; the
+    // load-bearing claim proven HERE is that the seed does not clobber or
+    // discard the pre-existing accrued global — it survives seeding
+    // untouched, ready to compose.
+    expect(engine.world.globals[`reputation_${CHAPEL_UNDEAD}`]).toBe(-30);
+  });
+
+  it('skips reputation baseline stamping when no profile is given (an observer/director-only load)', () => {
+    const engine = createGame();
+    const session = makePopulatedSession();
+
+    const report = seedWorldTruthFromSession(engine, session, null, 'test-engine-1.2.3');
+
+    expect(report.seeded).toBe(true);
+    expect(report.stores).not.toContain('reputation-baseline');
+    expect(engine.world.globals['claude_rpg.rep_baselined']).toBeUndefined();
   });
 });

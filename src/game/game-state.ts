@@ -57,10 +57,12 @@ import {
   grantXp,
   addInjury,
   incrementTurns,
-  adjustReputation,
   recordMilestone,
   getReputation,
 } from '@ai-rpg-engine/character-profile';
+// WO-A2T-2 (slice A2 §9, R1): the one write path for a reputation delta —
+// see reputation-view.ts's own doc comment.
+import { addFactionReputationGlobal } from './reputation-view.js';
 import {
   evolveTitle,
   type TitleEvolution,
@@ -580,8 +582,16 @@ export function applyFalloutEffects(
   for (const effect of fallout.effects) {
     switch (effect.type) {
       case 'reputation':
+        // WO-A2T-2 (slice A2 §9, R1): reputation is a VIEW composed from
+        // baseline + the accrued world.globals['reputation_<f>'] delta —
+        // never written directly onto the profile from this wave on.
+        // addFactionReputationGlobal adds this fallout's delta to the
+        // accrued ledger; the caller (GameSession.applyFalloutEffects,
+        // game.ts) refreshes the profile view via refreshWorldViews()
+        // right after this function returns (unchanged call site — see
+        // this function's own doc comment above).
         if (updatedProfile) {
-          updatedProfile = adjustReputation(updatedProfile, effect.factionId, effect.delta);
+          addFactionReputationGlobal(world, effect.factionId, effect.delta);
         }
         break;
 

@@ -1,0 +1,222 @@
+{
+  "run_id": "swarm-1788211425-6420",
+  "repo": "mcp-tool-shop-org/claude-rpg",
+  "compiled_from": {
+    "commit_sha": "5f3a003b6bbb9baa0d66403972be45eceba754c2"
+  },
+  "open_summary": {
+    "open": 0,
+    "deferred": 26,
+    "approved": 0
+  },
+  "grandfathered_drain": {
+    "frozen_total": 0,
+    "drained": 0,
+    "outstanding": []
+  },
+  "recurrence_stats": {
+    "top_recurring": [],
+    "recurrence_rate": {
+      "total_runs": 3,
+      "distinct_fingerprints": 461,
+      "recurring_fingerprints": 0,
+      "recurrence_rate": 0,
+      "window_days": null
+    }
+  },
+  "attention": {
+    "advisory": true,
+    "items": [
+      {
+        "file": "src/game.test.ts",
+        "score": 0.000878352953824652,
+        "components": {
+          "churn": 0.002635058861473956,
+          "recency": 0.3333333333333333,
+          "fragmentation": 1
+        }
+      },
+      {
+        "file": "src/foundry/world-gen.ts",
+        "score": 0.0005652454780361757,
+        "components": {
+          "churn": 0.001695736434108527,
+          "recency": 0.3333333333333333,
+          "fragmentation": 1
+        }
+      },
+      {
+        "file": "src/narrator/scene-context.ts",
+        "score": 0.0004410185611290075,
+        "components": {
+          "churn": 0.0013230556833870226,
+          "recency": 0.3333333333333333,
+          "fragmentation": 1
+        }
+      },
+      {
+        "file": ".github/workflows/ci.yml",
+        "score": 0,
+        "components": {
+          "churn": 0.0010332434860736747,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": ".github/workflows/release.yml",
+        "score": 0,
+        "components": {
+          "churn": 0.003245015388732771,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": ".gitignore",
+        "score": 0,
+        "components": {
+          "churn": 0.00024189646831156267,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": ".npmignore",
+        "score": 0,
+        "components": {
+          "churn": 0.0020215633423180594,
+          "recency": 0.3324697754749568,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "CHANGELOG.md",
+        "score": 0,
+        "components": {
+          "churn": 0.0014931451065562644,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.es.md",
+        "score": 0,
+        "components": {
+          "churn": 0.003930817610062893,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.fr.md",
+        "score": 0,
+        "components": {
+          "churn": 0.00349969567863664,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.hi.md",
+        "score": 0,
+        "components": {
+          "churn": 0.0035504159058632584,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.it.md",
+        "score": 0,
+        "components": {
+          "churn": 0.003930817610062893,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.ja.md",
+        "score": 0,
+        "components": {
+          "churn": 0.00349969567863664,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.md",
+        "score": 0,
+        "components": {
+          "churn": 0.0012680056806654494,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.pt-BR.md",
+        "score": 0,
+        "components": {
+          "churn": 0.0032968147697301684,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "README.zh.md",
+        "score": 0,
+        "components": {
+          "churn": 0.004235138973422601,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "SHIP_GATE.md",
+        "score": 0,
+        "components": {
+          "churn": 0.00008984725965858041,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "dogfood/roadmap/latest.json",
+        "score": 0,
+        "components": {
+          "churn": 0.008176100628930818,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "dogfood/roadmap/swarm-1787722919-4d9e.1.json",
+        "score": 0,
+        "components": {
+          "churn": 0.0031446540880503146,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      },
+      {
+        "file": "dogfood/roadmap/swarm-1787722919-4d9e.json",
+        "score": 0,
+        "components": {
+          "churn": 0.0031446540880503146,
+          "recency": 0,
+          "fragmentation": 0
+        }
+      }
+    ]
+  },
+  "compiled_at": "2026-08-31T21:23:46.000Z",
+  "operator_notes": [],
+  "expired_notes": [],
+  "drain_queue": {
+    "entries": [],
+    "overdue_ids": []
+  },
+  "notesPath": "dogfood/roadmap-notes.json",
+  "sequence": 1,
+  "content_hash": "f0808656385d464b9ee7640c9536f0a8d872c115c8ac1c3d4e1097ce6d320adf"
+}

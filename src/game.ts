@@ -12,6 +12,7 @@
 // v1.2: NPC agency — named NPCs as individual actors with goals, fears, and autonomous actions
 // v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
+import { seedWorldTruthFromSession, type WorldTruthSeedReport } from './game/world-truth-seed.js';
 import type { Engine, EntityState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
@@ -275,7 +276,7 @@ import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp
 import { renderCompactStatus } from './display/status-compact.js';
 import { generateSuggestions } from './display/contextual-suggestions.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
-import { listArchivedCampaigns, saveSession, type SaveSessionInput, getSavePath as getDefaultSavePath } from './session/session.js';
+import { listArchivedCampaigns, saveSession, loadResolvedOpportunitiesFromSession, type SaveSessionInput, type SavedSession, getSavePath as getDefaultSavePath } from './session/session.js';
 import { exportChronicleMarkdown, exportChronicleJSON, exportFinaleMarkdown, writeExport } from './session/chronicle-export.js';
 import { createDebugLogger, type DebugLogger } from './game/debug-logger.js';
 import { SessionTokenTracker, withTokenTracking } from './game/token-tracker.js';
@@ -942,6 +943,29 @@ export class GameSession {
    * itself (see that method's own doc comment for the residual, narrower
    * same-turn gap this leaves).
    */
+  /**
+   * Coordinator stitch (slice A2-truth, wave 5): the ONE load-time seed entry
+   * point for a 1.x save. Runs seedWorldTruthFromSession against this
+   * session's engine + profile and then refreshes every view — the seed
+   * alone leaves the session fields stale until the first round, so a
+   * resumed game would narrate its first turn against empty pressures,
+   * rumors, and NPC state. bin.ts's runLoad and the test harness both call
+   * this; nothing calls the bare seed with a live session.
+   */
+  seedWorldTruth(saved: SavedSession, engineVersion?: string): WorldTruthSeedReport {
+    const version = engineVersion
+      ?? (this.engine.world as { meta?: { saveVersion?: string } }).meta?.saveVersion
+      ?? 'unknown';
+    const report = seedWorldTruthFromSession(this.engine, saved, this.profile, version);
+    this.refreshWorldViews();
+    // resolvedOpportunities is session HISTORY, not world truth: the engine's
+    // opportunity-core namespace holds only the live list, and the view table
+    // appends expiry fallout per round. Restore it from the save here so both
+    // callers (bin.ts, the harness) get it through the one seed path.
+    this.resolvedOpportunities = loadResolvedOpportunitiesFromSession(saved);
+    return report;
+  }
+
   private refreshWorldViews(): void {
     const world = this.engine.world;
     this.activePressures = getActivePressures(world);

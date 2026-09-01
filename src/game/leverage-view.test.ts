@@ -65,7 +65,7 @@ describe('writeLeverageDeltas (the ONE ledger)', () => {
 
     writeLeverageDeltas(profile, world, { favor: 10 });
 
-    expect(getLeverageState(world.entities['player'].custom)).toMatchObject({ favor: 10 });
+    expect(getLeverageState(world.entities['player'].custom ?? {})).toMatchObject({ favor: 10 });
   });
 
   it('returns the profile with its leverage view refreshed to match the entity ledger', () => {
@@ -93,7 +93,7 @@ describe('writeLeverageDeltas (the ONE ledger)', () => {
     // One ledger: the tick's 5 and this call's 10 both show up on the SAME
     // number the profile reports (WO-A2T-3's own proof requirement).
     expect(getLeverageState(profile.custom).favor).toBe(15);
-    expect(getLeverageState(world.entities['player'].custom).favor).toBe(15);
+    expect(getLeverageState(world.entities['player'].custom ?? {}).favor).toBe(15);
   });
 
   it('clamps to [0, 100], matching the engine\'s own applyLeverageDeltas bound', () => {

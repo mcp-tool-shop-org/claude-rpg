@@ -36,7 +36,7 @@ import { TurnHistory } from '../../src/session/history.js';
 // CORRECT red per the addendum's own sequencing note ("write the proofs
 // against the design doc's contract and mark 'green expected at merge'
 // where your worktree cannot run them"), not a bug in this file.
-import { seedWorldTruthFromSession, type WorldTruthSeedReport } from '../../src/game/world-truth-seed.js';
+import type { WorldTruthSeedReport } from '../../src/game/world-truth-seed.js';
 
 export type HarnessOptions = {
   /** Options for the fake Claude client. */
@@ -223,7 +223,7 @@ export async function resumeHarness(
   // from that namespace, exactly like bin.ts's runLoad() call site
   // (ADDENDUM-cli-display WO-A2T-5) -- mirroring production's ONE seed
   // path instead of this helper re-deriving its own.
-  const seedReport = seedWorldTruthFromSession(session, savedSession);
+  const seedReport = session.seedWorldTruth(savedSession);
 
   // Fields NOT covered by the design doc's view table stay direct restores.
   session.partyState = restoredParty;

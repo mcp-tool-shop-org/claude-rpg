@@ -174,7 +174,7 @@ describe('WO-A2T-7: world-truth seed from a 1.x pack save', () => {
     // calls -- exactly what "a save written after adoption ignores the
     // fields" (§8) describes for a save whose engineState already carries
     // the marker.
-    const report2 = seedWorldTruthFromSession(h.session, savedSession);
+    const report2 = h.session.seedWorldTruth(savedSession, 'test-engine');
     expect(report2.seeded).toBe(false);
     expect(getPersistedOpportunities(h.session.engine.world)).toEqual([]);
   });
@@ -254,7 +254,7 @@ describe('WO-A2T-7: world-truth seed from a generated (packless) world save', ()
       genre: savedSession.genre ?? 'fantasy',
     });
 
-    const report = seedWorldTruthFromSession(session, savedSession);
+    const report = session.seedWorldTruth(savedSession, 'test-engine');
     expect(report.seeded).toBe(true);
 
     const fixturePressures = JSON.parse(savedSession.activePressures!);

@@ -72,6 +72,6 @@ export function writeLeverageDeltas(
 ): CharacterProfile {
   const player = world.entities[world.playerId];
   if (!player) return profile;
-  player.custom = applyLeverageDeltas(player.custom, deltas);
+  player.custom = applyLeverageDeltas(player.custom ?? {}, deltas);
   return refreshLeverageView(profile, world);
 }

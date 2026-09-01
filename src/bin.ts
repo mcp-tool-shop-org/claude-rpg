@@ -21,7 +21,6 @@ import { GameSession, type GameConfig } from './game.js';
 // Design doc/addendum text says '../game/world-truth-seed.js', but bin.ts
 // lives at src/bin.ts (sibling of src/game/), so the correct relative path
 // from here is './game/world-truth-seed.js' -- using the correct path.
-import { seedWorldTruthFromSession } from './game/world-truth-seed.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld, type WorldGenResult } from './foundry/world-gen.js';
@@ -708,7 +707,10 @@ async function runLoad(): Promise<void> {
   // uncaught throw crashing past recap into an inconsistent, half-seeded
   // world via main()'s generic 'startup' catch.
   const seedOutcome = runWorldTruthSeed(
-    () => seedWorldTruthFromSession(session, savedSession),
+    // Coordinator stitch (wave 5): the seed takes (engine, savedSession, profile,
+    // engineVersion) — the addendum's two-argument sketch was wrong; the version
+    // string is diagnostic only (the marker's presence decides idempotency).
+    () => session.seedWorldTruth(savedSession),
     session.debugLog,
   );
   if (!seedOutcome.ok) {

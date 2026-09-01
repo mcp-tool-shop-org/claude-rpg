@@ -10,11 +10,16 @@ governing migration between versions.
 | Field | Value |
 |-------|-------|
 | Version field | `schemaVersion` (integer, monotonically increasing) |
-| Current version | `2` |
+| Current version | `3` (slice A3 of the living-world cycle) |
 | Location | Top-level field in save JSON |
 
-Schema version 1 = all saves written before this sprint (version string `'0.1.0'`–`'1.4.0'`).
-Schema version 2 = saves written after this sprint (adds `schemaVersion`, `createdWithVersion`).
+Schema version 1 = all saves written before the runtime-proofing sprint (version string `'0.1.0'`–`'1.4.0'`).
+Schema version 2 = saves written after that sprint (adds `schemaVersion`, `createdWithVersion`).
+Schema version 3 = saves written by the living-world build (v2.0.0): the engine
+world (`engineState`) is the single truth for pressures, opportunities, NPC and
+faction state, district economies, party state, player rumors, and leverage;
+the ten 1.x string fields for those stores are no longer written; the app's
+`RumorEngine` snapshot rides the save as `rumorEngine`.
 
 ### 2. Chronicle Records
 
@@ -32,13 +37,14 @@ They carry `exportedAt` and package version metadata but are not migrated.
 | schemaVersion | Equivalent string versions | Changes |
 |---------------|---------------------------|---------|
 | 1 | `'0.1.0'` – `'1.4.0'` | Original format. Version as string. Optional fields accumulate per feature. |
-| 2 | (current) | Adds `schemaVersion` integer. Adds `createdWithVersion`. Removes string `version` union reliance. |
+| 2 | | Adds `schemaVersion` integer. Adds `createdWithVersion`. Removes string `version` union reliance. |
+| 3 | (current) | World truth lives in `engineState` (module namespaces, `world.globals`, the seed marker `claude_rpg.stores_seeded`, the reputation baselines). Stops writing `playerRumors`, `activePressures`, `resolvedPressures`, `npcAgencySnapshot`, `npcObligations`, `consequenceChains`, `partyState`, `districtEconomies`, `activeOpportunities`, `leverageSnapshot` (they stay readable for v1/v2 loads). Keeps `resolvedOpportunities` (session history — no engine namespace). Adds `rumorEngine` (the RumorEngine `EngineSnapshot`). |
 
 ## Compatibility Policy
 
 ### Forward compatibility (old saves → new code)
 
-- **Supported range:** schemaVersion 1–2
+- **Supported range:** schemaVersion 1–3
 - **Migration:** automatic, ordered, non-destructive
 - **Rule:** loading always yields current canonical shape. No downstream code reasons about old versions.
 
@@ -61,6 +67,27 @@ They carry `exportedAt` and package version metadata but are not migrated.
 4. **Original file is never overwritten before migration succeeds.** Backup (.bak) survives.
 5. **Migration result includes metadata:** source version, target version, steps applied.
 6. **Chronicle meaning is preserved.** Record order, significance, category — all survive intact.
+
+## The two-phase load (v3 and later)
+
+Loading is two phases, in this order, and the order is load-bearing:
+
+1. **Pure shape migration** — `migrateSave` runs the ordered `MIGRATIONS`
+   steps (v1→v2 normalizes legacy rumor/pressure entries; v2→v3 only stamps
+   `schemaVersion: 3`). No step ever drops the ten legacy fields: phase 2
+   needs them.
+2. **Runtime seed** — after the engine state is restored and
+   `initializeNamespaces` has backfilled absent module namespaces,
+   `GameSession.seedWorldTruth(savedSession)` writes each legacy field into
+   its engine namespace exactly once, stamps
+   `world.globals['claude_rpg.stores_seeded']`, refreshes the session's
+   views, and restores `resolvedOpportunities`. A save whose `engineState`
+   already carries the marker (every v3 save) is never seeded again; a v1 or
+   v2 save is seeded once and, when saved again, becomes v3.
+
+The seed is app-side by design: the engine's own `SAVE_VERSION` stays
+`'1.0.0'` and no engine module ships a `migrateState` hook; claude-rpg's
+`SavedSession` is the versioned artifact.
 
 ## Detection
 

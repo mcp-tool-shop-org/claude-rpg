@@ -9,6 +9,7 @@ import {
   isCompanionRecruitable,
   setPartyState,
   companionRoleTag,
+  updateLivingFactionMembership,
   type CompanionRole,
   type CompanionState,
   type PartyState,
@@ -87,6 +88,15 @@ export function recruitCompanion(
 
   const goal = personalGoal ?? (entity.custom?.personalGoal as string | undefined);
 
+  // R4 (WO-A1-4): capture the entity's pre-recruit faction BEFORE the
+  // party-faction dual-write below overwrites entity.faction, so dismiss can
+  // restore it later. A blank/absent faction stays undefined (nothing to
+  // restore) -- mirrors the CompanionState.originFaction contract (3.11
+  // field, companion-core.d.ts).
+  const originFaction = typeof entity.faction === 'string' && entity.faction.length > 0
+    ? entity.faction
+    : undefined;
+
   const companion: CompanionState = {
     npcId,
     role,
@@ -95,6 +105,7 @@ export function recruitCompanion(
     abilityTags: tags,
     morale: 60, // Start at moderate morale
     active: true,
+    originFaction,
   };
 
   // Tag entity as companion.
@@ -140,6 +151,12 @@ export function recruitCompanion(
     const partyFaction = player.faction ?? 'party';
     player.faction = partyFaction;
     entity.faction = partyFaction;
+    // R4 (WO-A1-4): keep the faction-cognition membership registry following
+    // the recruited entity's living identity for non-explicit slots -- an
+    // authored explicit membership (registerFactionMembership) stays sticky,
+    // that is the engine's own contract (faction-cognition.ts). No-op when
+    // the world registered no faction-cognition module.
+    updateLivingFactionMembership(engine.world, entity.id, partyFaction);
   }
 
   return { ok: true, party: addResult.party, companion };
@@ -168,6 +185,18 @@ export function dismissCompanion(
       if (entity.custom) {
         delete entity.custom.companionMorale;
         delete entity.custom.companionRole;
+      }
+      // R4 (WO-A1-4): restore the entity's pre-recruit faction identity
+      // instead of leaving the recruit dual-write's 'party' faction
+      // permanent. When the companion had no origin faction (originFaction
+      // undefined), there is nothing to restore -- clear the field entirely
+      // rather than leave the stale party faction behind.
+      const originFaction = result.removed.originFaction;
+      if (originFaction) {
+        entity.faction = originFaction;
+        updateLivingFactionMembership(engine.world, npcId, originFaction);
+      } else {
+        delete entity.faction;
       }
     }
     // F-7994dfff: gated on result.removed so the reject path ("is not in

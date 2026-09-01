@@ -7,18 +7,9 @@ import { createFakeClient, createCallLog, type FakeClientOptions, type CallLog }
 import {
   loadSession,
   loadProfileFromSession,
-  loadRumorsFromSession,
-  loadPressuresFromSession,
-  loadResolvedPressuresFromSession,
   loadChronicleFromSession,
-  loadNpcAgencyFromSession,
-  loadObligationsFromSession,
   loadNpcConversationsFromSession,
-  loadConsequenceChainsFromSession,
   loadPartyFromSession,
-  loadEconomiesFromSession,
-  loadOpportunitiesFromSession,
-  loadResolvedOpportunitiesFromSession,
   loadArcSnapshotFromSession,
   loadEndgameTriggersFromSession,
   loadFinaleFromSession,
@@ -26,6 +17,26 @@ import {
 import { getPackById } from '../../src/character/packs.js';
 import { validateEngineState } from '../../src/cli/engine-state-validator.js';
 import { TurnHistory } from '../../src/session/history.js';
+// WO-A2T-7 (slice A2-truth, run swarm-1788288802-f5a0, wave 5): game-core's
+// wave-4 finding "A2-truth-resumeHarness-field-writes" flagged that this
+// helper directly assigned the eleven now-view session fields from a loaded
+// 1.x SavedSession -- correct only until the NEXT round's refreshWorldViews()
+// call resets them to whatever (likely empty) world truth already holds,
+// since a 1.x save never wrote into the world.modules namespaces those views
+// read from. This wave's own contract (ADDENDUM-COMMON design lock 1,
+// ADDENDUM-game-core WO-A2T-1) closes that exact gap with
+// seedWorldTruthFromSession -- resumeHarness now seeds through the SAME
+// function bin.ts's runLoad calls (ADDENDUM-cli-display WO-A2T-5), instead
+// of re-deriving its own copy of the eight loaders below.
+//
+// SEQUENCING (ADDENDUM-COMMON honesty floor + this wave's own addendum):
+// game-core lands src/game/world-truth-seed.ts in an isolated worktree this
+// domain cannot see. Until the coordinator merges it in, this import is RED
+// (module not found) on this worktree's checked-out src/ -- that is the
+// CORRECT red per the addendum's own sequencing note ("write the proofs
+// against the design doc's contract and mark 'green expected at merge'
+// where your worktree cannot run them"), not a bug in this file.
+import { seedWorldTruthFromSession, type WorldTruthSeedReport } from '../../src/game/world-truth-seed.js';
 
 export type HarnessOptions = {
   /** Options for the fake Claude client. */
@@ -45,10 +56,18 @@ export type GameHarness = {
   turnCount: () => number;
   /** Get the last recorded turn's verb. */
   lastVerb: () => string | undefined;
+  /**
+   * WO-A2T-7: seedWorldTruthFromSession()'s own report ({ seeded, stores }),
+   * present only on a resumeHarness() result -- createHarness() builds a
+   * fresh world with no 1.x fields to seed from, so it stays undefined
+   * there. Lets a test assert seeded:true/false directly instead of
+   * inferring it from side effects.
+   */
+  seedReport?: WorldTruthSeedReport;
 };
 
 /** Wraps a constructed GameSession in the shared GameHarness shape -- the one thing createHarness() and resumeHarness() must never drift apart on. */
-function wrapSession(session: GameSession, callLog: CallLog): GameHarness {
+function wrapSession(session: GameSession, callLog: CallLog, seedReport?: WorldTruthSeedReport): GameHarness {
   return {
     session,
     callLog,
@@ -59,6 +78,7 @@ function wrapSession(session: GameSession, callLog: CallLog): GameHarness {
       const turns = session.history.getAll();
       return turns.length > 0 ? turns[turns.length - 1].verb : undefined;
     },
+    seedReport,
   };
 }
 
@@ -156,17 +176,11 @@ export async function resumeHarness(
   }
 
   const profile = loadProfileFromSession(savedSession);
-  const restoredRumors = loadRumorsFromSession(savedSession);
-  const restoredPressures = loadPressuresFromSession(savedSession);
-  const restoredResolved = loadResolvedPressuresFromSession(savedSession);
   const restoredJournal = loadChronicleFromSession(savedSession);
-  const restoredNpcAgency = loadNpcAgencyFromSession(savedSession);
-  const restoredObligations = loadObligationsFromSession(savedSession);
-  const restoredChains = loadConsequenceChainsFromSession(savedSession);
+  // WO-A2T-7: partyState/arcSnapshot/endgameTriggers/finaleOutline are NOT
+  // among the design doc's eleven world-truth VIEW fields (§3's table) --
+  // they stay direct session-field restores, unaffected by seeding.
   const restoredParty = loadPartyFromSession(savedSession);
-  const restoredEconomies = loadEconomiesFromSession(savedSession);
-  const restoredOpportunities = loadOpportunitiesFromSession(savedSession);
-  const restoredResolvedOpps = loadResolvedOpportunitiesFromSession(savedSession);
   const restoredArcSnapshot = loadArcSnapshotFromSession(savedSession);
   const restoredEndgameTriggers = loadEndgameTriggersFromSession(savedSession);
   const restoredFinale = loadFinaleFromSession(savedSession);
@@ -195,23 +209,27 @@ export async function resumeHarness(
     ...opts.gameOpts,
   });
 
-  // Mirrors bin.ts's runLoad() post-construction restoration exactly
-  // (src/bin.ts, "Restore rumors, pressures, and fallout history into
-  // session").
-  session.playerRumors = restoredRumors;
-  session.activePressures = restoredPressures;
-  session.resolvedPressures = restoredResolved;
-  session.lastNpcProfiles = restoredNpcAgency.profiles;
-  session.lastNpcActions = restoredNpcAgency.actions;
-  session.npcObligations = restoredObligations;
-  session.activeConsequenceChains = restoredChains;
+  // WO-A2T-7: the eleven world-truth VIEW fields (design doc §3 --
+  // activePressures/resolvedPressures/activeOpportunities/
+  // resolvedOpportunities/lastNpcActions/lastNpcProfiles/npcObligations/
+  // activeConsequenceChains/lastFactionActions/lastFactionProfiles/
+  // districtEconomies/playerRumors) are no longer restored by direct
+  // field assignment here -- that was only ever correct until the NEXT
+  // round's refreshWorldViews() call reset them from (empty) world truth,
+  // per game-core's wave-4 finding "A2-truth-resumeHarness-field-writes".
+  // seedWorldTruthFromSession writes each 1.x field into its
+  // world.modules namespace (idempotent via the
+  // `claude_rpg.stores_seeded` marker) and refreshes the session's views
+  // from that namespace, exactly like bin.ts's runLoad() call site
+  // (ADDENDUM-cli-display WO-A2T-5) -- mirroring production's ONE seed
+  // path instead of this helper re-deriving its own.
+  const seedReport = seedWorldTruthFromSession(session, savedSession);
+
+  // Fields NOT covered by the design doc's view table stay direct restores.
   session.partyState = restoredParty;
-  if (restoredEconomies.size > 0) session.districtEconomies = restoredEconomies;
-  session.activeOpportunities = restoredOpportunities;
-  session.resolvedOpportunities = restoredResolvedOpps;
   if (restoredArcSnapshot) session.arcSnapshot = restoredArcSnapshot;
   session.endgameTriggers = restoredEndgameTriggers;
   if (restoredFinale) session.finaleOutline = restoredFinale;
 
-  return wrapSession(session, callLog);
+  return wrapSession(session, callLog, seedReport);
 }

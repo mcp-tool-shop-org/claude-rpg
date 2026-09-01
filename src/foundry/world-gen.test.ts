@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateWorldGenProposal, generateWorld, KNOWN_WORLDGEN_GENRES } from './world-gen.js';
+import { validateWorldGenProposal, generateWorld, proposeWorld, instantiateWorld, KNOWN_WORLDGEN_GENRES } from './world-gen.js';
 import type { WorldGenProposal, WorldGenAttemptInfo } from './world-gen.js';
 import type { ClaudeClient } from '../claude-client.js';
 import { Engine } from '@ai-rpg-engine/core';
@@ -1200,5 +1200,76 @@ describe('generateWorld WO-A1-3: quest mapping — the synthesized offer trigger
         message: expect.stringContaining('Quest "q-blank" failed shape validation'),
       }),
     );
+  });
+});
+
+// WO-A4-6 (slice A4, §4): generateWorld's LLM half (prompt/retry/validate,
+// now proposeWorld) and engine-construction half (now instantiateWorld) were
+// one function before this slice. These proofs pin the split's contract:
+// proposeWorld never touches an Engine, instantiateWorld never touches a
+// ClaudeClient, and generateWorld's own composition of the two remains
+// byte-identical to calling instantiateWorld directly with the same
+// proposal + seed (the "generated-world resume" precondition A5/cli-display
+// builds on: rebuilding via instantiateWorld(savedProposal, savedSeed) must
+// reproduce the SAME engine a live generateWorld call would have built).
+describe('proposeWorld / instantiateWorld split (WO-A4-6)', () => {
+  it('proposeWorld resolves the validated proposal with no engine field on the result', async () => {
+    const proposal = makeValidProposal();
+    const client = makeMockClient(proposal);
+
+    const result = await proposeWorld(client, 'A test world');
+
+    expect(result.ok).toBe(true);
+    expect(result.proposal).toEqual(proposal);
+    expect(result.quests).toEqual(proposal.quests);
+    expect(result.tone).toBe(proposal.toneGuide);
+    expect('engine' in result).toBe(false);
+  });
+
+  it('proposeWorld surfaces the same accumulated errors/errorKind generateWorld used to return on a shape-validation failure', async () => {
+    const proposal = makeValidProposal();
+    proposal.npcs[0].id = '';
+    const client = makeMockClient(proposal);
+
+    const result = await proposeWorld(client, 'A test world');
+
+    expect(result.ok).toBe(false);
+    expect(result.errorKind).toBe('validation');
+    expect(result.errors).toContain('NPC missing required field: id');
+  });
+
+  it('instantiateWorld builds a byte-identical engine from the same proposal shape + seed, with no LLM client involved', () => {
+    const engineA = instantiateWorld(makeValidProposal(), 42);
+    const engineB = instantiateWorld(makeValidProposal(), 42);
+
+    expect(engineA.serialize()).toBe(engineB.serialize());
+    expect(engineA.store.state.meta.seed).toBe(42);
+  });
+
+  it('generateWorld composing proposeWorld + instantiateWorld reproduces the same engine a direct instantiateWorld(proposal, seed) call would -- the resume precondition', async () => {
+    const proposal = makeValidProposal();
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'A test world', 7);
+
+    expect(result.ok).toBe(true);
+    expect(result.seed).toBe(7);
+
+    const resumed = instantiateWorld(makeValidProposal(), result.seed);
+    expect(result.engine!.serialize()).toBe(resumed.serialize());
+  });
+
+  it('generateWorld resolves and returns a seed even on a failed (transient) attempt', async () => {
+    const client: ClaudeClient = {
+      model: 'test-model',
+      generate: vi.fn(),
+      generateStructured: vi.fn().mockResolvedValue({ ok: false, data: null, raw: '', error: 'LLM unavailable' }),
+    };
+
+    const result = await generateWorld(client, 'A test world', 13);
+
+    expect(result.ok).toBe(false);
+    expect(result.engine).toBeNull();
+    expect(result.seed).toBe(13);
   });
 });

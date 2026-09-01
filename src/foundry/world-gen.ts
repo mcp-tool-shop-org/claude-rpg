@@ -172,6 +172,17 @@ export type WorldGenResult = {
   /** F-cbc186cb: which failure class `errors` came from. Undefined when ok is true. */
   errorKind?: WorldGenErrorKind;
   /**
+   * WO-A4-6 (slice A4, §4): the seed the world WAS (or would have been, on a
+   * failed attempt) instantiated with -- resolved once by `generateWorld`
+   * before the LLM call (`seed ?? Math.floor(Math.random() * 100000)`, moved
+   * out of `instantiateWorld` so a caller resolving its own seed, e.g. a
+   * resumed generated-world load, can reuse the saved one deterministically).
+   * Present on both branches: a caller building the `SavedSession.worldSeed`
+   * field for a fresh game (runNew, game-core/cli-display territory) needs it
+   * whether or not this particular generation attempt succeeded.
+   */
+  seed: number;
+  /**
    * FT-BR-006: Generated quests from the LLM proposal, in the RAW proposal
    * shape (callers already consume this shape -- kept stable, additive
    * only). WO-A1-3 (§3): this is no longer the only place quests live -- a
@@ -621,34 +632,46 @@ function mapQuestsFromProposal(proposal: WorldGenProposal, logger?: DebugLogger)
 }
 
 /**
- * Generate a world from a creative prompt.
+ * WO-A4-6 (slice A4, §4): the LLM half of `generateWorld` -- prompt build,
+ * structured call, shape validation, retries -- everything up to a validated
+ * `WorldGenProposal`. Split out of `generateWorld` (behavior-preserving: the
+ * retry loop, error accumulation, and errorKind discriminant below are
+ * byte-identical to what `generateWorld` ran inline before this slice) so a
+ * caller resuming a generated world from a saved proposal (cli-display's
+ * `runLoad`, doc §4) never needs an LLM client at all -- it goes straight to
+ * `instantiateWorld` with the proposal it already has.
+ */
+export type WorldGenProposalResult = {
+  ok: boolean;
+  proposal: WorldGenProposal | null;
+  tone: string;
+  errors: string[];
+  /** F-cbc186cb: which failure class `errors` came from. Undefined when ok is true. */
+  errorKind?: WorldGenErrorKind;
+  /** FT-BR-006: raw proposal quest shape (see WorldGenResult.quests doc). */
+  quests: WorldGenProposal['quests'];
+};
+
+/**
+ * Generate (and validate) a world proposal from a creative prompt. The LLM
+ * half of `generateWorld` -- see `instantiateWorld` for the engine
+ * construction half and `generateWorld` for the composition of the two.
  * @param client - LLM client for structured generation
  * @param worldPrompt - Creative world description
- * @param seed - Optional deterministic seed for reproducible world generation.
- *               When omitted, a random seed is used.
  * @param opts.onAttempt - F-9da15f24: optional callback fired immediately before
  *               each RETRIED attempt (never the initial one), so a caller (e.g.
  *               bin.ts's spinner) can distinguish a validation/transient retry
  *               from one slow call. Omitted by every current caller -- behavior
  *               is unchanged when absent.
- * @param opts.logger - F-e23cc3ac: optional structured logger (src/game/debug-logger.ts).
- *               When provided (and enabled), the routine LLM-variance diagnostics
- *               below (missing NPC stats, resolved id collisions, skipped
- *               malformed NPCs, etc.) are recorded through it instead of printing
- *               unconditionally, mirroring immersion-runtime.ts's debugMode gating
- *               in this same domain. Omitted entirely, a normal (non-debug) run
- *               stays silent on these expected, already-handled cases.
  */
-export async function generateWorld(
+export async function proposeWorld(
   client: ClaudeClient,
   worldPrompt: string,
-  seed?: number,
   opts?: {
     onAttempt?: (info: WorldGenAttemptInfo) => void;
-    logger?: DebugLogger;
   },
-): Promise<WorldGenResult> {
-  const { onAttempt, logger } = opts ?? {};
+): Promise<WorldGenProposalResult> {
+  const { onAttempt } = opts ?? {};
   const prompt = buildWorldGenPrompt(worldPrompt);
 
   // F-cbc186cb: generate-plus-validate is retried internally before surfacing anything
@@ -724,7 +747,6 @@ export async function generateWorld(
   if (errors.length > 0 || !attemptProposal) {
     return {
       ok: false,
-      engine: null,
       proposal: attemptProposal,
       tone: attemptProposal?.toneGuide ?? '',
       errors: allErrors,
@@ -733,8 +755,38 @@ export async function generateWorld(
     };
   }
 
-  const proposal = attemptProposal;
+  return {
+    ok: true,
+    proposal: attemptProposal,
+    tone: attemptProposal.toneGuide ?? '',
+    errors: [],
+    quests: attemptProposal.quests ?? [],
+  };
+}
 
+/**
+ * WO-A4-6 (slice A4, §4): the engine-construction half of `generateWorld` --
+ * everything from ruleset assembly through the faction-cognition membership
+ * reconciliation, moved intact (byte-identical) out of `generateWorld`'s
+ * body. Exported so a caller can rebuild an engine from a proposal it already
+ * has validated (a resumed generated-world load, doc §4) without an LLM
+ * client. Takes the ALREADY-RESOLVED seed the world is to be built with --
+ * the `seed ?? Math.floor(Math.random() * 100000)` fallback that used to live
+ * here moved OUTSIDE, into `generateWorld`, so a resumed world can pass the
+ * saved seed straight through instead of this function silently drawing a
+ * new random one.
+ * @param proposal - a validated `WorldGenProposal` (e.g. from `proposeWorld`,
+ *               or `JSON.parse`d from a `SavedSession.worldGenProposal`).
+ * @param seed - the deterministic seed to construct the engine with.
+ * @param logger - F-e23cc3ac: optional structured logger (src/game/debug-logger.ts).
+ *               When provided (and enabled), the routine LLM-variance diagnostics
+ *               below (missing NPC stats, resolved id collisions, skipped
+ *               malformed NPCs, etc.) are recorded through it instead of printing
+ *               unconditionally, mirroring immersion-runtime.ts's debugMode gating
+ *               in this same domain. Omitted entirely, a normal (non-debug) run
+ *               stays silent on these expected, already-handled cases.
+ */
+export function instantiateWorld(proposal: WorldGenProposal, seed: number, logger?: DebugLogger): Engine {
   // Build ruleset
   const ruleset: RulesetDefinition = {
     id: proposal.ruleset.id,
@@ -864,7 +916,7 @@ export async function generateWorld(
       modules: [],
       contentPacks: [],
     },
-    seed: seed ?? Math.floor(Math.random() * 100000),
+    seed,
     ruleset,
     // WO-A1-1 (§1): traversal/status/combat/cognition-core/perception-filter/
     // simulation-inspector are the ONLY hand-listed modules left -- kept
@@ -1074,6 +1126,57 @@ export async function generateWorld(
     );
   }
 
+  return engine;
+}
+
+/**
+ * Generate a world from a creative prompt. Composes `proposeWorld` (the LLM
+ * half) and `instantiateWorld` (the engine-construction half) -- byte-
+ * identical behavior to the pre-split single function (WO-A4-6, slice A4
+ * §4): the seed fallback that used to run only after a successful proposal
+ * now resolves up front so a failed attempt's `WorldGenResult.seed` is still
+ * populated (a caller building `SavedSession.worldSeed`/`worldGenProposal`
+ * for a fresh game needs the seed regardless of this attempt's outcome), but
+ * this reordering changes nothing observable: the fallback only ever fires
+ * when the caller omitted `seed` in the first place, in which case no test
+ * or caller depends on which random value was drawn.
+ * @param client - LLM client for structured generation
+ * @param worldPrompt - Creative world description
+ * @param seed - Optional deterministic seed for reproducible world generation.
+ *               When omitted, a random seed is used.
+ * @param opts.onAttempt - see `proposeWorld`.
+ * @param opts.logger - see `instantiateWorld`.
+ */
+export async function generateWorld(
+  client: ClaudeClient,
+  worldPrompt: string,
+  seed?: number,
+  opts?: {
+    onAttempt?: (info: WorldGenAttemptInfo) => void;
+    logger?: DebugLogger;
+  },
+): Promise<WorldGenResult> {
+  const { onAttempt, logger } = opts ?? {};
+  const resolvedSeed = seed ?? Math.floor(Math.random() * 100000);
+
+  const proposed = await proposeWorld(client, worldPrompt, { onAttempt });
+
+  if (!proposed.ok || !proposed.proposal) {
+    return {
+      ok: false,
+      engine: null,
+      proposal: proposed.proposal,
+      tone: proposed.tone,
+      errors: proposed.errors,
+      errorKind: proposed.errorKind,
+      quests: proposed.quests,
+      seed: resolvedSeed,
+    };
+  }
+
+  const proposal = proposed.proposal;
+  const engine = instantiateWorld(proposal, resolvedSeed, logger);
+
   return {
     ok: true,
     engine,
@@ -1082,5 +1185,6 @@ export async function generateWorld(
     errors: [],
     // FT-BR-006: Preserve generated quests so callers can consume them
     quests: proposal.quests ?? [],
+    seed: resolvedSeed,
   };
 }

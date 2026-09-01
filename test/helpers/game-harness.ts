@@ -2,6 +2,16 @@
 // Provides a quick way to set up a game, execute turns, and inspect state.
 
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
+// WO-A3-7 (slice A3, run swarm-1788288802-f5a0, wave 6, "tests" domain):
+// the engine package the design doc admits this slice (docs/
+// living-world-slice-a3.md §3) -- already an installed dependency
+// (`grep -n rumor-system package.json` => "@ai-rpg-engine/rumor-system":
+// "^3.11.0") even though nothing in src/ imports it yet on this worktree
+// (game-core's own worktree lands GameSession.rumorEngine; this one cannot
+// see that change until the coordinator merges it in -- see the
+// SEQUENCING note on resumeHarness below, same pattern as WO-A2T-7's
+// world-truth-seed.js import last wave).
+import { RumorEngine, type RumorEngineConfig, type EngineSnapshot } from '@ai-rpg-engine/rumor-system';
 import { GameSession, type GameConfig } from '../../src/game.js';
 import { createFakeClient, createCallLog, type FakeClientOptions, type CallLog } from './fake-claude-client.js';
 import {
@@ -13,10 +23,29 @@ import {
   loadArcSnapshotFromSession,
   loadEndgameTriggersFromSession,
   loadFinaleFromSession,
+  saveSession,
+  type SaveSessionInput,
 } from '../../src/session/session.js';
 import { getPackById } from '../../src/character/packs.js';
 import { validateEngineState } from '../../src/cli/engine-state-validator.js';
 import { TurnHistory } from '../../src/session/history.js';
+
+/**
+ * design doc §3 (locked): "constructed on a new game with
+ * `{ stanceFadeTicks: 24 }`... restored on load with
+ * `RumorEngine.deserializeSafe(snapshot, config)`". Shared here so the
+ * harness and the test file pin the identical config the (not-yet-landed)
+ * production constructor is contracted to use.
+ */
+export const RUMOR_ENGINE_CONFIG: RumorEngineConfig = { stanceFadeTicks: 24 };
+
+/**
+ * Structured warnings from RumorEngine.deserializeSafe(), surfaced the same
+ * way seedReport surfaces seedWorldTruthFromSession()'s report -- never
+ * thrown, never shown to the player (design doc §3: "its warnings go to the
+ * debug log, never the player").
+ */
+export type RumorRestoreWarning = { field: string; message: string };
 // WO-A2T-7 (slice A2-truth, run swarm-1788288802-f5a0, wave 5): game-core's
 // wave-4 finding "A2-truth-resumeHarness-field-writes" flagged that this
 // helper directly assigned the eleven now-view session fields from a loaded
@@ -64,10 +93,24 @@ export type GameHarness = {
    * inferring it from side effects.
    */
   seedReport?: WorldTruthSeedReport;
+  /**
+   * WO-A3-7: RumorEngine.deserializeSafe()'s structured warnings when
+   * resumeHarness() restored a `rumorEngine` snapshot off a v3 save.
+   * Undefined on createHarness() (no snapshot to restore) and on a
+   * resumeHarness() call against a save with no `rumorEngine` field (v1/v2
+   * -- the engine starts fresh via GameConfig's own default, no snapshot to
+   * warn about).
+   */
+  rumorRestoreWarnings?: RumorRestoreWarning[];
 };
 
 /** Wraps a constructed GameSession in the shared GameHarness shape -- the one thing createHarness() and resumeHarness() must never drift apart on. */
-function wrapSession(session: GameSession, callLog: CallLog, seedReport?: WorldTruthSeedReport): GameHarness {
+function wrapSession(
+  session: GameSession,
+  callLog: CallLog,
+  seedReport?: WorldTruthSeedReport,
+  rumorRestoreWarnings?: RumorRestoreWarning[],
+): GameHarness {
   return {
     session,
     callLog,
@@ -79,6 +122,7 @@ function wrapSession(session: GameSession, callLog: CallLog, seedReport?: WorldT
       return turns.length > 0 ? turns[turns.length - 1].verb : undefined;
     },
     seedReport,
+    rumorRestoreWarnings,
   };
 }
 
@@ -185,11 +229,47 @@ export async function resumeHarness(
   const restoredEndgameTriggers = loadEndgameTriggersFromSession(savedSession);
   const restoredFinale = loadFinaleFromSession(savedSession);
 
+  // WO-A3-7 (slice A3 §3, design lock 3): restore the RumorEngine from a v3
+  // save's `rumorEngine` snapshot the same way bin.ts's runLoad is
+  // contracted to -- "restored on load with
+  // RumorEngine.deserializeSafe(snapshot, config)", warnings to the debug
+  // log/harness result, never the player.
+  //
+  // SEQUENCING (ADDENDUM-COMMON honesty floor, same shape as WO-A2T-7's
+  // world-truth-seed.js gap last wave): `SavedSession` on THIS worktree
+  // predates game-core's own isolated worktree adding the
+  // `rumorEngine?: string` field (design doc §1) -- `grep -n "rumorEngine"
+  // src/session/session.ts` on this tree returns nothing today. Reading it
+  // through an inline cast rather than the (not-yet-existing) typed
+  // property is deliberate, not a bug: a v1/v2 save (and this worktree's
+  // current view of ANY save, until the coordinator merges game-core's
+  // change in) simply has no such property, so this resolves to `undefined`
+  // exactly like every other optional legacy field on an old save --
+  // `restoredRumorEngine` stays `undefined` and GameSession's own
+  // constructor default (`config.rumorEngine ?? new RumorEngine(...)`,
+  // assumed to mirror the existing `journal` pattern -- see this file's
+  // `saveHarness` doc comment for the full assumption) takes over, exactly
+  // as it would for a save that genuinely predates this slice.
+  const rumorSnapshotRaw = (savedSession as unknown as { rumorEngine?: string }).rumorEngine;
+  let restoredRumorEngine: RumorEngine | undefined;
+  let rumorRestoreWarnings: RumorRestoreWarning[] | undefined;
+  if (rumorSnapshotRaw) {
+    const parsed = JSON.parse(rumorSnapshotRaw) as EngineSnapshot;
+    const restored = RumorEngine.deserializeSafe(parsed, RUMOR_ENGINE_CONFIG);
+    restoredRumorEngine = restored.engine;
+    rumorRestoreWarnings = restored.warnings;
+  }
+
   const callLog = opts.clientOpts?.callLog ?? createCallLog();
   const clientOpts = { ...opts.clientOpts, callLog };
   const client = createFakeClient(clientOpts);
 
-  const session = new GameSession({
+  // GameConfig doesn't declare `rumorEngine` on this worktree yet (same
+  // cross-domain gap as the snapshot read above) -- the widened local type
+  // lets this helper pass it through today without an `any` escape hatch,
+  // and costs nothing once game-core's own worktree lands the real field
+  // (a structural superset of GameConfig is still assignable to it).
+  const gameConfig: GameConfig & { rumorEngine?: RumorEngine } = {
     engine,
     client,
     tone: savedSession.tone,
@@ -206,8 +286,10 @@ export async function resumeHarness(
     // Coordinator stitch (wave 18): mirror bin.ts's conversation-memory
     // restoration (F-462792bb, Director ruling: persisted).
     npcConversations: loadNpcConversationsFromSession(savedSession),
+    ...(restoredRumorEngine ? { rumorEngine: restoredRumorEngine } : {}),
     ...opts.gameOpts,
-  });
+  };
+  const session = new GameSession(gameConfig);
 
   // WO-A2T-7: the eleven world-truth VIEW fields (design doc §3 --
   // activePressures/resolvedPressures/activeOpportunities/
@@ -231,5 +313,62 @@ export async function resumeHarness(
   session.endgameTriggers = restoredEndgameTriggers;
   if (restoredFinale) session.finaleOutline = restoredFinale;
 
-  return wrapSession(session, callLog, seedReport);
+  return wrapSession(session, callLog, seedReport, rumorRestoreWarnings);
+}
+
+/**
+ * WO-A3-7 (slice A3, run swarm-1788288802-f5a0, wave 6, "tests" domain):
+ * saves a harness's live session through the REAL production `saveSession()`
+ * (never a hand-rolled JSON.stringify -- the whole point of "full-fidelity"
+ * round trips is exercising the actual write path), to `savePath`.
+ *
+ * Field selection mirrors bin.ts's `buildSaveInput` (src/bin.ts, current
+ * worktree state) MINUS the ten legacy world-truth fields design lock 2
+ * retires this slice (`playerRumors`, `activePressures`, `resolvedPressures`,
+ * `npcAgencySnapshot`'s two source arrays, `npcObligations`,
+ * `consequenceChains`, `partyState`, `districtEconomies`,
+ * `activeOpportunities`, `leverageSnapshot` -- the last has no
+ * SaveSessionInput field to begin with, it's derived from `profile` inside
+ * saveSession() itself) PLUS `rumorEngine` (design lock 3).
+ * `resolvedOpportunities` stays (design lock 2: session history, not world
+ * truth).
+ *
+ * SEQUENCING: `SaveSessionInput` on this worktree still declares (and
+ * saveSession() still writes) the ten legacy fields -- game-core's own
+ * isolated worktree is the one that deletes them (design doc §2: "a compile
+ * error is the tripwire for any caller still passing them"). This function
+ * deliberately does NOT pass them (matching what the type will require
+ * post-merge), which means the CURRENT saveSession() implementation writes
+ * a schema v2 save missing nine of its normal optional fields until the
+ * coordinator merges game-core's change in -- the correct, forward-looking
+ * red for this wave's contract, not a bug in this helper. `rumorEngine` is
+ * passed as the live `RumorEngine` instance (mirrors the existing `journal`
+ * field's already-constructed-object convention, never a pre-serialized
+ * string) through the same widened-type pattern resumeHarness() uses above,
+ * since SaveSessionInput doesn't declare it here yet either.
+ */
+export async function saveHarness(h: GameHarness, savePath: string): Promise<void> {
+  const session = h.session;
+  const input: SaveSessionInput & { rumorEngine?: RumorEngine } = {
+    engine: session.engine,
+    history: session.history,
+    tone: session.tone,
+    savePath,
+    worldPrompt: session.worldPrompt,
+    profile: session.profile,
+    packId: session.packId,
+    npcConversations: session.npcConversations,
+    genre: session.genre,
+    journal: session.journal,
+    resolvedOpportunities: session.resolvedOpportunities,
+    arcSnapshot: session.arcSnapshot,
+    endgameTriggers: session.endgameTriggers,
+    finaleOutline: session.finaleOutline,
+    campaignStatus: session.campaignStatus,
+    // WO-A3-7 assumption -- see this function's doc comment above.
+    ...((session as unknown as { rumorEngine?: RumorEngine }).rumorEngine
+      ? { rumorEngine: (session as unknown as { rumorEngine?: RumorEngine }).rumorEngine }
+      : {}),
+  };
+  await saveSession(input as SaveSessionInput);
 }

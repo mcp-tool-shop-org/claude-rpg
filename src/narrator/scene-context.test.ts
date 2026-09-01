@@ -197,4 +197,144 @@ describe('describeEvent combat.encounter.cleared (F-88c8848b)', () => {
 
     expect(context.narrationInput.recentEvents).toEqual(['event']);
   });
+
+  // F-2218267d legacy note doesn't apply here; this block covers the
+  // pre-3.11 shape (no `outcome` key at all) to prove the '?? victory'
+  // default (design lock 1) keeps existing 3.10 fixtures/events valid.
+  it('treats a payload with no outcome key as victory (legacy 3.10 shape)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'combat.encounter.cleared',
+        tick: 1,
+        payload: {
+          zoneId: engine.world.locationId,
+          finalDefeatEventId: 'evt-defeat-legacy',
+          participants: {
+            survivors: [],
+            finalOpponent: { id: 'goblin-legacy', name: 'Old Fixture Goblin' },
+          },
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Encounter cleared: Old Fixture Goblin defeated',
+    ]);
+  });
+});
+
+// F-3e09c128 / F-461771d2: engine 3.11 (engagement-core.ts:192-197 victory
+// vs :225-272 retreat) added `outcome: 'victory' | 'retreat'` to
+// combat.encounter.cleared. Before this fix, describeEvent ignored
+// `outcome` entirely and always rendered the victory wording — including
+// for the last-hostile-flee retreat branch (engagement-core.ts:258-272),
+// which DOES populate finalOpponent.name (the fleeing entity's own name),
+// so a player watching the last hostile flee would see "<Name> defeated"
+// for an entity that was never defeated. OBSERVED RED (before this fix):
+// both cases below returned 'Encounter cleared: <Name> defeated' /
+// 'Encounter cleared' instead of the retreat wording asserted here.
+describe('describeEvent combat.encounter.cleared retreat outcome (F-3e09c128, F-461771d2)', () => {
+  it('names the entity that fled, and never says "defeated" (last-hostile-flee branch)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'combat.encounter.cleared',
+        tick: 1,
+        payload: {
+          zoneId: engine.world.locationId,
+          outcome: 'retreat',
+          disengageEventId: 'evt-flee-1',
+          participants: {
+            survivors: [],
+            finalOpponent: { id: 'goblin-3', name: 'Goblin Raider' },
+          },
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Encounter ended: Goblin Raider withdrew',
+    ]);
+    expect(context.narrationInput.recentEvents[0]).not.toContain('defeated');
+  });
+
+  it('falls back to a generic non-"defeated" message when the player flees (no finalOpponent)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'combat.encounter.cleared',
+        tick: 1,
+        payload: {
+          zoneId: engine.world.locationId,
+          outcome: 'retreat',
+          disengageEventId: 'evt-flee-2',
+          participants: {
+            survivors: [],
+          },
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Encounter ended without a kill',
+    ]);
+    expect(context.narrationInput.recentEvents[0]).not.toContain('defeated');
+  });
+});
+
+// F-45574e0a: engine 3.11 (traversal-core.ts:242-252 zoneMoodFields) adds an
+// optional `moodHint` district-mood aside to world.zone.entered's payload.
+// OBSERVED RED (before this fix): describeEvent read only
+// `p.zoneName ?? p.zoneId`, so the first case below returned bare
+// 'Entered Old Chapel' with the moodHint silently dropped.
+describe('describeEvent world.zone.entered moodHint (F-45574e0a)', () => {
+  it('appends moodHint when the payload provides one', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'world.zone.entered',
+        tick: 1,
+        payload: {
+          zoneId: 'old-chapel',
+          zoneName: 'Old Chapel',
+          previousZoneId: 'chapel-entrance',
+          tags: [],
+          moodHint: 'a tense hush hangs over the district',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Entered Old Chapel — a tense hush hangs over the district',
+    ]);
+  });
+
+  it('renders byte-identical to the pre-fix output when moodHint is absent (unmapped zone)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'world.zone.entered',
+        tick: 1,
+        payload: {
+          zoneId: 'old-chapel',
+          zoneName: 'Old Chapel',
+          previousZoneId: 'chapel-entrance',
+          tags: [],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual(['Entered Old Chapel']);
+  });
 });

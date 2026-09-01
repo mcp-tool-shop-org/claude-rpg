@@ -143,14 +143,37 @@ function describeEvent(event: ResolvedEvent): string {
       // when the last hostile in the player's zone is defeated. Payload-
       // driven with a sensible fallback, matching combat.entity.defeated's
       // house style above.
+      //
+      // F-3e09c128: engine 3.11 (engagement-core.ts:192-197 victory branch
+      // vs :225-272 retreat branches) added `outcome: 'victory' | 'retreat'`
+      // to this same payload. Absent outcome means victory (3.10-shaped
+      // events/fixtures stay valid — design lock 1, wave-2 ADDENDUM-COMMON).
+      // Retreat is never rendered as a defeat: the last-hostile-flee branch
+      // (engagement-core.ts:258-272) populates finalOpponent.name with the
+      // FLEEING entity's own name, so reusing the victory wording here would
+      // read as factually backwards ("<Name> defeated" for an entity that
+      // fled, not died).
       const participants = p.participants as
         | { finalOpponent?: { name?: string } }
         | undefined;
       const name = participants?.finalOpponent?.name;
+      const outcome = (p as { outcome?: string }).outcome ?? 'victory';
+      if (outcome === 'retreat') {
+        return name ? `Encounter ended: ${name} withdrew` : 'Encounter ended without a kill';
+      }
       return name ? `Encounter cleared: ${name} defeated` : 'Encounter cleared';
     }
-    case 'world.zone.entered':
-      return `Entered ${p.zoneName ?? p.zoneId ?? 'a new area'}`;
+    case 'world.zone.entered': {
+      // F-45574e0a: engine 3.11 (traversal-core.ts:242-252 zoneMoodFields,
+      // attached at :140,217,300) carries an optional `moodHint` district-
+      // mood aside on this payload — the engine's own CLI renderer surfaces
+      // it (packages/terminal-ui/src/renderer.ts:874-875). Append it in the
+      // same truthy-gated style the engine itself uses; byte-identical
+      // output when the zone is unmapped (moodHint absent).
+      const moodHint = (p as { moodHint?: string }).moodHint;
+      const zoneLabel = p.zoneName ?? p.zoneId ?? 'a new area';
+      return moodHint ? `Entered ${zoneLabel} — ${moodHint}` : `Entered ${zoneLabel}`;
+    }
     case 'resource.changed':
       return `${p.resourceId}: ${p.oldValue} → ${p.newValue}`;
     case 'dialogue.choice.selected':

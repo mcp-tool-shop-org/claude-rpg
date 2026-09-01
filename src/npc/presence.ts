@@ -3,6 +3,7 @@
 // v1.2: NPC Agency phase 1
 
 import type { NpcProfile, NpcActionResult } from '@ai-rpg-engine/modules';
+import { formatNpcAgencyForNarrator } from '@ai-rpg-engine/modules';
 
 // --- Dialogue Presence ---
 
@@ -55,11 +56,22 @@ export function buildNpcPresenceForDialogue(profile: NpcProfile): string {
 /**
  * Compact NPC action hints for narration prompt injection (~15 tokens each).
  * Describes observable NPC behavior without revealing motive.
+ *
+ * F-c9bbfea2: this used to hand-roll `results.slice(0, 2).map((r) =>
+ * r.narratorHint)` — a duplicate of the engine's own
+ * `formatNpcAgencyForNarrator` (installed dist:
+ * node_modules/@ai-rpg-engine/modules/dist/npc-agency.js:1216-1218), which
+ * does the exact same slice(0,2)/map with no comment explaining the
+ * divergence (unlike this file's deriveNpcPersonality, which documents in
+ * detail why IT deliberately does not reuse an engine equivalent). Verified
+ * the engine's cap is also 2 — not a different value — so there is no
+ * intentional delta to preserve; delegate instead of shadowing it under a
+ * similar-sounding local name (design lock 3, wave-2 ADDENDUM-COMMON).
  */
 export function buildNpcPresenceForNarrator(
   results: NpcActionResult[],
 ): string[] {
-  return results.slice(0, 2).map((r) => r.narratorHint);
+  return formatNpcAgencyForNarrator(results);
 }
 
 /**

@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { saveSession, loadSession, loadNpcConversationsFromSession, type SaveSessionInput } from './session.js';
 import { TurnHistory } from './history.js';
+import { CURRENT_SCHEMA_VERSION } from './migrate.js';
 
 // Minimal engine mock for save/load round-trip
 function createMockEngine() {
@@ -141,6 +142,82 @@ describe('saveSession with SaveSessionInput (PB-005)', () => {
     const raw = await readFile(savePath, 'utf-8');
     const data = JSON.parse(raw);
     expect(data.npcConversations).toBeUndefined();
+  });
+});
+
+// WO-A3-1 (slice A3 §1/§2, design lock 2): a v3 saveSession NEVER emits the
+// ten legacy world-truth fields (playerRumors, activePressures,
+// resolvedPressures, npcAgencySnapshot, npcObligations, consequenceChains,
+// partyState, districtEconomies, activeOpportunities, leverageSnapshot) —
+// engine.serialize() (already the first field written) carries them inside
+// the engine's own world-truth namespaces instead. Before this wave,
+// CURRENT_SCHEMA_VERSION was 2 and SaveSessionInput still had all ten as
+// live fields a caller could set and see written straight to disk.
+describe('saveSession — schema v3 write path (WO-A3-1, design lock 2)', () => {
+  it('writes schemaVersion: 3', async () => {
+    const savePath = join(testDir, 'v3-schema.json');
+    await saveSession({
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+    });
+
+    const data = JSON.parse(await readFile(savePath, 'utf-8'));
+    expect(data.schemaVersion).toBe(3);
+    expect(data.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+  });
+
+  it('a v3 save has NONE of the ten legacy world-truth keys, even when SaveSessionInput carries no fields for them at all (the type no longer offers them)', async () => {
+    const savePath = join(testDir, 'v3-no-legacy.json');
+    await saveSession({
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      resolvedOpportunities: [{ opportunityId: 'o1' } as never],
+      rumorEngine: JSON.stringify({ rumors: [], stances: [] }),
+    });
+
+    const data = JSON.parse(await readFile(savePath, 'utf-8'));
+    for (const key of [
+      'playerRumors', 'activePressures', 'resolvedPressures', 'npcAgencySnapshot',
+      'npcObligations', 'consequenceChains', 'partyState', 'districtEconomies',
+      'activeOpportunities', 'leverageSnapshot',
+    ]) {
+      expect(Object.prototype.hasOwnProperty.call(data, key)).toBe(false);
+    }
+    // resolvedOpportunities is session HISTORY, not one of the ten legacy
+    // world-truth fields — it IS still written.
+    expect(data.resolvedOpportunities).toBeDefined();
+  });
+
+  it('writes the rumorEngine field through unchanged (pre-serialized by GameSession.getRumorEngineSnapshot(), WO-A3-2)', async () => {
+    const savePath = join(testDir, 'v3-rumor-engine.json');
+    const snapshot = JSON.stringify({ rumors: [{ id: 'r1' }], stances: [] });
+    await saveSession({
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      rumorEngine: snapshot,
+    });
+
+    const data = JSON.parse(await readFile(savePath, 'utf-8'));
+    expect(data.rumorEngine).toBe(snapshot);
+  });
+
+  it('omits rumorEngine when not provided', async () => {
+    const savePath = join(testDir, 'v3-no-rumor-engine.json');
+    await saveSession({
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+    });
+
+    const data = JSON.parse(await readFile(savePath, 'utf-8'));
+    expect(data.rumorEngine).toBeUndefined();
   });
 });
 

@@ -27,6 +27,7 @@ import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile, getReputation } from '@ai-rpg-engine/character-profile';
 import type { OpportunityState, PlayerRumor } from '@ai-rpg-engine/modules';
 import { setPlayerRumorState, getLeverageState } from '@ai-rpg-engine/modules';
+import { RumorEngine } from '@ai-rpg-engine/rumor-system';
 // WO-A2-5 (slice A2 §7, proofs): the same world-truth readers/setters
 // game.ts's own refreshWorldViews()/write-through paths use, verified
 // against the installed 3.11 dist (see game.ts's own import doc comment).
@@ -2661,8 +2662,6 @@ describe('Slice A2-truth (WO-A2T-2/3/4): reputation composition + leverage unifi
       packId: 'chapel-threshold',
       genre: h.session.genre,
       profile: h.session.profile,
-      playerRumors: h.session.playerRumors,
-      activePressures: h.session.activePressures,
     });
 
     const loaded = await loadSession(savePath);
@@ -2674,5 +2673,159 @@ describe('Slice A2-truth (WO-A2T-2/3/4): reputation composition + leverage unifi
     // read it back correctly.
     expect(loadedProfile).not.toBeNull();
     expect(getReputation(loadedProfile!, CHAPEL_UNDEAD)).toBe(-20);
+  });
+});
+
+// WO-A3-2 (slice A3 §3): the host-owned RumorEngine instance — construction,
+// the addRumor mirror, runWorldRound's tick + post-round sweep ordering,
+// and save/restore via getRumorEngineSnapshot()/GameConfig.rumorEngineSnapshot.
+describe('Slice A3 (WO-A3-2): the RumorEngine instance', () => {
+  function makeTestRumor(overrides: Partial<PlayerRumor> = {}): PlayerRumor {
+    return {
+      id: 'test-rumor-1',
+      claim: 'defeated the Bone Collector',
+      subjectDescriptor: 'a grim wanderer',
+      sourceEvent: 'milestone',
+      confidence: 0.8,
+      distortion: 0,
+      mutationCount: 0,
+      valence: 'heroic',
+      spreadTo: [],
+      originTick: 0,
+      ...overrides,
+    };
+  }
+
+  it('a new game constructs a fresh, empty RumorEngine', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    expect(h.session.rumorEngine).toBeInstanceOf(RumorEngine);
+    expect(h.session.rumorEngine.activeCount()).toBe(0);
+  });
+
+  it('addRumor mirrors a real, non-suppressed ledger rumor into the RumorEngine (subject "player", key = ledger id)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const addRumor = (h.session as unknown as {
+      addRumor: (rumor: PlayerRumor) => void;
+    }).addRumor.bind(h.session);
+
+    const rumor = makeTestRumor({ id: 'ledger-heroic-1', originFactionId: 'chapel-undead' });
+    addRumor(rumor);
+
+    expect(h.session.playerRumors.some((r) => r.id === 'ledger-heroic-1')).toBe(true);
+    const mirrored = h.session.rumorEngine.findBySubjectKey('player', 'ledger-heroic-1');
+    expect(mirrored).toBeDefined();
+    expect(mirrored?.claim).toBe(rumor.claim);
+    expect(mirrored?.emotionalCharge).toBe(0.6); // heroic
+    expect(mirrored?.factionUptake).toContain('chapel-undead');
+  });
+
+  it("runWorldRound's post-round sweep (mirrorUnmirroredRumors) mirrors a ledger rumor that never went through addRumor", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const mirrorUnmirroredRumors = (h.session as unknown as {
+      mirrorUnmirroredRumors: () => void;
+    }).mirrorUnmirroredRumors.bind(h.session);
+
+    // Simulate a rumor that landed in the ledger WITHOUT going through
+    // GameSession.addRumor -- e.g. the tick's own NPC-originated rumors
+    // (spawnNpcOriginatedRumor + setPlayerRumorState, world-tick.js's
+    // npc-agency step) or game-state.ts's applyFalloutEffects rumor case.
+    h.session.playerRumors = [makeTestRumor({ id: 'bypassed-1', valence: 'tragic' })];
+    expect(h.session.rumorEngine.findBySubjectKey('player', 'bypassed-1')).toBeUndefined();
+
+    mirrorUnmirroredRumors();
+
+    const mirrored = h.session.rumorEngine.findBySubjectKey('player', 'bypassed-1');
+    expect(mirrored).toBeDefined();
+    expect(mirrored?.emotionalCharge).toBe(-0.3); // tragic
+  });
+
+  it('the sweep is idempotent: running it twice over the same ledger creates no sibling (design doc §4, Mirror completeness)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const mirrorUnmirroredRumors = (h.session as unknown as {
+      mirrorUnmirroredRumors: () => void;
+    }).mirrorUnmirroredRumors.bind(h.session);
+
+    h.session.playerRumors = [makeTestRumor({ id: 'idempotent-1' })];
+    mirrorUnmirroredRumors();
+    mirrorUnmirroredRumors();
+
+    expect(h.session.rumorEngine.query({ subject: 'player' })).toHaveLength(1);
+  });
+
+  it('runWorldRound ticks the RumorEngine and sweeps NPC-originated ledger rumors within a real turn (design doc §3 ordering)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    // Simulate the tick's own NPC-originated write (world-tick.js's
+    // npc-agency step calling spawnNpcOriginatedRumor + setPlayerRumorState
+    // directly) landing in the namespace BEFORE this turn's runWorldRound —
+    // proves the sweep picks it up via the real per-turn call chain, not
+    // just the isolated helper call above.
+    const before = getPlayerRumorState(h.session.engine.world);
+    setPlayerRumorState(h.session.engine.world, {
+      rumors: [...before.rumors, makeTestRumor({ id: 'npc-originated-1', valence: 'fearsome' })],
+    });
+
+    await h.play('look around');
+
+    const mirrored = h.session.rumorEngine.findBySubjectKey('player', 'npc-originated-1');
+    expect(mirrored).toBeDefined();
+    expect(mirrored?.emotionalCharge).toBe(-0.6); // fearsome
+  });
+
+  it('getRumorEngineSnapshot() / GameConfig.rumorEngineSnapshot round-trip a mirrored rumor across two sessions', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h1 = createHarness();
+    const addRumor = (h1.session as unknown as {
+      addRumor: (rumor: PlayerRumor) => void;
+    }).addRumor.bind(h1.session);
+    addRumor(makeTestRumor({ id: 'persist-1', originFactionId: 'chapel-undead' }));
+
+    const snapshot = h1.session.getRumorEngineSnapshot();
+    expect(typeof snapshot).toBe('string');
+    expect(JSON.parse(snapshot)).toHaveProperty('rumors');
+
+    const h2 = createHarness({ gameOpts: { rumorEngineSnapshot: snapshot } });
+    const restored = h2.session.rumorEngine.findBySubjectKey('player', 'persist-1');
+    expect(restored).toBeDefined();
+    expect(restored?.claim).toBe('defeated the Bone Collector');
+    expect(restored?.factionUptake).toContain('chapel-undead');
+  });
+
+  it('a rumorEngineSnapshot with one malformed rumor restores every valid entry, logs a warning via debugLog, and never throws (deserializeSafe contract)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const logger = createTestLogger();
+    const goodRumor = {
+      id: 'g1', claim: 'a claim', subject: 'player', key: 'good-1', value: true,
+      originalValue: true, sourceId: 'world', originTick: 1, confidence: 0.5,
+      emotionalCharge: 0, spreadPath: [], mutationCount: 0, factionUptake: [],
+      status: 'spreading', lastSpreadTick: 1,
+    };
+    const badRumor = { id: 'b1' }; // missing every other required Rumor field
+    const snapshot = JSON.stringify({ rumors: [goodRumor, badRumor], stances: [] });
+
+    const h = createHarness({ gameOpts: { rumorEngineSnapshot: snapshot, debugLogger: logger } });
+
+    expect(h.session.rumorEngine.get('g1')).toBeDefined();
+    expect(h.session.rumorEngine.get('b1')).toBeUndefined();
+    const warnEntry = logger.getEntries().find((e) => e.level === 'warn' && e.subsystem === 'rumors');
+    expect(warnEntry).toBeDefined();
+  });
+
+  it('a rumorEngineSnapshot that is not valid JSON falls back to a fresh RumorEngine instead of throwing', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const logger = createTestLogger();
+
+    const h = createHarness({ gameOpts: { rumorEngineSnapshot: 'not valid json {{{', debugLogger: logger } });
+
+    expect(h.session.rumorEngine).toBeInstanceOf(RumorEngine);
+    expect(h.session.rumorEngine.activeCount()).toBe(0);
+    const warnEntry = logger.getEntries().find((e) => e.level === 'warn' && e.subsystem === 'rumors');
+    expect(warnEntry).toBeDefined();
   });
 });

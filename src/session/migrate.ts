@@ -7,7 +7,7 @@ import { isDebugEnabled } from '../game/debug-logger.js';
 import type { PlayerRumor, WorldPressure } from '@ai-rpg-engine/modules';
 
 /** Current schema version. Increment when save shape changes. */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export type MigrationResult = {
   data: Record<string, unknown>;
@@ -243,9 +243,33 @@ function migrateV1toV2(data: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+/**
+ * Migrate from schema v2 to v3 (slice A3 §2, design lock 1). PURE: stamps
+ * `schemaVersion: 3` and touches NOTHING else. The ten legacy world-truth
+ * fields (playerRumors, activePressures, resolvedPressures,
+ * npcAgencySnapshot, npcObligations, consequenceChains, partyState,
+ * districtEconomies, activeOpportunities, leverageSnapshot) MUST survive
+ * this step untouched — the runtime load-time seed
+ * (seedWorldTruthFromSession, game/world-truth-seed.ts) reads them from the
+ * migrated data to populate the engine's world-truth namespaces exactly
+ * once, gated on `world.globals['claude_rpg.stores_seeded']` being absent.
+ * A v3-native save carries that marker inside its own serialized
+ * `engineState`, so this step's job is only to advance the version number a
+ * v1/v2 loader's already-migrated data now carries — never to drop or
+ * transform the legacy fields themselves (that would break the seed for a
+ * save this step never actually adopted into engine state).
+ */
+function migrateV2toV3(data: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...data,
+    schemaVersion: 3,
+  };
+}
+
 /** Ordered list of migrations: index 0 = v1→v2, index 1 = v2→v3, etc. */
 const MIGRATIONS: MigrationFn[] = [
   migrateV1toV2,
+  migrateV2toV3,
 ];
 
 // ─── Public API ─────────────────────────────────────────────

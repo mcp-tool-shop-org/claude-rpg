@@ -18,7 +18,7 @@ vi.mock('./display/play-renderer.js', async (importOriginal) => {
 });
 
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
-import type { ResolvedEvent } from '@ai-rpg-engine/core';
+import type { ResolvedEvent, Engine } from '@ai-rpg-engine/core';
 import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
@@ -26,6 +26,13 @@ import type { OpportunityState, PlayerRumor } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { loadNpcAgencyFromSession, type SavedSession } from './session/session.js';
 import { MAX_PLAYER_RUMORS } from './game/game-state.js';
+// Slice A1 (WO-A1-6, WO-A1-7, docs/living-world-slice-a1.md): generated-world
+// boot + verb-parity + defeat-fallout proofs, built against world-gen.ts's
+// CURRENT (main) generateWorld() signature per the wave-3 game-core
+// addendum -- see the describe block near the end of this file for why.
+import { generateWorld, type WorldGenProposal } from './foundry/world-gen.js';
+import { createFakeClient } from '../test/helpers/fake-claude-client.js';
+import { filterSupportedVerbs, SUPPORTED_VERBS, KNOWN_EXCLUDED_VERBS } from './turn-loop.js';
 
 /**
  * F-4ec3609b (ORDERING contract, cross-domain): turn-loop.ts's executeTurn()
@@ -2062,5 +2069,241 @@ describe('handleConclude retry safety', () => {
     const countAfterSecond = h.session.journal
       .serialize().records.filter((r) => r.category === 'campaign-concluded').length;
     expect(countAfterSecond).toBe(1);
+  });
+});
+
+// Slice A1 (WO-A1-6, WO-A1-7) -- docs/living-world-slice-a1.md, wave-3
+// ADDENDUM-game-core. Built against world-gen.ts's CURRENT (main)
+// generateWorld() signature, per the wave-3 game-core addendum's explicit
+// direction: "runtime-foundry is changing world-gen.ts in this same wave,
+// build your proof against the CURRENT main's generateWorld signature,
+// which stays stable." This worktree's copy of src/foundry/world-gen.ts
+// still constructs the pre-slice hand list (traversalCore, statusCore,
+// combatCore, createCognitionCore, createPerceptionFilter,
+// createEnvironmentCore, createFactionCognition, createRumorPropagation,
+// createDistrictCore({ districts: [] }), createBeliefProvenance,
+// createObserverPresentation, createSimulationInspector) -- NOT
+// buildWorldStack, so player-leverage, crafting-core, opportunity-core,
+// trade-core, economy-core, npc-agency, companion-core, world-tick, and
+// defeat-fallout are all absent from a generated world's engine today.
+//
+// Two of the three proofs below are RED on this worktree's current main for
+// exactly that reason (missing strategic-tier modules); per
+// ADDENDUM-game-core: "If your test cannot construct a generated world with
+// the strategic family until runtime-foundry's change merges, write the
+// proof so it is RED on the current main for the right reason ... the
+// coordinator runs it green at stitch." Observed reds are recorded in this
+// wave's fixes[] description, not re-derived here.
+function makeSliceA1Proposal(): WorldGenProposal {
+  return {
+    title: 'Slice A1 Test World',
+    theme: 'grim frontier',
+    toneGuide: 'terse and dangerous',
+    ruleset: {
+      id: 'a1-test-rules',
+      name: 'A1 Test Rules',
+      // vigor/instinct/will match combat-core.ts's DEFAULT_STAT_MAPPING
+      // (attack: 'vigor', precision: 'instinct', resolve: 'will') -- the
+      // stat mapping world-gen.ts's bare `combatCore` singleton uses (no
+      // custom CombatFormulas passed), so the fixture's hit-chance/damage
+      // math is the engine's real default, not a guess.
+      stats: [
+        { id: 'vigor', name: 'Vigor', default: 10 },
+        { id: 'instinct', name: 'Instinct', default: 10 },
+        { id: 'will', name: 'Will', default: 10 },
+      ],
+      resources: [{ id: 'hp', name: 'HP', default: 20, max: 20 }],
+    },
+    zones: [
+      { id: 'camp', roomId: 'camp', name: 'Camp', tags: [], neighbors: [], light: 8 },
+    ],
+    factions: [
+      { id: 'raiders', name: 'Raiders', disposition: 'hostile', description: 'Bandit crew', memberIds: ['raider-1'] },
+    ],
+    npcs: [
+      {
+        id: 'raider-1',
+        name: 'Raider',
+        type: 'enemy',
+        tags: ['enemy'],
+        zoneId: 'camp',
+        personality: 'aggressive',
+        goals: ['raid the camp'],
+        // Low stats + hp: 1 so a single landed hit defeats it -- the test
+        // still drives the kill through the real combat-core roll (see
+        // killEntityForReal below), not a fabricated event.
+        stats: { vigor: 3, instinct: 3, will: 3 },
+        resources: { hp: 1 },
+        beliefs: [],
+      },
+    ],
+    player: {
+      name: 'Wanderer',
+      // Player omits a `stamina` resource on purpose: combat-core.ts's
+      // attackHandler only enforces the stamina gate `attacker.resources
+      // .stamina !== undefined` -- an authored 0 would gate, an absent key
+      // does not (WO-resourceProfile-doc-vs-behavior). No stamina resource
+      // means killEntityForReal below never needs to refill it between
+      // attempts.
+      stats: { vigor: 15, instinct: 15, will: 10 },
+      resources: { hp: 20 },
+      startZoneId: 'camp',
+    },
+    quests: [],
+  };
+}
+
+/**
+ * Real-kill helper, mirroring ai-rpg-engine's own packages/modules/src/
+ * defeat-fallout.test.ts killEntity(): attacks through the ACTUAL
+ * combat-core hit-chance roll (a deterministic hash of tick/attacker/
+ * target/seed, not "different every run" RNG -- see game.test.ts's
+ * companion combat-reaction describe block above for the same discipline)
+ * until the target's own combat.entity.defeated event fires, rather than
+ * fabricating a TurnResult event by hand. The target's hp: 1 fixture value
+ * makes the very first landed hit lethal; the loop exists only to absorb
+ * an occasional missed roll, not to grind down a durable target.
+ */
+function killEntityForReal(engine: Engine, targetId: string, maxAttempts = 50): ResolvedEvent[] {
+  for (let i = 0; i < maxAttempts; i++) {
+    const events = engine.submitAction('attack', { targetIds: [targetId] });
+    if (events.some((e) => e.type === 'combat.entity.defeated' && e.payload.entityId === targetId)) {
+      return events;
+    }
+  }
+  throw new Error(`killEntityForReal: failed to defeat "${targetId}" within ${maxAttempts} attempts`);
+}
+
+describe('Slice A1 (WO-A1-6, WO-A1-7): generated-world GameSession boot + verb parity + defeat-fallout', () => {
+  it('WO-A1-6: a GameSession boots over a generated world, and registerLeverageVerbs\' {override:true} on sabotage/craft (game.ts ~2790-2815) does not throw', async () => {
+    const client = createFakeClient({ structuredData: makeSliceA1Proposal() });
+    const result = await generateWorld(client, 'a grim frontier camp', 1);
+    expect(result.ok).toBe(true);
+    if (!result.ok || !result.engine) throw new Error('fixture generateWorld() did not succeed -- ' + result.errors.join('; '));
+    const engine = result.engine;
+
+    // Today, world-gen.ts's module list has neither player-leverage nor
+    // crafting-core, so this construction is the FIRST registration of
+    // 'sabotage'/'craft' (the {override:true} option is inert, nothing to
+    // override). Once runtime-foundry's buildWorldStack wiring lands,
+    // player-leverage/crafting-core register those names first and this
+    // exact construction exercises the real override path (the same one
+    // createGame() pack worlds already exercise -- see the "boots on a
+    // pack world" baseline below). Either way, construction must not throw.
+    // (Constructed exactly ONCE against this engine: GameSession's own
+    // constructor is what calls registerLeverageVerbs(), so a second
+    // construction against the SAME engine would itself throw "social is
+    // already registered" -- 'social'/'rumor'/'diplomacy' have no
+    // {override:true} -- which would be a self-inflicted test bug, not a
+    // product one.)
+    let session: GameSession | undefined;
+    expect(() => {
+      session = new GameSession({
+        engine,
+        client,
+        title: result.proposal!.title,
+        tone: 'grim frontier',
+        genre: 'fantasy',
+      });
+    }).not.toThrow();
+    expect(session!.engine.getRegisteredVerbs()).toContain('sabotage');
+    expect(session!.engine.getRegisteredVerbs()).toContain('craft');
+
+    // Baseline: the exact same override path already survives on a pack
+    // world today (player-leverage/crafting-core ARE in starter-fantasy's
+    // module list), proving {override:true} itself is not what's missing --
+    // only the generated-world module family is.
+    const packEngine = createGame();
+    expect(() => new GameSession({
+      engine: packEngine,
+      title: 'Pack baseline',
+      tone: 'dark fantasy',
+      clientConfig: { apiKey: 'test-key' },
+    })).not.toThrow();
+  });
+
+  it('every verb a generated-world engine registers is either supported or a pinned known exclusion (SUPPORTED_VERBS/KNOWN_EXCLUDED_VERBS drift test, extended from turn-loop.test.ts to a generated-world engine)', async () => {
+    const client = createFakeClient({ structuredData: makeSliceA1Proposal() });
+    const result = await generateWorld(client, 'a grim frontier camp', 1);
+    if (!result.ok || !result.engine) throw new Error('fixture generateWorld() did not succeed -- ' + result.errors.join('; '));
+    new GameSession({ engine: result.engine, client, title: 'Generated', tone: 'grim frontier', genre: 'fantasy' });
+
+    const registered = result.engine.getRegisteredVerbs();
+    const unreviewed = registered.filter((v) => !SUPPORTED_VERBS.has(v) && !KNOWN_EXCLUDED_VERBS.has(v));
+    expect(unreviewed).toEqual([]);
+  });
+
+  it('WO-A1-6: a generated world\'s SUPPORTED_VERBS-filtered registered-verb catalog matches a pack world\'s once the strategic family is wired in, for every verb the strategic tier owns', async () => {
+    const client = createFakeClient({ structuredData: makeSliceA1Proposal() });
+    const result = await generateWorld(client, 'a grim frontier camp', 1);
+    if (!result.ok || !result.engine) throw new Error('fixture generateWorld() did not succeed -- ' + result.errors.join('; '));
+    // Constructing the GameSession registers the social/rumor/diplomacy/
+    // sabotage/craft aggregate verbs on both engines identically (game.ts's
+    // registerLeverageVerbs, independent of world source) -- what's NOT
+    // identical yet is what each engine's own module list already
+    // registered before that point.
+    new GameSession({ engine: result.engine, client, title: 'Generated', tone: 'grim frontier', genre: 'fantasy' });
+
+    const packEngine = createGame();
+    new GameSession({ engine: packEngine, title: 'Pack', tone: 'dark fantasy', clientConfig: { apiKey: 'test-key' } });
+
+    // Scoped deliberately: 'speak'/'use'/'equip'/'unequip' are SUPPORTED_VERBS
+    // entries backed by dialogue-core/inventory-core/equipment-core -- none
+    // of which are part of buildWorldStack's default composition
+    // (world-stack.d.ts's own doc comment lists it: environment-core,
+    // faction-cognition, rumor-propagation, district-core, economy-core,
+    // trade-core, companion-core, npc-agency, player-leverage,
+    // crafting-core, opportunity-core, belief-provenance,
+    // observer-presentation, defeat-fallout, world-tick -- no dialogue,
+    // inventory, or equipment module anywhere in that list), and the slice
+    // design doc's §1 hand list doesn't add them either. Asserting full
+    // equality including these would stay permanently RED even after this
+    // slice ships (a scope claim the design doc never makes) -- verified
+    // directly against the installed 3.11 dist and starter-fantasy's own
+    // module list, not assumed. This allowlist documents that boundary,
+    // mirroring the parity sentinel's own "subtract the pack's content-only
+    // modules by an explicit allowlist" discipline (design doc §5).
+    const OUT_OF_SCOPE_FOR_THIS_SLICE = new Set(['speak', 'use', 'equip', 'unequip']);
+    const generatedVerbs = filterSupportedVerbs(result.engine.getRegisteredVerbs()).sort();
+    const packVerbsInStackScope = filterSupportedVerbs(packEngine.getRegisteredVerbs())
+      .filter((v) => !OUT_OF_SCOPE_FOR_THIS_SLICE.has(v))
+      .sort();
+
+    // RED today: 'opportunity' (opportunity-resolution.js's ctx.actions
+    // .registerVerb('opportunity', ...), part of buildWorldStack's default
+    // composition) is registered on the pack engine (starter-fantasy wires
+    // opportunity-core) but not the generated one (world-gen.ts's hand list
+    // has no opportunity-core call at all). The slice's §1 (buildWorldStack
+    // replaces the generated-world module list's strategic tail) closes
+    // exactly this gap -- once it lands, this equality holds without
+    // editing this test.
+    expect(generatedVerbs).toEqual(packVerbsInStackScope);
+  });
+
+  it('WO-A1-7: a real kill in a generated world writes player_heat and reputation_<factionId> into world.globals (behavior delta #1)', async () => {
+    const client = createFakeClient({ structuredData: makeSliceA1Proposal() });
+    const result = await generateWorld(client, 'a grim frontier camp', 1);
+    if (!result.ok || !result.engine) throw new Error('fixture generateWorld() did not succeed -- ' + result.errors.join('; '));
+    const engine = result.engine;
+
+    // Sanity: nothing has written these globals before the kill.
+    expect(engine.world.globals['player_heat']).toBeUndefined();
+    expect(engine.world.globals['reputation_raiders']).toBeUndefined();
+
+    const events = killEntityForReal(engine, 'raider-1');
+    expect(events.some((e) => e.type === 'combat.entity.defeated' && e.payload.entityId === 'raider-1')).toBe(true);
+
+    // Keys and values per the installed 3.11 dist
+    // (node_modules/@ai-rpg-engine/modules/dist/defeat-fallout.js):
+    // heatPerKill defaults to 5 -> world.globals.player_heat; a non-boss
+    // kill's reputationPerKill defaults to -10 -> world.globals
+    // .reputation_<factionId>, keyed off the SAME `factions` roster
+    // buildWorldStack derives from proposal.factions (the raider-1 npc's
+    // 'raiders' membership). RED today: world-gen.ts's module list has no
+    // createDefeatFallout(...) call at all, so combat.entity.defeated has
+    // no listener to write either key -- both assertions above (the
+    // "before" sanity check) and below currently read/stay undefined.
+    expect(engine.world.globals['player_heat']).toBe(5);
+    expect(engine.world.globals['reputation_raiders']).toBe(-10);
   });
 });

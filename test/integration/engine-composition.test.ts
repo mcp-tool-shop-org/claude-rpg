@@ -15,6 +15,10 @@
 import { describe, it, expect } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { createHarness } from '../helpers/game-harness.js';
+import { generateWorld } from '../../src/foundry/world-gen.js';
+import { GameSession } from '../../src/game.js';
+import { createFakeClient } from '../helpers/fake-claude-client.js';
+import { makeParityWorldGenProposal } from '../helpers/world-gen-fixtures.js';
 
 describe('engine composition sentinels — verb-collision override', () => {
   // Gate-goes-RED proof: the installed engine really claims these verbs. If
@@ -52,5 +56,57 @@ describe('engine composition sentinels — verb-collision override', () => {
     const h = createHarness();
     const events = h.session.engine.submitAction('sabotage', { parameters: { subAction: 'unknown' } });
     expect(events.some((e) => e.type === 'sabotage.action.attempted')).toBe(true);
+  });
+});
+
+// WO-A1-10 (slice A1, run swarm-1788288802-f5a0, wave 3, "tests" domain):
+// the collision sentinel at parity. Design doc §5 "Collision sentinels
+// still hold": once world-gen.ts spreads buildWorldStack(...)'s modules
+// (design doc §1) into a generated-world Engine, player-leverage
+// ('sabotage') and crafting-core ('craft') register on a generated-world
+// engine exactly as they do on a pack engine above -- game.ts's
+// registerLeverageVerbs() `{ override: true }` override must cover BOTH
+// world sources, not just pack worlds.
+//
+// RED on current main -- see world-source-parity.test.ts's file-header
+// sequencing note. src/foundry/world-gen.ts's hand list does not yet
+// include player-leverage/crafting-core, so 'sabotage'/'craft' are
+// unregistered on today's generated-world engine and the "already
+// registered" throw this proof requires never fires. Goes green once
+// runtime-foundry's buildWorldStack adoption merges at stitch.
+describe('engine composition sentinels — generated-world verb collision (slice A1, WO-A1-10)', () => {
+  async function buildGeneratedEngine() {
+    const client = createFakeClient({
+      structuredData: makeParityWorldGenProposal({ title: 'Collision Test World' }),
+    });
+    const result = await generateWorld(client, 'a collision test world', 9);
+    if (!result.ok || !result.engine) {
+      throw new Error(`fixture generateWorld() failed: ${result.errors.join('; ')}`);
+    }
+    return result.engine;
+  }
+
+  it('a generated world already registers "sabotage" — un-overridden re-registration throws', async () => {
+    const engine = await buildGeneratedEngine();
+    expect(() => engine.dispatcher.registerVerb('sabotage', () => [])).toThrow(/already registered/i);
+  });
+
+  it('a generated world already registers "craft" — un-overridden re-registration throws', async () => {
+    const engine = await buildGeneratedEngine();
+    expect(() => engine.dispatcher.registerVerb('craft', () => [])).toThrow(/already registered/i);
+  });
+
+  it('GameSession constructs over a generated-world engine without a verb collision', async () => {
+    const engine = await buildGeneratedEngine();
+    expect(
+      () =>
+        new GameSession({
+          engine,
+          client: createFakeClient(),
+          title: 'Collision Test World',
+          tone: 'testing',
+          genre: 'fantasy',
+        }),
+    ).not.toThrow();
   });
 });

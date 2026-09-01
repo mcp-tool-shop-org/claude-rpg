@@ -132,17 +132,31 @@ describe('getTitleEvolutions', () => {
 // getWorldTickState/peekState) and pressure-spawn assertions read
 // getActivePressures(world) instead of a returned array.
 describe('applyFalloutEffects', () => {
-  it('applies reputation effect to profile', () => {
+  // WO-A2T-2 (slice A2 §9, R1, run swarm-1788288802-f5a0 wave 5): RE-PINNED.
+  // Pre-wave, this effect wrote straight onto `profile.reputation` via
+  // adjustReputation, so `result.profile!.reputation` showed the composed
+  // 60 (50 + 10) immediately. From this wave on, reputation deltas ADD to
+  // `world.globals['reputation_<factionId>']` (addFactionReputationGlobal,
+  // reputation-view.ts) — profile.reputation is now a VIEW the CALLER
+  // (GameSession.applyFalloutEffects, game.ts) recomposes via
+  // refreshWorldViews() right after this function returns, which this
+  // isolated pure-function test does not invoke. The correct assertion at
+  // this layer is the accrued global this function actually wrote; the
+  // composed-into-one-number behavior is proven at the GameSession layer by
+  // game.test.ts's own Slice A2-truth describe block.
+  it('adds the reputation delta to world.globals[reputation_<factionId>] (the accrued ledger, not the profile directly)', () => {
     const profile = makeMinimalProfile({ reputation: [{ factionId: 'guild', value: 50 }] });
     const fallout = {
       resolution: { pressureId: 'p1', pressureKind: 'test' as any, resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const, resolvedAtTick: 1 },
       summary: 'Test fallout',
       effects: [{ type: 'reputation' as const, factionId: 'guild', delta: 10 }],
     };
-    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {} } as any;
+    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {}, globals: {} } as any;
     const result = applyFalloutEffects(fallout, profile, world, [], makeEmptyPartyState(), 'fantasy', 1);
-    const guildRep = result.profile!.reputation.find((r) => r.factionId === 'guild');
-    expect(guildRep!.value).toBe(60);
+    // The profile object itself is passed through unchanged (identity, not
+    // a stale copy) — this function no longer mutates .reputation at all.
+    expect(result.profile).toBe(profile);
+    expect(world.globals['reputation_guild']).toBe(10);
   });
 
   it('spawns a chained pressure when under max', () => {

@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26):
 // renderDeathScreen is cli-display's half, landing in THEIR worktree this
@@ -21,9 +24,9 @@ import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import type { ResolvedEvent, Engine } from '@ai-rpg-engine/core';
 import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
-import { createProfile } from '@ai-rpg-engine/character-profile';
+import { createProfile, getReputation } from '@ai-rpg-engine/character-profile';
 import type { OpportunityState, PlayerRumor } from '@ai-rpg-engine/modules';
-import { setPlayerRumorState } from '@ai-rpg-engine/modules';
+import { setPlayerRumorState, getLeverageState } from '@ai-rpg-engine/modules';
 // WO-A2-5 (slice A2 §7, proofs): the same world-truth readers/setters
 // game.ts's own refreshWorldViews()/write-through paths use, verified
 // against the installed 3.11 dist (see game.ts's own import doc comment).
@@ -37,7 +40,7 @@ import {
   getEconomyCoreState,
 } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
-import { loadNpcAgencyFromSession, type SavedSession } from './session/session.js';
+import { loadNpcAgencyFromSession, type SavedSession, saveSession, loadSession, loadProfileFromSession } from './session/session.js';
 import { MAX_PLAYER_RUMORS } from './game/game-state.js';
 // Slice A1 (WO-A1-6, WO-A1-7, docs/living-world-slice-a1.md): generated-world
 // boot + verb-parity + defeat-fallout proofs, built against world-gen.ts's
@@ -1678,7 +1681,16 @@ describe('GameSession', () => {
     it('checkAutosave() persists the current presentation state', async () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
       const capturedInputs: Array<{ presentationState?: string }> = [];
-      vi.spyOn(await import('./session/session.js'), 'saveSession')
+      // F- (spotted while adding the Slice A2-truth describe block at the
+      // end of this file, run swarm-1788288802-f5a0 wave 5): this spy had
+      // no .mockRestore(), so it leaked past this test's own scope for the
+      // REST of the file — every later test importing saveSession got this
+      // no-op stub instead of the real function, with no thrown error to
+      // surface it (saveSession's callers just silently produced no save
+      // file). Restored explicitly now, matching every other saveSession
+      // spy in this file (see the FT-B-002 describe block's saveSpy.mockRestore()
+      // calls above).
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
         .mockImplementation(async (input) => {
           capturedInputs.push(input);
         });
@@ -1698,6 +1710,7 @@ describe('GameSession', () => {
       expect(h.session.immersion.stateMachine.current).toBe('dialogue');
       expect(capturedInputs).toHaveLength(1);
       expect(capturedInputs[0].presentationState).toBe('dialogue');
+      saveSpy.mockRestore();
     });
   });
 
@@ -1879,7 +1892,10 @@ describe('GameSession', () => {
     it('checkAutosave() persists the live npcConversations map', async () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
       const capturedInputs: Array<{ npcConversations?: Map<string, unknown> }> = [];
-      vi.spyOn(await import('./session/session.js'), 'saveSession')
+      // See the presentation-state-restore describe block's identical
+      // saveSession spy (above, this file) for why this one is restored
+      // explicitly too — an unrestored spy here leaked the SAME way.
+      const saveSpy = vi.spyOn(await import('./session/session.js'), 'saveSession')
         .mockImplementation(async (input) => {
           capturedInputs.push(input);
         });
@@ -1894,6 +1910,7 @@ describe('GameSession', () => {
       // this asserts real content is present, not just referential parity.
       expect(capturedInputs[0].npcConversations).toBe(h.session.npcConversations);
       expect(capturedInputs[0].npcConversations?.get('pilgrim')).toHaveLength(2);
+      saveSpy.mockRestore();
     });
   });
 
@@ -2534,5 +2551,128 @@ describe('Slice A2-core (WO-A2-5): the living-world driver proofs', () => {
     const persisted = getPersistedOpportunities(world).find((o) => o.id === opp.id);
     expect(persisted?.status).toBe('accepted');
     expect(h.session.activeOpportunities.find((o) => o.id === opp.id)?.status).toBe('accepted');
+  });
+});
+
+// WO-A2T-2/3/4 (slice A2 §9-§11, docs/living-world-slice-a2.md, run
+// swarm-1788288802-f5a0, wave 5): the reputation-composition and
+// leverage-unification integration through a LIVE GameSession -- the pure
+// helper logic itself (reputation-view.ts / leverage-view.ts) has its own
+// dedicated unit suites (src/game/reputation-view.test.ts,
+// src/game/leverage-view.test.ts); this describe block proves game.ts's own
+// wiring (the private adjustFactionReputation/tickPlayerLeverage methods,
+// and refreshWorldViews' own view-refresh calls) actually uses them, via
+// the same `(session as unknown as {...})` private-method-access pattern
+// this file already established (see the FT-B-008/F-51e110b9 describe
+// blocks above).
+describe('Slice A2-truth (WO-A2T-2/3/4): reputation composition + leverage unification + save-time views', () => {
+  const CHAPEL_UNDEAD = 'chapel-undead'; // starter-fantasy's only registered faction
+
+  function makeTestProfile(reputation: { factionId: string; value: number }[] = []) {
+    const profile = createProfile(
+      { name: 'Aldric', archetypeId: 'penitent-knight', backgroundId: 'oath-breaker', traitIds: [] },
+      { vigor: 5, instinct: 5, will: 5 },
+      { hp: 20, stamina: 8 },
+      [],
+      'chapel-threshold',
+    );
+    return { ...profile, reputation };
+  }
+
+  let tmpDir: string | undefined;
+  afterEach(async () => {
+    if (tmpDir) {
+      await rm(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  it('WO-A2T-2: adjustFactionReputation composes baseline + every accrued delta through a live GameSession, and refreshWorldViews keeps the view current', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    h.session.profile = makeTestProfile([{ factionId: CHAPEL_UNDEAD, value: 20 }]);
+
+    const adjustFactionReputation = (h.session as unknown as {
+      adjustFactionReputation: (factionId: string, delta: number) => void;
+    }).adjustFactionReputation.bind(h.session);
+
+    adjustFactionReputation(CHAPEL_UNDEAD, -10); // a kill-fallout-shaped delta
+    expect(getReputation(h.session.profile!, CHAPEL_UNDEAD)).toBe(10); // 20 - 10
+
+    adjustFactionReputation(CHAPEL_UNDEAD, -5); // a second, independent delta
+    expect(getReputation(h.session.profile!, CHAPEL_UNDEAD)).toBe(5); // composes, does not overwrite
+
+    // The baseline itself never moved -- only the accrued ledger did.
+    expect(h.session.engine.world.globals[`claude_rpg.rep_baseline_${CHAPEL_UNDEAD}`]).toBe(20);
+    expect(h.session.engine.world.globals[`reputation_${CHAPEL_UNDEAD}`]).toBe(-15);
+
+    // A subsequent round's own refreshWorldViews() (called via runWorldRound)
+    // reports the SAME composed value -- the profile field really is a VIEW,
+    // not a value adjustFactionReputation happened to leave lying around.
+    await h.play('look around');
+    expect(getReputation(h.session.profile!, CHAPEL_UNDEAD)).toBe(5);
+  });
+
+  it('WO-A2T-3: tickPlayerLeverage writes to the player ENTITY (not profile.custom directly) -- a tick-side gain and an app-side gain land on ONE ledger the profile reports', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    h.session.profile = makeTestProfile();
+    const player = h.session.engine.world.entities[h.session.engine.world.playerId];
+
+    // Simulates the engine's own step 5a2 income (world-tick.ts's
+    // runLeverageIncomeStep) landing on the entity ledger, exactly the way
+    // a real round's tick already does every turn since the A2-core wave-4
+    // stitch.
+    player.custom = { ...player.custom, 'leverage.favor': 5 };
+
+    const tickPlayerLeverage = (h.session as unknown as {
+      tickPlayerLeverage: (hints: { xpGained: number }) => void;
+    }).tickPlayerLeverage.bind(h.session);
+    tickPlayerLeverage({ xpGained: 15 }); // computeLeverageGains: xpGained >= 15 -> blackmail +5
+
+    // ONE ledger: the tick's favor:5 and this app-side gain's blackmail:5
+    // both show up on the SAME map, reported by the SAME profile view.
+    expect(getLeverageState(player.custom)).toMatchObject({ favor: 5, blackmail: 5 });
+    expect(getLeverageState(h.session.profile!.custom)).toMatchObject({ favor: 5, blackmail: 5 });
+    // Bookkeeping stays on the profile (unaffected by the ledger unification).
+    expect(h.session.profile!.custom['stats.leverage.blackmail.gained']).toBe(5);
+  });
+
+  it('WO-A2T-4: after a round, the saved profile\'s reputation is current -- a saved-then-reloaded profile matches world truth at save time', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-a2truth-save-'));
+    const savePath = join(tmpDir, 'save.json');
+
+    const h = createHarness({ gameOpts: { genre: 'fantasy' } });
+    h.session.profile = makeTestProfile([{ factionId: CHAPEL_UNDEAD, value: 0 }]);
+    await h.play('look around'); // a round runs -- stampReputationBaselines fires
+
+    const adjustFactionReputation = (h.session as unknown as {
+      adjustFactionReputation: (factionId: string, delta: number) => void;
+    }).adjustFactionReputation.bind(h.session);
+    adjustFactionReputation(CHAPEL_UNDEAD, -20);
+    expect(getReputation(h.session.profile!, CHAPEL_UNDEAD)).toBe(-20);
+
+    await saveSession({
+      engine: h.session.engine,
+      history: h.session.history,
+      tone: h.session.tone,
+      savePath,
+      packId: 'chapel-threshold',
+      genre: h.session.genre,
+      profile: h.session.profile,
+      playerRumors: h.session.playerRumors,
+      activePressures: h.session.activePressures,
+    });
+
+    const loaded = await loadSession(savePath);
+    const loadedProfile = loadProfileFromSession(loaded.session);
+
+    // The SavedSession's own `profile` field (serializeProfile(this.profile))
+    // is written FROM the view at save time (design doc §11) -- it already
+    // carries the composed -20, with no further seeding/refresh needed to
+    // read it back correctly.
+    expect(loadedProfile).not.toBeNull();
+    expect(getReputation(loadedProfile!, CHAPEL_UNDEAD)).toBe(-20);
   });
 });

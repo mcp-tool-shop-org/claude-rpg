@@ -96,7 +96,6 @@ import {
   grantXp,
   addInjury,
   incrementTurns,
-  adjustReputation,
   recordMilestone,
 } from '@ai-rpg-engine/character-profile';
 import {
@@ -136,7 +135,6 @@ import {
   resolveRumorAction,
   resolveDiplomacyAction,
   resolveSabotageAction,
-  tickLeverage,
   computeLeverageGains,
   formatLeverageForDirector,
   formatLeverageActionForNarrator,
@@ -195,6 +193,17 @@ import {
   simpleHashNum,
   sanitizeFilename,
 } from './game/game-state.js';
+// WO-A2T-2 (slice A2 §9, R1): reputation composition — one write path
+// (addFactionReputationGlobal), one view (refreshReputationProfile), one
+// baseline stamp (stampReputationBaselines, also called from
+// world-truth-seed.ts's WO-A2T-1 at load time).
+import { addFactionReputationGlobal, stampReputationBaselines, refreshReputationProfile } from './game/reputation-view.js';
+// WO-A2T-3 (slice A2 §10, R6): leverage unification, scoped to
+// tickPlayerLeverage only this wave (see refreshWorldViews' own doc
+// comment for why the other leverage/heat writers in this file are NOT
+// converted) — writeLeverageDeltas is the entity-ledger write-through +
+// profile-view refresh tickPlayerLeverage calls.
+import { writeLeverageDeltas } from './game/leverage-view.js';
 import { generateOpeningNarration, generateFinaleNarration } from './game/game-narration.js';
 import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, renderConcludeOutput, renderPlayOutput, renderDeathOutput, buildPartyStatusLine } from './game/game-presenter.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
@@ -690,11 +699,9 @@ export class GameSession {
 
     // Reputation
     if (hints.reputationDelta) {
-      this.profile = adjustReputation(
-        this.profile,
-        hints.reputationDelta.factionId,
-        hints.reputationDelta.delta,
-      );
+      // WO-A2T-2 (slice A2 §9, R1): the accrued ledger, not the profile
+      // directly — this.adjustFactionReputation refreshes the profile view.
+      this.adjustFactionReputation(hints.reputationDelta.factionId, hints.reputationDelta.delta);
 
       // Spawn reputation rumor
       const factionState = this.engine.world.factions[hints.reputationDelta.factionId];
@@ -905,6 +912,35 @@ export class GameSession {
    * design doc's own table it is an appending accumulator (the tick's
    * `opportunitiesExpired` entries, appended in runWorldRound; player-
    * resolved fallout appended from resolveOpportunity), not a pure view.
+   *
+   * WO-A2T-2 (slice A2 §9): the profile's reputation field is a view too,
+   * refreshed here alongside every other store. stampReputationBaselines is
+   * idempotent (a no-op once `claude_rpg.rep_baselined` is set) — calling
+   * it on every round is what lets a FRESH world (no SavedSession to seed
+   * from; see world-truth-seed.ts's WO-A2T-1 for the loaded-save half) get
+   * its baseline stamped on its own first round, per design doc §9.
+   *
+   * WO-A2T-3's leverage unification is deliberately NOT mirrored here.
+   * Reputation's five write sites are ALL converted this wave (design doc
+   * §9's own enumeration, verified exhaustive against a grep for
+   * `adjustReputation(` — every one funnels through addFactionReputationGlobal
+   * now), so profile.reputation has exactly one writer and refreshing it
+   * unconditionally every round is safe. Leverage/heat effects, by
+   * contrast, still write `profile.custom` DIRECTLY in three other places
+   * this file (applyOpportunityFalloutEffects, applyLeverageEffects,
+   * applyCraftEffects) — the wave addendum's WO-A2T-3 names only
+   * tickPlayerLeverage for conversion to the entity ledger, and an earlier
+   * attempt at this session to also convert those three broke a
+   * currently-passing test (game.test.ts's F-5b48354f bribe-resolution
+   * case): a blanket per-round leverage view-refresh from the entity's
+   * ledger silently reverted a leverage-verb's own profile.custom write the
+   * very next round, since the entity ledger and profile.custom are still
+   * two genuinely separate stores for those three sites. Calling
+   * refreshLeverageView here would reproduce that same clobber for EVERY
+   * turn after any leverage verb, not just the one this session caught.
+   * tickPlayerLeverage's own call to writeLeverageDeltas stays scoped to
+   * itself (see that method's own doc comment for the residual, narrower
+   * same-turn gap this leaves).
    */
   private refreshWorldViews(): void {
     const world = this.engine.world;
@@ -919,6 +955,26 @@ export class GameSession {
     this.lastFactionProfiles = getPersistedFactionProfiles(world);
     this.districtEconomies = new Map(Object.entries(getEconomyCoreState(world).districts));
     this.playerRumors = getPlayerRumorState(world).rumors;
+    if (this.profile) {
+      stampReputationBaselines(this.profile, world);
+      this.profile = refreshReputationProfile(this.profile, world);
+    }
+  }
+
+  /**
+   * WO-A2T-2 (slice A2 §9, R1): the ONE write path for a reputation delta —
+   * ADDs to `world.globals['reputation_<factionId>']` (never sets; see
+   * reputation-view.ts's addFactionReputationGlobal), then refreshes the
+   * profile's reputation view. `adjustReputation` (character-profile) is
+   * never called directly anywhere else in this file after this wave.
+   */
+  private adjustFactionReputation(factionId: string, delta: number): void {
+    const world = this.engine.world;
+    addFactionReputationGlobal(world, factionId, delta);
+    if (this.profile) {
+      stampReputationBaselines(this.profile, world);
+      this.profile = refreshReputationProfile(this.profile, world);
+    }
   }
 
   /**
@@ -2168,11 +2224,23 @@ export class GameSession {
     for (const effect of fallout.effects) {
       switch (effect.type) {
         case 'reputation':
+          // WO-A2T-2 (slice A2 §9, R1): the caller (applyOpportunityFalloutEffects'
+          // own caller, below) refreshes every view — including this one —
+          // right after this method returns.
           if (this.profile) {
-            this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
+            this.adjustFactionReputation(effect.factionId, effect.delta);
           }
           break;
         case 'leverage':
+          // WO-A2T-3 (slice A2 §10, R6): NOT converted to the entity
+          // ledger this wave — see leverage-view.ts's own doc comment and
+          // refreshWorldViews' doc comment (game.ts) for why: the wave
+          // addendum names only tickPlayerLeverage, and converting this
+          // site too (tried, then reverted this session) broke
+          // game.test.ts's F-5b48354f bribe-resolution test once
+          // refreshWorldViews' own per-round leverage sync reverted this
+          // write on the next round. Stays on profile.custom directly,
+          // unchanged from pre-wave behavior.
           if (this.profile) {
             this.profile = {
               ...this.profile,
@@ -3091,10 +3159,17 @@ export class GameSession {
     for (const effect of resolution.effects) {
       switch (effect.type) {
         case 'reputation':
-          this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
+          // WO-A2T-2 (slice A2 §9, R1): adjustFactionReputation both writes
+          // the accrued global and refreshes the profile view — no
+          // subsequent refreshWorldViews() call in this method's own
+          // caller, so the refresh must happen here.
+          this.adjustFactionReputation(effect.factionId, effect.delta);
           break;
 
         case 'leverage':
+          // WO-A2T-3 (slice A2 §10, R6): NOT converted to the entity
+          // ledger this wave — see refreshWorldViews' doc comment (above,
+          // this file) for why.
           this.profile = {
             ...this.profile,
             custom: applyLeverageDeltas(this.profile.custom, { [effect.currency]: effect.delta }),
@@ -3185,48 +3260,75 @@ export class GameSession {
     }
   }
 
-  /** Apply natural leverage gains from game events, and tick passive changes. */
+  /**
+   * Apply natural leverage gains from game events.
+   *
+   * WO-A2T-3 (slice A2 §10, R6): gains land on the player ENTITY's custom
+   * map (the ONE ledger — writeLeverageDeltas), never profile.custom
+   * directly; the profile's `leverage.*` fields are the view, refreshed by
+   * writeLeverageDeltas' own return.
+   *
+   * The passive tick this method used to run itself (heat decay +
+   * reputation-derived influence reconciliation, via the SAME `tickLeverage`
+   * this file used to call) is DELETED here, not redirected to the entity
+   * ledger: the engine's own leverage-income step (world-tick.ts's
+   * runLeverageIncomeStep, step 5a2 — straight-adopted, unconditional,
+   * since the A2-core wave-4 stitch) already calls `tickLeverage` on the
+   * SAME entity.custom every round runWorldRound's tick runs (verified
+   * against the installed 3.11 dist: `custom = tickLeverage(playerCustom,
+   * reputation); ... player.custom = custom;`). Once this method's gains
+   * target the same map the engine's step owns, keeping this method's own
+   * passive-tick call too would decay heat and reconcile influence TWICE
+   * per round on one ledger — the exact "no double simulation" failure
+   * mode this slice's own design doc guards pressures against (§7), just
+   * discovered here for leverage instead. Deleting the redundant half
+   * mirrors A2-core §5's hand-ticker-deletion precedent: what the engine's
+   * tick already does every round is not re-done app-side.
+   *
+   * KNOWN RESIDUAL GAP (documented, not fixed this wave — see
+   * refreshWorldViews' own doc comment above for the full reasoning):
+   * writeLeverageDeltas' return is a full six-currency refresh of
+   * profile.custom's `leverage.*` keys from the entity ledger. On a turn
+   * where `gains` is non-empty AND a leverage VERB (bribe/intimidate/etc.,
+   * via applyLeverageEffects) ALSO wrote profile.custom directly that same
+   * turn (still unconverted per the wave addendum's own narrow WO-A2T-3
+   * scope), this call would overwrite that verb's currencies with the
+   * entity ledger's unrelated values. Narrower than the per-round clobber
+   * this session found and reverted (that one fired on EVERY subsequent
+   * turn, unconditionally); this one requires `gains` to be non-empty the
+   * SAME turn a verb also spent/gained currency. Flagged for the
+   * coordinator: fully closing it requires converting every leverage/heat
+   * read+write site in this file to the entity ledger, a materially larger
+   * change than this WO authorizes.
+   */
   private tickPlayerLeverage(hints: ProfileUpdateHints): void {
     if (!this.profile) return;
 
-    // Natural gains from game events
     const gains = computeLeverageGains(hints);
-    if (Object.keys(gains).length > 0) {
-      this.profile = {
-        ...this.profile,
-        custom: applyLeverageDeltas(this.profile.custom, gains),
-      };
+    if (Object.keys(gains).length === 0) return;
 
-      // Stats: track currency gains
-      for (const [currency, delta] of Object.entries(gains)) {
-        if (delta > 0) {
-          const gKey = `stats.leverage.${currency}.gained`;
-          const prev: number = (this.profile.custom[gKey] as number) ?? 0;
-          this.profile = {
-            ...this.profile,
-            custom: { ...this.profile.custom, [gKey]: prev + delta },
-          };
-        } else if (delta < 0) {
-          const sKey = `stats.leverage.${currency}.spent`;
-          const prev: number = (this.profile.custom[sKey] as number) ?? 0;
-          this.profile = {
-            ...this.profile,
-            custom: { ...this.profile.custom, [sKey]: prev + Math.abs(delta) },
-          };
-        }
+    this.profile = writeLeverageDeltas(this.profile, this.engine.world, gains);
+
+    // Stats: track currency gains (profile-only bookkeeping — unaffected by
+    // the ledger unification; these keys were never part of the
+    // leverage.* view).
+    for (const [currency, delta] of Object.entries(gains)) {
+      if (delta > 0) {
+        const gKey = `stats.leverage.${currency}.gained`;
+        const prev: number = (this.profile.custom[gKey] as number) ?? 0;
+        this.profile = {
+          ...this.profile,
+          custom: { ...this.profile.custom, [gKey]: prev + delta },
+        };
+      } else if (delta < 0) {
+        const sKey = `stats.leverage.${currency}.spent`;
+        const prev: number = (this.profile.custom[sKey] as number) ?? 0;
+        this.profile = {
+          ...this.profile,
+          custom: { ...this.profile.custom, [sKey]: prev + Math.abs(delta) },
+        };
       }
     }
-
-    // Passive tick: heat decay, influence recalculation
-    const factionIds = Object.keys(this.engine.world.factions);
-    const reputations = factionIds.map((factionId) => ({
-      factionId,
-      value: getReputation(this.profile!, factionId),
-    }));
-    this.profile = {
-      ...this.profile,
-      custom: tickLeverage(this.profile.custom, reputations),
-    };
   }
 
   // --- v1.1: Cockpit helpers ---
@@ -3752,18 +3854,24 @@ export class GameSession {
           break;
 
         case 'heat':
+          // WO-A2T-3 (slice A2 §10, R6): NOT converted to the entity
+          // ledger this wave — see refreshWorldViews' doc comment (above,
+          // this file) for why. applyLeverageDeltas clamps 0-100, the same
+          // bound the previous Math.min(100, ...) enforced.
           if (this.profile) {
-            const currentHeat = (this.profile.custom['leverage.heat'] as number) ?? 0;
             this.profile = {
               ...this.profile,
-              custom: { ...this.profile.custom, 'leverage.heat': Math.min(100, currentHeat + effect.delta) },
+              custom: applyLeverageDeltas(this.profile.custom, { heat: effect.delta }),
             };
           }
           break;
 
         case 'reputation':
+          // WO-A2T-2 (slice A2 §9, R1): no subsequent refreshWorldViews()
+          // call in this method's own callers, so adjustFactionReputation's
+          // own immediate view refresh is load-bearing here.
           if (this.profile) {
-            this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
+            this.adjustFactionReputation(effect.factionId, effect.delta);
           }
           break;
 

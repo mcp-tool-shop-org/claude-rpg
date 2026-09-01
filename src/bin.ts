@@ -13,6 +13,15 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { version: pkgVersion } = require('../package.json') as { version: string };
 import { GameSession, type GameConfig } from './game.js';
+// WO-A2T-5 (slice A2-truth, design doc §8): load-time seed of world truth
+// from 1.x SavedSession fields, landed by game-core this same wave. Not yet
+// on this branch as of this edit (parallel wave-5 dispatch) -- coded against
+// the design doc's contract per the coordinator's honesty-floor instruction;
+// expected green once game-core's merge lands src/game/world-truth-seed.ts.
+// Design doc/addendum text says '../game/world-truth-seed.js', but bin.ts
+// lives at src/bin.ts (sibling of src/game/), so the correct relative path
+// from here is './game/world-truth-seed.js' -- using the correct path.
+import { seedWorldTruthFromSession } from './game/world-truth-seed.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld, type WorldGenResult } from './foundry/world-gen.js';
@@ -48,6 +57,7 @@ import { createSpinner, formatRetryLabel, type Spinner } from './cli/spinner.js'
 import { createStreamPresenter } from './cli/stream-presenter.js';
 import { renderPresentationCues, insertCuesBeforePrompt } from './cli/presentation-renderer.js';
 import { validateEngineState } from './cli/engine-state-validator.js';
+import { runWorldTruthSeed } from './cli/world-truth-seed-runner.js';
 import { parseSaveSelection, formatSaveSelectionPrompt, formatInvalidSelectionMessage } from './cli/save-selection.js';
 import {
   formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent,
@@ -681,6 +691,31 @@ async function runLoad(): Promise<void> {
   if (restoredArcSnapshot) session.arcSnapshot = restoredArcSnapshot;
   session.endgameTriggers = restoredEndgameTriggers;
   if (restoredFinale) session.finaleOutline = restoredFinale;
+
+  // WO-A2T-5 (slice A2-truth, design doc §8): seed world truth namespaces
+  // from the 1.x session fields just restored above, exactly once per save
+  // lineage. Runs AFTER initializeNamespaces (engine restore block above)
+  // and after the session fields above are populated (the seed reads them
+  // as its source), and BEFORE the first turn -- never on runNew/runPlay,
+  // whose fresh worlds carry no session fields to seed from. Idempotent:
+  // seedWorldTruthFromSession checks world.globals['claude_rpg.stores_seeded']
+  // itself and no-ops (reporting seeded: false) on a save already carrying
+  // the marker (i.e. any save written after adoption). Routed through
+  // runWorldTruthSeed (cli/world-truth-seed-runner.ts) so a malformed 1.x
+  // field surfacing mid-seed fails the load cleanly through the same
+  // 'load' presenter every other fallible step in this function uses
+  // (engine-state validation above, the pack lookup), instead of an
+  // uncaught throw crashing past recap into an inconsistent, half-seeded
+  // world via main()'s generic 'startup' catch.
+  const seedOutcome = runWorldTruthSeed(
+    () => seedWorldTruthFromSession(session, savedSession),
+    session.debugLog,
+  );
+  if (!seedOutcome.ok) {
+    presentError(seedOutcome.error, 'load', debugMode);
+    rl.close();
+    process.exit(1);
+  }
 
   // Show recap
   // Coordinator brief item 4a (narrative-llm's recap half): pack?.buildCatalog

@@ -203,4 +203,56 @@ describe('PresentationStateMachine', () => {
     ] as any;
     expect(sm.inferFromEvents(victoryEvents, undefined, 1)).toBe('aftermath');
   });
+
+  // F-62f5a5e5 (ambush timing): the engine's encounter-spawn zone-entry ambush
+  // (world-tick.ts step 0, encounter-spawn.ts:668) emits only 'encounter.spawned',
+  // never a 'combat.*'-prefixed event -- so before this fix, hasCombat's bare
+  // `type.startsWith('combat.')` scan never matched an ambush round at all, and
+  // the presentation state stayed 'exploration' the same turn hostiles spawned
+  // into the player's zone. immersion-runtime.ts's justEnteredCombat gate (and
+  // therefore combatStartHook's warning SFX + music-intensify cue) landed one
+  // turn late -- on the player's first attack next turn -- instead of riding the
+  // ambush's own narration.
+  it('infers combat from an encounter.spawned event when the spawned hostiles are alive in the current zone (F-62f5a5e5)', () => {
+    const sm = new PresentationStateMachine();
+    const world = {
+      locationId: 'zone-1',
+      entities: {
+        player: { resources: { hp: 20 }, zoneId: 'zone-1', tags: [] },
+        'enc-1': { resources: { hp: 10 }, zoneId: 'zone-1', tags: ['hostile'] },
+      },
+    } as any;
+    const events = [
+      { type: 'encounter.spawned', tick: 1, payload: { spawnedEntityIds: ['enc-1'] } },
+    ] as any;
+    expect(sm.inferFromEvents(events, undefined, 1, 'player', world)).toBe('combat');
+  });
+
+  it('does not infer combat from an encounter.spawned event when no world is supplied (event-only fallback)', () => {
+    // world is optional everywhere else in this method; an encounter.spawned event
+    // with no world handle to confirm living hostiles must fall back to the plain
+    // event-based combat check, same posture as every other world-gated branch here.
+    const sm = new PresentationStateMachine();
+    const events = [
+      { type: 'encounter.spawned', tick: 1, payload: { spawnedEntityIds: ['enc-1'] } },
+    ] as any;
+    expect(sm.inferFromEvents(events, undefined, 1, 'player')).toBe('combat');
+  });
+
+  it('does not infer combat from an encounter.spawned event whose spawned hostiles are not actually alive in the current zone', () => {
+    // Defensive symmetry with the 'combat' end side's own hasLivingHostiles guard:
+    // a bare event-type match alone is not trusted when a world handle is available
+    // to confirm it against live state.
+    const sm = new PresentationStateMachine();
+    const world = {
+      locationId: 'zone-1',
+      entities: {
+        player: { resources: { hp: 20 }, zoneId: 'zone-1', tags: [] },
+      },
+    } as any;
+    const events = [
+      { type: 'encounter.spawned', tick: 1, payload: { spawnedEntityIds: [] } },
+    ] as any;
+    expect(sm.inferFromEvents(events, undefined, 1, 'player', world)).toBe('exploration');
+  });
 });

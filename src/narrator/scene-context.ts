@@ -4,7 +4,9 @@ import type { WorldState, ResolvedEvent } from '@ai-rpg-engine/core';
 import {
   getPerceptionLog,
   presentForObserver,
+  formatPressureForNarrator,
   type ObserverPresentedEvent,
+  type WorldPressure,
 } from '@ai-rpg-engine/modules';
 import type { SceneNarrationInput } from '../prompts/narrate-scene.js';
 
@@ -180,6 +182,153 @@ function describeEvent(event: ResolvedEvent): string {
       return `Said: "${p.text ?? '...'}"`;
     case 'inventory.item.received':
       return `Received ${p.itemId ?? 'an item'}`;
+
+    // ── WO-A2-6 (slice A2-core §6): describeEvent coverage of every event
+    // runWorldTick (packages/modules/src/world-tick.ts) and its called
+    // modules emit into the SAME eventLog delta this round's narration
+    // reads, once the driver replaces the hand-tickers. Found by grepping
+    // `emit(` in world-tick.ts, encounter-spawn.ts, economy-core.ts,
+    // district-core.ts, npc-agency.ts, faction-agency.ts, opportunity-
+    // core.ts, player-leverage.ts per the design doc — economy-core.ts,
+    // district-core.ts, npc-agency.ts, faction-agency.ts and player-
+    // leverage.ts emit no ResolvedEvents directly; every event below is
+    // emitted centrally from world-tick.ts itself (or, for
+    // encounter.spawned, from encounter-spawn.ts, which world-tick calls at
+    // step 0). Two categories the design doc names ("economy shift events",
+    // "district mood transition events") have NO distinct event type to
+    // switch on: economy-shift fallout effects ride inside pressure.expired
+    // / pressure.resolved / opportunity.expired's own `effects` array
+    // (already rendered by those cases below), and a district mood
+    // transition (step 0c) never emits its own event — it only queues onto
+    // reactionTriggers and surfaces as a companion.reaction (also below).
+    // Reported here rather than silently gapped.
+
+    case 'pressure.spawned': {
+      // world-tick.ts:1759 (a spawn-pressure NpcEffect chain), :2555/:2573
+      // (fallout-chain spawn) and :2641 (the heat-gated spawn valve, step
+      // 5). Reuses formatPressureForNarrator: the payload
+      // (pressurePayload()) always carries exactly the three fields the
+      // formatter reads (kind, description, urgency), so the payload-only
+      // cast below is runtime-safe even though its shape is narrower than
+      // the full WorldPressure type formatPressureForNarrator declares.
+      // "surfaced" (not "spawned") names the subject — F-262c3f65's
+      // three-events-render-as-'spawned' collision (pressure.spawned /
+      // opportunity.spawned / encounter.spawned all fell through to the
+      // same bare default-arm text "spawned" before these cases existed).
+      return `Pressure surfaced: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;
+    }
+    case 'pressure.revealed':
+      // world-tick.ts:2527 — a HIDDEN pressure crosses to visible this
+      // round (the moment the player learns of it); distinct wording from
+      // pressure.spawned above so the two are never confused.
+      return `Pressure revealed: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;
+    case 'pressure.escalated': {
+      // world-tick.ts:2615 — urgency crossed a narrator band (the same
+      // 0.4/0.7 bands formatPressureForNarrator itself uses).
+      const band = (p as { band?: string }).band;
+      return `Pressure escalating: ${formatPressureForNarrator(p as unknown as WorldPressure)}${band ? ` [${band}]` : ''}`;
+    }
+    case 'pressure.expired':
+      // world-tick.ts:2555 — the natural-expiry branch (always stamps
+      // 'expired-ignored'; the player-resolved path is pressure.resolved
+      // below, per design doc §4).
+      return `Pressure expired: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;
+    case 'pressure.resolved':
+      // world-tick.ts:2070 — a faction action closed a pressure directly
+      // (runFactionAgencyTick's own resolution branch).
+      return `Pressure resolved: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;
+
+    case 'opportunity.spawned': {
+      // world-tick.ts:1849 (npc-agency's direct-offer NpcEffect) and :2794
+      // (evaluateOpportunities' own spawn valve) — same payload shape:
+      // {opportunityId, kind, title, reason, urgency}, no `turnsRemaining`.
+      // formatOpportunityForNarrator's deadline suffix guards on
+      // `turnsRemaining !== null`, so an ABSENT (undefined) field would
+      // read as "not null" and render "undefined turns left" — the
+      // formatter was built for the full OpportunityState, not this
+      // payload. Rendered from payload fields only instead (the addendum's
+      // own fallback for exactly this mismatch), noted here rather than
+      // forcing a reuse that would produce a wrong string.
+      const title = typeof p.title === 'string' ? p.title : 'An opportunity';
+      return `Opportunity offered: ${title}`;
+    }
+    case 'opportunity.expired': {
+      // world-tick.ts:2735 — natural-expiry fallout (Phase-9 remediation);
+      // same payload-shape mismatch as opportunity.spawned above (no
+      // `urgency`, no `turnsRemaining`), same fallback.
+      const title = typeof p.title === 'string' ? p.title : 'An opportunity';
+      return `Opportunity expired: ${title}`;
+    }
+
+    case 'encounter.spawned': {
+      // encounter-spawn.ts:667 — the zone-entry ambush check (world-tick's
+      // step 0), the ONE renderable event on the encounter-spawn path.
+      const name = typeof p.encounterName === 'string' ? p.encounterName : 'An encounter';
+      const zoneName = typeof p.zoneName === 'string' ? p.zoneName : 'the area';
+      return `Ambush: ${name} in ${zoneName}`;
+    }
+
+    case 'npc.action.resolved': {
+      // world-tick.ts:1880 — every resolved NPC-agency action
+      // (npc-agency.ts's runNpcAgencyTick), one per acting named NPC per
+      // round. narratorHint is authored per-verb specifically for this
+      // purpose (npc-agency.ts:825-1128); description is the fallback for
+      // any verb branch that leaves narratorHint blank.
+      const hint = typeof p.narratorHint === 'string' && p.narratorHint.length > 0 ? p.narratorHint : undefined;
+      const description = typeof p.description === 'string' ? p.description : undefined;
+      return hint ?? description ?? 'An NPC acted';
+    }
+    case 'npc.betrayal.witnessed': {
+      // world-tick.ts:1867 — the 'betray' verb specifically, emitted
+      // immediately BEFORE that same round's npc.action.resolved.
+      const npcName = typeof p.npcName === 'string' ? p.npcName : 'Someone';
+      const description = typeof p.description === 'string' ? p.description : 'betrayed you';
+      return `Betrayal: ${npcName} — ${description}`;
+    }
+    case 'faction.action.resolved': {
+      // world-tick.ts:2094 — runFactionAgencyTick's per-round resolved
+      // faction action. Same narratorHint-first, description-fallback
+      // house style as npc.action.resolved above (faction-agency.ts:469-662
+      // authors narratorHint per verb).
+      const hint = typeof p.narratorHint === 'string' && p.narratorHint.length > 0 ? p.narratorHint : undefined;
+      const description = typeof p.description === 'string' ? p.description : undefined;
+      return hint ?? description ?? 'A faction acted';
+    }
+
+    case 'companion.reaction': {
+      // world-tick.ts:955 (the round-callback's own reactions) and the
+      // tick's internal applyCompanionReactions (world-tick.ts:930-992,
+      // dispatched from combat, pressure-resolution, AND district-mood-
+      // transition triggers at step 0c/3c — the design doc's "district
+      // mood transition events" category has no event of its own; it
+      // surfaces here). narratorHint is authored per-trigger for exactly
+      // this purpose (companion-reactions.ts:311).
+      const hint = typeof p.narratorHint === 'string' && p.narratorHint.length > 0 ? p.narratorHint : undefined;
+      return hint ?? 'A companion reacts';
+    }
+    case 'companion.departed': {
+      // world-tick.ts:971 (the round-callback's own departure) and :1808
+      // (npc-agency's companion-departure NpcEffect) — a companion leaves
+      // the party.
+      const npcName = typeof p.npcName === 'string' ? p.npcName : 'A companion';
+      const reason = typeof p.reason === 'string' ? p.reason : 'left the party';
+      return `${npcName} has left the party: ${reason}`;
+    }
+
+    case 'world.zone.state.changed': {
+      // zone-state.ts:278 ("the moat bridge") — NOT one of design doc §6's
+      // named grep targets (world-tick.ts, encounter-spawn.ts, economy-
+      // core.ts, district-core.ts, npc-agency.ts, faction-agency.ts,
+      // opportunity-core.ts, player-leverage.ts), but its step runs INSIDE
+      // runWorldTick (step 0b) and its event enters the SAME eventLog
+      // delta this round's narration reads — exactly the gap §6 exists to
+      // close. Added as coverage beyond the literal file list; flagged
+      // here for coordinator review rather than silently included.
+      const zoneName = typeof p.zoneName === 'string' ? p.zoneName : 'The area';
+      const to = typeof p.to === 'string' ? p.to : 'a new state';
+      return `${zoneName} has changed: now ${to}`;
+    }
+
     default:
       return event.type.split('.').pop() ?? event.type;
   }

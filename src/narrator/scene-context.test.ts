@@ -338,3 +338,383 @@ describe('describeEvent world.zone.entered moodHint (F-45574e0a)', () => {
     expect(context.narrationInput.recentEvents).toEqual(['Entered Old Chapel']);
   });
 });
+
+// WO-A2-6 (slice A2-core §6): describeEvent coverage of every event
+// runWorldTick and its called modules emit (world-tick.ts, encounter-spawn.ts,
+// npc-agency.ts's effects, faction-agency.ts's effects — see scene-context.ts's
+// own header comment above the switch's new cases for the full grep/file
+// audit). OBSERVED RED for every case below (before this fix): describeEvent
+// had no case for any of these fourteen event types, so each fell through to
+// the bare default arm (`event.type.split('.').pop()`), rendering a bare
+// fragment like 'spawned' / 'resolved' / 'expired' / 'reaction' / 'departed' /
+// 'witnessed' / 'changed' into the narration prompt's 'Recent events:' section
+// — exactly the F-262c3f65 collision this wave closes (pressure.spawned /
+// opportunity.spawned / encounter.spawned were all indistinguishable
+// 'spawned' before these cases existed).
+describe('describeEvent world-tick coverage (WO-A2-6)', () => {
+  it('renders pressure.spawned via formatPressureForNarrator, naming the subject', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'pressure.spawned',
+        tick: 1,
+        payload: {
+          pressureId: 'wp-1',
+          kind: 'faction-crackdown',
+          description: 'A crackdown is brewing',
+          urgency: 0.5,
+          visibility: 'visible',
+          sourceFactionId: 'the-watch',
+          triggeredBy: 'heat-threshold',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Pressure surfaced: faction-crackdown: A crackdown is brewing (growing)',
+    ]);
+  });
+
+  it('renders pressure.revealed distinctly from pressure.spawned', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'pressure.revealed',
+        tick: 1,
+        payload: {
+          pressureId: 'wp-2',
+          kind: 'ambush-plot',
+          description: 'Someone is planning an ambush',
+          urgency: 0.8,
+          visibility: 'visible',
+          sourceFactionId: 'raiders',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Pressure revealed: ambush-plot: Someone is planning an ambush (urgent)',
+    ]);
+  });
+
+  it('renders pressure.escalated with the narrator band appended', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'pressure.escalated',
+        tick: 1,
+        payload: {
+          pressureId: 'wp-3',
+          kind: 'supply-crisis',
+          description: 'Food stores are running dry',
+          urgency: 0.75,
+          visibility: 'visible',
+          sourceFactionId: 'merchants',
+          band: 'urgent',
+          heat: 30,
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Pressure escalating: supply-crisis: Food stores are running dry (urgent) [urgent]',
+    ]);
+  });
+
+  it('renders pressure.expired', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'pressure.expired',
+        tick: 1,
+        payload: {
+          pressureId: 'wp-4',
+          kind: 'bounty-hunt',
+          description: 'A bounty was posted for you',
+          urgency: 0.2,
+          visibility: 'visible',
+          sourceFactionId: 'navy',
+          summary: 'The bounty expired unclaimed',
+          resolutionType: 'expired-ignored',
+          effects: [],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Pressure expired: bounty-hunt: A bounty was posted for you (distant)',
+    ]);
+  });
+
+  it('renders pressure.resolved (a faction action closing a pressure directly)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'pressure.resolved',
+        tick: 1,
+        payload: {
+          pressureId: 'wp-5',
+          kind: 'trade-war',
+          description: 'Two factions are choking trade routes',
+          urgency: 0.6,
+          visibility: 'visible',
+          sourceFactionId: 'guild',
+          summary: 'The guild backed down',
+          resolutionType: 'faction-resolved',
+          effects: [],
+          resolvedBy: 'guild',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Pressure resolved: trade-war: Two factions are choking trade routes (growing)',
+    ]);
+  });
+
+  it('renders opportunity.spawned from payload fields only (no turnsRemaining on this payload)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'opportunity.spawned',
+        tick: 1,
+        payload: {
+          opportunityId: 'op-1',
+          kind: 'bounty',
+          title: 'Clear the ratmen from the cellar',
+          reason: 'evaluateOpportunities',
+          urgency: 0.4,
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Opportunity offered: Clear the ratmen from the cellar',
+    ]);
+  });
+
+  it('renders opportunity.expired', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'opportunity.expired',
+        tick: 1,
+        payload: {
+          opportunityId: 'op-2',
+          kind: 'favor',
+          title: 'A favor for the innkeeper',
+          summary: 'The window closed unclaimed',
+          resolutionType: 'expired-ignored',
+          effects: [],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Opportunity expired: A favor for the innkeeper',
+    ]);
+  });
+
+  it('renders encounter.spawned naming both the encounter and the zone', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'encounter.spawned',
+        tick: 1,
+        payload: {
+          encounterId: 'enc-1',
+          encounterName: 'Goblin ambush',
+          composition: 'ambush',
+          zoneId: 'old-road',
+          zoneName: 'Old Road',
+          label: 'Ambush',
+          description: 'Goblins leap from the brush.',
+          spawnedEntityIds: ['goblin-1'],
+          spawnedEntityNames: ['Goblin Raider'],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Ambush: Goblin ambush in Old Road',
+    ]);
+  });
+
+  it('renders npc.action.resolved from narratorHint when present', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'npc.action.resolved',
+        tick: 1,
+        payload: {
+          npcId: 'npc-1',
+          npcName: 'Mira',
+          verb: 'confide',
+          description: 'Mira tells you a secret',
+          narratorHint: 'Mira leans in with a proposition',
+          dialogueHint: undefined,
+          effects: [],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Mira leans in with a proposition',
+    ]);
+  });
+
+  it('falls back to description when npc.action.resolved carries no narratorHint', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'npc.action.resolved',
+        tick: 1,
+        payload: {
+          npcId: 'npc-2',
+          npcName: 'Toran',
+          verb: 'wait',
+          description: 'Toran waits quietly',
+          narratorHint: '',
+          dialogueHint: undefined,
+          effects: [],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual(['Toran waits quietly']);
+  });
+
+  it('renders npc.betrayal.witnessed', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'npc.betrayal.witnessed',
+        tick: 1,
+        payload: {
+          npcId: 'npc-3',
+          npcName: 'Jace',
+          targetEntityId: 'player',
+          description: 'sells your location to the guards',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Betrayal: Jace — sells your location to the guards',
+    ]);
+  });
+
+  it('renders faction.action.resolved from narratorHint when present', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'faction.action.resolved',
+        tick: 1,
+        payload: {
+          factionId: 'the-watch',
+          verb: 'patrol',
+          description: 'The watch patrols the district',
+          narratorHint: 'the-watch patrols are thicker in the district',
+          effects: [],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'the-watch patrols are thicker in the district',
+    ]);
+  });
+
+  it('renders companion.reaction from narratorHint', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'companion.reaction',
+        tick: 1,
+        payload: {
+          npcId: 'comp-1',
+          trigger: 'combat-won',
+          moraleDelta: 5,
+          morale: 65,
+          narratorHint: 'Your companion fights with renewed confidence',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Your companion fights with renewed confidence',
+    ]);
+  });
+
+  it('renders companion.departed naming the companion and the reason', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'companion.departed',
+        tick: 1,
+        payload: {
+          npcId: 'comp-2',
+          npcName: 'Sela',
+          role: 'guard',
+          reason: 'morale broke under betrayal',
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Sela has left the party: morale broke under betrayal',
+    ]);
+  });
+
+  it('renders world.zone.state.changed (zone-state.ts — coverage beyond the design doc §6 file list, flagged for review)', () => {
+    const engine = createGame();
+    const events = [
+      {
+        type: 'world.zone.state.changed',
+        tick: 1,
+        payload: {
+          zoneId: 'market-square',
+          zoneName: 'Market Square',
+          from: 'stable',
+          to: 'strained',
+          cause: 'supply-crisis',
+          variantTags: ['strained'],
+        },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      'Market Square has changed: now strained',
+    ]);
+  });
+});

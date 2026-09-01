@@ -7,28 +7,24 @@
 // resumeHarness -> next dialogue prompt contains pre-save exchange) plus the
 // malformed-fixture guard case and the window boundary.
 //
-// Verified directly against this worktree's src: dialogue-mind.ts's
-// generateDialogue() already accepts a trailing `conversationHistory?`
-// param and threads it into buildDialoguePrompt() correctly (unit-level,
-// already works); prompts/dialogue-npc.ts's formatConversationHistory()
-// already implements the 5-exchange/~800-char window (already works). What
-// is missing -- verified directly against src/turn-loop.ts:358-372 -- is
-// turn-loop.ts's executeTurn() call to generateDialogue() passing only 13
-// positional args, never the 14th `conversationHistory` one, so the real
-// call site never threads anything through regardless of what GameSession
-// tracks. GameSession.npcConversations / GameConfig.npcConversations /
-// SaveSessionInput.npcConversations / loadNpcConversationsFromSession are
-// all pinned as landing this wave from another domain (session.ts and
-// game.ts are out of this "tests" domain's edit scope).
+// dialogue-mind.ts's generateDialogue() already accepted a trailing
+// `conversationHistory?` param and threads it into buildDialoguePrompt()
+// correctly (unit-level); prompts/dialogue-npc.ts's
+// formatConversationHistory() already implements the 5-exchange/~800-char
+// window. The WIRING landed in commit a6b2ca0 (F-462792bb) -- turn-loop.ts's
+// executeTurn() now calls generateDialogue() with
+// `conversationHistory?.get(interpreted.targetIds[0])` at Step 5 (see
+// turn-loop.ts:644), and GameSession.npcConversations / GameConfig
+// .npcConversations / SaveSessionInput.npcConversations /
+// loadNpcConversationsFromSession all landed alongside it in session.ts and
+// game.ts (out of this "tests" domain's edit scope, but present now).
 //
-// Risk containment note: this file deliberately does NOT modify
-// test/helpers/game-harness.ts's resumeHarness() to call the not-yet-
-// existing loadNpcConversationsFromSession() -- doing so would make EVERY
-// test in this domain (and any other file) that calls resumeHarness() throw
-// a hard TypeError today, not just the tests that care about conversation
-// memory. These tests instead observe the round trip entirely through the
-// existing public GameHarness surface (h.play(), h.callLog), which is
-// reachable without editing any shared helper's src-import surface.
+// Current shape: loadNpcConversationsFromSession() landed alongside the rest
+// of F-462792bb (commit a6b2ca0), and test/helpers/game-harness.ts's
+// resumeHarness() now calls it (see game-harness.ts:194) to thread a saved
+// session's conversation history back in on resume. These tests still
+// observe the round trip entirely through the public GameHarness surface
+// (h.play(), h.callLog), which continues to work unchanged.
 
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
@@ -42,7 +38,7 @@ import { createHarness, resumeHarness } from '../helpers/game-harness.js';
 const TALK_TO_PILGRIM = 'talk to pilgrim';
 
 describe('conversation memory round trip (F-a6575a94, brief R1 = persisted)', () => {
-  it('red in-worktree, green expected at merge: in-memory threading -- the second speak turn in one session receives the first exchange\'s NPC reply in its own prompt', async () => {
+  it('in-memory threading -- the second speak turn in one session receives the first exchange\'s NPC reply in its own prompt (landed in commit a6b2ca0, F-462792bb)', async () => {
     const h = createHarness({
       // Call-count-aware: each speak turn burns 2 generate() calls (Step
       // 3+4 narration, then Step 5 dialogue) -- the dialogue call is always
@@ -56,7 +52,7 @@ describe('conversation memory round trip (F-a6575a94, brief R1 = persisted)', ()
     expect(h.callLog.lastGeneratePrompt).toContain('FIRST_EXCHANGE_MARKER_1');
   });
 
-  it('red in-worktree, green expected at merge: full round trip -- save, resume, and the FIRST post-resume dialogue prompt still carries the pre-save exchange', async () => {
+  it('full round trip -- save, resume, and the FIRST post-resume dialogue prompt still carries the pre-save exchange (landed in commit a6b2ca0, F-462792bb)', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-conversation-memory-'));
     try {
       const h1 = createHarness({
@@ -71,10 +67,11 @@ describe('conversation memory round trip (F-a6575a94, brief R1 = persisted)', ()
         tone: h1.session.tone,
         savePath,
         packId: 'chapel-threshold',
-        // Pinned SaveSessionInput.npcConversations field -- h1.session
-        // doesn't carry this property in this worktree's OLD game.ts, so
-        // this reads as `undefined` today (harmless: saveSession() doesn't
-        // destructure a field it doesn't know about either).
+        // SaveSessionInput.npcConversations field. GameSession.npcConversations
+        // (landed in commit a6b2ca0, F-462792bb) now carries the real
+        // Map<string, ConversationExchange[]> -- the through-`unknown` cast
+        // is kept only because saveSession()'s own param type doesn't
+        // narrow it further here.
         npcConversations: (h1.session as unknown as { npcConversations?: unknown }).npcConversations,
       } as Parameters<typeof saveSession>[0]);
 
@@ -143,7 +140,7 @@ describe('conversation memory round trip (F-a6575a94, brief R1 = persisted)', ()
     }
   });
 
-  it('red in-worktree, green expected at merge: window/cap boundary -- the oldest exchange is evicted from the prompt after enough turns accumulate, the most recent one survives', async () => {
+  it('window/cap boundary -- the oldest exchange is evicted from the prompt after enough turns accumulate, the most recent one survives (landed in commit a6b2ca0, F-462792bb)', async () => {
     const TURN_COUNT = 8;
     const h = createHarness({
       clientOpts: {

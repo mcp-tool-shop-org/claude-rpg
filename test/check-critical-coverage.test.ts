@@ -266,12 +266,12 @@ describe('coverageReportLine', () => {
 // must keep passing unchanged), so `false` here is what selects the
 // NO_COLOR fallback.
 //
-// Parallel-wave caveat (mirrors game-turn-loop.test.ts:631-641's own
-// disclaimer for the identical cross-worktree shape): EXPECTED TO FAIL in
-// THIS worktree, in isolation, until ci-tooling's sibling fix to
-// coverageReportLine's signature lands in the cumulative tree at collect
-// time -- do not weaken these assertions to match the current ungated
-// output.
+// Landed: ci-tooling's sibling fix to coverageReportLine's signature shipped
+// in commit 849b513 (fix(ci-tooling): wave-10 amend -- NO_COLOR parity for
+// dividers, icons, and separators) -- scripts/check-coverage-utils.mjs's
+// coverageReportLine now takes the 5th `useColor = true` param these tests
+// pin. These assertions are green against the current contract, not a
+// forward-looking pin.
 describe('coverageReportLine NO_COLOR parity (F-ae59b90a)', () => {
   it('formats a passing file report under NO_COLOR with the ASCII fallback', () => {
     // Before (ungated):  '  ✓ src/llm/test.ts — 75.0% statements, 60.0% branches'

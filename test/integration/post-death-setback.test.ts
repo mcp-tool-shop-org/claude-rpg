@@ -25,20 +25,15 @@
 // hardcoded string match against not-yet-authored copy" in the routed
 // finding's own Fix text.
 //
-// Two DISTINCT bugs are pinned red here, for two DISTINCT reasons (both
-// disclosed): (1) no input-gating exists at all today (game.ts's
-// processInput has no downed-gate branch -- the residual this finding is
-// about), so a post-death ordinary turn advances tick/turnCount exactly like
-// any other turn; (2) immersion-runtime.ts's death hookPoint dispatch
-// (fireEventHooks, ~line 442) unconditionally re-checks
-// isPlayerDefeatEvent||isPlayerAtZeroHp every turn with NO
-// to==='menu'&&from!=='menu' one-shot guard, unlike combat-start's own
-// `justEnteredCombat` guard one function above it (F-0acb03fe) -- so with
-// hp pinned at 0 and no gate blocking a second turn, deathHook's cues
-// (alert_critical + fade-out) actually re-fire today. Both are exactly the
-// residual SLATE-6 exists to close; whichever domain lands
-// TurnResult.justDied is expected to fix both at once (justDied gates the
-// hook dispatch AND lets game.ts's processInput gate turns).
+// Two DISTINCT bugs were pinned red here, for two DISTINCT reasons (both
+// disclosed), and both landed together in commit a6b2ca0 (F-6bc0721e): (1)
+// game.ts's processInput now has a downed-gate branch (see game.ts:1314-1318
+// and the TurnResult.justDied field), so a post-death ordinary turn no
+// longer advances tick/turnCount; (2) immersion-runtime.ts now derives
+// `justEnteredMenu` the same way `justEnteredCombat` already worked
+// (F-0acb03fe) and gates the death hookPoint dispatch on it, so deathHook's
+// cues (alert_critical + fade-out) no longer re-fire on a second post-death
+// turn. These tests pin both fixed behaviors as the current contract.
 
 import { describe, it, expect, vi } from 'vitest';
 import { createHarness } from '../helpers/game-harness.js';
@@ -76,7 +71,7 @@ describe('post-death SETBACK gating (F-4285c469, Coordinator Brief R4)', () => {
     expect(hasDeathAlarm(onPresentation.mock.calls[1][0] as McpToolCall[])).toBe(true);
   });
 
-  it('ordinary verbs are blocked at the downed gate: no tick advance, no turn recorded (brief R4) -- red in-worktree, green expected at merge (game.ts has no downed-gate branch yet)', async () => {
+  it('ordinary verbs are blocked at the downed gate: no tick advance, no turn recorded (brief R4, landed in commit a6b2ca0, F-6bc0721e)', async () => {
     const h = createHarness();
     const world = h.session.engine.world;
     world.entities[world.playerId].resources.hp = 0;
@@ -94,7 +89,7 @@ describe('post-death SETBACK gating (F-4285c469, Coordinator Brief R4)', () => {
     expect(h.turnCount()).toBe(turnsAtDeath);
   });
 
-  it('no-double-transition regression lock: the death alarm does not re-fire on a second post-death turn with no intervening event, mirroring the to===X && from!==X guard shape already precedented for combat-entry (F-0acb03fe) -- red in-worktree, green expected at merge', async () => {
+  it('no-double-transition regression lock: the death alarm does not re-fire on a second post-death turn with no intervening event, mirroring the to===X && from!==X guard shape already precedented for combat-entry (F-0acb03fe, landed in commit a6b2ca0, F-6bc0721e)', async () => {
     const onPresentation = vi.fn();
     const h = createHarness({ gameOpts: { onPresentation } });
     const world = h.session.engine.world;
@@ -112,7 +107,7 @@ describe('post-death SETBACK gating (F-4285c469, Coordinator Brief R4)', () => {
     expect(anyReFire).toBe(false);
   });
 
-  it("'continue' lifts the gate back to exploration: an ordinary turn after 'continue' advances tick/turnCount again -- red in-worktree, green expected at merge", async () => {
+  it("'continue' lifts the gate back to exploration: an ordinary turn after 'continue' advances tick/turnCount again (landed in commit a6b2ca0, F-6bc0721e)", async () => {
     const h = createHarness();
     const world = h.session.engine.world;
     world.entities[world.playerId].resources.hp = 0;

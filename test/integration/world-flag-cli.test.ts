@@ -5,12 +5,14 @@
 // Coordinator Brief ruling (R5, binding): unknown --world = structured error
 // + exit 1 -- pin that, not a menu fallback.
 //
-// Verified directly against this worktree's src/bin.ts: runPlay(args) only
-// ever reads `args.includes('--fast')` before unconditionally calling
-// buildCharacter(rl) with no preset -- `--world` is silently unparsed today
-// (RED baseline). runLoad() is called with NO args at all
-// (`else if (command === 'load') { await runLoad(); }`), so --world is
-// already inert for the load path today, independent of this fix.
+// Landed: F-7862c05d (commit 6f071f4) added src/cli/world-flag.ts
+// (parseWorldFlag/formatValidWorlds) and wired it into src/bin.ts's
+// construction sites (see bin.ts:307-319) so --world resolves fully
+// pre-interactive, with an unknown value producing the structured error
+// below rather than a silent fall-through to the menu. runLoad() is still
+// called with NO args at all (`else if (command === 'load') { await
+// runLoad(); }`), so --world remains inert for the load path by design,
+// independent of this fix.
 //
 // Reuses test/integration/bin-cli-turn-loop.test.ts's established
 // spawnCli()/bundleBinCli()/writeFantasySave() conventions wholesale -- no
@@ -57,7 +59,7 @@ describe('bin.ts --world flag — preselection skips the menu (F-8d865d50)', () 
     cli = undefined;
   });
 
-  it('red in-worktree, green expected at merge: --world gladiator skips "Choose your world" and shows the gladiator pack identity, proving the menu was genuinely skipped rather than just answered fast', async () => {
+  it('--world gladiator skips "Choose your world" and shows the gladiator pack identity, proving the menu was genuinely skipped rather than just answered fast (landed in commit 6f071f4, F-7862c05d)', async () => {
     const gladiatorPackId = resolveWorldFlag('gladiator');
     expect(gladiatorPackId).toBeTruthy();
     const gladiatorPack = getPackById(gladiatorPackId!)!;
@@ -80,16 +82,17 @@ describe('bin.ts --world flag — preselection skips the menu (F-8d865d50)', () 
     cli.sendLine('Test Hero');
   }, scaledWaitMs(15000));
 
-  it("red in-worktree, green expected at merge (Coordinator Brief R5): an unrecognized --world value is a structured error with exit 1, never a silent fall-through to the interactive menu", async () => {
+  it("an unrecognized --world value is a structured error with exit 1, never a silent fall-through to the interactive menu (Coordinator Brief R5, landed in commit 6f071f4, F-7862c05d)", async () => {
     cli = spawnCli(bundle.entryPath, ['play', '--world', 'not-a-real-world-xyz'], {
       ...process.env,
       ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
     });
 
-    // Race exit-with-error against the (buggy-today) menu fallback so this
-    // fails fast with a clear signal instead of silently burning the full
-    // 15s timeout waiting for an exit that today's un-gated bin.ts never
-    // produces (it just sits at the interactive menu prompt indefinitely).
+    // Race exit-with-error against the (pre-fix) menu-fallback shape so a
+    // regression back to it fails fast with a clear signal instead of
+    // silently burning the full 15s timeout waiting for an exit that a
+    // regressed, un-gated bin.ts would never produce (it would just sit at
+    // the interactive menu prompt indefinitely).
     const outcome = await Promise.race([
       cli.waitForExit(15000).then((code) => ({ kind: 'exit' as const, code })),
       cli.waitForStdout('Choose your world').then(() => ({ kind: 'menu-fallback' as const })),

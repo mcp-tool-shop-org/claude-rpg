@@ -5,13 +5,11 @@
 //
 // narrator.ts's narrateScene() already implements the increment/switch logic
 // correctly (NarrateSceneOpts.consecutiveFallbacks, narrator.ts:137) --
-// that's unit-tested elsewhere (narrator.test.ts, cross-domain). What's
-// missing is the WIRING: turn-loop.ts's executeTurn() never passes
-// consecutiveFallbacks to narrateScene() at all (verified directly against
-// this worktree's src/turn-loop.ts:285-304 -- no such field in the call),
-// and ExecuteTurnOpts has no consecutiveFallbacks field to carry it
-// (pinned this wave per the Coordinator Brief: "TurnResult.isFallback +
-// ExecuteTurnOpts.consecutiveFallbacks"). These tests exercise the REAL
+// that's unit-tested elsewhere (narrator.test.ts, cross-domain). The WIRING
+// landed in commit a6b2ca0 (F-940cd4d0): turn-loop.ts's ExecuteTurnOpts now
+// carries a consecutiveFallbacks field (turn-loop.ts:234) and threads it
+// into narrateScene() (turn-loop.ts:535), with game.ts maintaining the
+// counter across turns. These tests exercise the REAL
 // createHarness()->play() loop end-to-end, which is the only way to prove
 // the wiring (not just the isolated function) actually works.
 //
@@ -28,7 +26,7 @@ import { createHarness, resumeHarness } from '../helpers/game-harness.js';
 import { FALLBACK_NARRATION, FALLBACK_NARRATION_REPEATED } from '../../src/narrator/narrator.js';
 
 describe('consecutiveFallbacks wiring through the real turn loop (F-5fce8d7f)', () => {
-  it('red in-worktree, green expected at merge: 3 consecutive failing turns show turn 1 = FALLBACK_NARRATION, turns 2-3 = FALLBACK_NARRATION_REPEATED', async () => {
+  it('3 consecutive failing turns show turn 1 = FALLBACK_NARRATION, turns 2-3 = FALLBACK_NARRATION_REPEATED (landed in commit a6b2ca0, F-940cd4d0)', async () => {
     const h = createHarness({ clientOpts: { generateFailure: 'timeout' } });
 
     const out1 = await h.play('look');
@@ -41,7 +39,7 @@ describe('consecutiveFallbacks wiring through the real turn loop (F-5fce8d7f)', 
     expect(out3).toContain(FALLBACK_NARRATION_REPEATED);
   });
 
-  it('red in-worktree, green expected at merge: streak resets on an intervening success (fail, fail, succeed, fail -> the 4th turn shows plain FALLBACK_NARRATION again, not REPEATED)', async () => {
+  it('streak resets on an intervening success (fail, fail, succeed, fail -> the 4th turn shows plain FALLBACK_NARRATION again, not REPEATED)', async () => {
     const h = createHarness({
       clientOpts: {
         // Call-count-aware: only the 3rd generate() call succeeds.

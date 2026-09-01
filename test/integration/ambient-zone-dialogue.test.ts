@@ -4,11 +4,12 @@
 // no-NPC coverage.
 //
 // generateZoneAmbience() is pure template expansion, already fully
-// unit-tested (src/npc/ambient-dialogue.test.ts, cross-domain). Nothing in
-// turn-loop.ts calls it today (verified directly against this worktree's
-// src/turn-loop.ts -- no import of ambient-dialogue.ts at all), so these
-// tests exercise the real createHarness()->play() loop, which is the only
-// way to prove the wiring itself (not just the isolated generator).
+// unit-tested (src/npc/ambient-dialogue.test.ts, cross-domain). The wiring
+// landed in commit a6b2ca0 (F-6e75fa93) -- src/turn-loop.ts now imports
+// generateAmbientLine/generateZoneAmbience (turn-loop.ts:24) and calls
+// generateZoneAmbience at Step 4.6 (turn-loop.ts:617). These tests exercise
+// the real createHarness()->play() loop, which is the only way to prove the
+// wiring itself end-to-end (not just the isolated generator).
 //
 // Determinism note (scoped down from the routed finding's Fix text,
 // disclosed): the finding recommends cross-checking the rendered line
@@ -56,7 +57,7 @@ function hasAmbientLineFor(output: string, ...names: string[]): boolean {
 }
 
 describe('ambient zone dialogue wiring (F-6f33a480)', () => {
-  it('red in-worktree, green expected at merge: an ordinary exploration turn in a zone with 2+ NPCs renders a real ambient line', async () => {
+  it('an ordinary exploration turn in a zone with 2+ NPCs renders a real ambient line (landed in commit a6b2ca0, F-6e75fa93)', async () => {
     const h = createHarness();
     // chapel-entrance (the starting zone) has both Suspicious Pilgrim and
     // Sister Maren -- generateZoneAmbience()'s own 2+ NPC gate is satisfied

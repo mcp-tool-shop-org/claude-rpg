@@ -27,6 +27,12 @@ export function renderCompactStatus(opts: {
   opportunitySummary?: string;
   arcIndicator?: string;
   endgameIndicator?: string;
+  /**
+   * WO-A4-8 (slice A4 §3, lock 6): the strategic ledger line, pre-formatted
+   * by director-renderer.ts's formatWorldLedgerLine (byte-absent when the
+   * ledger has nothing worth reporting -- see that function's doc comment).
+   */
+  worldLedgerLine?: string;
   fastMode?: boolean;
 }): string {
   const { statusData: s, leverageState, topThreat, suggestedMove, situationTag, economySummary, materialsSummary } = opts;
@@ -68,6 +74,12 @@ export function renderCompactStatus(opts: {
   const leverageLine = formatLeverageStatus(leverageState);
   if (leverageLine !== 'No leverage') {
     lines.push(`  ${leverageLine}`);
+  }
+
+  // WO-A4-8 (slice A4 §3, lock 6): strategic ledger line -- the first
+  // surface of the tick's own ledger (heat, faction alerts, district tone).
+  if (opts.worldLedgerLine) {
+    lines.push(`  ${opts.worldLedgerLine}`);
   }
 
   // Economy line

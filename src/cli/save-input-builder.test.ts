@@ -56,3 +56,26 @@ describe('buildSaveInput (WO-A3-4, slice A3)', () => {
     expect(input).toHaveProperty('rumorEngine');
   });
 });
+
+// WO-A4-7 (slice A4, run swarm-1788288802-f5a0, wave 7): generated-world
+// resume (design doc §4). buildSaveInput passes worldGenProposal/worldSeed
+// straight through from the session accessors game-core lands this same
+// wave (WO-A4-3) -- the identical pass-through discipline as rumorEngine
+// above (WO-A3-4).
+describe('buildSaveInput worldGenProposal/worldSeed pass-through (WO-A4-7)', () => {
+  it('carries whatever getWorldGenProposal()/getWorldSeed() report', () => {
+    // RED (observed on this worktree before game-core's WO-A4-3 lands):
+    // GameSession has no getWorldGenProposal()/getWorldSeed() methods yet
+    // on this branch -- this test throws "session.getWorldGenProposal is
+    // not a function" until the coordinator merges game-core's half of
+    // this slice into the same tree. Per ADDENDUM-cli-display.md WO-A4-7 /
+    // ADDENDUM-COMMON's parallel-wave contract, this is coded against
+    // docs/living-world-slice-a4.md §4 now and is "green expected at
+    // merge", not a bug in this file.
+    const { session } = createHarness();
+    const input = buildSaveInput(session, '/tmp/wo-a4-7-test-save.json');
+
+    expect(input.worldGenProposal).toBe(session.getWorldGenProposal());
+    expect(input.worldSeed).toBe(session.getWorldSeed());
+  });
+});

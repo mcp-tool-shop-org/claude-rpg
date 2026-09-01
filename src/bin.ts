@@ -9,6 +9,7 @@
 import { createInterface } from 'node:readline';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
+import type { Engine } from '@ai-rpg-engine/core';
 
 const require = createRequire(import.meta.url);
 const { version: pkgVersion } = require('../package.json') as { version: string };
@@ -23,21 +24,21 @@ import { GameSession, type GameConfig } from './game.js';
 // from here is './game/world-truth-seed.js' -- using the correct path.
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { createAdaptedClient } from './llm/claude-adapter.js';
-import { generateWorld, type WorldGenResult } from './foundry/world-gen.js';
+import { generateWorld, instantiateWorld, type WorldGenResult, type WorldGenProposal } from './foundry/world-gen.js';
+// WO-A4-7 (slice A4, design doc §4, ADDENDUM-COMMON lock 5): coded against
+// runtime-foundry's WO-A4-6 contract (ADDENDUM-runtime-foundry.md) ahead of
+// that split landing on this branch -- `instantiateWorld` does not exist yet
+// in src/foundry/world-gen.ts as of this edit (still the pre-split single
+// generateWorld). Expected red until the coordinator merges runtime-foundry's
+// half of this wave in; see decideResumePath's call site below for where it
+// is used.
+import { decideResumePath } from './cli/resume-path.js';
 import {
   saveSession,
   loadSession,
   loadProfileFromSession,
-  loadRumorsFromSession,
-  loadPressuresFromSession,
-  loadResolvedPressuresFromSession,
   loadChronicleFromSession,
-  loadNpcAgencyFromSession,
-  loadObligationsFromSession,
-  loadConsequenceChainsFromSession,
   loadPartyFromSession,
-  loadEconomiesFromSession,
-  loadOpportunitiesFromSession,
   loadResolvedOpportunitiesFromSession,
   loadArcSnapshotFromSession,
   loadEndgameTriggersFromSession,
@@ -47,6 +48,7 @@ import {
   listArchivedCampaigns,
   getSavePath,
   getDefaultSaveDir,
+  type SavedSession,
 } from './session/session.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError, renderError, type ErrorPresentation } from './cli/error-presenter.js';
@@ -110,6 +112,11 @@ import {
   getDistrictState,
   getDistrictDefinition,
   computeDistrictMood,
+  // WO-A4-7 (slice A4, coordinator honesty-floor finding -- see runLoad's
+  // partyState restore comment below): an engine-package export, not a
+  // game-core source file, so calling it directly here stays in this
+  // domain's owned globs.
+  setPartyState,
 } from '@ai-rpg-engine/modules';
 import { emitBootZoneEntry } from './cli/boot-zone-entry.js';
 
@@ -378,6 +385,60 @@ function divider(): string {
   return dim('─'.repeat(getTerminalWidth()));
 }
 
+/**
+ * WO-A4-7 (slice A4 design doc §4, ADDENDUM-COMMON lock 5): the "validate
+ * engine state -> assign -> initializeNamespaces -> restore rng" restore
+ * sequence, extracted out of runLoad's pack branch so the NEW generated-
+ * world branch can run the IDENTICAL sequence (the design doc's own wording)
+ * instead of a hand-copied fork that could silently drift from it. Every
+ * step here is exactly what the pack branch already did before this slice --
+ * see this function's individual F-numbered comments, carried over unchanged.
+ *
+ * Throws (never calls process.exit itself) on any failure -- both call
+ * sites wrap this in the SAME try/catch -> presentError(err, 'load',
+ * debugMode) -> rl.close() -> process.exit(1) pattern every other fallible
+ * load step in this file already uses, so the invalid-engine-state message
+ * still renders through error-presenter.ts's presentLoadError exactly as it
+ * did when this branch inlined the check.
+ */
+function restoreEngineStateFromSave(engine: Engine, savedSession: SavedSession): void {
+  // PFE-007: Validate structure before assigning — corrupted saves shouldn't silently break.
+  // Explicitly rejects world.state === null (F-1b8be73f); see cli/engine-state-validator.ts.
+  const validation = validateEngineState(savedSession.engineState);
+  if (!validation.valid) {
+    // F-e58b49ed: previously two raw, uncolored console.error() lines
+    // plus a bare process.exit(1) -- the only fatal branch in this
+    // function that bypassed presentError()/classifyForPresentation
+    // (no headline/explanation/preserved/nextAction shape, no
+    // red-vs-yellow severity signal, no [debug] block even under
+    // --debug). error-presenter.ts's presentLoadError has a matching
+    // branch keyed on this exact message prefix so validation.error
+    // survives into the rendered explanation.
+    throw new Error(`Save file has invalid engine state: ${validation.error}.`);
+  }
+  Object.assign(engine.store.state, structuredClone(validation.state));
+  // F-1afba928 (3.9 slice): the assign above wholesale-replaces the
+  // top-level `modules` key, so a namespace for any module ADDED to the
+  // engine after this save was written would stay undefined and crash
+  // (or silently blank) its first reader. Mirror Engine.deserialize's
+  // own post-restore step: absent namespaces get the module's registered
+  // defaults; present ones are never touched.
+  engine.moduleManager.initializeNamespaces(engine.store);
+  // task_3ddb1c06 (c): the save carries the full engine.serialize()
+  // envelope — restore the seeded RNG stream too, or every resume
+  // silently forks the world's determinism. Number.isFinite, not
+  // typeof: JSON.parse('1e999') yields Infinity, and SeededRNG.setState
+  // does no validation (mirrors the engine's own world.ts guard).
+  // Full Engine.deserialize remains blocked: it needs the pack's module
+  // list, which packs don't export — and actionLog is private with no
+  // setter, so campaign-spanning getActionLog() after a resume is an
+  // engine-side ask (pack engine-options export), not fixable here.
+  const envelope = JSON.parse(savedSession.engineState) as { world?: { rngState?: unknown } };
+  if (typeof envelope.world?.rngState === 'number' && Number.isFinite(envelope.world.rngState)) {
+    engine.store.rng.setState(envelope.world.rngState);
+  }
+}
+
 async function runLoad(): Promise<void> {
   const saves = await listSaves();
   if (saves.length === 0) {
@@ -518,55 +579,19 @@ async function runLoad(): Promise<void> {
   // (mirrors itemCatalog's own existing hoist) so pack?.buildCatalog is
   // still in scope at the renderRecap() call site further down.
   let pack: PackInfo | undefined;
-  if (savedSession.packId) {
-    pack = getPackById(savedSession.packId);
+  // WO-A4-7 (slice A4 design doc §4, ADDENDUM-COMMON lock 5): which of the
+  // three restore branches this save takes -- pack (pre-A4, unchanged),
+  // generated (closes the wave-5 finding that generated worlds had no
+  // resume path), or refuse (neither present, falls through to the existing
+  // "!engine" refusal below with no new copy). See cli/resume-path.ts.
+  const resumePath = decideResumePath(savedSession);
+  if (resumePath.kind === 'pack') {
+    pack = getPackById(resumePath.packId);
     if (pack) {
       engine = pack.createGame();
       itemCatalog = pack.itemCatalog;
       try {
-        // PFE-007: Validate structure before assigning — corrupted saves shouldn't silently break.
-        // Explicitly rejects world.state === null (F-1b8be73f); see cli/engine-state-validator.ts.
-        const validation = validateEngineState(savedSession.engineState);
-        if (!validation.valid) {
-          // F-e58b49ed: previously two raw, uncolored console.error() lines
-          // plus a bare process.exit(1) -- the only fatal branch in this
-          // function that bypassed presentError()/classifyForPresentation
-          // (no headline/explanation/preserved/nextAction shape, no
-          // red-vs-yellow severity signal, no [debug] block even under
-          // --debug). Routes through the same pipeline the adjacent catch
-          // block and the "!engine" branch below already use;
-          // error-presenter.ts's presentLoadError has a matching branch
-          // keyed on this exact message prefix so validation.error survives
-          // into the rendered explanation.
-          presentError(
-            new Error(`Save file has invalid engine state: ${validation.error}.`),
-            'load',
-            debugMode,
-          );
-          rl.close();
-          process.exit(1);
-        }
-        Object.assign(engine.store.state, structuredClone(validation.state));
-        // F-1afba928 (3.9 slice): the assign above wholesale-replaces the
-        // top-level `modules` key, so a namespace for any module ADDED to the
-        // engine after this save was written would stay undefined and crash
-        // (or silently blank) its first reader. Mirror Engine.deserialize's
-        // own post-restore step: absent namespaces get the module's registered
-        // defaults; present ones are never touched.
-        engine.moduleManager.initializeNamespaces(engine.store);
-        // task_3ddb1c06 (c): the save carries the full engine.serialize()
-        // envelope — restore the seeded RNG stream too, or every resume
-        // silently forks the world's determinism. Number.isFinite, not
-        // typeof: JSON.parse('1e999') yields Infinity, and SeededRNG.setState
-        // does no validation (mirrors the engine's own world.ts guard).
-        // Full Engine.deserialize remains blocked: it needs the pack's module
-        // list, which packs don't export — and actionLog is private with no
-        // setter, so campaign-spanning getActionLog() after a resume is an
-        // engine-side ask (pack engine-options export), not fixable here.
-        const envelope = JSON.parse(savedSession.engineState) as { world?: { rngState?: unknown } };
-        if (typeof envelope.world?.rngState === 'number' && Number.isFinite(envelope.world.rngState)) {
-          engine.store.rng.setState(envelope.world.rngState);
-        }
+        restoreEngineStateFromSave(engine, savedSession);
       } catch (err) {
         // F-c7e13af2: every exception here is fatal (not just JSON parse errors,
         // which validateEngineState now handles internally) — falling through with
@@ -576,12 +601,37 @@ async function runLoad(): Promise<void> {
         process.exit(1);
       }
     }
+  } else if (resumePath.kind === 'generated') {
+    // WO-A4-7: rebuild the engine via runtime-foundry's instantiateWorld
+    // (WO-A4-6), then run the IDENTICAL restore sequence the pack branch
+    // above runs (design doc §4: "the same restore sequence a pack world
+    // runs") -- restoreEngineStateFromSave is the shared extraction. No
+    // itemCatalog/pack for a generated world, matching runNew's fresh-world
+    // construction (GameConfig.itemCatalog stays undefined).
+    try {
+      const proposal = JSON.parse(resumePath.proposalJson) as WorldGenProposal;
+      engine = instantiateWorld(proposal, resumePath.seed);
+      restoreEngineStateFromSave(engine, savedSession);
+    } catch (err) {
+      presentError(err, 'load', debugMode);
+      rl.close();
+      process.exit(1);
+    }
   }
   if (!engine) {
     // F-c8dd84fe: was a bare console.error with no packId and no next-action
     // guidance, unlike every other fatal branch in this function. Routes
     // through the same presentError(err, 'load', debugMode) pipeline the
     // adjacent engine-state-validation catch above already uses.
+    //
+    // WO-A4-7: also the refusal path for a save with neither packId nor
+    // worldGenProposal (resumePath.kind === 'refuse') -- design doc §4:
+    // "refused through the existing load presenter (no new copy)". Left
+    // exactly as it read before this slice; a packless, proposal-less save
+    // is not a shape this slice's fixtures produce (both v1/v2 saves and
+    // pack-based v3 saves always carry a packId), so the interpolated
+    // "unknown pack" wording, while imperfect for that corrupt-save edge
+    // case, is the addendum's explicit "no new lines" instruction.
     presentError(
       new Error(`Cannot restore engine — unknown pack "${savedSession.packId}".`),
       'load',
@@ -597,17 +647,44 @@ async function runLoad(): Promise<void> {
   // Restore history
   const history = TurnHistory.fromJSON(savedSession.turnHistory);
 
-  // Restore player rumors, pressures, fallout history, and chronicle
-  const restoredRumors = loadRumorsFromSession(savedSession);
-  const restoredPressures = loadPressuresFromSession(savedSession);
-  const restoredResolved = loadResolvedPressuresFromSession(savedSession);
+  // Restore fallout history, chronicle, and party.
+  //
+  // WO-A4-1 (game-core, this same wave, slice A4 §1/lock 1) converts
+  // playerRumors/activePressures/resolvedPressures/lastNpcProfiles/
+  // lastNpcActions/npcObligations/activeConsequenceChains/districtEconomies/
+  // activeOpportunities into `get` accessors reading world truth on every
+  // access -- this file used to load each of those off the raw savedSession
+  // here and assign them onto the session below, but that was ALREADY dead
+  // code before this edit: session.seedWorldTruth() (called via
+  // runWorldTruthSeed further down) invokes GameSession.refreshWorldViews(),
+  // which unconditionally overwrites all nine of those fields from live
+  // getActivePressures(world)/getPersistedOpportunities(world)/etc reads
+  // immediately afterward — confirmed against game.ts's
+  // seedWorldTruth()/refreshWorldViews() bodies — before anything
+  // downstream (captureWorldSnapshot below, runGameLoop's initial snapshot)
+  // ever reads them. Legacy (1.x) saves are covered by a SEPARATE, already-
+  // existing seed path: game-core's seedWorldTruthFromSession
+  // (src/game/world-truth-seed.ts) reads these same savedSession fields
+  // directly and writes them into the engine's world-truth namespaces once,
+  // gated on the STORES_SEEDED_KEY marker -- it does not need this file to
+  // load them first. Removed entirely rather than ported to a setter: there
+  // is nothing left here to compute or assign for these nine.
   const restoredJournal = loadChronicleFromSession(savedSession);
-  const restoredNpcAgency = loadNpcAgencyFromSession(savedSession);
-  const restoredObligations = loadObligationsFromSession(savedSession);
-  const restoredChains = loadConsequenceChainsFromSession(savedSession);
+  // partyState is ALSO added to the getter table by WO-A4-1
+  // (`getPartyState(world)`), but unlike the nine above,
+  // GameSession.refreshWorldViews() has never refreshed it (no
+  // getPartyState call in that method, verified against game.ts), and
+  // seedWorldTruthFromSession has never seeded it either (verified: no
+  // "party" reference anywhere in world-truth-seed.ts) -- this file's own
+  // assignment below was the SOLE writer, and it wrote into a plain session
+  // field that engine.serialize() never captured. That was already a
+  // pre-existing data-loss bug independent of this slice (resume a 1.x save
+  // with recruited companions, save again, and the companions were never in
+  // the resulting v3 engineState at all) -- fixed in the same motion this
+  // getter conversion forces, by writing straight into the engine's own
+  // companion-core world-truth namespace instead (see the guarded
+  // setPartyState call below, in place of the old plain-field assignment).
   const restoredParty = loadPartyFromSession(savedSession);
-  const restoredEconomies = loadEconomiesFromSession(savedSession);
-  const restoredOpportunities = loadOpportunitiesFromSession(savedSession);
   const restoredResolvedOpps = loadResolvedOpportunitiesFromSession(savedSession);
   const restoredArcSnapshot = loadArcSnapshotFromSession(savedSession);
   const restoredEndgameTriggers = loadEndgameTriggersFromSession(savedSession);
@@ -650,17 +727,15 @@ async function runLoad(): Promise<void> {
     rumorEngineSnapshot: savedSession.rumorEngine,
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
-  // Restore rumors, pressures, and fallout history into session
-  session.playerRumors = restoredRumors;
-  session.activePressures = restoredPressures;
-  session.resolvedPressures = restoredResolved;
-  session.lastNpcProfiles = restoredNpcAgency.profiles;
-  session.lastNpcActions = restoredNpcAgency.actions;
-  session.npcObligations = restoredObligations;
-  session.activeConsequenceChains = restoredChains;
-  session.partyState = restoredParty;
-  if (restoredEconomies.size > 0) session.districtEconomies = restoredEconomies;
-  session.activeOpportunities = restoredOpportunities;
+  // WO-A4-7 (slice A4, coordinator honesty-floor finding): see the doc
+  // comment on restoredParty above -- a v3 save's loadPartyFromSession
+  // always returns an EMPTY createPartyState() default (v3 never writes the
+  // legacy `partyState` field; see session.ts's loadPartyFromSession), so
+  // this stays guarded exactly like districtEconomies used to be, or it
+  // would wipe a v3 save's real, already-restored companions.
+  if (restoredParty.companions.length > 0) {
+    setPartyState(engine.world, restoredParty);
+  }
   session.resolvedOpportunities = restoredResolvedOpps;
   if (restoredArcSnapshot) session.arcSnapshot = restoredArcSnapshot;
   session.endgameTriggers = restoredEndgameTriggers;
@@ -806,6 +881,21 @@ async function runNew(worldPrompt: string): Promise<void> {
     title,
     tone: result.tone,
     worldPrompt,
+    // WO-A4-7 (slice A4 design doc §4, ADDENDUM-COMMON lock 5): a generated
+    // world has no packId to resume from on the next `claude-rpg load` --
+    // the proposal + the seed it was instantiated with ride the session
+    // config so the FIRST save carries them (game-core's saveSession only
+    // writes worldGenProposal when packId is absent). `result.seed` is
+    // runtime-foundry's WO-A4-6 addition (the resolved seed generateWorld
+    // instantiated with, whether caller-supplied or randomly generated --
+    // "the caller resolves the seed and passes it, so a resumed world
+    // reuses the saved one"); `result.proposal` is already validated by
+    // generateWorld's own retry loop above. Both fields do not exist yet on
+    // GameConfig/WorldGenResult on this branch (game-core's WO-A4-3,
+    // runtime-foundry's WO-A4-6) -- coded against ADDENDUM-COMMON's
+    // parallel-wave contract, "green expected at merge".
+    worldGenProposal: result.proposal ?? undefined,
+    worldSeed: result.seed,
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   const rl = createInterface({

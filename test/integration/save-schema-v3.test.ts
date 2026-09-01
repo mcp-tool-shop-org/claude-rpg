@@ -136,8 +136,13 @@ function expectV3Shape(raw: Record<string, unknown>): void {
   // same convention as every other serialized-blob SavedSession field
   // (chronicleRecords, npcObligations, etc.).
   expect(typeof raw.rumorEngine).toBe('string');
-  const engineState = JSON.parse(raw.engineState as string) as { world?: { globals?: Record<string, unknown> } };
-  expect(engineState.world?.globals?.[MARKER_KEY]).toBeTruthy();
+  // Coordinator stitch (slice A3): Engine.serialize() nests the world state
+  // under `world.state` (the save listing's engineState peek reads the same
+  // path); the marker lives in world.state.globals.
+  const engineState = JSON.parse(raw.engineState as string) as {
+    world?: { state?: { globals?: Record<string, unknown> }; globals?: Record<string, unknown> };
+  };
+  expect((engineState.world?.state?.globals ?? engineState.world?.globals)?.[MARKER_KEY]).toBeTruthy();
 }
 
 // ─── Schema v3 pin ─────────────────────────────────────────────

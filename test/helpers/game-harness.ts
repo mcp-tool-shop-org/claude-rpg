@@ -269,7 +269,7 @@ export async function resumeHarness(
   // lets this helper pass it through today without an `any` escape hatch,
   // and costs nothing once game-core's own worktree lands the real field
   // (a structural superset of GameConfig is still assignable to it).
-  const gameConfig: GameConfig & { rumorEngine?: RumorEngine } = {
+  const gameConfig: GameConfig = {
     engine,
     client,
     tone: savedSession.tone,
@@ -286,7 +286,10 @@ export async function resumeHarness(
     // Coordinator stitch (wave 18): mirror bin.ts's conversation-memory
     // restoration (F-462792bb, Director ruling: persisted).
     npcConversations: loadNpcConversationsFromSession(savedSession),
-    ...(restoredRumorEngine ? { rumorEngine: restoredRumorEngine } : {}),
+    // Coordinator stitch (slice A3): GameSession restores the RumorEngine from
+    // the serialized snapshot itself (GameConfig.rumorEngineSnapshot); the
+    // deserializeSafe above runs only to expose restore warnings to tests.
+    ...(rumorSnapshotRaw ? { rumorEngineSnapshot: rumorSnapshotRaw } : {}),
     ...opts.gameOpts,
   };
   const session = new GameSession(gameConfig);
@@ -349,7 +352,7 @@ export async function resumeHarness(
  */
 export async function saveHarness(h: GameHarness, savePath: string): Promise<void> {
   const session = h.session;
-  const input: SaveSessionInput & { rumorEngine?: RumorEngine } = {
+  const input: SaveSessionInput = {
     engine: session.engine,
     history: session.history,
     tone: session.tone,
@@ -365,10 +368,9 @@ export async function saveHarness(h: GameHarness, savePath: string): Promise<voi
     endgameTriggers: session.endgameTriggers,
     finaleOutline: session.finaleOutline,
     campaignStatus: session.campaignStatus,
-    // WO-A3-7 assumption -- see this function's doc comment above.
-    ...((session as unknown as { rumorEngine?: RumorEngine }).rumorEngine
-      ? { rumorEngine: (session as unknown as { rumorEngine?: RumorEngine }).rumorEngine }
-      : {}),
+    // Coordinator stitch (slice A3): the save carries the serialized snapshot,
+    // exactly as bin.ts's buildSaveInput does.
+    rumorEngine: session.getRumorEngineSnapshot(),
   };
   await saveSession(input as SaveSessionInput);
 }

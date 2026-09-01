@@ -79,6 +79,22 @@ export function seedWorldTruthFromSession(
   if (world.globals[STORES_SEEDED_KEY] !== undefined) {
     return { seeded: false, stores: [] };
   }
+  // Coordinator stitch (slice A3, wave 6 — the tests agent's data-loss
+  // finding): a v3 save never carries the ten legacy fields, so seeding from
+  // it would overwrite real world-truth namespaces with empty defaults. A v3
+  // save's engineState IS the truth. Stamp the marker so the invariant
+  // "every v3 world carries it" holds from here on, and seed nothing.
+  // (Keyed on the PRESENCE of legacy fields, not on schemaVersion: after
+  // migrateSave every loaded save reads as the current schema, so the only
+  // honest signal that there is something to seed from is the fields.)
+  const legacyFields: Array<keyof SavedSession> = [
+    'playerRumors', 'activePressures', 'resolvedPressures', 'npcAgencySnapshot',
+    'npcObligations', 'consequenceChains', 'districtEconomies', 'activeOpportunities',
+  ];
+  if (!legacyFields.some((f) => session[f] !== undefined)) {
+    world.globals[STORES_SEEDED_KEY] = `${session.schemaVersion}@${engineVersion}`;
+    return { seeded: false, stores: [] };
+  }
 
   const stores: string[] = [];
 

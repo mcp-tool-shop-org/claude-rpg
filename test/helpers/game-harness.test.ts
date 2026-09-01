@@ -10,6 +10,7 @@
 // or after the round-trip.
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { getWorldTickState } from '@ai-rpg-engine/modules';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -62,7 +63,11 @@ describe('resumeHarness — session-state continuity (F-95191273)', () => {
       tags: ['test'],
       currentTick: tickBeforeSave,
     });
-    h1.session.activePressures = [pressure];
+    // Coordinator stitch (slice A2/A3): activePressures is a view of world
+    // truth and a v3 save carries pressures only inside engineState — seed
+    // the world-tick namespace, then refresh the view.
+    getWorldTickState(h1.session.engine.world).pressures.push(pressure);
+    (h1.session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
 
     await saveSession({
       engine: h1.session.engine,
@@ -72,8 +77,8 @@ describe('resumeHarness — session-state continuity (F-95191273)', () => {
       packId: 'chapel-threshold',
       genre: h1.session.genre,
       profile: h1.session.profile,
-      playerRumors: h1.session.playerRumors,
-      activePressures: h1.session.activePressures,
+      // Coordinator stitch (slice A3): v3 writers take no legacy stores —
+      // the world (engineState) carries pressures and rumors.
     });
 
     const h2 = await resumeHarness(savePath, {

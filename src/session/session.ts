@@ -1395,7 +1395,18 @@ export type ArchivedCampaignSummary = {
  * does.
  */
 type EngineStateZonePeek = {
-  world?: { state?: { locationId?: string; zones?: Record<string, { name?: string }> } };
+  world?: {
+    state?: {
+      locationId?: string;
+      zones?: Record<string, { name?: string }>;
+      playerId?: string;
+      entities?: Record<string, { custom?: Record<string, string | number | boolean> }>;
+      modules?: {
+        'world-tick'?: { pressures?: Array<{ urgency?: number; description?: string }> };
+        'companion-core'?: { party?: { companions?: unknown[] } };
+      };
+    };
+  };
 };
 
 /** List all saves with summary info for display. */
@@ -1430,8 +1441,19 @@ export async function listSaves(): Promise<SaveSlotSummary[]> {
       }
 
       // Extract hottest pressure from save
+      // Coordinator stitch (slice A3): a v3 save carries no legacy fields — the
+      // listing summaries derive from the engineState peek (world-tick
+      // pressures, companion-core party, the player entity's leverage) and
+      // fall back to the legacy fields for v1/v2 saves.
+      let peek: EngineStateZonePeek | undefined;
+      try { peek = JSON.parse(session.engineState) as EngineStateZonePeek; } catch { peek = undefined; }
+      const peekState = peek?.world?.state;
       let hottestPressure: string | undefined;
-      if (session.activePressures) {
+      const peekPressures = peekState?.modules?.['world-tick']?.pressures;
+      if (peekPressures && peekPressures.length > 0) {
+        const hottest = peekPressures.reduce((a, b) => ((a.urgency ?? 0) > (b.urgency ?? 0) ? a : b));
+        hottestPressure = hottest.description;
+      } else if (session.activePressures) {
         try {
           const pressures = JSON.parse(session.activePressures) as WorldPressure[];
           if (pressures.length > 0) {
@@ -1445,7 +1467,10 @@ export async function listSaves(): Promise<SaveSlotSummary[]> {
 
       // Extract companion count from party state
       let companionCount: number | undefined;
-      if (session.partyState) {
+      const peekCompanions = peekState?.modules?.['companion-core']?.party?.companions;
+      if (peekCompanions && peekCompanions.length > 0) {
+        companionCount = peekCompanions.length;
+      } else if (session.partyState) {
         try {
           const party = JSON.parse(session.partyState) as { companions?: unknown[] };
           if (party.companions && party.companions.length > 0) {

@@ -93,7 +93,7 @@ describe('save/load round-trip', () => {
     const result = await loadSession(path);
     const loaded = result.session;
 
-    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.schemaVersion).toBe(3) /* stitch: schema v3 (slice A3) */;
     expect(loaded.tone).toBe('dark fantasy');
     expect(loaded.engineState).toBeTruthy();
     expect(loaded.turnHistory).toBeTruthy();
@@ -315,7 +315,7 @@ describe('write integrity', () => {
 
     await saveSession({ engine, history, tone: 'dark fantasy', savePath: deepPath });
     const result = await loadSession(deepPath);
-    expect(result.session.schemaVersion).toBe(2);
+    expect(result.session.schemaVersion).toBe(3) /* stitch: schema v3 (slice A3) */;
   });
 });
 
@@ -358,7 +358,7 @@ describe('write integrity: rename failure recovery', () => {
 
     // And it must still be a valid, loadable save -- not just byte-identical.
     const result = await loadSession(path);
-    expect(result.session.schemaVersion).toBe(2);
+    expect(result.session.schemaVersion).toBe(3) /* stitch: schema v3 (slice A3) */;
 
     // No leaked tmp file from the failed attempt (session.ts's outer catch
     // unlinks tmpPath on any failure).

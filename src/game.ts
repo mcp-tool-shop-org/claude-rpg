@@ -12,7 +12,7 @@
 // v1.2: NPC agency — named NPCs as individual actors with goals, fears, and autonomous actions
 // v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
-import { seedWorldTruthFromSession, type WorldTruthSeedReport } from './game/world-truth-seed.js';
+import { seedWorldTruthFromSession, STORES_SEEDED_KEY, type WorldTruthSeedReport } from './game/world-truth-seed.js';
 import { mirrorPlayerRumor } from './game/rumor-mirror.js';
 import { RumorEngine, type EngineSnapshot } from '@ai-rpg-engine/rumor-system';
 import type { Engine, EntityState, ResolvedEvent } from '@ai-rpg-engine/core';
@@ -1113,6 +1113,14 @@ export class GameSession {
    * turn-loop.ts's `events` includes it for narration/hints/history.
    */
   private runWorldRound(actionEvents: ResolvedEvent[]): ResolvedEvent[] {
+    // Coordinator stitch (slice A3): a fresh world stamps the seed marker at
+    // its first round, so every save it ever writes carries it and no later
+    // load can mistake the world for an unseeded 1.x save (the tests agent's
+    // data-loss finding; the seed also refuses v3 saves outright).
+    if (this.engine.world.globals[STORES_SEEDED_KEY] === undefined) {
+      const ver = (this.engine.world as { meta?: { saveVersion?: string } }).meta?.saveVersion ?? 'unknown';
+      this.engine.world.globals[STORES_SEEDED_KEY] = `fresh@${ver}`;
+    }
     // 1. Corpse gate.
     const player = this.engine.world.entities[this.engine.world.playerId];
     const alreadyDead = (player?.resources?.hp ?? 1) <= 0;

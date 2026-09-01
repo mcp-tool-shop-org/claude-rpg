@@ -88,23 +88,24 @@ describe('validateVersion', () => {
 // ─── migrateSave pipeline ────────────────────────────────────
 
 describe('migrateSave', () => {
-  it('v1 minimal → v2 with correct metadata', () => {
+  it('v1 minimal → v3 with correct metadata (two ordered steps)', () => {
     const raw = { version: '0.1.0', engineState: '{}', turnHistory: { turns: [] }, tone: 'grim', savedAt: '2026-01-01T00:00:00Z' };
     const result = migrateSave(raw);
 
+    // Coordinator stitch (slice A3): CURRENT_SCHEMA_VERSION is 3; v1 → v2 → v3.
     expect(result.sourceVersion).toBe(1);
     expect(result.targetVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(result.stepsApplied).toBe(1);
-    expect(result.data.schemaVersion).toBe(2);
+    expect(result.stepsApplied).toBe(2);
+    expect(result.data.schemaVersion).toBe(3);
     expect(result.data.createdWithVersion).toBe('0.1.0');
     expect(result.data.campaignStatus).toBe('active');
   });
 
-  it('v1 rich → v2 preserves all optional fields', () => {
+  it('v1 rich → v3 preserves all optional fields (the legacy fields survive for the load-time seed)', () => {
     const raw = JSON.parse('{"version":"1.4.0","engineState":"{}","turnHistory":{"turns":[]},"tone":"dark","savedAt":"2026-01-01T00:00:00Z","playerRumors":"[]","activePressures":"[]","chronicleRecords":"[]","campaignStatus":"active"}');
     const result = migrateSave(raw);
 
-    expect(result.data.schemaVersion).toBe(2);
+    expect(result.data.schemaVersion).toBe(3);
     expect(result.data.playerRumors).toBe('[]');
     expect(result.data.activePressures).toBe('[]');
     expect(result.data.chronicleRecords).toBe('[]');
@@ -117,13 +118,13 @@ describe('migrateSave', () => {
     expect(result.data.campaignStatus).toBe('active');
   });
 
-  it('v2 passes through with zero steps', () => {
+  it('v2 migrates one pure step to v3 (schemaVersion stamped, nothing else touched)', () => {
     const raw = { schemaVersion: 2, version: '1.4.0', engineState: '{}', turnHistory: { turns: [] }, tone: 'dark', savedAt: 'x' };
     const result = migrateSave(raw);
 
     expect(result.sourceVersion).toBe(2);
-    expect(result.stepsApplied).toBe(0);
-    expect(result.data).toEqual(raw);
+    expect(result.stepsApplied).toBe(1);
+    expect(result.data).toEqual({ ...raw, schemaVersion: 3 });
   });
 
   it('future version is rejected', () => {
@@ -147,8 +148,8 @@ describe('fixture round-trips via loadSession', () => {
 
     expect(result.migrated).toBe(true);
     expect(result.sourceVersion).toBe(1);
-    expect(result.stepsApplied).toBe(1);
-    expect(result.session.schemaVersion).toBe(2);
+    expect(result.stepsApplied).toBe(2);
+    expect(result.session.schemaVersion).toBe(3);
     expect(result.session.tone).toBe('grim');
   });
 
@@ -199,13 +200,13 @@ describe('fixture round-trips via loadSession', () => {
     expect(result.session.characterName).toBe('Brynn');
   });
 
-  it('v2-current loads without migration', async () => {
+  it('v2-current loads through the one pure v2→v3 step', async () => {
     const path = await fixtureToTmp('v2-current.json');
     const result = await loadSession(path);
 
-    expect(result.migrated).toBe(false);
-    expect(result.stepsApplied).toBe(0);
-    expect(result.session.schemaVersion).toBe(2);
+    expect(result.migrated).toBe(true);
+    expect(result.stepsApplied).toBe(1);
+    expect(result.session.schemaVersion).toBe(3);
     expect(result.session.characterName).toBe('Aldric');
   });
 

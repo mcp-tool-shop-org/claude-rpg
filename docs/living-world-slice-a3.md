@@ -63,10 +63,16 @@ dialogue surface to per-hearer stances without a second migration.
   them — the seed needs them.
 - The runtime seed (A2-truth's `seedWorldTruthFromSession`, called from
   bin.ts after `initializeNamespaces`) reads the legacy fields ONLY when the
-  world carries no `claude_rpg.stores_seeded` marker. A v3 save always
-  carries the marker inside `engineState`, so a v3 load never seeds; a v1/v2
-  load seeds exactly once. Document the two-phase rule in
-  `docs/persistence-versioning.md` (coordinator-authored).
+  world carries no `claude_rpg.stores_seeded` marker AND at least one legacy
+  field is present. **Corrected at the wave-6 stitch (the tests agent's
+  data-loss finding):** a v3 save carries none of the ten fields, so a seed
+  keyed on the marker alone would have overwritten real world truth with
+  empty defaults for any world that never stamped the marker. Two guards
+  now hold the invariant: the seed refuses a save with no legacy fields
+  (stamping the marker as it does), and a fresh world stamps the marker at
+  its first round (`runWorldRound`). The guard is keyed on field PRESENCE,
+  not on `schemaVersion` — after `migrateSave` every loaded save reads as the
+  current schema. Documented in `docs/persistence-versioning.md`.
 - `buildSaveInput` (bin.ts) stops passing the eleven stores; `saveSession`
   stops serializing them; `SaveSessionInput` drops those keys (a compile
   error is the tripwire for any caller still passing them).

@@ -6,7 +6,7 @@ import {
   sanitizeFilename,
   getTitleEvolutions,
   applyFalloutEffects,
-  buildPressureInputs,
+  readFactionCognitionScalars,
   propagateRumors,
   addRumor,
   capPlayerRumors,
@@ -23,7 +23,7 @@ import {
   getStatusDataFromProfile,
 } from './game-state.js';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { PartyState } from '@ai-rpg-engine/modules';
+import { getActivePressures, getFactionCognition, type PartyState } from '@ai-rpg-engine/modules';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
 import type { BuildCatalog } from '@ai-rpg-engine/character-creation';
 
@@ -123,6 +123,14 @@ describe('getTitleEvolutions', () => {
   });
 });
 
+// WO-A2-3/4 (slice A2 §4, write-through): applyFalloutEffects no longer
+// takes/returns activePressures or districtEconomies (see its own doc
+// comment, game-state.ts) — a chained pressure and an economy shift now
+// land straight on world truth (world.modules), so every mock world below
+// carries `modules: {}` (the accessors' own non-attaching-read contract
+// requires at least an empty modules object; see world-tick.js's
+// getWorldTickState/peekState) and pressure-spawn assertions read
+// getActivePressures(world) instead of a returned array.
 describe('applyFalloutEffects', () => {
   it('applies reputation effect to profile', () => {
     const profile = makeMinimalProfile({ reputation: [{ factionId: 'guild', value: 50 }] });
@@ -131,10 +139,8 @@ describe('applyFalloutEffects', () => {
       summary: 'Test fallout',
       effects: [{ type: 'reputation' as const, factionId: 'guild', delta: 10 }],
     };
-    const result = applyFalloutEffects(
-      fallout, profile, { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {} } as any,
-      [], [], makeEmptyPartyState(), new Map(), 'fantasy', 1,
-    );
+    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {} } as any;
+    const result = applyFalloutEffects(fallout, profile, world, [], makeEmptyPartyState(), 'fantasy', 1);
     const guildRep = result.profile!.reputation.find((r) => r.factionId === 'guild');
     expect(guildRep!.value).toBe(60);
   });
@@ -153,16 +159,18 @@ describe('applyFalloutEffects', () => {
         tags: ['chain'],
       }],
     };
-    const result = applyFalloutEffects(
-      fallout, profile, { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {} } as any,
-      [], [], makeEmptyPartyState(), new Map(), 'fantasy', 1,
-    );
-    expect(result.activePressures.length).toBe(1);
+    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {} } as any;
+    applyFalloutEffects(fallout, profile, world, [], makeEmptyPartyState(), 'fantasy', 1);
+    expect(getActivePressures(world).length).toBe(1);
   });
 
   it('does not spawn pressure when at max capacity', () => {
     const profile = makeMinimalProfile();
-    const existing = Array.from({ length: 3 }, (_, i) => ({ id: `p${i}` })) as any[];
+    const existing = Array.from({ length: 3 }, (_, i) => ({ id: `p${i}`, kind: `other-${i}` })) as any[];
+    const world = {
+      entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {},
+      modules: { 'world-tick': { pressures: existing, lastHeat: 0, quietRounds: 0, lastEventIndex: 0, milestones: [] } },
+    } as any;
     const fallout = {
       resolution: { pressureId: 'p-src', pressureKind: 'test' as any, resolutionType: 'resolved-by-player' as const, resolvedBy: 'player', resolutionVisibility: 'known' as const, resolvedAtTick: 1 },
       summary: 'Capped',
@@ -175,11 +183,8 @@ describe('applyFalloutEffects', () => {
         tags: [],
       }],
     };
-    const result = applyFalloutEffects(
-      fallout, profile, { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {} } as any,
-      [], existing, makeEmptyPartyState(), new Map(), 'fantasy', 1,
-    );
-    expect(result.activePressures.length).toBe(3);
+    applyFalloutEffects(fallout, profile, world, [], makeEmptyPartyState(), 'fantasy', 1);
+    expect(getActivePressures(world).length).toBe(3);
   });
 
   it('returns null profile when input profile is null', () => {
@@ -188,40 +193,39 @@ describe('applyFalloutEffects', () => {
       summary: 'Null profile',
       effects: [{ type: 'reputation' as const, factionId: 'guild', delta: 5 }],
     };
-    const result = applyFalloutEffects(
-      fallout, null, { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {} } as any,
-      [], [], makeEmptyPartyState(), new Map(), 'fantasy', 1,
-    );
+    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {} } as any;
+    const result = applyFalloutEffects(fallout, null, world, [], makeEmptyPartyState(), 'fantasy', 1);
     expect(result.profile).toBeNull();
   });
 });
 
-describe('buildPressureInputs', () => {
-  it('builds valid PressureInputs from minimal state', () => {
+// WO-A2-4 (slice A2 §5, deletion): buildPressureInputs (this file's own
+// app-side PressureInputs assembly) is deleted with its sole caller — see
+// game-state.ts's own deletion note. The faction-cognition type-safety
+// regression it used to cover (B-010) is preserved directly against
+// readFactionCognitionScalars, the function that actually does the
+// non-numeric-value guarding.
+describe('readFactionCognitionScalars — faction cognition type safety', () => {
+  it('handles faction cognition with non-numeric alertLevel/cohesion', () => {
     const world = {
       entities: {},
       factions: { guild: { id: 'guild' } },
       locationId: 'zone-1',
       playerId: 'p1',
       zones: {},
-      modules: {},
+      modules: {
+        cognition: {
+          factions: {
+            guild: { alertLevel: 'high', cohesion: null },
+          },
+        },
+      },
     } as any;
-    const profile = makeMinimalProfile();
-    const inputs = buildPressureInputs(world, profile, [], [], 'fantasy', 5, new Map());
-    expect(inputs.genre).toBe('fantasy');
-    expect(inputs.currentTick).toBe(5);
-    expect(inputs.reputation).toHaveLength(1);
-    expect(inputs.reputation[0].factionId).toBe('guild');
-  });
-
-  it('handles null profile gracefully', () => {
-    const world = {
-      entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {},
-      modules: {},
-    } as any;
-    const inputs = buildPressureInputs(world, null, [], [], 'cyberpunk', 10, new Map());
-    expect(inputs.playerLevel).toBe(1);
-    expect(inputs.totalTurns).toBe(0);
+    // Should not throw even with bad cognition data
+    const scalars = readFactionCognitionScalars(getFactionCognition(world, 'guild'));
+    expect(scalars).toBeDefined();
+    expect(typeof scalars.alertLevel).toBe('number');
+    expect(typeof scalars.cohesion).toBe('number');
   });
 });
 
@@ -423,29 +427,10 @@ describe('getPlayerFactionAccess — negative reputation handling', () => {
   });
 });
 
-// B-010: buildPressureInputs faction cognition type safety
-describe('buildPressureInputs — faction cognition type safety', () => {
-  it('handles faction cognition with non-numeric alertLevel/cohesion', () => {
-    const world = {
-      entities: {},
-      factions: { guild: { id: 'guild' } },
-      locationId: 'zone-1',
-      playerId: 'p1',
-      zones: {},
-      modules: {
-        cognition: {
-          factions: {
-            guild: { alertLevel: 'high', cohesion: null },
-          },
-        },
-      },
-    } as any;
-    const profile = makeMinimalProfile();
-    // Should not throw even with bad cognition data
-    const inputs = buildPressureInputs(world, profile, [], [], 'fantasy', 5, new Map());
-    expect(inputs.factionStates).toBeDefined();
-  });
-});
+// B-010: faction cognition type safety — see the
+// 'readFactionCognitionScalars — faction cognition type safety' describe
+// block above (moved there when buildPressureInputs, the wrapper this test
+// used to go through, was deleted — WO-A2-4, slice A2 §5).
 
 // B-011: isValidSupplyCategory and applyEconomyShiftToMap validation
 describe('isValidSupplyCategory', () => {

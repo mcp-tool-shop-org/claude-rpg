@@ -12,7 +12,7 @@
 // v1.2: NPC agency — named NPCs as individual actors with goals, fears, and autonomous actions
 // v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
-import type { Engine, EntityState } from '@ai-rpg-engine/core';
+import type { Engine, EntityState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog, ItemDefinition } from '@ai-rpg-engine/equipment';
@@ -44,13 +44,10 @@ import {
   type CraftingContext,
   formatMaterialsCompact,
   // Opportunities (v1.9)
-  evaluateOpportunities,
-  tickOpportunities,
   getAvailableOpportunities,
   getAcceptedOpportunities,
   formatOpportunityListForDirector,
   type OpportunityState,
-  type OpportunityInputs,
   computeOpportunityFallout,
   type OpportunityFallout,
   type OpportunityFalloutEffect,
@@ -66,6 +63,33 @@ import {
   formatEndgameForNarrator,
   type EndgameTrigger,
   type EndgameInputs,
+} from '@ai-rpg-engine/modules';
+// WO-A2-2/3 (slice A2 §2-§3, the living-world driver): the tick itself,
+// plus the world-truth readers/setters every session-field VIEW and
+// write-through path in this file refreshes from/writes through to.
+// Signatures verified against the installed 3.11 dist
+// (node_modules/@ai-rpg-engine/modules/dist/*.d.ts) before use, per the
+// wave addendum's engine-reuse lock.
+import {
+  runWorldTick,
+  getActivePressures,
+  getWorldTickState,
+  RESOLVED_PRESSURES_KEPT,
+  pushActivePressure,
+  getPersistedOpportunities,
+  setPersistedOpportunities,
+  getPersistedNpcProfiles,
+  getPersistedNpcLastActions,
+  getPersistedNpcObligations,
+  getPersistedNpcChains,
+  getPersistedNpcRecapEntries,
+  setPersistedNpcState,
+  getPersistedFactionProfiles,
+  getPersistedFactionLastActions,
+  getEconomyCoreState,
+  getPlayerRumorState,
+  setPlayerRumorState,
+  getPartyState,
 } from '@ai-rpg-engine/modules';
 import { CampaignJournal, buildFinaleOutline, formatFinaleForDirector, formatFinaleForTerminal, type FinaleOutline, type FinaleNpcInput, type FinaleFactionInput, type FinaleDistrictInput } from '@ai-rpg-engine/campaign-memory';
 import {
@@ -83,12 +107,9 @@ import {
   propagateRumor,
   getRumorsKnownToFaction,
   type PlayerRumor,
-  evaluatePressures,
-  tickPressures,
   getVisiblePressures,
   makePressure,
   type WorldPressure,
-  type PressureInputs,
   computeFallout,
   type ResolutionType,
   type PressureFallout,
@@ -96,17 +117,10 @@ import {
   modifyDistrictMetric,
 } from '@ai-rpg-engine/modules';
 import {
-  getDistrictForZone,
   getEntityFaction,
   getFactionCognition,
-  runFactionAgencyTick,
-  buildFactionProfile,
-  formatFactionAgencyForNarrator,
-  formatNpcAgencyForNarrator,
-  generateNpcTextures,
   type FactionActionResult,
   type FactionProfile,
-  tickObligations,
   type NpcActionResult,
   type NpcProfile,
   type NpcObligationLedger,
@@ -142,11 +156,6 @@ import {
   getNetObligationWeight,
   createObligation,
   addObligation,
-  evaluateConsequenceChainTrigger,
-  buildConsequenceChain,
-  shouldResolveChainStep,
-  resolveConsequenceChainStep,
-  tickConsequenceChain,
   type LoyaltyBreakpoint,
   type ConsequenceChain,
   getDistrictState,
@@ -173,11 +182,9 @@ import {
   getTitleEvolutions,
   propagateRumors as _propagateRumors,
   addRumor as _addRumor,
-  buildPressureInputs as _buildPressureInputs,
   applyFalloutEffects as _applyFalloutEffects,
   initializeDistrictEconomies,
-  tickDistrictEconomies as _tickDistrictEconomies,
-  applyEconomyShiftToMap,
+  applyEconomyShiftToWorld,
   buildArcInputs as _buildArcInputs,
   buildFinaleFromState,
   readFactionCognitionScalars,
@@ -209,7 +216,12 @@ import { hasLivingHostiles } from './runtime/hooks.js';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import type { StatusData } from './character/presence.js';
 import { deriveChronicleEvents, buildChronicleContext, type ChronicleEventSource } from './session/chronicle.js';
-import { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
+// WO-A2-4 (slice A2 §5, deletion): tickNpcAgency/buildNpcProfilesForDirector/
+// applyNpcEffects (src/npc/agency.ts, narrative-llm-owned) had exactly one
+// caller in this file — the now-deleted tickNpcAgencyTurn — so this import
+// is dropped. Not a cross-domain edit: agency.ts itself is untouched here;
+// narrative-llm's own wave-4 addendum (WO for that domain) reduces/deletes
+// those now-dead exports on its own file.
 import {
   recruitCompanion,
   dismissCompanion,
@@ -217,6 +229,24 @@ import {
   syncCompanionMorale,
   inferCompanionRole,
 } from './companion/companion-bridge.js';
+/**
+ * WO-A2-2 (slice A2 §2, cross-domain — ADDENDUM-runtime-foundry.md
+ * WO-A2-8): a NAMESPACE import (not a named one) for
+ * drainQueuedCompanionReactions, runtime-foundry's own export, drained in
+ * runWorldRound() below. NOT present in this isolated worktree's copy of
+ * companion-bridge.ts as of this commit (only the five named exports
+ * above exist here) — runtime-foundry lands it in the SAME wave, in
+ * parallel, in its own worktree; this resolves once that domain's edits
+ * merge at collect/stitch. A named `import { drainQueuedCompanionReactions }`
+ * would fail to LINK at all in an isolated worktree missing the export
+ * (a hard ESM SyntaxError on this file's very first import, breaking
+ * every test in game.test.ts, not just the ones that exercise it) —
+ * the namespace form only fails at the CALL SITE below (already wrapped
+ * in try/catch), which is the isolation-safe shape per the wave brief's
+ * "test your side with a documented local cast/stub if the other half is
+ * absent" allowance.
+ */
+import * as companionBridge from './companion/companion-bridge.js';
 // F-88570323: shared tiered name resolution — see its doc comment in
 // action-interpreter.ts for why this is the same lookup attack/speak/
 // inspect/use already get.
@@ -500,6 +530,17 @@ export class GameSession {
   private readonly onPresentation?: (calls: McpToolCall[]) => void;
   /** Streaming seam contract (game-core half): see GameConfig.onNarrationChunk. */
   private readonly onNarrationChunk?: StreamCallback;
+  /**
+   * WO-A2-2 (slice A2 §2): the player's zone at the START of the turn
+   * currently in flight, captured in processInput() right before
+   * executeTurn() is called. runWorldRound() (this session's own
+   * onResolved hook, invoked BY executeTurn mid-flight, before this turn's
+   * processInput() call site sees a return) reads this to detect a
+   * same-turn zone change and call followPlayer() — the only place in
+   * processInput() that naturally has a pre-turn zone to compare against.
+   * Session-local, deliberately not persisted (meaningless between turns).
+   */
+  private turnStartZoneId: string | undefined;
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -719,15 +760,22 @@ export class GameSession {
       );
     }
 
-    // Pressure resolution (player-driven)
+    // Pressure resolution (player-driven).
+    // WO-A2-3/4 (slice A2 §4, write-through): splice the resolved pressure
+    // out of the world-tick namespace's OWN live `pressures` array (the
+    // "one ledger" — this.activePressures is a view of it from this wave
+    // on) instead of filtering a local copy. This call always runs OUTSIDE
+    // a tick (applyProfileHints is a post-turn step, after runWorldRound's
+    // own tick already finished this turn), so mutating the array
+    // getWorldTickState returns directly is the correct discipline
+    // pushActivePressure's own doc comment describes for non-tick callers.
     if (hints.pressureResolution) {
-      const pressure = this.activePressures.find(
+      const state = getWorldTickState(this.engine.world);
+      const idx = state.pressures.findIndex(
         (p) => p.id === hints.pressureResolution!.pressureId,
       );
-      if (pressure) {
-        this.activePressures = this.activePressures.filter(
-          (p) => p.id !== pressure.id,
-        );
+      if (idx !== -1) {
+        const [pressure] = state.pressures.splice(idx, 1);
         this.resolvePressure(pressure, hints.pressureResolution.resolutionType, 'player');
       }
     }
@@ -842,6 +890,195 @@ export class GameSession {
       this.genre,
       this.packId,
     );
+  }
+
+  /**
+   * WO-A2-3 (slice A2 §3, views): refresh every session-field VIEW from
+   * world truth. Called after runWorldRound()'s tick and after every
+   * write-through mutation elsewhere in this file (design lock 3 — "one
+   * ledger per store": a field is refreshed here, never independently
+   * advanced). Every existing reader (prompt garnish, director renderer,
+   * recaps, chronicle, save) keeps reading these same session fields
+   * unchanged this slice.
+   *
+   * `resolvedOpportunities` is deliberately NOT refreshed here — per the
+   * design doc's own table it is an appending accumulator (the tick's
+   * `opportunitiesExpired` entries, appended in runWorldRound; player-
+   * resolved fallout appended from resolveOpportunity), not a pure view.
+   */
+  private refreshWorldViews(): void {
+    const world = this.engine.world;
+    this.activePressures = getActivePressures(world);
+    this.resolvedPressures = getWorldTickState(world).resolvedPressures ?? [];
+    this.activeOpportunities = getPersistedOpportunities(world);
+    this.lastNpcActions = getPersistedNpcLastActions(world);
+    this.lastNpcProfiles = getPersistedNpcProfiles(world);
+    this.npcObligations = getPersistedNpcObligations(world);
+    this.activeConsequenceChains = new Map(getPersistedNpcChains(world).map((c) => [c.id, c]));
+    this.lastFactionActions = getPersistedFactionLastActions(world);
+    this.lastFactionProfiles = getPersistedFactionProfiles(world);
+    this.districtEconomies = new Map(Object.entries(getEconomyCoreState(world).districts));
+    this.playerRumors = getPlayerRumorState(world).rumors;
+  }
+
+  /**
+   * WO-A2-3/4 (slice A2 §4, write-through): the one write path for
+   * npcObligations mutations outside the tick. setPersistedNpcState is a
+   * full-namespace write (profiles/lastActions/obligationLedgers/chains/
+   * recapEntries together) — read the other four slices back from world
+   * truth first so this call only actually changes the obligations
+   * ledger, then refresh every view.
+   */
+  private writeNpcObligations(next: Map<string, NpcObligationLedger>): void {
+    const world = this.engine.world;
+    setPersistedNpcState(
+      world,
+      getPersistedNpcProfiles(world),
+      getPersistedNpcLastActions(world),
+      next,
+      getPersistedNpcChains(world),
+      getPersistedNpcRecapEntries(world),
+    );
+    this.refreshWorldViews();
+  }
+
+  /**
+   * WO-A2-2 (slice A2 §2): the living-world round — wired as this session's
+   * own executeTurn() `onResolved` hook (see the call site in
+   * processInput() below). Runs AFTER the player's action resolved and
+   * BEFORE narration, so pressure spawns, NPC/faction actions, district-
+   * mood/heat/leverage-income ticks, and encounter spawns all land in the
+   * SAME turn's narration and event log the player's own action did.
+   *
+   * Corpse gate (step 1): no tick over a corpse. followPlayer (step 2):
+   * companions move with the player when the zone changed, so the world
+   * then reacts to where they actually stand. Steps 3-4: capture the
+   * eventLog cursor, then run the tick — straight adoption, no feature
+   * flag (design lock 2): every non-rejected, non-corpse round. Step 5:
+   * refresh every view. Step 6: drain the tick's own companion-reaction
+   * side effects. Step 7: return the round's delta so turn-loop.ts's
+   * `events` includes it for narration/hints/history.
+   */
+  private runWorldRound(actionEvents: ResolvedEvent[]): ResolvedEvent[] {
+    // 1. Corpse gate.
+    const player = this.engine.world.entities[this.engine.world.playerId];
+    const alreadyDead = (player?.resources?.hp ?? 1) <= 0;
+    const justDefeated = actionEvents.some(
+      (e) => e.type === 'combat.entity.defeated' && e.payload.entityId === this.engine.world.playerId,
+    );
+    if (alreadyDead || justDefeated) return [];
+
+    // 2. followPlayer when the zone changed this turn.
+    if (this.turnStartZoneId !== undefined && this.engine.world.locationId !== this.turnStartZoneId) {
+      followPlayer(this.engine, this.partyState);
+    }
+
+    // WO-A2-4 (slice A2 §5, kept branch): reference-identity snapshot of
+    // this round's INCOMING lastNpcActions/lastFactionActions views. The
+    // engine's own persisted lastActions list is a ROLLING snapshot (the
+    // most recent action PER npc/faction, not "this round's actions") —
+    // an npc/faction that took no action this round keeps the SAME object
+    // reference from a previous round, while one that DID act gets a
+    // brand-new result object (verified against world-tick.js's
+    // runNpcAgencyStep/runFactionAgencyStep: both seed their
+    // lastActionsBy* map from getPersistedNpc/FactionLastActions and only
+    // `.set()` a NEW object for ids present in this round's own results).
+    // Comparing by reference after the tick — not content — is what lets
+    // the chronicle derivation below fire only for entries that are
+    // actually new this round, instead of re-chronicling the same stale
+    // action every quiet round forever.
+    const prevNpcByNpc = new Map(this.lastNpcActions.map((r) => [r.action.npcId, r]));
+    const prevFactionByFaction = new Map(this.lastFactionActions.map((r) => [r.action.factionId, r]));
+
+    // 3. Capture the eventLog cursor before the tick.
+    const before = this.engine.world.eventLog.length;
+
+    // 4. Run the tick.
+    const tickResult = runWorldTick(this.engine, {
+      genre: this.genre,
+      log: (m) => this.debugLog.warn('world-tick', m),
+    });
+    if (!tickResult.ok) {
+      // WorldTickResult.ok:false means the guarded tick threw internally
+      // and logged its own bounded line already (runWorldTick's own
+      // contract) — logged here too, never surfaced raw to the player.
+      this.debugLog.error('subsystem', 'world tick failed', { tick: this.engine.tick });
+    }
+
+    // resolvedOpportunities: append this round's expiry fallout (design
+    // doc §3 — an accumulator, not a view; see refreshWorldViews' doc
+    // comment).
+    for (const fallout of tickResult.opportunitiesExpired) {
+      this.resolvedOpportunities.push(fallout);
+    }
+    this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
+
+    // 5. Refresh every view.
+    this.refreshWorldViews();
+
+    // WO-A2-4 (slice A2 §5, kept branch): chronicle entries for NPC and
+    // faction actions new THIS round only (see the reference-identity
+    // note above) — re-sourced from the refreshed views instead of the
+    // deleted tickFactionAgency/tickNpcAgencyTurn's own per-result loops.
+    // This also covers the old forced-chain-step loop's chronicle side
+    // effect: the engine merges a resolved chain's forced action into the
+    // SAME lastActions list (world-tick.js's runNpcAgencyStep pushes the
+    // stepped result into `results` before persisting), so it shows up
+    // here too, keyed by the same reference-identity check.
+    for (const result of this.lastNpcActions) {
+      if (prevNpcByNpc.get(result.action.npcId) === result) continue;
+      const npcEntity = this.engine.world.entities[result.action.npcId];
+      const npcName = npcEntity?.name ?? result.action.npcId;
+      const source: ChronicleEventSource = {
+        kind: 'npc-action',
+        action: result.action,
+        npcName,
+        tick: this.engine.tick,
+      };
+      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+        this.journal.record(entry);
+      }
+    }
+    for (const result of this.lastFactionActions) {
+      if (prevFactionByFaction.get(result.action.factionId) === result) continue;
+      const source: ChronicleEventSource = {
+        kind: 'faction-action',
+        action: result.action,
+        tick: this.engine.tick,
+      };
+      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
+        this.journal.record(entry);
+      }
+    }
+
+    // 6. Drain the tick's own companion-reaction side effects.
+    // WO-A2-8 (runtime-foundry, cross-domain — ADDENDUM-runtime-foundry.md):
+    // the tick's district-mood transition step (world-tick.ts step 0c)
+    // reacts companions directly against the engine's OWN persisted party
+    // mirror (getPartyState/setPartyState, companion-core.ts) — a
+    // DIFFERENT object than this session's own `partyState` field, which
+    // this file only ever pushes OUT to via setPartyState (recruit/
+    // dismiss/followPlayer/syncCompanionMorale), never reads back. Sync
+    // it back first so any morale/departure the tick applied is visible
+    // to this session too, then drain whatever reaction trigger
+    // companion-bridge.ts's drainQueuedCompanionReactions maps into this
+    // app's own CompanionReaction shape for recording (see that
+    // function's own doc comment, companion-bridge.ts, for exactly what
+    // it drains).
+    this.partyState = getPartyState(this.engine.world);
+    try {
+      if (typeof companionBridge.drainQueuedCompanionReactions === 'function') {
+        const drained = companionBridge.drainQueuedCompanionReactions(this.engine, this.partyState);
+        if (drained.length > 0) this.lastCompanionReactions = drained;
+      }
+    } catch (err) {
+      this.debugLog.error('subsystem', 'companion reaction drain failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // 7. Return the round's delta.
+    return this.engine.world.eventLog.slice(before);
   }
 
   /** Process one player input and return the rendered output. */
@@ -1006,8 +1243,10 @@ export class GameSession {
     // Compute district mood for narration
     const districtDescriptor = this.getDistrictDescriptor();
 
-    // Track zone before turn for companion following
-    const zoneBefore = this.engine.world.locationId;
+    // WO-A2-2 (slice A2 §2): the pre-turn zone, read back by
+    // runWorldRound() (executeTurn's onResolved hook, below) to decide
+    // whether companions need to follow the player this round.
+    this.turnStartZoneId = this.engine.world.locationId;
 
     const partyPresenceStr = this.getPartyPresence();
     const turnEconomyCtx = this.getEconomyContext();
@@ -1028,6 +1267,11 @@ export class GameSession {
         pressureContext: pressureCtx,
         worldPressures: this.activePressures,
         lastNpcActions: this.lastNpcActions,
+        // WO-A2-1/2 (slice A2 §1-§2): the living-world round — NPC
+        // agency, companions, the world tick — runs after the player's
+        // own action resolves and before narration (turn-loop.ts's
+        // ExecuteTurnOpts.onResolved contract).
+        onResolved: (actionEvents) => this.runWorldRound(actionEvents),
         districtDescriptor,
         partyPresence: partyPresenceStr,
         // Coordinator ruling (b) (wave-13 RULING-persisted-namespaces.md):
@@ -1178,22 +1422,22 @@ export class GameSession {
       // Record chronicle events from this turn
       this.recordChronicleEvents(turnResult);
 
-      // Faction agency: factions evaluate state and take actions
-      this.tickFactionAgency();
-
-      // Economy tick: baseline-seeking decay per district (v1.7)
-      this.tickDistrictEconomies();
-
-      // NPC agency: named NPCs evaluate state and take individual actions
-      this.tickNpcAgencyTurn();
+      // WO-A2-4 (slice A2 §5, deletion): tickFactionAgency,
+      // tickDistrictEconomies, tickNpcAgencyTurn, evaluateAndTickPressures,
+      // and evaluateAndTickOpportunities are DELETED — runWorldRound()
+      // (this session's own executeTurn onResolved hook, already run
+      // earlier this turn, before narration) now advances all five via the
+      // engine's runWorldTick, straight adoption, every non-rejected,
+      // non-corpse round (slice A2 §2, design lock 2). Their session
+      // fields (lastFactionActions/lastFactionProfiles,
+      // districtEconomies, lastNpcActions/lastNpcProfiles/
+      // npcObligations/activeConsequenceChains, activePressures,
+      // activeOpportunities) are refreshed VIEWS from world truth
+      // (refreshWorldViews(), called inside runWorldRound) from this wave
+      // on — never independently ticked here.
 
       // Item recognition: NPCs notice equipped items with provenance
       this.tickItemRecognition();
-
-      // Companion zone following: if player moved zones, companions follow
-      if (this.engine.world.locationId !== zoneBefore) {
-        followPlayer(this.engine, this.partyState);
-      }
 
       // Companion reactions to combat and district conditions
       if (this.partyState.companions.length > 0) {
@@ -1245,30 +1489,23 @@ export class GameSession {
           this.processCompanionReactions('combat-won');
         }
 
-        // District mood reactions (at start of each turn)
-        const playerDistrict = this.getPlayerDistrictId();
-        if (playerDistrict) {
-          const dState = getDistrictState(this.engine.world, playerDistrict);
-          const dDef = getDistrictDefinition(this.engine.world, playerDistrict);
-          if (dState && dDef) {
-            const mood = computeDistrictMood(dState, dDef.tags);
-            if (mood.tone === 'grim' || mood.tone === 'oppressive') {
-              this.processCompanionReactions('district-grim');
-            } else if (mood.tone === 'prosperous') {
-              this.processCompanionReactions('district-prosperous');
-            }
-          }
-        }
+        // WO-A2-4 (slice A2 §5, deletion): the steady-state district-mood
+        // companion reaction ("at the start of every turn, react to the
+        // CURRENT mood tone") is deleted — the engine's own tick (step 0c,
+        // world-tick.ts) fires companion reactions on district-mood
+        // TRANSITIONS only, drained in runWorldRound() this same turn (see
+        // that method's companion-reaction-drain step).
       }
 
-      // Propagate existing rumors to new factions
+      // Propagate existing rumors to new factions (now write-through — see
+      // propagateRumors' own doc comment).
       this.propagateRumors();
 
-      // Evaluate and tick world pressures
-      this.evaluateAndTickPressures();
-
-      // Evaluate and tick opportunities (v1.9)
-      this.evaluateAndTickOpportunities();
+      // WO-A2-4 (slice A2 §5, deletion): evaluateAndTickPressures /
+      // evaluateAndTickOpportunities are deleted — runWorldTick (inside
+      // this turn's runWorldRound, before narration) already evaluated,
+      // ticked, and expired both this round; activePressures/
+      // activeOpportunities are refreshed views (refreshWorldViews()).
 
       // Arc detection + endgame evaluation (v2.0)
       this.tickArcDetection();
@@ -1576,9 +1813,18 @@ export class GameSession {
     return getTitleEvolutions();
   }
 
-  /** Propagate existing rumors to new factions (max 3 per turn). */
+  /**
+   * Propagate existing rumors to new factions (max 3 per turn).
+   * WO-A2-3/4 (slice A2 §4, write-through): reads/writes the
+   * player-rumor namespace directly (world truth), not the session's own
+   * cached field, then refreshes the view.
+   */
   private propagateRumors(): void {
-    this.playerRumors = _propagateRumors(this.playerRumors, this.engine.world, this.partyState);
+    const world = this.engine.world;
+    const state = getPlayerRumorState(world);
+    const next = _propagateRumors(state.rumors, world, this.partyState);
+    setPlayerRumorState(world, { ...state, rumors: next });
+    this.refreshWorldViews();
   }
 
   /** Get the district ID the player is currently in. */
@@ -1641,27 +1887,29 @@ export class GameSession {
     );
   }
 
-  /** Tick existing pressures, process expired → fallout, evaluate for new ones. */
-  private evaluateAndTickPressures(): void {
-    // Tick: returns active + expired
-    const tickResult = tickPressures(this.activePressures, this.engine.tick);
-    this.activePressures = tickResult.active;
+  // WO-A2-4 (slice A2 §5, deletion): evaluateAndTickPressures /
+  // buildPressureInputs (the private wrapper) / evaluateAndTickOpportunities
+  // / buildOpportunityInputs (the private wrapper) are deleted —
+  // runWorldTick (world-tick.ts, driven from runWorldRound below) now
+  // ticks/expires/evaluates both pressures and opportunities every round
+  // from world truth; resolvePressure's own former "expired-ignored" call
+  // site (evaluateAndTickPressures' expiry loop) is gone with it — expiry
+  // fallout is the engine's own job now (WorldTickResult.expired /
+  // .opportunitiesExpired, both already applied by the tick itself).
+  // resolvePressure below survives for the ONE remaining caller:
+  // applyProfileHints' player-resolved-pressure branch (a leverage verb
+  // resolving a live pressure), which runs OUTSIDE any tick.
 
-    // Process expired pressures → fallout
-    for (const expired of tickResult.expired) {
-      this.resolvePressure(expired, 'expired-ignored', 'expiry');
-    }
-
-    // Evaluate for new pressure (returns null most turns — scarcity by design)
-    if (!this.profile) return;
-    const inputs = this.buildPressureInputs();
-    const result = evaluatePressures(inputs);
-    if (result) {
-      this.activePressures.push(result.pressure);
-    }
-  }
-
-  /** Resolve a pressure and apply its fallout effects. */
+  /**
+   * Resolve a pressure and apply its fallout effects. Player-resolved path
+   * only from this wave on (see the deletion note above) — resolvedPressures
+   * is a world-truth ledger the engine's own tick also appends to on
+   * expiry, so this method appends onto that SAME live array
+   * (getWorldTickState) rather than a session-local one, capped to
+   * RESOLVED_PRESSURES_KEPT (the engine's own cap, not the app's old
+   * MAX_RESOLVED_FALLOUT_ENTRIES) so both paths agree on one retention
+   * policy for one shared ledger.
+   */
   private resolvePressure(
     pressure: WorldPressure,
     resolutionType: ResolutionType,
@@ -1684,8 +1932,13 @@ export class GameSession {
     }
 
     this.applyFalloutEffects(fallout);
-    this.resolvedPressures.push(fallout);
-    this.capOldestFirst(this.resolvedPressures, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
+
+    const state = getWorldTickState(this.engine.world);
+    const resolved = state.resolvedPressures ?? [];
+    resolved.push(fallout);
+    while (resolved.length > RESOLVED_PRESSURES_KEPT) resolved.shift();
+    state.resolvedPressures = resolved;
+    this.refreshWorldViews();
 
     // Companion reactions to pressure resolution
     if (this.partyState.companions.length > 0) {
@@ -1694,91 +1947,41 @@ export class GameSession {
     }
   }
 
-  /** Apply structured fallout effects to session state. Delegates to pure function in game-state.ts. */
+  /**
+   * Apply structured fallout effects to session state. Delegates to the
+   * pure function in game-state.ts.
+   *
+   * WO-A2-3/4 (slice A2 §4, write-through): the pure function no longer
+   * takes/returns activePressures or districtEconomies (both write
+   * straight to world truth internally — see its own doc comment); a
+   * spawned rumor is written through to the player-rumor namespace here
+   * (the ledger the rumor 'addRumor' write-through helper also writes),
+   * then every view is refreshed once.
+   */
   private applyFalloutEffects(fallout: PressureFallout): void {
     const result = _applyFalloutEffects(
       fallout,
       this.profile,
       this.engine.world,
       this.playerRumors,
-      this.activePressures,
       this.partyState,
-      this.districtEconomies,
       this.genre,
       this.engine.tick,
     );
     this.profile = result.profile;
-    this.playerRumors = result.playerRumors;
-    this.activePressures = result.activePressures;
+    if (result.playerRumors !== this.playerRumors) {
+      setPlayerRumorState(this.engine.world, {
+        ...getPlayerRumorState(this.engine.world),
+        rumors: result.playerRumors,
+      });
+    }
     if (result.titleChanged) {
       this.pendingAnnouncements.push(`Title evolved: "${result.titleChanged.newTitle}"`);
     }
-  }
-
-  /** Assemble PressureInputs from current session state. */
-  private buildPressureInputs(): PressureInputs {
-    return _buildPressureInputs(
-      this.engine.world, this.profile, this.playerRumors,
-      this.activePressures, this.genre, this.engine.tick, this.districtEconomies,
-    );
+    this.refreshWorldViews();
   }
 
   // --- Opportunity System (v1.9) ---
-
-  /** Assemble OpportunityInputs from current session state. */
-  private buildOpportunityInputs(): OpportunityInputs {
-    const factionIds = Object.keys(this.engine.world.factions);
-
-    const playerReputations = factionIds.map((fid) => ({
-      factionId: fid,
-      value: this.profile ? getReputation(this.profile, fid) : 0,
-    }));
-
-    // F-faf37249: routes through game-state.ts's single exported guard
-    // instead of a hand-copied inline mirror (see readFactionCognitionScalars'
-    // doc comment).
-    const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
-    for (const factionId of factionIds) {
-      factionStates[factionId] = readFactionCognitionScalars(getFactionCognition(this.engine.world, factionId));
-    }
-
-    return {
-      activeOpportunities: this.activeOpportunities,
-      activePressures: this.activePressures,
-      npcProfiles: this.lastNpcProfiles,
-      npcObligations: this.npcObligations,
-      factionStates,
-      playerReputations,
-      playerLeverage: this.profile ? getLeverageState(this.profile.custom) : { favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0 },
-      districtEconomies: this.districtEconomies,
-      companions: this.partyState.companions,
-      playerDistrictId: this.getPlayerDistrictId() ?? 'unknown',
-      playerLevel: this.profile?.progression.level ?? 1,
-      currentTick: this.engine.tick,
-      genre: this.genre,
-      totalTurns: this.profile?.totalTurns ?? 0,
-    };
-  }
-
-  /** Tick existing opportunities and evaluate for new ones. */
-  private evaluateAndTickOpportunities(): void {
-    // Tick: decrement timers, expire overdue
-    const tickResult = tickOpportunities(this.activeOpportunities, this.engine.tick);
-    this.activeOpportunities = tickResult.active;
-
-    // Process expired opportunities → fallout
-    for (const expired of tickResult.expired) {
-      this.resolveOpportunity(expired, 'expired');
-    }
-
-    // Evaluate for new opportunity
-    if (!this.profile) return;
-    const inputs = this.buildOpportunityInputs();
-    const result = evaluateOpportunities(inputs);
-    if (result) {
-      this.activeOpportunities.push(result.opportunity);
-    }
-  }
 
   /**
    * Process opportunity verb from a turn result.
@@ -1814,7 +2017,14 @@ export class GameSession {
         // FT-B-007: Match by name/index, fallback to most recent
         const original = this.matchOpportunity(available, opportunityName, opportunityIndex);
         const target: OpportunityState = { ...original, status: 'accepted', acceptedAtTick: this.engine.tick };
-        this.activeOpportunities = this.activeOpportunities.map((o) => o.id === target.id ? target : o);
+        // WO-A2-3/4 (slice A2 §4, write-through): setPersistedOpportunities
+        // then refresh, instead of reassigning the session's own (now-view)
+        // array directly.
+        setPersistedOpportunities(
+          this.engine.world,
+          getPersistedOpportunities(this.engine.world).map((o) => o.id === target.id ? target : o),
+        );
+        this.refreshWorldViews();
         // Chronicle
         const source: ChronicleEventSource = { kind: 'opportunity-accepted', opportunity: target, tick: this.engine.tick };
         for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
@@ -1890,13 +2100,21 @@ export class GameSession {
     return candidates[candidates.length - 1];
   }
 
-  /** Resolve an opportunity and apply its fallout effects. */
+  /**
+   * Resolve an opportunity and apply its fallout effects.
+   * WO-A2-3/4 (slice A2 §4, write-through): removes from world truth's
+   * own persisted opportunities list, not the session's own (now-view)
+   * array.
+   */
   private resolveOpportunity(
     opp: OpportunityState,
     resolutionType: OpportunityResolutionType,
   ): void {
     // Remove from active list
-    this.activeOpportunities = this.activeOpportunities.filter((o) => o.id !== opp.id);
+    setPersistedOpportunities(
+      this.engine.world,
+      getPersistedOpportunities(this.engine.world).filter((o) => o.id !== opp.id),
+    );
 
     // Build resolved copy — immutable, never mutate the original
     const resolvedStatus = resolutionType === 'completed' ? 'completed'
@@ -1932,6 +2150,7 @@ export class GameSession {
     this.applyOpportunityFalloutEffects(fallout);
     this.resolvedOpportunities.push(fallout);
     this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
+    this.refreshWorldViews();
   }
 
   /** Apply structured opportunity fallout effects to session state. */
@@ -1973,8 +2192,12 @@ export class GameSession {
           }
           break;
         case 'spawn-pressure': {
+          // WO-A2-3/4 (slice A2 §4, write-through + engine reuse):
+          // pushActivePressure honors the engine's own one-active-per-kind
+          // invariant (superseding the old ad hoc MAX_ACTIVE=3 cap) and
+          // writes straight to the world-tick namespace's live array.
           const MAX_ACTIVE = 3;
-          if (this.activePressures.length < MAX_ACTIVE) {
+          if (getActivePressures(this.engine.world).length < MAX_ACTIVE) {
             const chainPressure = makePressure({
               kind: effect.kind,
               sourceFactionId: effect.sourceFactionId,
@@ -1987,11 +2210,16 @@ export class GameSession {
               tags: effect.tags,
               currentTick: this.engine.tick,
             });
-            this.activePressures.push(chainPressure);
+            pushActivePressure(this.engine.world, chainPressure);
+            this.refreshWorldViews();
           }
           break;
         }
         case 'obligation': {
+          // WO-A2-3/4 (slice A2 §4, write-through): npcObligations
+          // mutations go through setPersistedNpcState (the full NPC-agency
+          // namespace write), preserving every other slice of it as read
+          // back from world truth, then refresh.
           const counterparty = effect.direction === 'npc-owes-player'
             ? this.engine.world.playerId
             : effect.npcId;
@@ -2001,7 +2229,9 @@ export class GameSession {
             this.engine.tick,
           );
           const ledger = this.npcObligations.get(effect.npcId) ?? { obligations: [] };
-          this.npcObligations.set(effect.npcId, addObligation(ledger, obl));
+          const updatedObligations = new Map(this.npcObligations);
+          updatedObligations.set(effect.npcId, addObligation(ledger, obl));
+          this.writeNpcObligations(updatedObligations);
           break;
         }
         case 'npc-relationship':
@@ -2363,326 +2593,84 @@ export class GameSession {
     this.districtEconomies = initializeDistrictEconomies(this.engine.world, this.genre);
   }
 
-  /** Tick all district economies — baseline-seeking decay, stability modulation. */
-  private tickDistrictEconomies(): void {
-    _tickDistrictEconomies(this.districtEconomies, this.engine.world, this.engine.tick);
-  }
+  // WO-A2-4 (slice A2 §5, deletion): tickDistrictEconomies (the private
+  // wrapper) is deleted — runWorldTick already ticks every district's
+  // economy itself each round (see the game-state.ts deletion note beside
+  // its own now-deleted tickDistrictEconomies export).
 
-  /** Apply an economy-shift effect to a district's economy. */
+  /**
+   * Apply an economy-shift effect to a district's economy.
+   * WO-A2-3/4 (slice A2 §4, write-through): writes straight to
+   * economy-core's own live districts Record on world truth
+   * (applyEconomyShiftToWorld) instead of the app's own districtEconomies
+   * Map, then refreshes the view.
+   */
   private applyEconomyShiftEffect(
     districtId: string,
     category: string,
     delta: number,
     cause: string,
   ): void {
-    applyEconomyShiftToMap(this.districtEconomies, districtId, category, delta, cause);
+    applyEconomyShiftToWorld(this.engine.world, districtId, category, delta, cause);
+    this.refreshWorldViews();
   }
 
-  /** Faction agency: factions evaluate state and take strategic actions. */
-  private tickFactionAgency(): void {
-    if (!this.profile) return;
-
-    const factionIds = Object.keys(this.engine.world.factions);
-    if (factionIds.length === 0) {
-      this.lastFactionActions = [];
-      this.lastFactionProfiles = [];
-      return;
-    }
-
-    // Build reputation array from profile
-    const playerReputations = factionIds.map((factionId) => ({
-      factionId,
-      value: getReputation(this.profile!, factionId),
-    }));
-
-    // Run faction agency tick (builds profiles, evaluates, resolves)
-    const results = runFactionAgencyTick(
-      this.engine.world,
-      playerReputations,
-      this.activePressures,
-      this.engine.tick,
-      this.districtEconomies,
-    );
-
-    // Build profiles for director view (even if no actions were taken)
-    this.lastFactionProfiles = factionIds.map((factionId) => {
-      const rep = playerReputations.find((r) => r.factionId === factionId)?.value ?? 0;
-      return buildFactionProfile(factionId, this.engine.world, rep, this.activePressures, this.districtEconomies);
-    });
-
-    // Apply effects from each faction action
-    for (const result of results) {
-      this.applyFactionEffects(result);
-
-      // Record in chronicle
-      const source: ChronicleEventSource = {
-        kind: 'faction-action',
-        action: result.action,
-        tick: this.engine.tick,
-      };
-      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
-        this.journal.record(entry);
-      }
-    }
-
-    this.lastFactionActions = results;
-  }
-
-  /** Apply effects from a faction action to session state. */
-  private applyFactionEffects(result: FactionActionResult): void {
-    for (const effect of result.effects) {
-      switch (effect.type) {
-        case 'district-metric':
-          modifyDistrictMetric(
-            this.engine.world,
-            effect.districtId,
-            effect.metric,
-            effect.delta,
-          );
-          break;
-
-        case 'reputation':
-          if (this.profile) {
-            this.profile = adjustReputation(this.profile, effect.factionId, effect.delta);
-          }
-          break;
-
-        case 'rumor':
-          if (this.profile) {
-            this.addRumor(
-              spawnPlayerRumor(
-                { label: effect.claim, description: effect.claim, tags: [effect.valence] },
-                this.profile,
-                effect.targetFactionIds[0],
-                this.getPlayerDistrictId(),
-                this.engine.tick,
-              ),
-            );
-          }
-          break;
-
-        case 'pressure': {
-          const MAX_ACTIVE = 3;
-          if (this.activePressures.length < MAX_ACTIVE) {
-            this.activePressures.push(makePressure({
-              kind: effect.kind,
-              sourceFactionId: effect.sourceFactionId,
-              description: effect.description,
-              triggeredBy: `faction-agency:${result.action.verb}`,
-              urgency: effect.urgency,
-              visibility: 'hidden',
-              turnsRemaining: 8,
-              potentialOutcomes: [],
-              tags: ['faction-agency'],
-              currentTick: this.engine.tick,
-            }));
-          }
-          break;
-        }
-
-        case 'cohesion': {
-          // F-faf37249: readFactionCognitionScalars() replaces the inline
-          // typeof guard -- cog is a live reference into world state
-          // (getFactionCognition's own contract), so writing the clamped,
-          // safely-defaulted scalar back onto it is the same mutation as
-          // before, just no longer hand-duplicated.
-          const cog = getFactionCognition(this.engine.world, effect.factionId);
-          cog.cohesion = Math.max(0, Math.min(1, readFactionCognitionScalars(cog).cohesion + effect.delta));
-          break;
-        }
-
-        case 'alert': {
-          const cog = getFactionCognition(this.engine.world, effect.factionId);
-          cog.alertLevel = Math.max(0, Math.min(100, readFactionCognitionScalars(cog).alertLevel + effect.delta));
-          break;
-        }
-
-        case 'member-count':
-          // Member count changes are tracked conceptually — no entity spawning in v0.9
-          break;
-
-        case 'economy-shift':
-          this.applyEconomyShiftEffect(effect.districtId, effect.category, effect.delta, effect.cause);
-          break;
-      }
-    }
-  }
+  // WO-A2-4 (slice A2 §5, deletion): tickFactionAgency and its now-dead
+  // helper applyFactionEffects are deleted — verified against the
+  // installed 3.11 dist (world-tick.js's runFactionAgencyStep,
+  // packages/modules/dist/world-tick.js:1543-1626 in this worktree's
+  // node_modules) that runWorldTick's own faction-agency step already
+  // drives runFactionAgencyTick and applies EVERY one of this method's own
+  // effect cases directly onto world truth: district-metric
+  // (applyDistrictMetricEffect), reputation (addGlobal
+  // 'reputation_<f>' — the accrued ledger; NOT profile.reputation[]
+  // directly, which is why A2-truth's reputation composition, §9, exists
+  // as the NEXT wave, not this one), alert (addGlobal 'faction_alert_<f>'),
+  // rumor (spawnNpcOriginatedRumor + setPlayerRumorState), pressure
+  // (makePressure + the one-active-per-kind invariant, same as
+  // pushActivePressure), economy-shift (setDistrictEconomy), and
+  // member-count. lastFactionActions/lastFactionProfiles are refreshed
+  // views (getPersistedFactionLastActions/getPersistedFactionProfiles)
+  // from this wave on.
 
   // --- v1.2: NPC Agency ---
-
-  /** NPC agency: named NPCs evaluate state and take individual actions. */
-  private tickNpcAgencyTurn(): void {
-    if (!this.profile) return;
-
-    // Tick obligation decay
-    for (const [npcId, ledger] of this.npcObligations) {
-      this.npcObligations.set(npcId, tickObligations(ledger));
-    }
-
-    // Run NPC agency tick (builds profiles, evaluates, resolves)
-    const results = tickNpcAgency(
-      this.engine,
-      this.activePressures,
-      this.playerRumors,
-      this.npcObligations,
-    );
-
-    // Build profiles for director view (even if no actions were taken)
-    this.lastNpcProfiles = buildNpcProfilesForDirector(
-      this.engine,
-      this.activePressures,
-      this.playerRumors,
-      this.npcObligations,
-    );
-
-    // Apply effects from each NPC action
-    for (const result of results) {
-      this.profile = applyNpcEffects(result, {
-        profile: this.profile!,
-        playerRumors: this.playerRumors,
-        activePressures: this.activePressures,
-        engine: this.engine,
-        getPlayerDistrictId: () => this.getPlayerDistrictId(),
-        npcObligations: this.npcObligations,
-        activeOpportunities: this.activeOpportunities,
-        genre: this.genre,
-      });
-
-      // Record in chronicle
-      const npcEntity = this.engine.world.entities[result.action.npcId];
-      const npcName = npcEntity?.name ?? result.action.npcId;
-      const source: ChronicleEventSource = {
-        kind: 'npc-action',
-        action: result.action,
-        npcName,
-        tick: this.engine.tick,
-      };
-      for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
-        this.journal.record(entry);
-      }
-
-      // Record obligation events in chronicle
-      for (const effect of result.effects) {
-        if (effect.type === 'obligation') {
-          const oblSource: ChronicleEventSource = {
-            kind: 'obligation-created',
-            obligation: {
-              id: `obl-${result.action.npcId}-${this.engine.tick}`,
-              kind: effect.kind,
-              direction: effect.direction,
-              npcId: effect.npcId,
-              counterpartyId: effect.counterpartyId,
-              magnitude: effect.magnitude,
-              sourceTag: effect.sourceTag,
-              createdAtTick: this.engine.tick,
-              decayTurns: effect.decayTurns,
-            },
-            npcName,
-            tick: this.engine.tick,
-          };
-          for (const entry of deriveChronicleEvents(oblSource, this.engine.world.playerId)) {
-            this.journal.record(entry);
-          }
-        }
-      }
-    }
-
-    // --- Consequence chain management ---
-
-    // Evaluate breakpoint shifts for consequence triggers
-    for (const profile of this.lastNpcProfiles) {
-      const prevBp = this.previousBreakpoints.get(profile.npcId);
-      if (prevBp && prevBp !== profile.breakpoint) {
-        // Breakpoint shifted — check for consequence trigger
-        if (!this.activeConsequenceChains.has(profile.npcId)) {
-          const oblLedger = this.npcObligations.get(profile.npcId);
-          const kind = evaluateConsequenceChainTrigger(profile, prevBp, oblLedger);
-          if (kind) {
-            const chain = buildConsequenceChain(
-              profile.npcId, kind, `${prevBp} → ${profile.breakpoint}`, this.engine.tick,
-            );
-            this.activeConsequenceChains.set(profile.npcId, chain);
-          }
-        }
-      }
-      // Store current breakpoint for next turn comparison
-      this.previousBreakpoints.set(profile.npcId, profile.breakpoint);
-    }
-
-    // Tick and resolve active consequence chains
-    for (const [npcId, chain] of this.activeConsequenceChains) {
-      let updated = tickConsequenceChain(chain);
-      if (shouldResolveChainStep(updated)) {
-        const stepResult = resolveConsequenceChainStep(updated);
-        if (stepResult) {
-          updated = stepResult.chain;
-          // Force the NPC action through existing resolution pipeline
-          const npcEntity = this.engine.world.entities[npcId];
-          const npcName = npcEntity?.name ?? npcId;
-          const forcedAction = {
-            npcId,
-            verb: stepResult.verb,
-            targetEntityId: this.engine.world.playerId,
-            description: `${npcName} ${stepResult.description}`,
-          };
-          const forcedResult = {
-            action: forcedAction,
-            effects: [], // Chain steps use existing NPC action resolution
-            narratorHint: `${npcName} ${stepResult.description}`,
-            dialogueHint: undefined,
-          };
-          // Record chain step in chronicle
-          const chainSource: ChronicleEventSource = {
-            kind: 'npc-action',
-            action: forcedAction,
-            npcName,
-            tick: this.engine.tick,
-          };
-          for (const entry of deriveChronicleEvents(chainSource, this.engine.world.playerId)) {
-            this.journal.record(entry);
-          }
-          results.push(forcedResult);
-
-          // Companion reactions to consequence chain events
-          if (this.partyState.companions.length > 0 && (chain.kind === 'vendetta' || chain.kind === 'retaliation')) {
-            this.processCompanionReactions('betrayal-witnessed');
-          }
-
-          // District drift from consequence chain resolution
-          const npcDistrictId = npcEntity?.zoneId ? getDistrictForZone(this.engine.world, npcEntity.zoneId) : undefined;
-          if (npcDistrictId) {
-            switch (chain.kind) {
-              case 'retaliation':
-              case 'vendetta':
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'alertPressure', 5);
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', -3);
-                break;
-              case 'extortion':
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'commerce', -3);
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', -2);
-                break;
-              case 'abandonment':
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'commerce', -3);
-                break;
-              case 'plea':
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', -1);
-                break;
-              case 'sacrifice':
-                modifyDistrictMetric(this.engine.world, npcDistrictId, 'morale', 3);
-                break;
-            }
-          }
-        }
-      }
-      this.activeConsequenceChains.set(npcId, updated);
-      // Clean up resolved chains
-      if (updated.resolved) {
-        this.activeConsequenceChains.delete(npcId);
-      }
-    }
-
-    this.lastNpcActions = results;
-  }
+  //
+  // WO-A2-4 (slice A2 §5, deletion): tickNpcAgencyTurn is deleted —
+  // verified against the installed 3.11 dist (world-tick.js's
+  // runNpcAgencyStep, packages/modules/dist/world-tick.js:1254-1526 in
+  // this worktree's node_modules) that runWorldTick's own npc-agency step
+  // already does EVERY piece of this method's job directly against world
+  // truth: obligation decay (tickObligations per ledger), the NPC agency
+  // tick itself (runNpcAgencyTick), EVERY NpcEffect variant this codebase's
+  // own applyNpcEffects (src/npc/agency.ts, narrative-llm-owned) used to
+  // apply by hand (belief/memory/morale/suspicion/reputation/alert/
+  // zone-change/pressure/obligation/npc-rumor/companion-departure/
+  // spawn-opportunity), AND the entire consequence-chain lifecycle
+  // (tick existing chains, evaluate breakpoint-shift triggers, build new
+  // chains, resolve a ready step by forcing the NPC action through
+  // resolveNpcAction, persisting profiles/lastActions/obligationLedgers/
+  // chains/recapEntries in one setPersistedNpcState call). lastNpcActions/
+  // lastNpcProfiles/npcObligations/activeConsequenceChains are refreshed
+  // views from this wave on; chronicle derivation for the round's actions
+  // (including forced chain steps, now merged into the same lastActions
+  // list by the engine) is re-sourced in runWorldRound() below.
+  //
+  // KNOWN GAP (kept branch NOT reproduced, reported per the honesty
+  // floor): the engine's own consequence-chain resolution does not emit
+  // this app's old bespoke "district drift by chain kind"
+  // (modifyDistrictMetric keyed off retaliation/vendetta/extortion/
+  // abandonment/plea/sacrifice) or the 'betrayal-witnessed' companion
+  // reaction trigger for a resolved retaliation/vendetta step — neither
+  // is in the design doc's explicit "must re-source" list (only chronicle
+  // entries and the recap/chronicle side effects are named), and no
+  // engine-side equivalent exists for either (confirmed: no
+  // retaliation/vendetta/extortion/abandonment/plea/sacrifice string
+  // appears anywhere in world-tick.js). A resolved chain step still
+  // narrates (the engine emits npc.action.resolved and, for a 'betray'
+  // verb, npc.betrayal.witnessed onto the eventLog every forced step
+  // reaches) but no longer nudges district metrics or companion morale on
+  // its own. Flagged for a follow-up wave rather than reimplemented here
+  // against low-confidence diffing.
 
   // --- v1.6: Item Recognition ---
 
@@ -3021,13 +3009,17 @@ export class GameSession {
         const sideRoll = simpleHashNum(targetId + this.engine.tick) % 100;
         if (sideRoll < mods.sideEffectChance * 100) {
           if (npcProfile.breakpoint === 'allied' || npcProfile.breakpoint === 'favorable') {
-            // Friendly side effect: NPC grants a bonus favor
+            // Friendly side effect: NPC grants a bonus favor.
+            // WO-A2-3/4 (slice A2 §4, write-through): see
+            // writeNpcObligations' own doc comment.
             const ledger = this.npcObligations.get(targetId) ?? { obligations: [] };
             const obl = createObligation(
               'favor', 'npc-owes-player', targetId, this.engine.world.playerId,
               2, 'leverage-bonus', this.engine.tick, 15,
             );
-            this.npcObligations.set(targetId, addObligation(ledger, obl));
+            const updatedObligations = new Map(this.npcObligations);
+            updatedObligations.set(targetId, addObligation(ledger, obl));
+            this.writeNpcObligations(updatedObligations);
           } else if (npcProfile.breakpoint === 'hostile' || npcProfile.breakpoint === 'compromised') {
             resolution.effects.push({
               type: 'reputation', factionId: npcProfile.factionId ?? '', delta: -5,
@@ -3129,9 +3121,12 @@ export class GameSession {
           break;
 
         case 'pressure': {
+          // WO-A2-3/4 (slice A2 §4, write-through + engine reuse): see
+          // applyOpportunityFalloutEffects' own 'spawn-pressure' case for
+          // the same pushActivePressure pattern.
           const MAX_ACTIVE = 3;
-          if (this.activePressures.length < MAX_ACTIVE) {
-            this.activePressures.push(makePressure({
+          if (getActivePressures(this.engine.world).length < MAX_ACTIVE) {
+            const pressure = makePressure({
               kind: effect.kind,
               sourceFactionId: effect.sourceFactionId,
               description: effect.description,
@@ -3142,7 +3137,9 @@ export class GameSession {
               potentialOutcomes: [],
               tags: ['player-leverage'],
               currentTick: this.engine.tick,
-            }));
+            });
+            pushActivePressure(this.engine.world, pressure);
+            this.refreshWorldViews();
           }
           break;
         }
@@ -3346,16 +3343,30 @@ export class GameSession {
     return `  ${name} has left your party.`;
   }
 
-  /** Add a rumor, applying companion rumor-suppression if applicable. */
+  /**
+   * Add a rumor, applying companion rumor-suppression if applicable.
+   * WO-A2-3/4 (slice A2 §4, write-through): THE one write-through helper
+   * every other playerRumors writer in this file (item recognition,
+   * dialogue-adjacent fallout/leverage/faction rumor effects) now goes
+   * through — reads/writes the player-rumor namespace directly (world
+   * truth) instead of the session's own cached field, then refreshes the
+   * view.
+   */
   private addRumor(rumor: PlayerRumor): void {
-    const before = this.playerRumors;
-    this.playerRumors = _addRumor(rumor, before, this.partyState, this.engine.tick);
+    const world = this.engine.world;
+    const state = getPlayerRumorState(world);
+    const before = state.rumors;
+    const next = _addRumor(rumor, before, this.partyState, this.engine.tick);
+    if (next !== before) {
+      setPlayerRumorState(world, { ...state, rumors: next });
+    }
+    this.refreshWorldViews();
     // F-fd5e8eec: detect a cap eviction (a genuinely new array — ruling out
     // suppression, which returns the same reference unchanged — whose length
     // didn't grow) and warn once per session. See rumorCapWarned's doc
     // comment above for why the notice lives here rather than inside
     // capPlayerRumors/addRumor (game-state.ts, "No console IO").
-    if (!this.rumorCapWarned && this.playerRumors !== before && this.playerRumors.length <= before.length) {
+    if (!this.rumorCapWarned && next !== before && next.length <= before.length) {
       this.rumorCapWarned = true;
       this.debugLog.warn('rumors', 'playerRumors hit MAX_PLAYER_RUMORS — oldest/inert rumors are now evicted as new ones are spawned.');
     }

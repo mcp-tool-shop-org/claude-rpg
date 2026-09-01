@@ -1155,3 +1155,120 @@ describe('verb allowlist (F-4fc952ae)', () => {
     expect(capturedPrompt).toContain('craft');
   });
 });
+
+// WO-A2-1 (slice A2 §1, docs/living-world-slice-a2.md): the onResolved
+// hook contract game.ts's own runWorldRound() is wired through (game.ts,
+// out of this file's scope) -- these tests exercise the CONTRACT directly
+// against executeTurn(), independent of GameSession.
+describe('executeTurn onResolved hook (WO-A2-1)', () => {
+  /**
+   * Forces engine.submitAction to reject: a well-formed, high-confidence
+   * interpreted action whose target id nothing in the world has.
+   * F-d421875b's own documented contract (turn-loop.ts, Step 2's catch
+   * comment): ActionDispatcher.dispatch emits a non-throwing
+   * action.rejected event for an ordinary invalid/missing-target action
+   * and returns normally, rather than throwing.
+   */
+  function createRejectingActionClient(): ClaudeClient {
+    return {
+      model: 'mock',
+      async generate() {
+        return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
+      },
+      async generateStructured() {
+        return {
+          ok: true,
+          data: {
+            verb: 'attack',
+            targetIds: ['totally-nonexistent-entity-xyz'],
+            toolId: null,
+            parameters: null,
+            confidence: 'high',
+            reasoning: 'forces the engine to reject an unresolvable target',
+            alternatives: null,
+          },
+          raw: '',
+        };
+      },
+    };
+  }
+
+  it('calls onResolved exactly once with this turn\'s own action events after a normal (non-rejected) action resolves', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+    const onResolved = vi.fn((_events: unknown[]) => []);
+
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+      onResolved: onResolved as unknown as ExecuteTurnOpts['onResolved'],
+    });
+
+    expect(onResolved).toHaveBeenCalledTimes(1);
+    const callArgs = onResolved.mock.calls[0][0] as { type: string }[];
+    expect(callArgs.length).toBeGreaterThan(0);
+    // onResolved returned [] (no round events), so the final events are
+    // exactly what it was called with.
+    expect(result.events).toEqual(callArgs);
+  });
+
+  it('is skipped when the action is rejected (an action.rejected-only events array) -- a dead menu entry costs the player nothing', async () => {
+    const engine = createGame();
+    const client = createRejectingActionClient();
+    const history = new TurnHistory();
+    const onResolved = vi.fn((_events: unknown[]) => []);
+
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'attack the nonexistent one', tone: 'dark fantasy',
+      onResolved: onResolved as unknown as ExecuteTurnOpts['onResolved'],
+    });
+
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].type).toBe('action.rejected');
+    expect(onResolved).not.toHaveBeenCalled();
+  });
+
+  it('a throwing hook is logged through debugLog and yields [] -- a normal narrated turn, never a killed one', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+    const logger = createTestLogger();
+    const onResolved = vi.fn(() => { throw new Error('hook boom'); });
+
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+      onResolved: onResolved as unknown as ExecuteTurnOpts['onResolved'],
+      debugLog: logger,
+    });
+
+    expect(result.narration).toBeTruthy();
+    // Still carries the action's own events -- only the round's ADDITIONAL
+    // events were lost, not the whole turn.
+    expect(result.events.length).toBeGreaterThan(0);
+    const errorEntry = logger.getEntries().find(
+      (e) => e.level === 'error' && e.message === 'onResolved hook threw',
+    );
+    expect(errorEntry).toBeDefined();
+    expect(errorEntry!.subsystem).toBe('turn');
+  });
+
+  it("round events onResolved returns reach narrateScene's recentEvents and the final TurnResult.events", async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+    const fakeRoundEvent = {
+      id: 'round-1', type: 'pressure.spawned', payload: {}, targetIds: [], tick: engine.tick,
+    };
+    const onResolved = vi.fn(() => [fakeRoundEvent]);
+
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+      onResolved: onResolved as unknown as ExecuteTurnOpts['onResolved'],
+    });
+
+    expect(result.events).toContainEqual(fakeRoundEvent);
+    expect(mockedNarrateScene).toHaveBeenCalled();
+    const narrateOpts = mockedNarrateScene.mock.calls[mockedNarrateScene.mock.calls.length - 1][0];
+    expect(narrateOpts.recentEvents).toContainEqual(fakeRoundEvent);
+  });
+});

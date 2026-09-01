@@ -1324,6 +1324,63 @@ describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231
   });
 });
 
+// ─── F-2126ffd0: the 'combat-end' hookPoint dispatch gate never fired for a 3.11
+// retreat-outcome combat.encounter.cleared (no combat.entity.defeated present at all),
+// so a successful escape got no audio acknowledgment in this domain -- the encounter
+// just fell back to 'exploration' the FOLLOWING turn with no transition cue. The gate
+// now also fires on the engine's own authoritative combat.encounter.cleared event
+// (any outcome), independent of the legacy combat.entity.defeated + !hasLivingHostiles
+// derivation, which stays live this wave to guard fixtures/3.10-shaped streams. ───
+
+describe('immersion-runtime: combat-end fires on a retreat-outcome combat.encounter.cleared (F-2126ffd0)', () => {
+  it('fires the combat-end hookPoint on a retreat clear with no accompanying combat.entity.defeated', async () => {
+    const engine = createGame();
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const fireSpy = vi.spyOn(runtime.hookManager, 'fire');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.encounter.cleared', payload: { outcome: 'retreat' } }] as any,
+      'flee',
+    );
+
+    const combatEndFires = fireSpy.mock.calls.filter(([ctx]) => ctx.hookPoint === 'combat-end');
+    expect(combatEndFires).toHaveLength(1);
+  });
+
+  it('softens the music but does not play the victory chime on a retreat clear', async () => {
+    const engine = createGame();
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.encounter.cleared', payload: { outcome: 'retreat' } }] as any,
+      'flee',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).not.toContain('ui_success');
+    expect(setMusicSpy).toHaveBeenCalledWith(expect.objectContaining({ action: 'soften' }));
+  });
+
+  it('still plays the victory chime on a victory-outcome combat.encounter.cleared with no combat.entity.defeated', async () => {
+    const engine = createGame();
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.encounter.cleared', payload: { outcome: 'victory' } }] as any,
+      'attack',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).toContain('ui_success');
+  });
+});
+
 // ─── F-d8d1f51d: a sustained scene mood must not repeat the identical ambient/music
 // cue every turn. AudioDirector.schedule()'s cooldown only ever gates commands whose
 // action is literally 'play' (verified against dist/director.js's isOnCooldown gate)

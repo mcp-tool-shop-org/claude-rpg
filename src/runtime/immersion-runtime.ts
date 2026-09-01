@@ -538,20 +538,42 @@ export class ImmersionRuntime {
       calls.push(...(await this.executeMergedHookResult(merged)));
     }
 
-    // Combat end — gated on the encounter actually being over (F-d9fc231c), not just
-    // on "a combat.entity.defeated event exists": a multi-hostile fight fires that
-    // event once per kill, well before the last enemy falls. Mirrors the gate now
-    // inside combatEndHook itself (hooks.ts) so no OTHER hook that might ever get
-    // registered at 'combat-end' has to remember this check independently.
-    if (
+    // Combat end — gated on the encounter actually being over. Two independent
+    // signals both stay live this wave (ADDENDUM-runtime-foundry):
+    //  1. F-2126ffd0/F-99563c70: the engine's own authoritative `combat.encounter.cleared`
+    //     event (3.11+), fired for EITHER outcome — 'victory' or 'retreat'. Before this,
+    //     a retreat clear (which never carries a combat.entity.defeated at all — engine
+    //     engagement-core.ts's flee branch) never reached this dispatch gate, so a
+    //     successful escape got no combat-end cue of any kind.
+    //  2. F-d9fc231c: the legacy derivation (a combat.entity.defeated event and no
+    //     hostile remaining in zone) — not just on "a combat.entity.defeated event
+    //     exists": a multi-hostile fight fires that event once per kill, well before
+    //     the last enemy falls. Kept for fixture/test event streams and any
+    //     3.10-shaped consumer that never emits combat.encounter.cleared at all.
+    // Mirrors the gate now inside combatEndHook itself (hooks.ts) so no OTHER hook
+    // that might ever get registered at 'combat-end' has to remember this check
+    // independently.
+    const clearedEvent = events.find((e) => e.type === 'combat.encounter.cleared');
+    const legacyEncounterOver =
       events.some((e) => e.type === 'combat.entity.defeated') &&
-      !hasLivingHostiles(engine.world)
-    ) {
+      !hasLivingHostiles(engine.world);
+    if (clearedEvent || legacyEncounterOver) {
+      // F-2126ffd0: resolve the outcome once here and pass it through HookContext
+      // (additive optional field — see hooks.ts) so combatEndHook doesn't have to
+      // re-parse the event payload; absent outcome (legacy-only dispatch, no cleared
+      // event) leaves the field unset and combatEndHook's own fallback treats that
+      // as 'victory', matching a 3.10-shaped bare combat.entity.defeated stream.
+      const outcome: 'victory' | 'retreat' | undefined = clearedEvent
+        ? (clearedEvent.payload as { outcome?: string }).outcome === 'retreat'
+          ? 'retreat'
+          : 'victory'
+        : undefined;
       const endCtx: HookContext = {
         hookPoint: 'combat-end',
         world: engine.world,
         events,
         presentationState: state,
+        ...(outcome ? { outcome } : {}),
       };
       const results = this.hookManager.fire(endCtx);
       const merged = HookManager.mergeResults(results);

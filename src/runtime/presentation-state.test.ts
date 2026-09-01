@@ -176,4 +176,31 @@ describe('PresentationStateMachine', () => {
     // player's own death.
     expect(sm.inferFromEvents([], undefined, 3, 'player')).toBe('exploration');
   });
+
+  it('infers aftermath (not stuck in combat) from a retreat-outcome combat.encounter.cleared with no combat.entity.defeated (F-99563c70)', () => {
+    // 3.11's engagement-core.ts emits combat.encounter.cleared with
+    // payload.outcome: 'retreat' on a player-flee or last-hostile-flee, with NO
+    // accompanying combat.entity.defeated (unlike a 3.10-shaped victory clear, which
+    // always co-occurs with one). Before this fix, hasCombat matched (the event type
+    // starts with 'combat.') but hasDefeat did not, so inferFromEvents returned the
+    // generic 'combat' branch forever — the presentation state never left combat on
+    // a successful escape.
+    const sm = new PresentationStateMachine();
+    const retreatEvents = [
+      { type: 'combat.encounter.cleared', tick: 1, payload: { outcome: 'retreat' } },
+    ] as any;
+    expect(sm.inferFromEvents(retreatEvents, undefined, 1)).toBe('aftermath');
+  });
+
+  it('infers aftermath from a victory-outcome combat.encounter.cleared even without a co-occurring combat.entity.defeated event', () => {
+    // Mirrors the retreat case above for the 'victory' outcome value, so both of
+    // 3.11's two outcome strings resolve the same way — 'aftermath' is the ONLY
+    // reachable branch off a cleared encounter (design lock: do not invent a new
+    // state for a retreat vs. a victory).
+    const sm = new PresentationStateMachine();
+    const victoryEvents = [
+      { type: 'combat.encounter.cleared', tick: 1, payload: { outcome: 'victory' } },
+    ] as any;
+    expect(sm.inferFromEvents(victoryEvents, undefined, 1)).toBe('aftermath');
+  });
 });

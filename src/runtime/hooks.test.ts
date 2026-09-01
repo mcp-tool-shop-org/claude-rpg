@@ -463,3 +463,63 @@ describe('combatEndHook waits for the whole encounter (F-d9fc231c)', () => {
     expect(results[0].sfxCues![0].effectId).toBe('ui_success');
   });
 });
+
+// ─── F-2126ffd0: combatEndHook must fire on a retreat-outcome combat.encounter.cleared
+// (3.11's engagement-core.ts emits this with no accompanying combat.entity.defeated at
+// all) with a neutral cue set — no victory chime for a withdrawal, per the design lock
+// that a retreat is not a victory anywhere in this domain. ───
+
+describe('combatEndHook retreat-outcome combat.encounter.cleared (F-2126ffd0)', () => {
+  it('does not fire the victory sfx chime on a retreat-outcome cleared event, but still softens the music', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      events: [
+        { type: 'combat.encounter.cleared', tick: 1, payload: { outcome: 'retreat' } },
+      ] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues ?? []).toHaveLength(0);
+    expect(results[0].musicCue).toEqual({ action: 'soften', fadeMs: 1000 });
+  });
+
+  it('still fires the victory sfx chime on a victory-outcome combat.encounter.cleared with no combat.entity.defeated', () => {
+    // 3.10-shaped fixtures always pair combat.encounter.cleared with a preceding
+    // combat.entity.defeated; this covers the cleared event alone resolving the
+    // same way a defeat does today (design lock: victory path byte-identical).
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      events: [
+        { type: 'combat.encounter.cleared', tick: 1, payload: { outcome: 'victory' } },
+      ] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues![0].effectId).toBe('ui_success');
+    expect(results[0].musicCue).toEqual({ action: 'soften', fadeMs: 1000 });
+  });
+
+  it('does not fire a retreat cue when the player is the one who is defeated (player-death takes precedence)', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+
+    const ctx = makeContext({
+      hookPoint: 'combat-end',
+      events: [
+        { type: 'combat.encounter.cleared', tick: 1, payload: { outcome: 'retreat' } },
+        { type: 'combat.entity.defeated', tick: 1, payload: { entityId: 'player' } },
+      ] as any,
+    });
+
+    const results = manager.fire(ctx);
+    expect(results).toHaveLength(0);
+  });
+});

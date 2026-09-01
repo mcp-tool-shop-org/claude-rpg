@@ -29,6 +29,15 @@ export type HookContext = {
   events: ResolvedEvent[];
   presentationState: PresentationState;
   narrationPlan?: NarrationPlan;
+  /**
+   * F-2126ffd0: the outcome of a `combat.encounter.cleared` event dispatched this
+   * hookPoint, when the caller has already resolved one (immersion-runtime.ts's
+   * combat-end dispatch gate). Additive/optional so existing HookContext call sites
+   * (and every other HookPoint) are unaffected. `combatEndHook` below re-derives this
+   * from `events` directly when omitted, so a hook fired standalone in a test (no
+   * caller-supplied outcome) still resolves correctly.
+   */
+  outcome?: 'victory' | 'retreat';
 };
 
 export type HookResult = {
@@ -212,10 +221,19 @@ export const combatStartHook: Hook = (ctx) => {
   };
 };
 
-/** Play success SFX on combat end. */
+/**
+ * Play success SFX on combat end — or, on a retreat, a neutral music-only cue.
+ *
+ * F-2126ffd0: 3.11's engine emits `combat.encounter.cleared` for BOTH a victory and a
+ * player/last-hostile flee, distinguished only by `payload.outcome` ('victory' |
+ * 'retreat'; absent means victory, matching 3.10-shaped streams — design lock). A
+ * retreat is not a victory anywhere in this domain: no victory chime, no "defeated"
+ * prose — but the encounter DOES end, so the music still softens like it does today.
+ */
 export const combatEndHook: Hook = (ctx) => {
   const hasDefeat = ctx.events.some((e) => e.type === 'combat.entity.defeated');
-  if (!hasDefeat) return null;
+  const clearedEvent = ctx.events.find((e) => e.type === 'combat.encounter.cleared');
+  if (!hasDefeat && !clearedEvent) return null;
   // F-91f803b2: skip when the PLAYER is the defeated entity — deathHook already
   // owns that presentation (critical alarm + fade-out). combat-end and death are
   // dispatched independently and unconditionally off the same combat.entity.defeated
@@ -239,8 +257,29 @@ export const combatEndHook: Hook = (ctx) => {
   // hasDefeat is true above) -- but a multi-hostile fight fires combat.entity.defeated
   // once per kill, not once per encounter. If another hostile in the same zone is
   // still standing, the fight itself isn't over yet, so suppress the victory chime +
-  // music soften until the actual last kill.
-  if (hasLivingHostiles(ctx.world)) return null;
+  // music soften until the actual last kill. Skipped when a `combat.encounter.cleared`
+  // event is present — the engine only ever emits that event once the whole encounter
+  // (all hostiles, or the fleeing side) is actually resolved, so it is authoritative
+  // and doesn't need the legacy per-zone hostile scan; this also guards fixture event
+  // streams that fire a bare combat.entity.defeated with no cleared event at all.
+  if (!clearedEvent && hasLivingHostiles(ctx.world)) return null;
+
+  // F-2126ffd0: prefer a caller-supplied outcome (ImmersionRuntime.fireEventHooks
+  // already parsed it once for the dispatch gate), else derive it directly from the
+  // cleared event's own payload so this hook stays correct when fired standalone
+  // (e.g. hooks.test.ts calling HookManager.fire directly). No cleared event at all
+  // means a 3.10-shaped bare combat.entity.defeated — always a victory.
+  const outcome: 'victory' | 'retreat' =
+    ctx.outcome ??
+    (clearedEvent
+      ? (clearedEvent.payload as { outcome?: string }).outcome === 'retreat'
+        ? 'retreat'
+        : 'victory'
+      : 'victory');
+
+  if (outcome === 'retreat') {
+    return { musicCue: { action: 'soften', fadeMs: 1000 } };
+  }
   return {
     sfxCues: [{ effectId: 'ui_success', timing: 'immediate', intensity: 0.7 }],
     musicCue: { action: 'soften', fadeMs: 1000 },

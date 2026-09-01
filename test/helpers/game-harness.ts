@@ -12,6 +12,8 @@ import { createGame } from '@ai-rpg-engine/starter-fantasy';
 // SEQUENCING note on resumeHarness below, same pattern as WO-A2T-7's
 // world-truth-seed.js import last wave).
 import { RumorEngine, type RumorEngineConfig, type EngineSnapshot } from '@ai-rpg-engine/rumor-system';
+import type { Engine } from '@ai-rpg-engine/core';
+import type { ItemCatalog } from '@ai-rpg-engine/equipment';
 import { GameSession, type GameConfig } from '../../src/game.js';
 import { createFakeClient, createCallLog, type FakeClientOptions, type CallLog } from './fake-claude-client.js';
 import {
@@ -25,10 +27,20 @@ import {
   loadFinaleFromSession,
   saveSession,
   type SaveSessionInput,
+  type SavedSession,
 } from '../../src/session/session.js';
 import { getPackById } from '../../src/character/packs.js';
 import { validateEngineState } from '../../src/cli/engine-state-validator.js';
 import { TurnHistory } from '../../src/session/history.js';
+// WO-A4-10 (slice A4, run swarm-1788288802-f5a0, wave 7, "tests" domain):
+// generateWorld/WorldGenProposal already exist today (runtime-foundry's own
+// isolated worktree for THIS wave only ADDS the proposeWorld/instantiateWorld
+// split -- design doc docs/living-world-slice-a4.md §4 -- it does not remove
+// or change generateWorld's existing signature/behavior, per that section's
+// own "generateWorld composes the two"), so this is a safe STATIC import.
+// `instantiateWorld` itself is deliberately NOT imported statically here --
+// see rebuildGeneratedEngine's own doc comment below for why.
+import { generateWorld, type WorldGenProposal } from '../../src/foundry/world-gen.js';
 
 /**
  * design doc §3 (locked): "constructed on a new game with
@@ -187,6 +199,73 @@ export function createHarness(opts: HarnessOptions = {}): GameHarness {
  * hook or actionLog continuity, and will stay green even if one is missing
  * or broken -- do not rely on them as tripwires for either.
  */
+/**
+ * WO-A4-10 (slice A4, run swarm-1788288802-f5a0, wave 7, "tests" domain):
+ * rebuilds a PACKLESS save's engine via `instantiateWorld(proposal, seed)`
+ * -- design doc docs/living-world-slice-a4.md §4 / ADDENDUM-COMMON design
+ * lock 5: "runLoad rebuilds a packless world via instantiateWorld then runs
+ * the SAME restore sequence as a pack world (validate -> assign state ->
+ * initializeNamespaces -> rng -> seedWorldTruth)". This closes the exact
+ * gap world-truth-seed.test.ts's file header and save-schema-v3.test.ts's
+ * WO-A3-6 fixture test both documented last wave: "generated-world saves
+ * have no resume path in this app at all" -- runLoad's own generated
+ * branch, and this mirror of it, is what A4 adds.
+ *
+ * Deliberately a DYNAMIC `import()`, not a static one: `instantiateWorld`
+ * does not exist on src/foundry/world-gen.ts on THIS worktree yet --
+ * runtime-foundry's own isolated worktree for this wave adds the
+ * proposeWorld/instantiateWorld split. A static named import of a
+ * not-yet-existing export throws a SyntaxError at MODULE LOAD time for
+ * every file that imports this helper (nearly every integration test in
+ * this suite, transitively via resumeHarness) -- exactly the blast radius
+ * WO-A4-11 ("phase9/parity/driver/seed/v3 proofs stay green") forbids.
+ * Accessing a missing property on a dynamically-imported module's
+ * namespace object is merely `undefined`, not a throw, so the RED below is
+ * confined to whichever test actually exercises a packless-generated
+ * resume -- the same isolation discipline `seedWorldTruthFromSession`'s
+ * import got last wave (that one was a brand-new file, a cleaner case; this
+ * one is an existing file gaining a new export, which is why the static
+ * form is unsafe here specifically).
+ *
+ * ASSUMED CONTRACT (design doc §4 names `instantiateWorld(proposal, seed,
+ * logger)` but not its literal return shape): this reads either a bare
+ * `Engine` (has a `.world`) or a `{ engine: Engine }` wrapper matching
+ * `WorldGenResult`'s existing shape, whichever runtime-foundry's split
+ * actually returns -- flagged per the addendum's honesty floor, not
+ * silently guessed away. If the real export differs in a way this
+ * detection can't handle, the fix is confined to this one function.
+ */
+async function rebuildGeneratedEngine(savedSession: SavedSession, savePath: string): Promise<Engine> {
+  const worldGenProposalRaw = (savedSession as unknown as { worldGenProposal?: string }).worldGenProposal;
+  if (!worldGenProposalRaw) {
+    // Design lock 5: "a save with neither packId nor worldGenProposal is
+    // refused through the existing load presenter (no new copy)" -- this
+    // helper has no presenter to route through (same documented limitation
+    // as the packId-absent throw below), so it throws directly instead.
+    throw new Error(
+      `resumeHarness: save at "${savePath}" has no packId and no worldGenProposal -- cannot restore engine.`,
+    );
+  }
+
+  const worldGenModule = (await import('../../src/foundry/world-gen.js')) as unknown as {
+    instantiateWorld?: (proposal: WorldGenProposal, seed?: number) => Engine | { engine: Engine };
+  };
+  if (typeof worldGenModule.instantiateWorld !== 'function') {
+    throw new Error(
+      'resumeHarness: src/foundry/world-gen.ts does not export instantiateWorld yet -- ' +
+        'runtime-foundry\'s isolated worktree for THIS wave (run swarm-1788288802-f5a0, wave 7, ' +
+        'design doc docs/living-world-slice-a4.md §4) adds the proposeWorld/instantiateWorld split. ' +
+        'RED per ADDENDUM-COMMON\'s sequencing note, not a bug in this helper -- goes green once ' +
+        'the coordinator merges runtime-foundry\'s change in.',
+    );
+  }
+
+  const proposal = JSON.parse(worldGenProposalRaw) as WorldGenProposal;
+  const worldSeed = (savedSession as unknown as { worldSeed?: number }).worldSeed;
+  const built = worldGenModule.instantiateWorld(proposal, worldSeed);
+  return 'world' in built ? (built as Engine) : (built as { engine: Engine }).engine;
+}
+
 export async function resumeHarness(
   savePath: string,
   opts: HarnessOptions = {},
@@ -194,15 +273,25 @@ export async function resumeHarness(
   const loadResult = await loadSession(savePath);
   const savedSession = loadResult.session;
 
-  if (!savedSession.packId) {
-    throw new Error(`resumeHarness: save at "${savePath}" has no packId -- cannot restore engine.`);
-  }
-  const pack = getPackById(savedSession.packId);
-  if (!pack) {
-    throw new Error(`resumeHarness: unknown pack "${savedSession.packId}".`);
+  let engine: Engine;
+  // WO-A4-10: `itemCatalog` below has no equivalent for a packless/generated
+  // world (WorldGenProposal carries no item catalog this slice) -- stays
+  // `undefined` for that branch, same as every other pack-only optional
+  // field this function already treats that way (buildCatalog, below).
+  let itemCatalog: ItemCatalog | undefined;
+  if (savedSession.packId) {
+    const pack = getPackById(savedSession.packId);
+    if (!pack) {
+      throw new Error(`resumeHarness: unknown pack "${savedSession.packId}".`);
+    }
+    engine = pack.createGame();
+    itemCatalog = pack.itemCatalog;
+  } else {
+    // WO-A4-10: the packless branch -- see rebuildGeneratedEngine's own doc
+    // comment for the full sequencing/contract discussion.
+    engine = await rebuildGeneratedEngine(savedSession, savePath);
   }
 
-  const engine = pack.createGame();
   const validation = validateEngineState(savedSession.engineState);
   if (!validation.valid) {
     throw new Error(`resumeHarness: save at "${savePath}" has invalid engine state (${validation.error}).`);
@@ -269,14 +358,24 @@ export async function resumeHarness(
   // lets this helper pass it through today without an `any` escape hatch,
   // and costs nothing once game-core's own worktree lands the real field
   // (a structural superset of GameConfig is still assignable to it).
-  const gameConfig: GameConfig = {
+  // WO-A4-10: a packless/generated save carries `worldGenProposal`/
+  // `worldSeed` (widened cast -- see rebuildGeneratedEngine's own doc
+  // comment for why these aren't typed on SavedSession here yet). Threaded
+  // back onto the RESUMED session's own config so a second save/resume
+  // cycle carries them forward too (design lock 5's "resumes like a pack
+  // world" implies indefinitely, not just once) -- absent entirely for a
+  // pack session, matching every other optional field's "omit if absent"
+  // convention.
+  const savedSessionExtras = savedSession as unknown as { worldGenProposal?: string; worldSeed?: number };
+
+  const gameConfig: GameConfig & { worldGenProposal?: string; worldSeed?: number } = {
     engine,
     client,
     tone: savedSession.tone,
     title: savedSession.characterName ?? 'Test Game',
     worldPrompt: savedSession.worldPrompt,
     profile: profile ?? undefined,
-    itemCatalog: pack.itemCatalog,
+    itemCatalog,
     genre: savedSession.genre ?? 'fantasy',
     journal: restoredJournal,
     // task_3ddb1c06 (a)+(b): mirrored as fixed — see bin.ts runLoad().
@@ -290,6 +389,8 @@ export async function resumeHarness(
     // the serialized snapshot itself (GameConfig.rumorEngineSnapshot); the
     // deserializeSafe above runs only to expose restore warnings to tests.
     ...(rumorSnapshotRaw ? { rumorEngineSnapshot: rumorSnapshotRaw } : {}),
+    ...(savedSessionExtras.worldGenProposal !== undefined ? { worldGenProposal: savedSessionExtras.worldGenProposal } : {}),
+    ...(savedSessionExtras.worldSeed !== undefined ? { worldSeed: savedSessionExtras.worldSeed } : {}),
     ...opts.gameOpts,
   };
   const session = new GameSession(gameConfig);
@@ -352,7 +453,19 @@ export async function resumeHarness(
  */
 export async function saveHarness(h: GameHarness, savePath: string): Promise<void> {
   const session = h.session;
-  const input: SaveSessionInput = {
+  // WO-A4-10 (slice A4 §4, design lock 5): `worldGenProposal`/`worldSeed`
+  // aren't declared on `GameSession`/`SaveSessionInput` on this worktree yet
+  // (game-core's own isolated worktree adds them this wave -- "written by
+  // saveSession when the session has no packId"). Read through the same
+  // widened-cast pattern this file already uses for the rumorEngine
+  // snapshot: on THIS worktree a pack session and a createGeneratedHarness()
+  // session read back identically as `undefined` here, so the object-spread
+  // below is a no-op today and both fields are simply absent from every
+  // save this helper writes -- the correct red for a packless-generated
+  // save/resume round trip until the coordinator merges game-core's change
+  // in, not a bug in this helper.
+  const sessionExtras = session as unknown as { worldGenProposal?: string; worldSeed?: number };
+  const input: SaveSessionInput & { worldGenProposal?: string; worldSeed?: number } = {
     engine: session.engine,
     history: session.history,
     tone: session.tone,
@@ -371,6 +484,58 @@ export async function saveHarness(h: GameHarness, savePath: string): Promise<voi
     // Coordinator stitch (slice A3): the save carries the serialized snapshot,
     // exactly as bin.ts's buildSaveInput does.
     rumorEngine: session.getRumorEngineSnapshot(),
+    ...(sessionExtras.worldGenProposal !== undefined ? { worldGenProposal: sessionExtras.worldGenProposal } : {}),
+    ...(sessionExtras.worldSeed !== undefined ? { worldSeed: sessionExtras.worldSeed } : {}),
   };
   await saveSession(input as SaveSessionInput);
+}
+
+/**
+ * WO-A4-10 (slice A4, run swarm-1788288802-f5a0, wave 7, "tests" domain):
+ * builds a GameHarness the same way bin.ts's `runNew()` does for a
+ * generated (packless) world -- `generateWorld()` with a fake client
+ * returning `opts.proposal`, then a `GameSession` constructed directly over
+ * the resulting engine, with `worldGenProposal`/`worldSeed` threaded onto
+ * `GameConfig` so a later `saveHarness()`/`resumeHarness()` round trip
+ * exercises the SAME packless-generated resume path bin.ts's `runLoad` is
+ * contracted to (design lock 5: "runNew passes the proposal + seed into the
+ * session so the first save carries them").
+ *
+ * SEQUENCING: `GameConfig.worldGenProposal`/`worldSeed` are not declared on
+ * this worktree's src/game.ts yet (game-core's own isolated worktree adds
+ * them this wave, mirroring the existing `rumorEngineSnapshot` convention)
+ * -- passed through the same widened-cast pattern as that field. Until the
+ * coordinator merges game-core's change in, `GameSession`'s constructor
+ * simply never reads these two extra keys (structural typing lets the
+ * widened object through harmlessly), so `session.worldGenProposal`/
+ * `worldSeed` read back as `undefined` on THIS worktree -- the correct red
+ * for generated-world-resume.test.ts's own proof, not a bug in this helper.
+ */
+export async function createGeneratedHarness(
+  proposal: WorldGenProposal,
+  opts: HarnessOptions & { worldPrompt?: string; seed?: number } = {},
+): Promise<GameHarness> {
+  const callLog = opts.clientOpts?.callLog ?? createCallLog();
+  const clientOpts = { ...opts.clientOpts, callLog };
+
+  const genClient = createFakeClient({ ...clientOpts, structuredData: proposal });
+  const result = await generateWorld(genClient, opts.worldPrompt ?? 'a generated-world-resume fixture world', opts.seed);
+  if (!result.ok || !result.engine) {
+    throw new Error(`createGeneratedHarness: generateWorld failed: ${result.errors.join('; ')}`);
+  }
+
+  const playClient = createFakeClient(clientOpts);
+  const gameConfig: GameConfig & { worldGenProposal?: string; worldSeed?: number } = {
+    engine: result.engine,
+    client: playClient,
+    title: proposal.title,
+    tone: result.tone,
+    genre: proposal.genre ?? 'fantasy',
+    worldGenProposal: JSON.stringify(result.proposal ?? proposal),
+    worldSeed: opts.seed,
+    ...opts.gameOpts,
+  };
+  const session = new GameSession(gameConfig);
+
+  return wrapSession(session, callLog);
 }

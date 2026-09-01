@@ -287,6 +287,38 @@ describe('bin defenses: early SIGINT guard for pre-gameplay windows (F-4997779f)
 // cli/* modules rather than bin.ts itself (see this file's own top comment).
 // This block documents bin.ts's wiring contract: which of the three
 // engine-construction paths call it.
+// WO-A4-7 (slice A4, coordinator honesty-floor finding, run
+// swarm-1788288802-f5a0): game-core's WO-A4-1 (this same wave) converts
+// GameSession.partyState into a `get` accessor over getPartyState(world) --
+// runLoad's OLD `session.partyState = restoredParty;` line (a plain-field
+// assignment) becomes both a compile error under that getter AND was
+// already the sole writer of a pre-existing data-loss bug: it wrote into a
+// session field engine.serialize() never captured, so a resumed 1.x save's
+// companions were never in the resulting v3 engineState at all. Fixed by
+// writing straight into the engine's own companion-core world-truth
+// namespace instead, via @ai-rpg-engine/modules' setPartyState (an engine
+// export, not a game-core source file). Mirrors this file's own
+// "extractable logic patterns" convention (see this file's top comment):
+// bin.ts's runLoad can't be imported directly, so this documents the exact
+// guard runLoad uses before calling setPartyState.
+describe('bin defenses: legacy party-state seed guard (WO-A4-7)', () => {
+  // Mirrors runLoad's own guard verbatim:
+  //   if (restoredParty.companions.length > 0) {
+  //     setPartyState(engine.world, restoredParty);
+  //   }
+  function shouldSeedLegacyPartyState(restoredParty: { companions: unknown[] }): boolean {
+    return restoredParty.companions.length > 0;
+  }
+
+  it('skips the world-truth write for an empty party (a v3 save\'s loadPartyFromSession default -- v3 never writes the legacy partyState field, so writing it would wipe a v3 save\'s real, already-restored companions)', () => {
+    expect(shouldSeedLegacyPartyState({ companions: [] })).toBe(false);
+  });
+
+  it('seeds the world-truth companion-core namespace for a non-empty restored party (a 1.x legacy save that actually carried companions)', () => {
+    expect(shouldSeedLegacyPartyState({ companions: [{ npcId: 'rowan' }] })).toBe(true);
+  });
+});
+
 describe('bin defenses: boot zone-entry emission wiring (F-10cc3b71)', () => {
   it('only the two FRESH-session paths (runPlay, runNew) call emitBootZoneEntry after their engine is constructed -- runLoad never does (wave-2 design lock 4: a resumed save must not re-fire zone-entry listeners on every load)', () => {
     const freshSessionPaths = ['runPlay', 'runNew'];

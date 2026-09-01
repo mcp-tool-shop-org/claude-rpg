@@ -64,6 +64,11 @@ import {
   formatEndgameForDirector,
   type ArcSnapshot,
   type EndgameTrigger,
+  // WO-A4-8 (slice A4 §3, lock 6): the /status ledger line's quiet-round
+  // denominator -- the SAME constant the engine's own tick uses to decide
+  // when heat starts decaying (world-tick.ts), so this line can never drift
+  // from the mechanic it's reporting on.
+  QUIET_ROUNDS_BEFORE_DECAY,
 } from '@ai-rpg-engine/modules';
 import { formatFinaleForDirector, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
@@ -193,6 +198,26 @@ ${divider()}
  * arguments transposed at a call site. Passing every field by name makes
  * that class of bug a compile error instead of a silent mislabeling.
  */
+/**
+ * WO-A4-8 (slice A4 design doc §3, ADDENDUM-COMMON lock 6): the strategic
+ * ledger data game-core (WO-A4-4) builds from `world.globals` +
+ * `getWorldTickState(world)` and hands to `/status` -- this domain only
+ * renders it. Coded against ADDENDUM-game-core.md's contract ahead of that
+ * merge landing on this branch (parallel-wave honesty floor): `worldLedger:
+ * { heat, quietRounds, factionAlerts: Record<string, number>, districtTone?
+ * }` read from `world.globals` + `getWorldTickState(world)`.
+ */
+export type WorldLedgerSummary = {
+  /** `world.globals.player_heat` (HEAT_KEY). */
+  heat: number;
+  /** `getWorldTickState(world).quietRounds`. */
+  quietRounds: number;
+  /** `world.globals.faction_alert_<factionId>` entries, filtered to >0 by the caller or here -- both are safe (see formatWorldLedgerLine). */
+  factionAlerts: Record<string, number>;
+  /** `getWorldTickState(world).districtTones[<current district>]`. */
+  districtTone?: string;
+};
+
 export type ExecuteDirectorCommandOptions = {
   command: string;
   world: WorldState;
@@ -223,7 +248,38 @@ export type ExecuteDirectorCommandOptions = {
   arcSnapshot?: ArcSnapshot | null;
   endgameTriggers?: EndgameTrigger[];
   finaleOutline?: FinaleOutline | null;
+  /** WO-A4-8: see WorldLedgerSummary's doc comment. */
+  worldLedger?: WorldLedgerSummary;
 };
+
+/**
+ * WO-A4-8 (slice A4 §3, lock 6): formats the `/status` strategic ledger line
+ * -- DRAFT, listed verbatim for coordinator review. Byte-absent (returns
+ * undefined, so renderCompactStatus omits the line) when the ledger reports
+ * nothing worth a player's attention: zero heat, no faction alert above
+ * zero, and no district tone. Otherwise heat always leads (a "Heat 0 ·
+ * Alerts: ..." reading is still informative once ANY segment is non-empty),
+ * with quiet-round progress toward HEAT_DECAY_PER_QUIET_TICK's grace window
+ * riding alongside it in parens, e.g.:
+ *   "Heat 12 (3/37 quiet) · Alerts: chapel-undead 60 · District: tense"
+ */
+function formatWorldLedgerLine(ledger: WorldLedgerSummary | undefined): string | undefined {
+  if (!ledger) return undefined;
+  const alertEntries = Object.entries(ledger.factionAlerts ?? {}).filter(([, level]) => level > 0);
+  const hasHeat = ledger.heat > 0;
+  const hasAlerts = alertEntries.length > 0;
+  const hasDistrict = !!ledger.districtTone;
+  if (!hasHeat && !hasAlerts && !hasDistrict) return undefined;
+
+  const segments: string[] = [`Heat ${ledger.heat} (${ledger.quietRounds}/${QUIET_ROUNDS_BEFORE_DECAY} quiet)`];
+  if (hasAlerts) {
+    segments.push(`Alerts: ${alertEntries.map(([factionId, level]) => `${factionId} ${level}`).join(', ')}`);
+  }
+  if (hasDistrict) {
+    segments.push(`District: ${ledger.districtTone}`);
+  }
+  return segments.join(' · ');
+}
 
 /** Execute a director command and return the rendered output. */
 export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): string {
@@ -233,6 +289,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     leverageState, strategicMap, statusData, suggestedMove, situationTag, profileCustom,
     npcProfiles, lastNpcActions, npcObligations, partyState, profile, itemCatalog,
     districtEconomies, genre, activeOpportunities, arcSnapshot, endgameTriggers, finaleOutline,
+    worldLedger,
   } = opts;
 
   const parts = command.trim().split(/\s+/);
@@ -480,6 +537,10 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       const endgameIndicator = unacknowledgedTriggers.length > 0
         ? unacknowledgedTriggers.map((t) => `${t.resolutionClass} (turn ${t.detectedAtTick})`).join(', ')
         : undefined;
+      // WO-A4-8 (slice A4 §3, lock 6): the strategic ledger line -- see
+      // formatWorldLedgerLine's doc comment for the byte-absent-when-empty
+      // rule and the draft format.
+      const worldLedgerLine = formatWorldLedgerLine(worldLedger);
       return renderCompactStatus({
         statusData,
         leverageState,
@@ -491,6 +552,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
         opportunitySummary,
         arcIndicator,
         endgameIndicator,
+        worldLedgerLine,
       });
     }
 

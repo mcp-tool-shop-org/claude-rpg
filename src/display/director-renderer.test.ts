@@ -147,6 +147,75 @@ describe('executeDirectorCommand', () => {
     expect(result).toContain('victory');
   });
 
+  // WO-A4-8 (slice A4 design doc §3, ADDENDUM-COMMON lock 6): the /status
+  // strategic ledger line -- heat, faction alerts above zero, district tone.
+  // Coded against ADDENDUM-game-core.md's `worldLedger: { heat, quietRounds,
+  // factionAlerts, districtTone? }` contract (WO-A4-4, not yet landed on
+  // this branch -- this test exercises cli-display's own renderer directly,
+  // so it is green today; only game.ts/bin.ts's real call site building
+  // that object is "green expected at merge").
+  describe('/status world ledger line (WO-A4-8)', () => {
+    const statusData = {
+      name: 'Aldric', level: 3, archetypeName: 'Warrior',
+      hp: 20, injuryTags: [], statuses: [],
+    } as any;
+    const leverageState = {
+      favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0,
+    } as any;
+
+    it('renders heat, alerts (filtered to >0), and district tone', () => {
+      const result = executeDirectorCommand({
+        command: '/status',
+        world: makeWorld(),
+        statusData,
+        leverageState,
+        worldLedger: {
+          heat: 12,
+          quietRounds: 3,
+          factionAlerts: { 'chapel-undead': 60, 'quiet-guild': 0 },
+          districtTone: 'tense',
+        },
+      });
+      expect(result).toContain('Heat 12 (3/37 quiet)');
+      expect(result).toContain('Alerts: chapel-undead 60');
+      expect(result).not.toContain('quiet-guild');
+      expect(result).toContain('District: tense');
+    });
+
+    it('omits the ledger line entirely when heat is 0, no alerts, and no district tone', () => {
+      const result = executeDirectorCommand({
+        command: '/status',
+        world: makeWorld(),
+        statusData,
+        leverageState,
+        worldLedger: { heat: 0, quietRounds: 0, factionAlerts: {} },
+      });
+      expect(result).not.toContain('Heat 0');
+    });
+
+    it('still renders when heat is 0 but an alert is present', () => {
+      const result = executeDirectorCommand({
+        command: '/status',
+        world: makeWorld(),
+        statusData,
+        leverageState,
+        worldLedger: { heat: 0, quietRounds: 0, factionAlerts: { 'chapel-undead': 15 } },
+      });
+      expect(result).toContain('Heat 0');
+      expect(result).toContain('Alerts: chapel-undead 15');
+    });
+
+    it('omits the ledger line entirely when worldLedger is absent (existing callers unaffected)', () => {
+      const result = executeDirectorCommand({
+        command: '/status',
+        world: makeWorld(),
+        statusData,
+        leverageState,
+      });
+      expect(result).not.toContain('Heat');
+    });
+  });
+
   // --- /chronicle output ---
 
   it('should return "No chronicle events" when journal is empty', () => {

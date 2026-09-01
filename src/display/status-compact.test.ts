@@ -181,6 +181,28 @@ describe('renderCompactStatus (F-478cbef8)', () => {
   });
 });
 
+/**
+ * WO-A4-8 (slice A4 design doc §3, ADDENDUM-COMMON lock 6): the /status
+ * strategic ledger line. renderCompactStatus itself is a pure renderer here
+ * -- it trusts whatever string (or undefined) director-renderer.ts's
+ * formatWorldLedgerLine hands it, so these tests only pin the presence/
+ * placement/omission contract of the `worldLedgerLine` opt, not the
+ * formatting logic itself (that's director-renderer.test.ts's job).
+ */
+describe('renderCompactStatus world ledger line (WO-A4-8)', () => {
+  it('renders the pre-formatted ledger line when present', () => {
+    const result = renderCompactStatus(baseOpts({
+      worldLedgerLine: 'Heat 12 (3/37 quiet) · Alerts: chapel-undead 60 · District: tense',
+    }));
+    expect(result).toContain('Heat 12 (3/37 quiet) · Alerts: chapel-undead 60 · District: tense');
+  });
+
+  it('omits the ledger line entirely when absent (byte-absent contract)', () => {
+    const result = renderCompactStatus(baseOpts());
+    expect(result).not.toContain('Heat');
+  });
+});
+
 // F-38eb3dec: status-compact.ts's DIVIDER was a fixed 60-char string,
 // unlike play-renderer.ts's own dividers (PFE-005), which adapt to the
 // real terminal width. Mirrors play-renderer-divider.test.ts's assertions.

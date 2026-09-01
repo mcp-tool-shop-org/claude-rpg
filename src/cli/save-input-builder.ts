@@ -25,6 +25,12 @@
 // this branch — both are red until game-core's WO-A3-1/2/3 merge into this
 // wave (parallel-wave contract, ADDENDUM-cli-display.md WO-A3-4: "mark
 // 'green expected at merge' if game-core's branch is not on yours").
+//
+// WO-A4-7 (slice A4, docs/living-world-slice-a4.md §4): worldGenProposal/
+// worldSeed pass through the same way — coded against ADDENDUM-game-core's
+// WO-A4-3 contract (`GameSession.getWorldGenProposal()` / `getWorldSeed()`,
+// `SaveSessionInput.worldGenProposal?: string` / `worldSeed?: number`) ahead
+// of that merge landing here too.
 import type { GameSession } from '../game.js';
 import type { SaveSessionInput } from '../session/session.js';
 
@@ -57,5 +63,20 @@ export function buildSaveInput(session: GameSession, savePath: string, packId?: 
     endgameTriggers: session.endgameTriggers,
     finaleOutline: session.finaleOutline,
     campaignStatus: session.campaignStatus,
+    // WO-A4-7 (slice A4 design doc §4, ADDENDUM-COMMON lock 5): rides the
+    // save the way the RumorEngine snapshot above does -- a pre-serialized
+    // pass-through from the session accessors game-core lands this same
+    // wave (WO-A4-3: GameSession.getWorldGenProposal() / getWorldSeed(),
+    // GameConfig.worldGenProposal / worldSeed). `undefined` on a pack
+    // session (or any save before this slice) is the correct "not a
+    // generated world" case -- saveSession only WRITES worldGenProposal
+    // when the session has no packId (design doc §4). Coded against
+    // ADDENDUM-game-core.md's contract ahead of that merge landing on this
+    // branch (parallel-wave honesty floor): this file cannot see
+    // GameSession.getWorldGenProposal()/getWorldSeed() yet, so this line is
+    // "green expected at merge", not a bug here (mirrors this file's own
+    // rumorEngine precedent above, WO-A3-4).
+    worldGenProposal: session.getWorldGenProposal(),
+    worldSeed: session.getWorldSeed(),
   };
 }

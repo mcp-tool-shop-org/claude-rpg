@@ -107,6 +107,52 @@ describe('renderPresentationCues', () => {
     expect(text).not.toContain('starts');
   });
 
+  // F-488e6621: before this fix, a victory sting, a defeat sting, and (at
+  // engine 3.11) a retreat sting all rendered the SAME generic
+  // '  · a sting of music' line -- renderMusicLine only ever read
+  // `params.action === 'sting'`, never `params.trackId`, even though
+  // audio-bridge.ts's setMusic (runtime/audio-bridge.ts:120-127) already
+  // forwards `trackId: cue.trackId` on every __music_intent__ call. Observed
+  // red before the fix: all three assertions below failed because
+  // renderMusicLine had no STING_LABELS lookup at all -- every trackId
+  // produced the identical 'a sting of music' text, so a player could not
+  // tell a win from a loss from a fled encounter.
+  it.each([
+    ['music_victory_sting', 'triumph'],
+    ['music_defeat_sting', 'loss'],
+    ['music_retreat_sting', 'retreat'],
+  ])('gives the %s trackId its own distinct sting phrasing ("%s")', (trackId, expectedWord) => {
+    const text = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId } },
+    ]);
+    expect(text).toContain('sting');
+    expect(text).toContain(expectedWord);
+  });
+
+  it('renders three DIFFERENT lines for victory/defeat/retreat stings (no two trackIds collapse to the same text)', () => {
+    const victory = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId: 'music_victory_sting' } },
+    ]);
+    const defeat = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId: 'music_defeat_sting' } },
+    ]);
+    const retreat = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId: 'music_retreat_sting' } },
+    ]);
+    expect(new Set([victory, defeat, retreat]).size).toBe(3);
+  });
+
+  it('falls back to the pre-existing generic sting line for an unrecognized trackId (or none at all), never throwing or rendering "undefined"', () => {
+    const unknownTrack = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId: 'some_future_sting' } },
+    ]);
+    const noTrack = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting' } },
+    ]);
+    expect(unknownTrack).toContain('a sting of music');
+    expect(noTrack).toContain('a sting of music');
+  });
+
   it('maps the __ui_effect_intent__ fade-out (deathHook fade-to-black) to a blank-screen sequence: newlines + a rule distinct from the routine divider, not ANSI art', () => {
     const calls: McpToolCall[] = [
       { tool: '__ui_effect_intent__', params: { type: 'fade-out', durationMs: 2000, color: '#000' } },
@@ -359,13 +405,33 @@ describe('cue label humanization (F-7eb33249)', () => {
 // entry (or a future LLM-facing sound id) shipping with no curated label,
 // silently leaking a raw underscored token to players again.
 describe('cue label vocabulary-drift tripwire (F-7eb33249)', () => {
-  it('every CORE_SOUND_PACK entry (the real structural source of truth, not app code) humanizes with no underscore reaching the screen', () => {
-    // Sanity: the probe itself isn't vacuous -- if this ever reads 0, the
-    // import above broke silently and every assertion below would trivially
-    // "pass" over an empty loop.
-    expect(CORE_SOUND_PACK.entries.length).toBeGreaterThan(0);
-
+  // F-25e533e4: this probe used to iterate ALL of CORE_SOUND_PACK.entries
+  // (music included) through a ternary that only ever built a 'sound_effect'
+  // call -- so every domain:'music' entry (music_calm/dread/triumph plus
+  // the three combat stings) was routed through renderSfxLine, never
+  // renderMusicLine, the function that actually renders it in production.
+  // The loop "passed" over music while testing nothing about how music
+  // actually renders. Narrowed to sfx/ambient (renderMusicLine gets its own
+  // loop below, exercising the real function).
+  //
+  // Domain-breakdown assertion (not just >0): the old
+  // `expect(...length).toBeGreaterThan(0)` sanity check would have stayed
+  // green even with every music entry silently mis-routed, because it never
+  // asserted a count or a domain split -- exactly how this gap went
+  // unnoticed. A future entry added to ANY domain now forces this test (or
+  // the parallel music one below) to be updated deliberately instead of
+  // silently "passing" through the wrong loop.
+  it('every CORE_SOUND_PACK sfx/ambient entry (the real structural source of truth, not app code) humanizes with no underscore reaching the screen', () => {
+    const domainCounts: Record<string, number> = {};
     for (const entry of CORE_SOUND_PACK.entries) {
+      domainCounts[entry.domain] = (domainCounts[entry.domain] ?? 0) + 1;
+    }
+    expect(domainCounts).toEqual({ sfx: 10, ambient: 3, music: 6 });
+
+    const sfxAndAmbient = CORE_SOUND_PACK.entries.filter((entry) => entry.domain !== 'music');
+    expect(sfxAndAmbient.length).toBeGreaterThan(0);
+
+    for (const entry of sfxAndAmbient) {
       const token = entry.voiceSoundboardEffect;
       const params = entry.domain === 'ambient'
         ? { effect: token, volume: 0.5 }
@@ -373,6 +439,51 @@ describe('cue label vocabulary-drift tripwire (F-7eb33249)', () => {
       const text = renderPresentationCues([{ tool: 'sound_effect', params }]);
       expect(text, `entry "${entry.id}" (token "${token}") leaked an underscore`).not.toContain('_');
     }
+  });
+
+  // F-25e533e4 companion loop: every domain:'music' CORE_SOUND_PACK entry
+  // whose id ends "_sting" (the combat-outcome stings COMBAT_STING_MAP
+  // targets -- music_victory_sting/music_defeat_sting/music_retreat_sting)
+  // is routed through a REAL __music_intent__ call (not 'sound_effect'), so
+  // renderMusicLine -- the function that actually renders it in production
+  // -- is what this test exercises. Asserts the F-488e6621 fix stays true:
+  // each sting entry gets its OWN line, distinct from the generic
+  // fallback an unrecognized trackId falls back to.
+  it('every CORE_SOUND_PACK combat-sting music entry gets a distinct line via renderMusicLine, not the generic sting fallback', () => {
+    const stingEntries = CORE_SOUND_PACK.entries.filter(
+      (entry) => entry.domain === 'music' && entry.id.endsWith('_sting'),
+    );
+    expect(stingEntries.length).toBe(3);
+
+    const fallback = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId: '__unregistered_track__' } },
+    ]);
+
+    const seen = new Set<string>();
+    for (const entry of stingEntries) {
+      const text = renderPresentationCues([
+        { tool: '__music_intent__', params: { action: 'sting', trackId: entry.id } },
+      ]);
+      expect(text, `music sting entry "${entry.id}" rendered the generic fallback instead of a distinct phrase`).not.toBe(fallback);
+      seen.add(text);
+    }
+    // No two combat outcomes may collapse to the same rendered line.
+    expect(seen.size).toBe(stingEntries.length);
+  });
+
+  // Red proof (design lock: "prove the probe can FAIL"): a trackId this
+  // file's STING_LABELS has no authored phrase for -- e.g. a hypothetical
+  // future COMBAT_STING_MAP entry the renderer hasn't been taught yet --
+  // must fall through to the pre-existing generic line, proving the probe
+  // above is actually discriminating (it would fail this same equality
+  // check if renderMusicLine ever regressed to giving every trackId the
+  // same text) rather than vacuously passing no matter what renderMusicLine
+  // does.
+  it('a fabricated/unregistered sting trackId falls through to the generic fallback line, not a fabricated distinct one', () => {
+    const text = renderPresentationCues([
+      { tool: '__music_intent__', params: { action: 'sting', trackId: 'music_totally_unauthored_sting' } },
+    ]);
+    expect(text).toContain('a sting of music');
   });
 
   // Coordinator brief (wave-18/cli-display.md, item 5): parity-check against

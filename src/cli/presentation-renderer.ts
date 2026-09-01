@@ -42,6 +42,7 @@ import type { McpToolCall } from '../runtime/audio-bridge.js';
 // this boundary, so the value is narrowed defensively below (renderUiEffectLine)
 // rather than trusted outright.
 import type { UiEffectType } from '@ai-rpg-engine/presentation';
+import { COMBAT_STING_MAP } from '@ai-rpg-engine/soundpack-core';
 import { dim, critical } from './colors.js';
 import { getTerminalWidth } from '../display/play-renderer.js';
 
@@ -80,10 +81,16 @@ function isAmbientCue(params: Record<string, unknown>): boolean {
  * / "Available ambient layers" lines in NARRATE_SYSTEM) so player-facing
  * phrasing agrees with what the LLM was told the sound is.
  *
- * Covers all 13 tokens @ai-rpg-engine/soundpack-core's CORE_SOUND_PACK
- * currently defines (10 sfx + 3 ambient) -- see the vocabulary-drift
- * tripwire in presentation-renderer.test.ts, which imports CORE_SOUND_PACK
- * directly so a future 14th entry gets exercised automatically.
+ * Covers the 13 sfx+ambient tokens @ai-rpg-engine/soundpack-core's
+ * CORE_SOUND_PACK currently defines (10 sfx + 3 ambient) -- NOT the pack's
+ * 5 domain:'music' entries (music_calm/dread/triumph plus the three combat
+ * stings), which route through renderMusicLine instead (see its own
+ * STING_LABELS, F-488e6621). See the vocabulary-drift tripwire in
+ * presentation-renderer.test.ts, which imports CORE_SOUND_PACK directly so
+ * a future 14th sfx/ambient entry gets exercised automatically; F-25e533e4
+ * added a parallel tripwire loop over the music entries so a future
+ * addition there is caught too, instead of silently excluded the way this
+ * comment used to (wrongly) claim full coverage while doing exactly that.
  */
 const SFX_LABELS: Record<string, string> = {
   chime_notification: 'a notification chime',
@@ -151,7 +158,36 @@ function renderAmbientLine(params: Record<string, unknown>): string {
  * claims music "starts" for a value that isn't actually 'play' -- an
  * as-yet-unknown future action now gets a neutral "music changes" instead of
  * a specific claim this function has no evidence for.
+ *
+ * F-488e6621 (wave-2 amend): the 'sting' case above rendered the SAME line
+ * '  · a sting of music' for every combat outcome -- a player could not
+ * tell from the text cue whether they'd won, lost, or fled a fight.
+ * audio-bridge.ts's setMusic (runtime/audio-bridge.ts:120-127) already
+ * forwards `trackId: cue.trackId` into every `__music_intent__` call's
+ * params, resolved upstream via the installed 3.11 soundpack-core's
+ * COMBAT_STING_MAP (`combat.victory`/`combat.defeat`/`combat.retreat` ->
+ * `music_victory_sting`/`music_defeat_sting`/`music_retreat_sting`) -- this
+ * was simply never read here. STING_LABELS below is built by INVERTING
+ * COMBAT_STING_MAP (keyed by trackId, valued by this file's own authored
+ * phrase for that outcome) rather than hand-copying the three trackId
+ * strings, so a future engine rename of a trackId is still recognized
+ * automatically (this stays byte-for-byte in sync with the engine's own
+ * map); an outcome key this file has no authored phrase for is dropped by
+ * the `in STING_PHRASE_BY_OUTCOME` filter and falls through safely to the
+ * pre-existing generic line rather than rendering `undefined`.
  */
+const STING_PHRASE_BY_OUTCOME: Record<string, string> = {
+  'combat.victory': 'a sting of triumph',
+  'combat.defeat': 'a sting of loss',
+  'combat.retreat': 'a sting of retreat',
+};
+
+const STING_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(COMBAT_STING_MAP)
+    .filter(([outcome]) => outcome in STING_PHRASE_BY_OUTCOME)
+    .map(([outcome, cue]) => [cue.trackId, STING_PHRASE_BY_OUTCOME[outcome]]),
+);
+
 function renderMusicLine(params: Record<string, unknown>): string {
   const action = stringParam(params, 'action');
   switch (action) {
@@ -163,8 +199,11 @@ function renderMusicLine(params: Record<string, unknown>): string {
       return dim('  · music fades out');
     case 'crossfade':
       return dim('  · music shifts');
-    case 'sting':
-      return dim('  · a sting of music');
+    case 'sting': {
+      const trackId = stringParam(params, 'trackId');
+      const label = trackId !== undefined ? STING_LABELS[trackId] : undefined;
+      return dim(`  · ${label ?? 'a sting of music'}`);
+    }
     case 'play':
       return dim('  · music starts');
     default:

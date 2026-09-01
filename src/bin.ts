@@ -98,6 +98,7 @@ import {
   getDistrictDefinition,
   computeDistrictMood,
 } from '@ai-rpg-engine/modules';
+import { emitBootZoneEntry } from './cli/boot-zone-entry.js';
 
 /** Build a SaveSessionInput from a GameSession + save path. */
 function buildSaveInput(session: GameSession, savePath: string, packId?: string): SaveSessionInput {
@@ -343,6 +344,9 @@ async function runPlay(args: string[]): Promise<void> {
   // presetPack, narrative-llm's half).
   const result = await buildCharacter(rl, packInfo);
   const engine = result.pack.createGame();
+  // F-10cc3b71: fresh session only (never runLoad) -- zoneId is final now
+  // that chargen is done. See emitBootZoneEntry's doc comment above.
+  emitBootZoneEntry(engine);
 
   const fastMode = args.includes('--fast');
   const presentationBox: PresentationBox = { calls: [] };
@@ -769,6 +773,10 @@ async function runNew(worldPrompt: string): Promise<void> {
 
   const title = result.proposal?.title ?? 'Generated World';
   console.log(`  World "${title}" created!\n`);
+
+  // F-10cc3b71: fresh session only (never runLoad) -- generateWorld's
+  // player placement is now final. See emitBootZoneEntry's doc comment.
+  emitBootZoneEntry(result.engine);
 
   const presentationBox: PresentationBox = { calls: [] };
   const streamBox: StreamBox = { current: null };

@@ -1198,10 +1198,43 @@ export class GameSession {
       // Companion reactions to combat and district conditions
       if (this.partyState.companions.length > 0) {
         // Combat reactions
-        // A defeat event alone fires prematurely mid-melee — combat is won only
-        // when no living hostiles remain (same fix shape as combatEndHook).
-        const hasCombatWon = turnResult.events.some((e) => e.type === 'combat.entity.defeated')
-          && !hasLivingHostiles(this.engine.world);
+        // F-ccd9dc08: the old heuristic (a defeat event fired this turn AND
+        // no living hostiles remain in the zone) never read the engine's own
+        // combat.encounter.cleared/outcome. At 3.11 a same-turn "one hostile
+        // defeated, the last hostile flees" turn clears the encounter with
+        // outcome: 'retreat' -- the fled hostile drops out of
+        // hasLivingHostiles() too, so the old heuristic read that as a win.
+        // The engine's cleared event is now the primary signal: absent
+        // `outcome` (3.10-shaped events/fixtures) still means victory (lock
+        // 1 default); a 'retreat' outcome is never a win (lock 2), full
+        // stop, even though a real `combat.entity.defeated` also fired the
+        // same turn.
+        //
+        // The old defeat+no-hostiles derivation is KEPT, but only as a
+        // fallback for when NO cleared event fires at all -- proven
+        // necessary, not assumed: verified directly against the installed
+        // 3.11 dist that killing a non-hostile NPC in a zone that also
+        // holds an unrecruited companion candidate (e.g. Sister Maren
+        // before /recruit) emits ZERO combat.encounter.cleared events.
+        // engagement-core.ts's 'defeated' trigger bails out at
+        // `else if (hasEnemiesInZone(world, playerEntity)) return;`
+        // (packages/modules/src/engagement-core.ts:178-179) before ever
+        // reaching the emit, because hasEnemiesInZone routes through
+        // targeting.ts's affiliationOf, whose legacy same-`type` fallback
+        // (targeting.ts:46, `candidate.type === source.type`) misclassifies
+        // ANY unrecruited "npc"-typed entity (no `faction` set) as an
+        // "enemy" of the player-typed source -- a harmless recruitable ally
+        // included. hasLivingHostiles() (runtime/hooks.ts) does not share
+        // that flaw -- it gates on the `hostile`/`enemy` TAG convention, not
+        // engine-wide type affiliation -- so it stays a correct fallback
+        // signal for exactly this suppressed case.
+        const clearedEvent = turnResult.events.find(
+          (e) => e.type === 'combat.encounter.cleared',
+        );
+        const hasCombatWon = clearedEvent
+          ? ((clearedEvent.payload as { outcome?: string }).outcome ?? 'victory') === 'victory'
+          : turnResult.events.some((e) => e.type === 'combat.entity.defeated')
+            && !hasLivingHostiles(this.engine.world);
         const hasCombatLost = turnResult.events.some(
           (e) => e.type === 'combat.entity.defeated' &&
             e.payload.entityId === this.engine.world.playerId,

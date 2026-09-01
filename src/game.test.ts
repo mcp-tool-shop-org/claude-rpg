@@ -18,6 +18,7 @@ vi.mock('./display/play-renderer.js', async (importOriginal) => {
 });
 
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import type { ResolvedEvent } from '@ai-rpg-engine/core';
 import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
@@ -1196,6 +1197,122 @@ describe('GameSession', () => {
       ]);
       const maren = h.session.partyState.companions.find((c) => c.npcId === 'sister-maren');
       expect(maren?.morale).toBe(57);
+    });
+
+    // F-ccd9dc08: hasCombatWon/hasCombatLost (game.ts:1198-1230) never read
+    // combat.encounter.cleared/outcome at all -- a same-turn "one hostile
+    // defeated, the last hostile flees" turn clears the encounter with
+    // outcome:'retreat' at 3.11 (engagement-core.ts:215-246), but the fled
+    // hostile also drops out of hasLivingHostiles()'s zone-scoped count, so
+    // the old heuristic (a defeat event fired this turn AND no living
+    // hostiles remain) read the turn as a win regardless.
+    //
+    // Constructing a genuine same-turn "kill + last-hostile-flee" engine
+    // state is impractical (ADDENDUM-COMMON: "a retreat fixture is an
+    // event object with outcome: 'retreat' where a real flee is
+    // impractical"), so this drives the exact same real pilgrim-kill turn
+    // as the combat-won test above (a genuine combat.entity.defeated event
+    // fires) and injects the retreat-outcome cleared event the routed bug
+    // is about via a submitAction spy that calls straight through to the
+    // real engine and only appends one fixture event to its real return.
+    //
+    // chapel-entrance's own real combat.encounter.cleared is separately
+    // proven suppressed on this exact turn regardless (verified directly
+    // against the installed 3.11 dist): Sister Maren sits in the same zone
+    // unrecruited, and targeting.ts's affiliationOf legacy same-`type`
+    // fallback (no `faction` set on either side) misclassifies her
+    // "npc"-typed entity as an "enemy" of the player-typed source, so
+    // engagement-core.ts's `else if (hasEnemiesInZone(world,
+    // playerEntity)) return;` (:178-179) bails the emit before it happens
+    // -- so the injected fixture event is the ONLY combat.encounter.cleared
+    // event this turn sees, cleanly isolating the assertion to it.
+    it('retreat clear with a same-turn kill (multi-hostile) does not fire combat-won', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('go to chapel-nave');
+      await h.play('/recruit aldric');
+      await h.play('go to chapel-entrance');
+
+      const pilgrim = h.session.engine.world.entities['pilgrim'];
+      pilgrim.resources.hp = 1;
+
+      const originalSubmit = h.session.engine.submitAction.bind(h.session.engine);
+      vi.spyOn(h.session.engine, 'submitAction').mockImplementation((verb, opts) => {
+        const events = originalSubmit(verb, opts);
+        const clearedEvent: ResolvedEvent = {
+          id: 'evt-fixture-retreat-clear',
+          tick: h.session.engine.tick,
+          type: 'combat.encounter.cleared',
+          actorId: 'player',
+          targetIds: [],
+          payload: { zoneId: 'chapel-entrance', outcome: 'retreat' },
+          tags: ['combat', 'encounter', 'cleared'],
+        };
+        events.push(clearedEvent);
+        return events;
+      });
+
+      // OBSERVED RED (pre-fix): with the old heuristic
+      // (`turnResult.events.some(e => e.type === 'combat.entity.defeated')
+      // && !hasLivingHostiles(this.engine.world)`), this turn's real pilgrim
+      // defeat + empty hostile zone reads as a win regardless of the
+      // injected retreat-outcome cleared event (the old code never looked
+      // at it) -- lastCompanionReactions held
+      // `[{ npcId: 'brother-aldric', trigger: 'combat-won', moraleDelta:
+      // -1 }]` instead of `[]`, verified by re-running this test against
+      // that exact pre-fix expression before replacing it.
+      await h.play('attack pilgrim');
+
+      expect(pilgrim.resources.hp).toBe(0);
+      expect(h.session.lastCompanionReactions).toEqual([]);
+    });
+
+    // F-ccd9dc08 (lock 1 default): a `combat.encounter.cleared` event with
+    // no `outcome` key at all -- the 3.10 shape, before the field existed
+    // -- must still read as a victory. Sister Maren is temporarily tagged
+    // `hostile` with hp restored so hasLivingHostiles(world) reads TRUE,
+    // making the legacy no-living-hostiles fallback (kept only for the one
+    // proven case where the engine emits no cleared event at all) read
+    // this turn as NOT a win if it were ever consulted -- isolating the
+    // assertion to the primary combat.encounter.cleared-outcome path so a
+    // regression that quietly ORs the two signals together (instead of the
+    // cleared-event branch short-circuiting the fallback) would be caught
+    // here, not just coincidentally pass.
+    it('a 3.10-shaped cleared event without an outcome field still fires combat-won (lock 1 default), even when the legacy no-living-hostiles fallback would say no', async () => {
+      const { createHarness } = await import('../test/helpers/game-harness.js');
+      const h = createHarness();
+
+      await h.play('go to chapel-nave');
+      await h.play('/recruit aldric');
+      await h.play('go to chapel-entrance');
+
+      const maren = h.session.engine.world.entities['sister-maren'];
+      maren.tags = [...maren.tags, 'hostile'];
+      maren.resources.hp = 5;
+
+      const originalSubmit = h.session.engine.submitAction.bind(h.session.engine);
+      vi.spyOn(h.session.engine, 'submitAction').mockImplementation((verb, opts) => {
+        const events = originalSubmit(verb, opts);
+        const clearedEvent: ResolvedEvent = {
+          id: 'evt-fixture-3.10-clear',
+          tick: h.session.engine.tick,
+          type: 'combat.encounter.cleared',
+          actorId: 'player',
+          targetIds: [],
+          // Deliberately no `outcome` key -- the pre-3.11 shape.
+          payload: { zoneId: 'chapel-entrance' },
+          tags: ['combat', 'encounter', 'cleared'],
+        };
+        events.push(clearedEvent);
+        return events;
+      });
+
+      await h.play('look around');
+
+      expect(h.session.lastCompanionReactions).toEqual([
+        expect.objectContaining({ npcId: 'brother-aldric', trigger: 'combat-won', moraleDelta: -1 }),
+      ]);
     });
   });
 

@@ -76,8 +76,10 @@ import {
 import {
   runWorldTick,
   getActivePressures,
+  getResolvedPressures,
   getWorldTickState,
   RESOLVED_PRESSURES_KEPT,
+  HEAT_KEY,
   pushActivePressure,
   getPersistedOpportunities,
   setPersistedOpportunities,
@@ -93,6 +95,16 @@ import {
   getPlayerRumorState,
   setPlayerRumorState,
   getPartyState,
+  // WO-A4-2 (slice A4 §2, design lock 3): the engine's own persisted move
+  // recommendation — the tick's own move-advisor step (runMoveAdvisorStep,
+  // world-tick.ts) recomputes and persists this every round, ALREADY
+  // including the situationHint text (attached by the tick's own caller,
+  // never by recommendMoves() itself — see MoveRecommendation's own doc
+  // comment, move-advisor.d.ts). The app's own buildMoveRecommendation()
+  // (below) calls recommendMoves() directly and never attaches
+  // situationHint, so reading it from THAT call always returned undefined
+  // — the red this WO's situationHint proof catches.
+  getPersistedMoveRecommendation,
 } from '@ai-rpg-engine/modules';
 import { CampaignJournal, buildFinaleOutline, formatFinaleForDirector, formatFinaleForTerminal, type FinaleOutline, type FinaleNpcInput, type FinaleFactionInput, type FinaleDistrictInput } from '@ai-rpg-engine/campaign-memory';
 import {
@@ -184,7 +196,6 @@ import {
   propagateRumors as _propagateRumors,
   addRumor as _addRumor,
   applyFalloutEffects as _applyFalloutEffects,
-  initializeDistrictEconomies,
   applyEconomyShiftToWorld,
   buildArcInputs as _buildArcInputs,
   buildFinaleFromState,
@@ -202,7 +213,7 @@ import {
 // world-truth-seed.ts's WO-A2T-1 at load time).
 import { addFactionReputationGlobal, stampReputationBaselines, refreshReputationProfile } from './game/reputation-view.js';
 // WO-A2T-3 (slice A2 §10, R6): leverage unification, scoped to
-// tickPlayerLeverage only this wave (see refreshWorldViews' own doc
+// tickPlayerLeverage only this wave (see refreshProfileViews' own doc
 // comment for why the other leverage/heat writers in this file are NOT
 // converted) — writeLeverageDeltas is the entity-ledger write-through +
 // profile-view refresh tickPlayerLeverage calls.
@@ -227,6 +238,12 @@ import { hasLivingHostiles } from './runtime/hooks.js';
 // turn-loop.ts doesn't re-export the type.
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import type { StatusData } from './character/presence.js';
+// WO-A4-3 (slice A4 §4, design lock 5): type-only — runtime-foundry owns
+// world-gen.ts's proposeWorld/instantiateWorld split (their own worktree,
+// this wave); this session only carries the already-validated proposal
+// object through to its own save (getWorldGenProposal(), below), never
+// constructs or validates one itself.
+import type { WorldGenProposal } from './foundry/world-gen.js';
 import { deriveChronicleEvents, buildChronicleContext, type ChronicleEventSource } from './session/chronicle.js';
 // WO-A2-4 (slice A2 §5, deletion): tickNpcAgency/buildNpcProfilesForDirector/
 // applyNpcEffects (src/npc/agency.ts, narrative-llm-owned) had exactly one
@@ -264,7 +281,6 @@ import * as companionBridge from './companion/companion-bridge.js';
 // inspect/use already get.
 import { findEntityByName } from './action-interpreter.js';
 import {
-  createPartyState,
   isCompanion,
   adjustCompanionMorale,
   type PartyState,
@@ -435,6 +451,24 @@ export type GameConfig = {
    * constructs a fresh RumorEngine instead.
    */
   rumorEngineSnapshot?: string;
+  /**
+   * WO-A4-3 (slice A4 §4, design lock 5): the LLM-authored world proposal a
+   * PACKLESS (generated) session was instantiated from — undefined for a
+   * pack-launched session, whose own `packId` is its reconstruction key
+   * instead. Already validated by its own caller (runtime-foundry's
+   * proposeWorld/instantiateWorld split, cli-display's runNew); this
+   * session only carries it forward so its own first save can persist it
+   * (getWorldGenProposal(), read by cli-display's save-input builder) —
+   * closes the wave-5 finding that a generated world had no resume path.
+   */
+  worldGenProposal?: WorldGenProposal;
+  /**
+   * WO-A4-3: the seed `instantiateWorld` used to build this packless
+   * session's world, carried forward the same way worldGenProposal is
+   * (getWorldSeed()) so `runLoad`'s generated branch can rebuild the
+   * identical world from the SAME proposal + seed pair.
+   */
+  worldSeed?: number;
 };
 
 export class GameSession {
@@ -443,6 +477,10 @@ export class GameSession {
   readonly history: TurnHistory;
   /** Pack id for pack-launched sessions (undefined for custom worlds). */
   readonly packId?: string;
+  /** WO-A4-3: see GameConfig.worldGenProposal — undefined for a pack session. */
+  private readonly worldGenProposal?: WorldGenProposal;
+  /** WO-A4-3: see GameConfig.worldSeed. */
+  private readonly worldSeed?: number;
   readonly tone: string;
   readonly title: string;
   readonly worldPrompt?: string;
@@ -451,9 +489,63 @@ export class GameSession {
   /** F-97ffd8cd: see GameConfig.buildCatalog. */
   readonly buildCatalog: BuildCatalog | null;
   profile: CharacterProfile | null;
-  playerRumors: PlayerRumor[] = [];
-  activePressures: WorldPressure[] = [];
-  resolvedPressures: PressureFallout[] = [];
+  /**
+   * WO-A4-1 (slice A4 §1, design lock 1): these twelve properties are LIVE
+   * getters over engine world truth, not stored fields — every access reads
+   * `this.engine.world` fresh (arrays/maps callers never mutate), so there
+   * is no refresh step and no stale window: a write to the world is visible
+   * to every reader on its very next access. `refreshWorldViews()` (the old
+   * per-round/per-write-through sync for these) is deleted with them; the
+   * source-text tripwire (game.test.ts) fails on any `this.<name> =`
+   * assignment to one of these dozen names anywhere in this file.
+   * `resolvedOpportunities` is the one exception (declared below,
+   * unchanged) — session HISTORY, not a world-truth view (design doc §1).
+   */
+  get playerRumors(): PlayerRumor[] {
+    return getPlayerRumorState(this.engine.world).rumors;
+  }
+  get activePressures(): WorldPressure[] {
+    return getActivePressures(this.engine.world);
+  }
+  get resolvedPressures(): PressureFallout[] {
+    return getResolvedPressures(this.engine.world);
+  }
+  get activeOpportunities(): OpportunityState[] {
+    return getPersistedOpportunities(this.engine.world);
+  }
+  get lastNpcActions(): NpcActionResult[] {
+    return getPersistedNpcLastActions(this.engine.world);
+  }
+  get lastNpcProfiles(): NpcProfile[] {
+    return getPersistedNpcProfiles(this.engine.world);
+  }
+  get npcObligations(): Map<string, NpcObligationLedger> {
+    return getPersistedNpcObligations(this.engine.world);
+  }
+  get activeConsequenceChains(): Map<string, ConsequenceChain> {
+    return new Map(getPersistedNpcChains(this.engine.world).map((c) => [c.id, c]));
+  }
+  get lastFactionActions(): FactionActionResult[] {
+    return getPersistedFactionLastActions(this.engine.world);
+  }
+  get lastFactionProfiles(): FactionProfile[] {
+    return getPersistedFactionProfiles(this.engine.world);
+  }
+  get districtEconomies(): Map<string, DistrictEconomy> {
+    return new Map(Object.entries(getEconomyCoreState(this.engine.world).districts));
+  }
+  /**
+   * WO-A2-8 (runtime-foundry, cross-domain) / WO-A4-1: the engine's own
+   * persisted party mirror (companion-core.ts) is now this getter's ONLY
+   * source — every write path in this file pushes OUT to it via
+   * `setPartyState`/`syncCompanionMorale` (recruit, dismiss, morale
+   * adjustments, the tick's own companion reactions) and this getter always
+   * reads it back fresh, so a tick-applied morale/departure change is
+   * visible here on its very next access with no separate resync step.
+   */
+  get partyState(): PartyState {
+    return getPartyState(this.engine.world);
+  }
   // F-51e110b9: not readonly — trimJournalIfNeeded() below rebuilds this
   // from CampaignJournal's own public serialize()/deserialize() pair (the
   // compiled @ai-rpg-engine/campaign-memory class exposes no delete/evict
@@ -461,11 +553,6 @@ export class GameSession {
   journal: CampaignJournal;
   readonly genre: string;
   mode: GameMode = 'play';
-  lastFactionActions: FactionActionResult[] = [];
-  lastFactionProfiles: FactionProfile[] = [];
-  lastNpcActions: NpcActionResult[] = [];
-  lastNpcProfiles: NpcProfile[] = [];
-  npcObligations: Map<string, NpcObligationLedger> = new Map();
   /**
    * F-462792bb (SLATE-2, persisted per Director ruling R2): per-NPC recent
    * conversation history, keyed by NPC id (never name/genre — the same key
@@ -490,12 +577,8 @@ export class GameSession {
    */
   readonly rumorEngine: RumorEngine;
   previousBreakpoints: Map<string, LoyaltyBreakpoint> = new Map();
-  activeConsequenceChains: Map<string, ConsequenceChain> = new Map();
   lastLeverageResolution: LeverageResolution | null = null;
   lastCompanionReactions: CompanionReaction[] = [];
-  partyState: PartyState = createPartyState();
-  districtEconomies: Map<string, DistrictEconomy> = new Map();
-  activeOpportunities: OpportunityState[] = [];
   resolvedOpportunities: OpportunityFallout[] = [];
   arcSnapshot: ArcSnapshot | null = null;
   endgameTriggers: EndgameTrigger[] = [];
@@ -582,6 +665,8 @@ export class GameSession {
     this.client = config.client ?? createAdaptedClient(config.clientConfig);
     this.history = config.history ?? new TurnHistory();
     this.packId = config.packId;
+    this.worldGenProposal = config.worldGenProposal;
+    this.worldSeed = config.worldSeed;
     if (config.campaignStatus) this.campaignStatus = config.campaignStatus;
     this.tone = config.tone ?? 'dark fantasy, concise, atmospheric';
     this.title = config.title ?? 'claude-rpg';
@@ -652,8 +737,14 @@ export class GameSession {
       this.rumorEngine = new RumorEngine(rumorEngineConfig);
     }
 
-    // Initialize district economies from genre + district tags
-    this.initializeDistrictEconomies();
+    // WO-A4-1 (slice A4 §1): districtEconomies is a live getter over world
+    // truth now (getEconomyCoreState(world).districts) — the engine's own
+    // createEconomyCore module already seeds that namespace from
+    // genre+district-tags at world construction (runtime-foundry's world
+    // build, verified against economy-core.js's createEconomyCore), so
+    // there is nothing left for this session to seed independently. The
+    // former private initializeDistrictEconomies() (and its free-function
+    // counterpart, game-state.ts) are deleted with it.
 
     // Register leverage verb handlers (thin stubs — resolution happens in processInput)
     this.registerLeverageVerbs();
@@ -672,6 +763,43 @@ export class GameSession {
   /** Get status data for enhanced status bar. */
   getStatusData(): StatusData | null {
     return getStatusDataFromProfile(this.profile, this.itemCatalog, this.buildCatalog ?? undefined);
+  }
+
+  /**
+   * WO-A4-4 (slice A4 §3, design lock 6): the tick's own strategic ledger —
+   * heat (`world.globals[HEAT_KEY]`), faction alerts above zero
+   * (`world.globals['faction_alert_<factionId>']` per faction in
+   * `world.factions` — the same global-key convention game.test.ts already
+   * exercises directly), quietRounds, and the CURRENT district's tone
+   * (`getWorldTickState(world).districtTones`, keyed by districtId). The
+   * first surface of the tick's own ledger on `/status` (both modes,
+   * above) — assembling the data is this domain's job; rendering it is
+   * cli-display's (status-compact.ts / director-renderer.ts).
+   */
+  private buildWorldLedger(): {
+    heat: number;
+    quietRounds: number;
+    factionAlerts: Record<string, number>;
+    districtTone?: string;
+  } {
+    const world = this.engine.world;
+    const heatRaw = world.globals[HEAT_KEY];
+    const heat = typeof heatRaw === 'number' ? heatRaw : 0;
+    const tickState = getWorldTickState(world);
+    const factionAlerts: Record<string, number> = {};
+    for (const factionId of Object.keys(world.factions ?? {})) {
+      const raw = world.globals[`faction_alert_${factionId}`];
+      const value = typeof raw === 'number' ? raw : 0;
+      if (value > 0) factionAlerts[factionId] = value;
+    }
+    const districtId = this.getPlayerDistrictId();
+    const districtTone = districtId ? tickState.districtTones?.[districtId] : undefined;
+    return {
+      heat,
+      quietRounds: tickState.quietRounds,
+      factionAlerts,
+      ...(districtTone ? { districtTone } : {}),
+    };
   }
 
   /**
@@ -733,6 +861,22 @@ export class GameSession {
    */
   getRumorEngineSnapshot(): string {
     return JSON.stringify(this.rumorEngine.serialize());
+  }
+
+  /**
+   * WO-A4-3 (slice A4 §4, design lock 5): the world-gen proposal this
+   * packless session was instantiated from — cli-display's save-input
+   * builder reads this (alongside getWorldSeed()) and threads it straight
+   * into SaveSessionInput.worldGenProposal, same pass-through discipline as
+   * getRumorEngineSnapshot() above. Undefined for a pack-launched session.
+   */
+  getWorldGenProposal(): WorldGenProposal | undefined {
+    return this.worldGenProposal;
+  }
+
+  /** WO-A4-3: see getWorldGenProposal's doc comment. */
+  getWorldSeed(): number | undefined {
+    return this.worldSeed;
   }
 
   /** Apply profile update hints from a turn result. */
@@ -963,88 +1107,75 @@ export class GameSession {
   }
 
   /**
-   * WO-A2-3 (slice A2 §3, views): refresh every session-field VIEW from
-   * world truth. Called after runWorldRound()'s tick and after every
-   * write-through mutation elsewhere in this file (design lock 3 — "one
-   * ledger per store": a field is refreshed here, never independently
-   * advanced). Every existing reader (prompt garnish, director renderer,
-   * recaps, chronicle, save) keeps reading these same session fields
-   * unchanged this slice.
+   * WO-A4-1 (slice A4 §1, design lock 1, renamed from refreshWorldViews):
+   * refresh the profile-side VIEWS only — reputation composition
+   * (stampReputationBaselines + refreshReputationProfile). The eleven
+   * world-backed session fields this method used to also resync
+   * (activePressures, resolvedPressures, activeOpportunities, lastNpcActions/
+   * lastNpcProfiles/npcObligations/activeConsequenceChains,
+   * lastFactionActions/lastFactionProfiles, districtEconomies,
+   * playerRumors) plus partyState are now live `get` accessors over world
+   * truth (above) that need no refresh step at all — every access already
+   * reads `this.engine.world` fresh. Still called after runWorldRound()'s
+   * tick and after every write-through mutation elsewhere in this file
+   * (design lock 3 — "one ledger per store"), since the profile's
+   * reputation view is genuinely a separate store from the world-truth
+   * getters and still needs its own explicit sync.
    *
-   * `resolvedOpportunities` is deliberately NOT refreshed here — per the
-   * design doc's own table it is an appending accumulator (the tick's
-   * `opportunitiesExpired` entries, appended in runWorldRound; player-
-   * resolved fallout appended from resolveOpportunity), not a pure view.
-   *
-   * WO-A2T-2 (slice A2 §9): the profile's reputation field is a view too,
-   * refreshed here alongside every other store. stampReputationBaselines is
-   * idempotent (a no-op once `claude_rpg.rep_baselined` is set) — calling
-   * it on every round is what lets a FRESH world (no SavedSession to seed
-   * from; see world-truth-seed.ts's WO-A2T-1 for the loaded-save half) get
-   * its baseline stamped on its own first round, per design doc §9.
+   * stampReputationBaselines is idempotent (a no-op once
+   * `claude_rpg.rep_baselined` is set) — calling it on every round is what
+   * lets a FRESH world (no SavedSession to seed from; see
+   * world-truth-seed.ts's WO-A2T-1 for the loaded-save half) get its
+   * baseline stamped on its own first round, per design doc §9 (A2).
    *
    * WO-A2T-3's leverage unification is deliberately NOT mirrored here.
-   * Reputation's five write sites are ALL converted this wave (design doc
-   * §9's own enumeration, verified exhaustive against a grep for
-   * `adjustReputation(` — every one funnels through addFactionReputationGlobal
-   * now), so profile.reputation has exactly one writer and refreshing it
+   * Reputation's five write sites are ALL converted (design doc §9's own
+   * enumeration, verified exhaustive against a grep for `adjustReputation(`
+   * — every one funnels through addFactionReputationGlobal now), so
+   * profile.reputation has exactly one writer and refreshing it
    * unconditionally every round is safe. Leverage/heat effects, by
    * contrast, still write `profile.custom` DIRECTLY in three other places
    * this file (applyOpportunityFalloutEffects, applyLeverageEffects,
-   * applyCraftEffects) — the wave addendum's WO-A2T-3 names only
-   * tickPlayerLeverage for conversion to the entity ledger, and an earlier
-   * attempt at this session to also convert those three broke a
-   * currently-passing test (game.test.ts's F-5b48354f bribe-resolution
-   * case): a blanket per-round leverage view-refresh from the entity's
-   * ledger silently reverted a leverage-verb's own profile.custom write the
-   * very next round, since the entity ledger and profile.custom are still
-   * two genuinely separate stores for those three sites. Calling
-   * refreshLeverageView here would reproduce that same clobber for EVERY
-   * turn after any leverage verb, not just the one this session caught.
-   * tickPlayerLeverage's own call to writeLeverageDeltas stays scoped to
-   * itself (see that method's own doc comment for the residual, narrower
-   * same-turn gap this leaves).
+   * applyCraftEffects) — an earlier attempt to also convert those three
+   * broke a currently-passing test (game.test.ts's F-5b48354f
+   * bribe-resolution case): a blanket per-round leverage view-refresh from
+   * the entity's ledger silently reverted a leverage-verb's own
+   * profile.custom write the very next round, since the entity ledger and
+   * profile.custom are still two genuinely separate stores for those three
+   * sites. tickPlayerLeverage's own call to writeLeverageDeltas stays
+   * scoped to itself (see that method's own doc comment for the residual,
+   * narrower same-turn gap this leaves).
    */
+  private refreshProfileViews(): void {
+    if (this.profile) {
+      stampReputationBaselines(this.profile, this.engine.world);
+      this.profile = refreshReputationProfile(this.profile, this.engine.world);
+    }
+  }
+
   /**
    * Coordinator stitch (slice A2-truth, wave 5): the ONE load-time seed entry
    * point for a 1.x save. Runs seedWorldTruthFromSession against this
-   * session's engine + profile and then refreshes every view — the seed
-   * alone leaves the session fields stale until the first round, so a
-   * resumed game would narrate its first turn against empty pressures,
-   * rumors, and NPC state. bin.ts's runLoad and the test harness both call
-   * this; nothing calls the bare seed with a live session.
+   * session's engine + profile and then refreshes the profile views —
+   * WO-A4-1: the world-backed getters need no seed-time refresh of their
+   * own (they read world truth live, and seedWorldTruthFromSession has
+   * already written it by this point), but a FRESH world's reputation
+   * baseline still needs its one explicit stamp. bin.ts's runLoad and the
+   * test harness both call this; nothing calls the bare seed with a live
+   * session.
    */
   seedWorldTruth(saved: SavedSession, engineVersion?: string): WorldTruthSeedReport {
     const version = engineVersion
       ?? (this.engine.world as { meta?: { saveVersion?: string } }).meta?.saveVersion
       ?? 'unknown';
     const report = seedWorldTruthFromSession(this.engine, saved, this.profile, version);
-    this.refreshWorldViews();
+    this.refreshProfileViews();
     // resolvedOpportunities is session HISTORY, not world truth: the engine's
     // opportunity-core namespace holds only the live list, and the view table
     // appends expiry fallout per round. Restore it from the save here so both
     // callers (bin.ts, the harness) get it through the one seed path.
     this.resolvedOpportunities = loadResolvedOpportunitiesFromSession(saved);
     return report;
-  }
-
-  private refreshWorldViews(): void {
-    const world = this.engine.world;
-    this.activePressures = getActivePressures(world);
-    this.resolvedPressures = getWorldTickState(world).resolvedPressures ?? [];
-    this.activeOpportunities = getPersistedOpportunities(world);
-    this.lastNpcActions = getPersistedNpcLastActions(world);
-    this.lastNpcProfiles = getPersistedNpcProfiles(world);
-    this.npcObligations = getPersistedNpcObligations(world);
-    this.activeConsequenceChains = new Map(getPersistedNpcChains(world).map((c) => [c.id, c]));
-    this.lastFactionActions = getPersistedFactionLastActions(world);
-    this.lastFactionProfiles = getPersistedFactionProfiles(world);
-    this.districtEconomies = new Map(Object.entries(getEconomyCoreState(world).districts));
-    this.playerRumors = getPlayerRumorState(world).rumors;
-    if (this.profile) {
-      stampReputationBaselines(this.profile, world);
-      this.profile = refreshReputationProfile(this.profile, world);
-    }
   }
 
   /**
@@ -1081,7 +1212,7 @@ export class GameSession {
       getPersistedNpcChains(world),
       getPersistedNpcRecapEntries(world),
     );
-    this.refreshWorldViews();
+    this.refreshProfileViews();
   }
 
   /**
@@ -1099,8 +1230,10 @@ export class GameSession {
    * flag (design lock 2): every non-rejected, non-corpse round. Step 4.5
    * (WO-A3-2, slice A3 §3): tick the RumorEngine's own lifecycle
    * (spreading → established → fading → dead; stance decay), AFTER the
-   * world tick and BEFORE the view refresh (design doc §3's own ordering).
-   * Step 5: refresh every view. Step 5.5 (WO-A3-2): sweep this round's
+   * world tick and BEFORE the profile-view refresh (design doc §3's own
+   * ordering). Step 5: refresh the profile views (WO-A4-1: the
+   * world-backed getters need no refresh call — they already read this
+   * round's tick output live). Step 5.5 (WO-A3-2): sweep this round's
    * refreshed playerRumors for any ledger rumor not yet mirrored — the
    * tick's own NPC-originated rumors (spawnNpcOriginatedRumor, written
    * directly into the player-rumor namespace by the engine's own
@@ -1109,8 +1242,11 @@ export class GameSession {
    * game-state.ts's applyFalloutEffects rumor case, which writes through
    * setPlayerRumorState directly rather than this.addRumor — see that
    * method's own doc comment). Step 6: drain the tick's own
-   * companion-reaction side effects. Step 7: return the round's delta so
-   * turn-loop.ts's `events` includes it for narration/hints/history.
+   * companion-reaction side effects — WO-A4-1: partyState is a live
+   * getter now, so there is no separate session-field resync to do here
+   * any more (see that getter's own doc comment above). Step 7: return the
+   * round's delta so turn-loop.ts's `events` includes it for
+   * narration/hints/history.
    */
   private runWorldRound(actionEvents: ResolvedEvent[]): ResolvedEvent[] {
     // Coordinator stitch (slice A3): a fresh world stamps the seed marker at
@@ -1167,20 +1303,22 @@ export class GameSession {
     }
 
     // resolvedOpportunities: append this round's expiry fallout (design
-    // doc §3 — an accumulator, not a view; see refreshWorldViews' doc
-    // comment).
+    // doc §3 — an accumulator, not a world-truth getter; it stays a real
+    // field per WO-A4-1).
     for (const fallout of tickResult.opportunitiesExpired) {
       this.resolvedOpportunities.push(fallout);
     }
     this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
 
     // 4.5 (WO-A3-2, slice A3 §3): tick the RumorEngine's own lifecycle —
-    // AFTER the world tick, BEFORE the view refresh (design doc §3's
-    // ordering; see this method's own doc comment above).
+    // AFTER the world tick, BEFORE the profile-view refresh (design doc
+    // §3's ordering; see this method's own doc comment above).
     this.rumorEngine.tick(this.engine.tick);
 
-    // 5. Refresh every view.
-    this.refreshWorldViews();
+    // 5. Refresh the profile views (reputation composition) — WO-A4-1: the
+    // world-backed getters (activePressures, playerRumors, etc.) need no
+    // refresh call at all; they already read this round's tick output live.
+    this.refreshProfileViews();
 
     // 5.5 (WO-A3-2): mirror any ledger rumor this round's refreshed
     // playerRumors carries that isn't in the RumorEngine yet — catches the
@@ -1228,17 +1366,15 @@ export class GameSession {
     // WO-A2-8 (runtime-foundry, cross-domain — ADDENDUM-runtime-foundry.md):
     // the tick's district-mood transition step (world-tick.ts step 0c)
     // reacts companions directly against the engine's OWN persisted party
-    // mirror (getPartyState/setPartyState, companion-core.ts) — a
-    // DIFFERENT object than this session's own `partyState` field, which
-    // this file only ever pushes OUT to via setPartyState (recruit/
-    // dismiss/followPlayer/syncCompanionMorale), never reads back. Sync
-    // it back first so any morale/departure the tick applied is visible
-    // to this session too, then drain whatever reaction trigger
-    // companion-bridge.ts's drainQueuedCompanionReactions maps into this
-    // app's own CompanionReaction shape for recording (see that
-    // function's own doc comment, companion-bridge.ts, for exactly what
-    // it drains).
-    this.partyState = getPartyState(this.engine.world);
+    // mirror (getPartyState/setPartyState, companion-core.ts). WO-A4-1:
+    // `this.partyState` is a live getter over that SAME mirror now, so any
+    // morale/departure the tick just applied is already visible to this
+    // session on its very next access — no resync assignment needed here
+    // any more (see the getter's own doc comment above). Just drain
+    // whatever reaction trigger companion-bridge.ts's
+    // drainQueuedCompanionReactions maps into this app's own
+    // CompanionReaction shape for recording (see that function's own doc
+    // comment, companion-bridge.ts, for exactly what it drains).
     try {
       if (typeof companionBridge.drainQueuedCompanionReactions === 'function') {
         // Coordinator stitch (wave 4): the engine has NO reaction queue — the
@@ -1313,6 +1449,14 @@ export class GameSession {
         arcSnapshot: this.arcSnapshot,
         endgameTriggers: this.endgameTriggers,
         finaleOutline: this.finaleOutline,
+        // WO-A4-4 (slice A4 §3, design lock 6): the tick's own strategic
+        // ledger — cli-display's ExecuteDirectorCommandOptions/
+        // renderCompactStatus gain this field in their own worktree this
+        // same wave (director-renderer.ts / status-compact.ts, out of
+        // this domain's globs); this call site supplies the data ahead of
+        // that landing, per the addendum's "code against the doc's
+        // contract" instruction — green expected at merge.
+        worldLedger: this.buildWorldLedger(),
       });
     }
 
@@ -1353,6 +1497,10 @@ export class GameSession {
           arcIndicator: arcInd,
           endgameIndicator: endgameInd,
           fastMode: this.fastMode,
+          // WO-A4-4 (slice A4 §3, design lock 6): see the director-mode
+          // /status call site's identical note above — cli-display's
+          // status-compact.ts gains this field in their own worktree.
+          worldLedger: this.buildWorldLedger(),
         });
         // F-9319b8d8: appended after the rendered box (see
         // buildSubsystemHealthIndicator()'s doc comment for why it isn't a
@@ -1451,18 +1599,31 @@ export class GameSession {
         onResolved: (actionEvents) => this.runWorldRound(actionEvents),
         districtDescriptor,
         partyPresence: partyPresenceStr,
-        // Coordinator ruling (b) (wave-13 RULING-persisted-namespaces.md):
-        // live GameSession state threaded to the two remaining hints —
-        // never the unpopulated persisted namespaces. situationHint is
-        // pre-gated to the urgent tags so calm rounds add zero prompt text.
+        // WO-A4-2 (slice A4 §2, design lock 3): situationHint is pre-gated
+        // to the urgent tags so calm rounds add zero prompt text.
         activeOpportunities: this.activeOpportunities,
         situationHint: (() => {
-          // A hint computation must never kill a turn: buildMoveRecommendation
-          // aggregates the full strategic map, and any state shape it dislikes
-          // (fresh worlds, minimal test worlds) degrades to no-hint, not a
-          // thrown turn.
+          // A hint computation must never kill a turn: a malformed/absent
+          // world-tick namespace degrades to no-hint, not a thrown turn —
+          // same discipline the pre-A4 buildMoveRecommendation() call this
+          // replaces already had.
+          //
+          // WO-A4-2: sourced from the engine's OWN persisted recommendation
+          // (getPersistedMoveRecommendation — the tick's own move-advisor
+          // step, runMoveAdvisorStep in world-tick.ts, recomputes and
+          // persists this every round) instead of this session's own
+          // buildMoveRecommendation() (still used elsewhere — see that
+          // method's own doc comment for exactly where). RED BEFORE THIS
+          // FIX: buildMoveRecommendation()'s own game-state.ts helper calls
+          // recommendMoves() directly and never attaches `situationHint`
+          // (only the tick's own runMoveAdvisorStep caller does — see
+          // MoveRecommendation's doc comment, move-advisor.d.ts) — so
+          // `rec.situationHint` read from THAT call was always undefined,
+          // no matter the situationTag. This is "one simulation" (design
+          // doc §2): the app no longer recomputes what the tick already
+          // computed and persisted this same round.
           try {
-            const rec = this.profile ? this.buildMoveRecommendation() : null;
+            const rec = getPersistedMoveRecommendation(this.engine.world);
             return rec && (rec.situationTag === 'pressured' || rec.situationTag === 'crisis')
               ? rec.situationHint
               : undefined;
@@ -1609,9 +1770,8 @@ export class GameSession {
       // fields (lastFactionActions/lastFactionProfiles,
       // districtEconomies, lastNpcActions/lastNpcProfiles/
       // npcObligations/activeConsequenceChains, activePressures,
-      // activeOpportunities) are refreshed VIEWS from world truth
-      // (refreshWorldViews(), called inside runWorldRound) from this wave
-      // on — never independently ticked here.
+      // activeOpportunities) are live getters over world truth (WO-A4-1)
+      // — never independently ticked here.
 
       // Item recognition: NPCs notice equipped items with provenance
       this.tickItemRecognition();
@@ -1688,7 +1848,7 @@ export class GameSession {
       // evaluateAndTickOpportunities are deleted — runWorldTick (inside
       // this turn's runWorldRound, before narration) already evaluated,
       // ticked, and expired both this round; activePressures/
-      // activeOpportunities are refreshed views (refreshWorldViews()).
+      // activeOpportunities are live getters over world truth (WO-A4-1).
 
       // Arc detection + endgame evaluation (v2.0)
       this.tickArcDetection();
@@ -2006,7 +2166,7 @@ export class GameSession {
     const state = getPlayerRumorState(world);
     const next = _propagateRumors(state.rumors, world, this.partyState);
     setPlayerRumorState(world, { ...state, rumors: next });
-    this.refreshWorldViews();
+    this.refreshProfileViews();
   }
 
   /** Get the district ID the player is currently in. */
@@ -2120,7 +2280,7 @@ export class GameSession {
     resolved.push(fallout);
     while (resolved.length > RESOLVED_PRESSURES_KEPT) resolved.shift();
     state.resolvedPressures = resolved;
-    this.refreshWorldViews();
+    this.refreshProfileViews();
 
     // Companion reactions to pressure resolution
     if (this.partyState.companions.length > 0) {
@@ -2160,7 +2320,7 @@ export class GameSession {
     if (result.titleChanged) {
       this.pendingAnnouncements.push(`Title evolved: "${result.titleChanged.newTitle}"`);
     }
-    this.refreshWorldViews();
+    this.refreshProfileViews();
   }
 
   // --- Opportunity System (v1.9) ---
@@ -2206,7 +2366,7 @@ export class GameSession {
           this.engine.world,
           getPersistedOpportunities(this.engine.world).map((o) => o.id === target.id ? target : o),
         );
-        this.refreshWorldViews();
+        this.refreshProfileViews();
         // Chronicle
         const source: ChronicleEventSource = { kind: 'opportunity-accepted', opportunity: target, tick: this.engine.tick };
         for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {
@@ -2332,7 +2492,7 @@ export class GameSession {
     this.applyOpportunityFalloutEffects(fallout);
     this.resolvedOpportunities.push(fallout);
     this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
-    this.refreshWorldViews();
+    this.refreshProfileViews();
   }
 
   /** Apply structured opportunity fallout effects to session state. */
@@ -2341,8 +2501,8 @@ export class GameSession {
       switch (effect.type) {
         case 'reputation':
           // WO-A2T-2 (slice A2 §9, R1): the caller (applyOpportunityFalloutEffects'
-          // own caller, below) refreshes every view — including this one —
-          // right after this method returns.
+          // own caller, below) refreshes the profile views — including
+          // this one — right after this method returns.
           if (this.profile) {
             this.adjustFactionReputation(effect.factionId, effect.delta);
           }
@@ -2350,11 +2510,11 @@ export class GameSession {
         case 'leverage':
           // WO-A2T-3 (slice A2 §10, R6): NOT converted to the entity
           // ledger this wave — see leverage-view.ts's own doc comment and
-          // refreshWorldViews' doc comment (game.ts) for why: the wave
+          // refreshProfileViews' doc comment (game.ts) for why: the wave
           // addendum names only tickPlayerLeverage, and converting this
           // site too (tried, then reverted this session) broke
           // game.test.ts's F-5b48354f bribe-resolution test once
-          // refreshWorldViews' own per-round leverage sync reverted this
+          // refreshProfileViews' own per-round leverage sync reverted this
           // write on the next round. Stays on profile.custom directly,
           // unchanged from pre-wave behavior.
           if (this.profile) {
@@ -2405,7 +2565,7 @@ export class GameSession {
               currentTick: this.engine.tick,
             });
             pushActivePressure(this.engine.world, chainPressure);
-            this.refreshWorldViews();
+            this.refreshProfileViews();
           }
           break;
         }
@@ -2432,8 +2592,17 @@ export class GameSession {
           // Applied through NPC cognition system
           break;
         case 'companion-morale':
+          // WO-A4-1 (slice A4 §1): partyState is a getter now — assigning
+          // to it is not legal (and, pre-A4, this call site's plain-field
+          // assignment silently discarded itself the next time
+          // runWorldRound's own resync ran, since nothing here ever
+          // pushed this change out to world truth). Write straight
+          // through via syncCompanionMorale (setPartyState), matching
+          // every other companion-morale write path in this file
+          // (processCompanionReactions below).
           if (this.partyState.companions.some((c) => c.npcId === effect.npcId)) {
-            this.partyState = adjustCompanionMorale(this.partyState, effect.npcId, effect.delta);
+            const updatedParty = adjustCompanionMorale(this.partyState, effect.npcId, effect.delta);
+            syncCompanionMorale(this.engine, updatedParty);
           }
           break;
         case 'alert':
@@ -2782,10 +2951,10 @@ export class GameSession {
 
   // --- v1.7: Economy ---
 
-  /** Initialize district economies from genre + district tags. */
-  private initializeDistrictEconomies(): void {
-    this.districtEconomies = initializeDistrictEconomies(this.engine.world, this.genre);
-  }
+  // WO-A4-1 (slice A4 §1, deletion): the private initializeDistrictEconomies()
+  // seeder (and its game-state.ts free-function counterpart) are deleted —
+  // see the constructor's own doc comment for why districtEconomies needs
+  // no independent seeding once it is a live getter over world truth.
 
   // WO-A2-4 (slice A2 §5, deletion): tickDistrictEconomies (the private
   // wrapper) is deleted — runWorldTick already ticks every district's
@@ -2806,7 +2975,7 @@ export class GameSession {
     cause: string,
   ): void {
     applyEconomyShiftToWorld(this.engine.world, districtId, category, delta, cause);
-    this.refreshWorldViews();
+    this.refreshProfileViews();
   }
 
   // WO-A2-4 (slice A2 §5, deletion): tickFactionAgency and its now-dead
@@ -3277,14 +3446,14 @@ export class GameSession {
         case 'reputation':
           // WO-A2T-2 (slice A2 §9, R1): adjustFactionReputation both writes
           // the accrued global and refreshes the profile view — no
-          // subsequent refreshWorldViews() call in this method's own
+          // subsequent refreshProfileViews() call in this method's own
           // caller, so the refresh must happen here.
           this.adjustFactionReputation(effect.factionId, effect.delta);
           break;
 
         case 'leverage':
           // WO-A2T-3 (slice A2 §10, R6): NOT converted to the entity
-          // ledger this wave — see refreshWorldViews' doc comment (above,
+          // ledger this wave — see refreshProfileViews' doc comment (above,
           // this file) for why.
           this.profile = {
             ...this.profile,
@@ -3340,7 +3509,7 @@ export class GameSession {
               currentTick: this.engine.tick,
             });
             pushActivePressure(this.engine.world, pressure);
-            this.refreshWorldViews();
+            this.refreshProfileViews();
           }
           break;
         }
@@ -3402,7 +3571,7 @@ export class GameSession {
    * tick already does every round is not re-done app-side.
    *
    * KNOWN RESIDUAL GAP (documented, not fixed this wave — see
-   * refreshWorldViews' own doc comment above for the full reasoning):
+   * refreshProfileViews' own doc comment above for the full reasoning):
    * writeLeverageDeltas' return is a full six-currency refresh of
    * profile.custom's `leverage.*` keys from the entity ledger. On a turn
    * where `gains` is non-empty AND a leverage VERB (bribe/intimidate/etc.,
@@ -3458,7 +3627,23 @@ export class GameSession {
     );
   }
 
-  /** Build a MoveRecommendation from current session state. */
+  /**
+   * Build a MoveRecommendation from current session state.
+   *
+   * WO-A4-2 (slice A4 §2, design lock 3): the ONE per-turn call this method
+   * used to have — situationHint's computation in processInput's
+   * executeTurn options (above) — is deleted; that hint now reads
+   * getPersistedMoveRecommendation(world) instead (the tick's own
+   * recomputation, which also attaches situationHint — this method's own
+   * `recommendMoves(inputs)` call never did, so `rec.situationHint` from
+   * THIS method was always undefined). This method survives for its three
+   * remaining on-demand callers, none of which are in the turn path and
+   * none of which read `.situationHint`: the director-mode command
+   * dispatch's `suggestedMove`/`situationTag` (no turn consumed — see
+   * processInput's director-mode branch), the play-mode `/status` command
+   * (also no turn consumed), and the post-turn move-advisor/contextual-
+   * suggestions block (`.top3`/`.situationTag` for `generateSuggestions`).
+   */
   private buildMoveRecommendation(): MoveRecommendation {
     return _buildMoveRecommendation(
       this.engine.world, this.profile, this.playerRumors,
@@ -3512,7 +3697,12 @@ export class GameSession {
 
     if (!result.ok) return `  ${result.error}`;
 
-    this.partyState = result.party;
+    // WO-A4-1: recruitCompanion already wrote result.party through to world
+    // truth via its own internal setPartyState call — partyState (a getter
+    // now) already reflects it; syncCompanionMorale below both stamps the
+    // new companion's morale onto its entity's custom fields AND re-writes
+    // the same party state through, so no separate assignment is needed
+    // here.
     syncCompanionMorale(this.engine, this.partyState);
 
     // Record chronicle event
@@ -3554,7 +3744,10 @@ export class GameSession {
     const result = dismissCompanion(this.engine, this.partyState, resolvedId);
     if (!result.removed) return `  ${name} is not in your party.`;
 
-    this.partyState = result.party;
+    // WO-A4-1: dismissCompanion already wrote result.party through to world
+    // truth via its own internal setPartyState call (gated on
+    // result.removed, true here) — partyState (a getter now) already
+    // reflects it, so no separate assignment is needed.
 
     // Record chronicle event
     const dismissSource: ChronicleEventSource = {
@@ -3596,7 +3789,7 @@ export class GameSession {
       // both is safe.
       mirrorPlayerRumor(this.rumorEngine, rumor);
     }
-    this.refreshWorldViews();
+    this.refreshProfileViews();
     // F-fd5e8eec: detect a cap eviction (a genuinely new array — ruling out
     // suppression, which returns the same reference unchanged — whose length
     // didn't grow) and warn once per session. See rumorCapWarned's doc
@@ -3646,10 +3839,19 @@ export class GameSession {
 
     this.lastCompanionReactions = reactions;
 
+    // WO-A4-1 (slice A4 §1): partyState is a getter now, so each
+    // iteration's morale change is written straight through
+    // (syncCompanionMorale, which calls setPartyState internally) before
+    // the next iteration reads `this.partyState` again — the same
+    // fold-as-you-go a plain field assignment used to give for free, now
+    // made explicit. A departure reads world truth via
+    // handleCompanionDeparture -> this.partyState, which is why the flush
+    // has to happen before it, not after the whole loop.
     for (const reaction of reactions) {
-      this.partyState = adjustCompanionMorale(
+      const updatedParty = adjustCompanionMorale(
         this.partyState, reaction.npcId, reaction.moraleDelta,
       );
+      syncCompanionMorale(this.engine, updatedParty);
 
       if (reaction.departure) {
         this.handleCompanionDeparture(
@@ -3658,9 +3860,6 @@ export class GameSession {
         );
       }
     }
-
-    // Sync morale to entity custom fields for engine-side goal derivation
-    syncCompanionMorale(this.engine, this.partyState);
   }
 
   // --- v1.8: Crafting ---
@@ -3998,7 +4197,7 @@ export class GameSession {
 
         case 'heat':
           // WO-A2T-3 (slice A2 §10, R6): NOT converted to the entity
-          // ledger this wave — see refreshWorldViews' doc comment (above,
+          // ledger this wave — see refreshProfileViews' doc comment (above,
           // this file) for why. applyLeverageDeltas clamps 0-100, the same
           // bound the previous Math.min(100, ...) enforced.
           if (this.profile) {
@@ -4010,7 +4209,7 @@ export class GameSession {
           break;
 
         case 'reputation':
-          // WO-A2T-2 (slice A2 §9, R1): no subsequent refreshWorldViews()
+          // WO-A2T-2 (slice A2 §9, R1): no subsequent refreshProfileViews()
           // call in this method's own callers, so adjustFactionReputation's
           // own immediate view refresh is load-bearing here.
           if (this.profile) {
@@ -4042,7 +4241,9 @@ export class GameSession {
 
     const result = dismissCompanion(this.engine, this.partyState, npcId);
     if (result.removed) {
-      this.partyState = result.party;
+      // WO-A4-1: dismissCompanion already wrote result.party through to
+      // world truth via its own internal setPartyState call — partyState
+      // (a getter now) already reflects it.
 
       if (isBetrayal) {
         const betraySource: ChronicleEventSource = {

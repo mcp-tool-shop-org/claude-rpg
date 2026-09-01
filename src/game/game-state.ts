@@ -10,7 +10,6 @@ import { EQUIPMENT_SLOTS, recordItemEvent } from '@ai-rpg-engine/equipment';
 import {
   evaluateItemRecognition,
   shouldRecognize,
-  createDistrictEconomy,
   applyEconomyShift,
   deriveEconomyDescriptor,
   formatEconomyForNarrator,
@@ -678,17 +677,13 @@ export function applyFalloutEffects(
 
 // ─── Economy ─────────────────────────────────────────────────
 
-/** Initialize district economies from genre + district tags. */
-export function initializeDistrictEconomies(world: WorldState, genre: string): Map<string, DistrictEconomy> {
-  const economies = new Map<string, DistrictEconomy>();
-  const districtIds = getAllDistrictIds(world);
-  for (const districtId of districtIds) {
-    const def = getDistrictDefinition(world, districtId);
-    const tags = def?.tags ?? [];
-    economies.set(districtId, createDistrictEconomy(genre, tags));
-  }
-  return economies;
-}
+// WO-A4-1 (slice A4 §1, deletion): initializeDistrictEconomies (this file's
+// own genre+tags seeder) is deleted with its sole caller, GameSession's own
+// private initializeDistrictEconomies() (game.ts) — districtEconomies is a
+// live getter over world truth now (getEconomyCoreState(world).districts),
+// and the engine's own createEconomyCore module already seeds that
+// namespace from genre+district-tags at world construction, so there is
+// nothing left for the session to seed independently at construction time.
 
 // WO-A2-4 (slice A2 §5, deletion): tickDistrictEconomies (this file's own
 // per-Map ticker) is deleted with its sole caller,

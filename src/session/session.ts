@@ -22,6 +22,11 @@ import { TurnHistory } from './history.js';
 // is prompts/dialogue-npc.ts's own type (narrative-llm-owned, already landed
 // for real — only its consumer wiring is this wave's gap).
 import type { ConversationExchange } from '../prompts/dialogue-npc.js';
+// WO-A4-3 (slice A4 §4, design lock 5): type-only — see game.ts's identical
+// import doc comment (runtime-foundry owns the proposeWorld/instantiateWorld
+// split in world-gen.ts; this file only serializes an already-validated
+// proposal object through to the save).
+import type { WorldGenProposal } from '../foundry/world-gen.js';
 
 export type SavedSession = {
   schemaVersion: number;
@@ -119,6 +124,26 @@ export type SavedSession = {
    * mirrored a rumor.
    */
   rumorEngine?: string;
+  /**
+   * WO-A4-3 (slice A4 §4, design lock 5): JSON of the `WorldGenProposal` a
+   * PACKLESS (generated) session was instantiated from —
+   * GameSession.getWorldGenProposal() (game.ts) supplies the object;
+   * saveSession stringifies it here, and only when the session has no
+   * `packId` (a pack session's own `packId` is its reconstruction key
+   * instead — see SavedSession.packId). Absent on every pre-A4 save and on
+   * every pack session's save. `runLoad`'s generated branch (cli-display)
+   * parses this back and feeds it, with `worldSeed` below, to
+   * `instantiateWorld` to rebuild the identical world — closing the
+   * wave-5 finding that a generated world had no resume path.
+   */
+  worldGenProposal?: string;
+  /**
+   * WO-A4-3: the seed `instantiateWorld` used to build this packless
+   * session's world, carried the same way worldGenProposal is (gated on
+   * the same `!packId` condition) so a resumed generated world rebuilds
+   * from the identical proposal + seed pair.
+   */
+  worldSeed?: number;
 };
 
 export type SaveSlotSummary = {
@@ -180,6 +205,16 @@ export type SaveSessionInput = {
    * pass-through discipline as presentationState above).
    */
   rumorEngine?: string;
+  /**
+   * WO-A4-3 (slice A4 §4, design lock 5): the already-validated proposal
+   * object — GameSession.getWorldGenProposal() (game.ts) supplies it;
+   * saveSession JSON.stringifies it into SavedSession.worldGenProposal,
+   * and only when `packId` is absent (see saveSession's own doc comment
+   * on the write-side gate). Undefined for a pack-launched session.
+   */
+  worldGenProposal?: WorldGenProposal;
+  /** WO-A4-3: see worldGenProposal's doc comment; the seed instantiateWorld used. */
+  worldSeed?: number;
 };
 
 export async function saveSession(input: SaveSessionInput): Promise<void> {
@@ -188,6 +223,7 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     genre, journal, resolvedOpportunities,
     arcSnapshot, endgameTriggers, finaleOutline, campaignStatus,
     presentationState, npcConversations, rumorEngine,
+    worldGenProposal, worldSeed,
   } = input;
 
   const session: SavedSession = {
@@ -237,6 +273,15 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     // WO-A3-2 (slice A3 §3): pre-serialized by GameSession.getRumorEngineSnapshot() —
     // passed through unchanged, same discipline as presentationState above.
     rumorEngine,
+    // WO-A4-3 (slice A4 §4, design lock 5): written ONLY when the session
+    // has no packId — a pack session's own packId is its reconstruction
+    // key instead, so a pack session's save carries neither field (the
+    // proposal/seed pair would be meaningless for it). See
+    // SavedSession.worldGenProposal's doc comment.
+    worldGenProposal: !packId && worldGenProposal
+      ? JSON.stringify(worldGenProposal)
+      : undefined,
+    worldSeed: !packId ? worldSeed : undefined,
   };
 
   const dir = dirname(savePath);

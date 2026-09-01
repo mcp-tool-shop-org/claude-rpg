@@ -15,7 +15,7 @@ import { VALID_SUPPLY_CATEGORIES, capPlayerRumors } from '../game/game-state.js'
 import type { Engine } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { serializeProfile, deserializeProfile } from '@ai-rpg-engine/character-profile';
-import { getLeverageState, formatLeverageStatus, type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState, type DistrictEconomy, type OpportunityState, type OpportunityFallout, type ArcSnapshot, type EndgameTrigger } from '@ai-rpg-engine/modules';
+import { type PlayerRumor, type WorldPressure, type PressureFallout, type NpcActionResult, type NpcProfile, type NpcObligationLedger, type ConsequenceChain, type PartyState, createPartyState, type DistrictEconomy, type OpportunityState, type OpportunityFallout, type ArcSnapshot, type EndgameTrigger } from '@ai-rpg-engine/modules';
 import { CampaignJournal, type CampaignRecord, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import { TurnHistory } from './history.js';
 // F-462792bb (SLATE-2, persisted per Director ruling R2): ConversationExchange
@@ -38,29 +38,52 @@ export type SavedSession = {
   characterName?: string;
   characterLevel?: number;
   characterTitle?: string;
+  /**
+   * LEGACY READ-ONLY as of schema v3 (WO-A3-1, design lock 2): world truth
+   * from A2 on. A v3 writer (saveSession) NEVER emits this field — the
+   * engine's own player-rumor namespace (world truth) is what a v3
+   * `engineState` carries instead. Kept on the TYPE only so v1/v2 readers
+   * (migrate.ts's pipeline, the load-time seed in game/world-truth-seed.ts)
+   * can still read a save written before adoption.
+   */
   // v0.3.0 fields
   playerRumors?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v0.4.0 fields
   activePressures?: string;
   genre?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v0.5.0 fields
   resolvedPressures?: string;
   // v0.6.0 fields
   chronicleRecords?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v0.7.0 fields
   leverageSnapshot?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v0.8.0 fields
   npcAgencySnapshot?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v0.9.0 fields
   npcObligations?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v1.0.0 fields
   consequenceChains?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v1.1.0 fields
   partyState?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v1.2.0 fields
   districtEconomies?: string;
+  /** LEGACY READ-ONLY as of schema v3 — see playerRumors' doc comment above. */
   // v1.3.0 fields
   activeOpportunities?: string;
+  /**
+   * NOT legacy — still WRITTEN by a v3 saveSession (design doc §1/§3): this
+   * is session HISTORY (expiry fallout appended by runWorldRound, player-
+   * resolved fallout appended by resolveOpportunity), not world truth — the
+   * engine's opportunity-core namespace only ever holds the LIVE list.
+   */
   resolvedOpportunities?: string;
   // v1.4.0 fields
   arcSnapshot?: string;
@@ -85,6 +108,17 @@ export type SavedSession = {
    * loadNpcConversationsFromSession() for the read side.
    */
   npcConversations?: string;
+  /**
+   * WO-A3-2 (slice A3 §3): JSON of the admitted `@ai-rpg-engine/rumor-system`
+   * RumorEngine's `EngineSnapshot` (`{ rumors, stances }`, from
+   * `rumorEngine.serialize()` — dead rumors omitted per the engine's own
+   * default). GameSession.getRumorEngineSnapshot() produces this string for
+   * the save path; GameConfig.rumorEngineSnapshot (game.ts) restores it via
+   * `RumorEngine.deserializeSafe`. Absent on every pre-v3 save (the engine
+   * did not exist in the session yet) and on a v3 session that has never
+   * mirrored a rumor.
+   */
+  rumorEngine?: string;
 };
 
 export type SaveSlotSummary = {
@@ -103,7 +137,23 @@ export type SaveSlotSummary = {
   lastZoneName?: string;
 };
 
-/** PB-005: Single-object input for saveSession — replaces 23 positional params. */
+/**
+ * PB-005: Single-object input for saveSession — replaces 23 positional
+ * params.
+ *
+ * WO-A3-1 (slice A3 §1/§2, design lock 2): as of schema v3 this type NO
+ * LONGER carries the ten legacy world-truth fields (playerRumors,
+ * activePressures, resolvedPressures, npcProfiles/npcActions —
+ * npcAgencySnapshot's two source fields, npcObligations, consequenceChains,
+ * partyState, districtEconomies, activeOpportunities) — the engine's own
+ * `engine.serialize()` (already the first field written below) carries all
+ * of them inside its world-truth namespaces now, so a v3 `saveSession` has
+ * nothing left to compute from these. Removing them here is the deliberate
+ * compile-error tripwire design lock 2 calls for: any caller still building
+ * one of these into a SaveSessionInput object fails to compile instead of
+ * silently double-writing world truth. `resolvedOpportunities` is NOT
+ * legacy (see SavedSession.resolvedOpportunities's doc comment) and stays.
+ */
 export type SaveSessionInput = {
   engine: Engine;
   history: TurnHistory;
@@ -112,18 +162,8 @@ export type SaveSessionInput = {
   worldPrompt?: string;
   profile?: CharacterProfile | null;
   packId?: string;
-  playerRumors?: PlayerRumor[];
-  activePressures?: WorldPressure[];
   genre?: string;
-  resolvedPressures?: PressureFallout[];
   journal?: CampaignJournal;
-  npcProfiles?: NpcProfile[];
-  npcActions?: NpcActionResult[];
-  npcObligations?: Map<string, NpcObligationLedger>;
-  consequenceChains?: Map<string, ConsequenceChain>;
-  partyState?: PartyState;
-  districtEconomies?: Map<string, DistrictEconomy>;
-  activeOpportunities?: OpportunityState[];
   resolvedOpportunities?: OpportunityFallout[];
   arcSnapshot?: ArcSnapshot | null;
   endgameTriggers?: EndgameTrigger[];
@@ -133,22 +173,22 @@ export type SaveSessionInput = {
   presentationState?: string;
   /** F-462792bb (SLATE-2, persisted per Director ruling R2): see SavedSession.npcConversations. */
   npcConversations?: Map<string, ConversationExchange[]>;
+  /**
+   * WO-A3-2 (slice A3 §3): pre-serialized RumorEngine snapshot — see
+   * SavedSession.rumorEngine's doc comment. GameSession.getRumorEngineSnapshot()
+   * produces this string; saveSession writes it through unchanged (same
+   * pass-through discipline as presentationState above).
+   */
+  rumorEngine?: string;
 };
 
 export async function saveSession(input: SaveSessionInput): Promise<void> {
   const {
     engine, history, tone, savePath, worldPrompt, profile, packId,
-    playerRumors, activePressures, genre, resolvedPressures, journal,
-    npcProfiles, npcActions, npcObligations, consequenceChains,
-    partyState, districtEconomies, activeOpportunities, resolvedOpportunities,
+    genre, journal, resolvedOpportunities,
     arcSnapshot, endgameTriggers, finaleOutline, campaignStatus,
-    presentationState, npcConversations,
+    presentationState, npcConversations, rumorEngine,
   } = input;
-
-  // Compute leverage snapshot for save summary
-  const leverageSnap = profile
-    ? formatLeverageStatus(getLeverageState(profile.custom))
-    : undefined;
 
   const session: SavedSession = {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -163,38 +203,18 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     characterName: profile?.build.name,
     characterLevel: profile?.progression.level,
     characterTitle: profile?.custom.title as string | undefined,
-    playerRumors: playerRumors && playerRumors.length > 0
-      ? JSON.stringify(playerRumors)
-      : undefined,
-    activePressures: activePressures && activePressures.length > 0
-      ? JSON.stringify(activePressures)
-      : undefined,
     genre,
-    resolvedPressures: resolvedPressures && resolvedPressures.length > 0
-      ? JSON.stringify(resolvedPressures)
-      : undefined,
     chronicleRecords: journal && journal.size() > 0
       ? JSON.stringify(journal.serialize())
       : undefined,
-    leverageSnapshot: leverageSnap || undefined,
-    npcAgencySnapshot: (npcProfiles && npcProfiles.length > 0) || (npcActions && npcActions.length > 0)
-      ? JSON.stringify({ profiles: npcProfiles ?? [], actions: npcActions ?? [] })
-      : undefined,
-    npcObligations: npcObligations && npcObligations.size > 0
-      ? JSON.stringify(Object.fromEntries(npcObligations))
-      : undefined,
-    consequenceChains: consequenceChains && consequenceChains.size > 0
-      ? JSON.stringify(Object.fromEntries(consequenceChains))
-      : undefined,
-    partyState: partyState && partyState.companions.length > 0
-      ? JSON.stringify(partyState)
-      : undefined,
-    districtEconomies: districtEconomies && districtEconomies.size > 0
-      ? JSON.stringify(Object.fromEntries(districtEconomies))
-      : undefined,
-    activeOpportunities: activeOpportunities && activeOpportunities.length > 0
-      ? JSON.stringify(activeOpportunities)
-      : undefined,
+    // WO-A3-1 (design lock 2): the ten legacy world-truth fields
+    // (playerRumors, activePressures, resolvedPressures, npcAgencySnapshot,
+    // npcObligations, consequenceChains, partyState, districtEconomies,
+    // activeOpportunities, leverageSnapshot) are NEVER written by a v3
+    // saveSession — engine.serialize() above already carries all of them
+    // inside the engine's own world-truth namespaces. resolvedOpportunities
+    // is NOT one of the ten (session history, not world truth — see its
+    // own SavedSession doc comment) and is still written below.
     resolvedOpportunities: resolvedOpportunities && resolvedOpportunities.length > 0
       ? JSON.stringify(resolvedOpportunities)
       : undefined,
@@ -214,6 +234,9 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     npcConversations: npcConversations && npcConversations.size > 0
       ? JSON.stringify(Object.fromEntries(npcConversations))
       : undefined,
+    // WO-A3-2 (slice A3 §3): pre-serialized by GameSession.getRumorEngineSnapshot() —
+    // passed through unchanged, same discipline as presentationState above.
+    rumorEngine,
   };
 
   const dir = dirname(savePath);

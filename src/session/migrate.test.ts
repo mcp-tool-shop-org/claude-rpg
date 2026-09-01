@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { migrateSave } from './migrate.js';
+import { migrateSave, CURRENT_SCHEMA_VERSION } from './migrate.js';
 
 // F-c5ff2a5c: migrateV1toV2 shallow-spread the raw save object and never
 // transformed the *content* of legacy nested-JSON-string fields
@@ -152,5 +152,75 @@ describe('migrateSave — legacy rumor/pressure normalization (F-c5ff2a5c)', () 
     const result = migrateSave(raw);
     expect(result.data.playerRumors).toBeUndefined();
     expect(result.data.activePressures).toBeUndefined();
+  });
+});
+
+// WO-A3-1 (slice A3 §1/§2, design lock 1): schema v3 — migrateV2toV3 is a
+// PURE stamp (schemaVersion: 3 only), and the full v1/v2 -> v3 chain must
+// leave the ten legacy world-truth fields untouched so the runtime seed
+// (game/world-truth-seed.ts's seedWorldTruthFromSession, called once per
+// world) can still read them. Before this migration step existed,
+// CURRENT_SCHEMA_VERSION stayed 2 and migrateSave(raw).data.schemaVersion
+// on a v2 save was observed to stay 2 (stepsApplied: 0) — this suite pins
+// the v3 destination directly rather than re-asserting that historical red.
+describe('migrateSave — v2 -> v3 (WO-A3-1, design lock 1: PURE stamp only)', () => {
+  it('CURRENT_SCHEMA_VERSION is 3', () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(3);
+  });
+
+  it('stamps schemaVersion: 3 on a v2 save and reports one step applied', () => {
+    const raw = { schemaVersion: 2, version: '1.4.0', tone: 'dark fantasy' };
+    const result = migrateSave(raw);
+    expect(result.data.schemaVersion).toBe(3);
+    expect(result.sourceVersion).toBe(2);
+    expect(result.targetVersion).toBe(3);
+    expect(result.stepsApplied).toBe(1);
+  });
+
+  it('a v2 -> v3 migration touches NOTHING but schemaVersion — every legacy world-truth field survives byte-identical', () => {
+    const raw = {
+      schemaVersion: 2,
+      version: '1.4.0',
+      playerRumors: JSON.stringify([{ id: 'r1', claim: 'a claim', subjectDescriptor: 'x', sourceEvent: 'milestone', confidence: 0.5, distortion: 0, mutationCount: 0, valence: 'heroic', spreadTo: [], originTick: 1 }]),
+      activePressures: JSON.stringify([{ id: 'p1', kind: 'k', sourceFactionId: 'f', description: 'd', triggeredBy: 't', urgency: 0.5, visibility: 'known', turnsRemaining: null, potentialOutcomes: [], tags: [], createdAtTick: 0 }]),
+      resolvedPressures: JSON.stringify([{ id: 'p0' }]),
+      npcAgencySnapshot: JSON.stringify({ profiles: [], actions: [] }),
+      npcObligations: JSON.stringify({ npc1: {} }),
+      consequenceChains: JSON.stringify({ npc1: {} }),
+      partyState: JSON.stringify({ companions: [] }),
+      districtEconomies: JSON.stringify({ d1: {} }),
+      activeOpportunities: JSON.stringify([{ id: 'o1' }]),
+      leverageSnapshot: 'Heat: 3',
+    };
+    const result = migrateSave(raw);
+    for (const key of [
+      'playerRumors', 'activePressures', 'resolvedPressures', 'npcAgencySnapshot',
+      'npcObligations', 'consequenceChains', 'partyState', 'districtEconomies',
+      'activeOpportunities', 'leverageSnapshot',
+    ] as const) {
+      expect(result.data[key]).toBe(raw[key]);
+    }
+    expect(result.data.schemaVersion).toBe(3);
+  });
+
+  it('a v1 save migrates through v2 in two steps to land on v3', () => {
+    const raw = { version: '1.0.0' };
+    const result = migrateSave(raw);
+    expect(result.sourceVersion).toBe(1);
+    expect(result.targetVersion).toBe(3);
+    expect(result.stepsApplied).toBe(2);
+    expect(result.data.schemaVersion).toBe(3);
+    // migrateV1toV2's own normalization (createdWithVersion, campaignStatus
+    // default) still ran as step 1 — v2->v3 only adds the version stamp on
+    // top, it does not undo v1->v2's work.
+    expect(result.data.createdWithVersion).toBe('1.0.0');
+    expect(result.data.campaignStatus).toBe('active');
+  });
+
+  it('a v3 save passed through migrateSave is a no-op (0 steps applied)', () => {
+    const raw = { schemaVersion: 3, version: '1.4.0' };
+    const result = migrateSave(raw);
+    expect(result.stepsApplied).toBe(0);
+    expect(result.data.schemaVersion).toBe(3);
   });
 });

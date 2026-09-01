@@ -13,6 +13,8 @@
 // v1.6: equipment provenance — item recognition, combat chronicles, acquisition tracking
 
 import { seedWorldTruthFromSession, type WorldTruthSeedReport } from './game/world-truth-seed.js';
+import { mirrorPlayerRumor } from './game/rumor-mirror.js';
+import { RumorEngine, type EngineSnapshot } from '@ai-rpg-engine/rumor-system';
 import type { Engine, EntityState, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
@@ -422,6 +424,17 @@ export type GameConfig = {
    * it into every saveSession call site on the save path.
    */
   npcConversations?: Map<string, ConversationExchange[]>;
+  /**
+   * WO-A3-2 (slice A3 §3): restored RumorEngine snapshot for resumed
+   * sessions, read from a save via SavedSession.rumorEngine (a JSON string
+   * of the engine's own EngineSnapshot `{ rumors, stances }`). Parsed and
+   * restored via `RumorEngine.deserializeSafe` in the constructor — a
+   * malformed individual rumor entry is skipped with a logged warning
+   * (never surfaced to the player), never a hard failure of session
+   * construction. Omitted (new game, or a save that predates this field)
+   * constructs a fresh RumorEngine instead.
+   */
+  rumorEngineSnapshot?: string;
 };
 
 export class GameSession {
@@ -464,6 +477,18 @@ export class GameSession {
    * below and tickObligations-style Map.set() calls.
    */
   readonly npcConversations: Map<string, ConversationExchange[]>;
+  /**
+   * WO-A3-2 (slice A3 §3): the admitted `@ai-rpg-engine/rumor-system`
+   * instance — host-owned, constructed on a new game with
+   * `{ stanceFadeTicks: 24 }` (per-hearer stances fade after ~24 rounds; an
+   * A6 tuning lever) or restored from a save via
+   * config.rumorEngineSnapshot (see the constructor below). Write side
+   * only this slice: mirrorPlayerRumor (game/rumor-mirror.ts) bridges the
+   * app's existing 4-valence playerRumors ledger into it at addRumor() and
+   * via runWorldRound()'s post-round sweep; dialogue and the /rumors
+   * surface keep reading the 4-valence view unchanged until A5.
+   */
+  readonly rumorEngine: RumorEngine;
   previousBreakpoints: Map<string, LoyaltyBreakpoint> = new Map();
   activeConsequenceChains: Map<string, ConsequenceChain> = new Map();
   lastLeverageResolution: LeverageResolution | null = null;
@@ -601,6 +626,32 @@ export class GameSession {
     this.onPresentation = config.onPresentation;
     this.onNarrationChunk = config.onNarrationChunk;
 
+    // WO-A3-2 (slice A3 §3): restore the RumorEngine from a save snapshot,
+    // or construct fresh for a new game. debugLog is already initialized
+    // above (this.debugLog = config.debugLogger ?? createDebugLogger()),
+    // so a restore warning has somewhere safe to go before the constructor
+    // finishes.
+    const rumorEngineConfig = { stanceFadeTicks: 24 };
+    if (config.rumorEngineSnapshot) {
+      let parsed: EngineSnapshot | undefined;
+      try {
+        parsed = JSON.parse(config.rumorEngineSnapshot) as EngineSnapshot;
+      } catch {
+        this.debugLog.warn('rumors', 'RumorEngine restore: rumorEngineSnapshot was not valid JSON — starting a fresh RumorEngine.');
+      }
+      if (parsed) {
+        const { engine, warnings } = RumorEngine.deserializeSafe(parsed, rumorEngineConfig);
+        this.rumorEngine = engine;
+        for (const w of warnings) {
+          this.debugLog.warn('rumors', `RumorEngine restore: ${w.field}: ${w.message}`);
+        }
+      } else {
+        this.rumorEngine = new RumorEngine(rumorEngineConfig);
+      }
+    } else {
+      this.rumorEngine = new RumorEngine(rumorEngineConfig);
+    }
+
     // Initialize district economies from genre + district tags
     this.initializeDistrictEconomies();
 
@@ -671,6 +722,17 @@ export class GameSession {
    */
   getCostSummary(): string {
     return this.tokenTracker.formatCostSummary();
+  }
+
+  /**
+   * WO-A3-2 (slice A3 §3): pre-serialized RumorEngine snapshot for the save
+   * path — cli-display's buildSaveInput (bin.ts) reads this and threads it
+   * straight into SaveSessionInput.rumorEngine unchanged (same pass-through
+   * discipline as GameConfig.restoredPresentationState/
+   * this.immersion.stateMachine.current above).
+   */
+  getRumorEngineSnapshot(): string {
+    return JSON.stringify(this.rumorEngine.serialize());
   }
 
   /** Apply profile update hints from a turn result. */
@@ -1034,10 +1096,21 @@ export class GameSession {
    * companions move with the player when the zone changed, so the world
    * then reacts to where they actually stand. Steps 3-4: capture the
    * eventLog cursor, then run the tick — straight adoption, no feature
-   * flag (design lock 2): every non-rejected, non-corpse round. Step 5:
-   * refresh every view. Step 6: drain the tick's own companion-reaction
-   * side effects. Step 7: return the round's delta so turn-loop.ts's
-   * `events` includes it for narration/hints/history.
+   * flag (design lock 2): every non-rejected, non-corpse round. Step 4.5
+   * (WO-A3-2, slice A3 §3): tick the RumorEngine's own lifecycle
+   * (spreading → established → fading → dead; stance decay), AFTER the
+   * world tick and BEFORE the view refresh (design doc §3's own ordering).
+   * Step 5: refresh every view. Step 5.5 (WO-A3-2): sweep this round's
+   * refreshed playerRumors for any ledger rumor not yet mirrored — the
+   * tick's own NPC-originated rumors (spawnNpcOriginatedRumor, written
+   * directly into the player-rumor namespace by the engine's own
+   * npc-agency step, never through this session's addRumor) land here,
+   * plus any other write path that bypasses addRumor entirely (e.g.
+   * game-state.ts's applyFalloutEffects rumor case, which writes through
+   * setPlayerRumorState directly rather than this.addRumor — see that
+   * method's own doc comment). Step 6: drain the tick's own
+   * companion-reaction side effects. Step 7: return the round's delta so
+   * turn-loop.ts's `events` includes it for narration/hints/history.
    */
   private runWorldRound(actionEvents: ResolvedEvent[]): ResolvedEvent[] {
     // 1. Corpse gate.
@@ -1093,8 +1166,20 @@ export class GameSession {
     }
     this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
 
+    // 4.5 (WO-A3-2, slice A3 §3): tick the RumorEngine's own lifecycle —
+    // AFTER the world tick, BEFORE the view refresh (design doc §3's
+    // ordering; see this method's own doc comment above).
+    this.rumorEngine.tick(this.engine.tick);
+
     // 5. Refresh every view.
     this.refreshWorldViews();
+
+    // 5.5 (WO-A3-2): mirror any ledger rumor this round's refreshed
+    // playerRumors carries that isn't in the RumorEngine yet — catches the
+    // tick's own NPC-originated rumors and any write path that bypasses
+    // this.addRumor. Idempotent (mirrorPlayerRumor's own findBySubjectKey
+    // guard), so re-scanning already-mirrored rumors every round is safe.
+    this.mirrorUnmirroredRumors();
 
     // WO-A2-4 (slice A2 §5, kept branch): chronicle entries for NPC and
     // faction actions new THIS round only (see the reference-identity
@@ -1807,18 +1892,15 @@ export class GameSession {
         savePath,
         worldPrompt: this.worldPrompt,
         profile: this.profile,
-        playerRumors: this.playerRumors,
-        activePressures: this.activePressures,
         genre: this.genre,
-        resolvedPressures: this.resolvedPressures,
         journal: this.journal,
-        npcProfiles: this.lastNpcProfiles,
-        npcActions: this.lastNpcActions,
-        npcObligations: this.npcObligations,
-        consequenceChains: this.activeConsequenceChains,
-        partyState: this.partyState,
-        districtEconomies: this.districtEconomies,
-        activeOpportunities: this.activeOpportunities,
+        // WO-A3-1 (design lock 2): playerRumors/activePressures/
+        // resolvedPressures/npcProfiles/npcActions/npcObligations/
+        // consequenceChains/partyState/districtEconomies/activeOpportunities
+        // are no longer SaveSessionInput fields — engine.serialize() (below,
+        // via SaveSessionInput.engine) already carries all ten inside the
+        // engine's own world-truth namespaces. resolvedOpportunities is NOT
+        // one of the ten (session history, not world truth) and stays.
         resolvedOpportunities: this.resolvedOpportunities,
         arcSnapshot: this.arcSnapshot,
         endgameTriggers: this.endgameTriggers,
@@ -1832,6 +1914,8 @@ export class GameSession {
         // threads this same field into every OTHER saveSession call site —
         // this is the one this domain owns directly (autosave).
         npcConversations: this.npcConversations,
+        // WO-A3-2 (slice A3 §3): see SavedSession.rumorEngine's doc comment.
+        rumorEngine: this.getRumorEngineSnapshot(),
       };
       await saveSession(input);
       this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
@@ -3495,6 +3579,14 @@ export class GameSession {
     const next = _addRumor(rumor, before, this.partyState, this.engine.tick);
     if (next !== before) {
       setPlayerRumorState(world, { ...state, rumors: next });
+      // WO-A3-2 (slice A3 §3): mirror into the RumorEngine ONLY when the
+      // rumor was actually added — `next === before` above (companion
+      // rumor-suppression, game-state.ts's own addRumor doc comment) means
+      // this rumor never entered the ledger at all, so there is nothing to
+      // mirror. runWorldRound's own post-round sweep (mirrorUnmirroredRumors)
+      // is idempotent against this call via findBySubjectKey, so calling
+      // both is safe.
+      mirrorPlayerRumor(this.rumorEngine, rumor);
     }
     this.refreshWorldViews();
     // F-fd5e8eec: detect a cap eviction (a genuinely new array — ruling out
@@ -3505,6 +3597,25 @@ export class GameSession {
     if (!this.rumorCapWarned && next !== before && next.length <= before.length) {
       this.rumorCapWarned = true;
       this.debugLog.warn('rumors', 'playerRumors hit MAX_PLAYER_RUMORS — oldest/inert rumors are now evicted as new ones are spawned.');
+    }
+  }
+
+  /**
+   * WO-A3-2 (slice A3 §3): mirror every entry in this.playerRumors that the
+   * RumorEngine doesn't already have (by `findBySubjectKey('player', id)`)
+   * — called from runWorldRound's post-round sweep (step 5.5). Covers
+   * ledger rumors that never went through this.addRumor: the engine's own
+   * NPC-originated rumors (spawnNpcOriginatedRumor, written straight into
+   * the player-rumor namespace by the npc-agency tick step) and
+   * game-state.ts's applyFalloutEffects rumor case (writes through
+   * setPlayerRumorState directly — see applyFalloutEffects' own doc
+   * comment, game.ts). Idempotent: mirrorPlayerRumor itself no-ops on an
+   * already-mirrored id, so calling this every round never creates
+   * duplicates (design doc §4, "Mirror completeness").
+   */
+  private mirrorUnmirroredRumors(): void {
+    for (const rumor of this.playerRumors) {
+      mirrorPlayerRumor(this.rumorEngine, rumor);
     }
   }
 

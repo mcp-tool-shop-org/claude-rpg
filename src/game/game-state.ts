@@ -11,7 +11,6 @@ import {
   evaluateItemRecognition,
   shouldRecognize,
   createDistrictEconomy,
-  tickDistrictEconomy,
   applyEconomyShift,
   deriveEconomyDescriptor,
   formatEconomyForNarrator,
@@ -81,6 +80,12 @@ import {
   type PressureFallout,
   type FalloutEffect,
   modifyDistrictMetric,
+  // WO-A2-3/4 (slice A2 §3-§5): write-through + engine-reuse for pressure
+  // spawns and economy shifts that used to land on GameSession's own
+  // (now-view) activePressures array / districtEconomies Map.
+  getActivePressures,
+  pushActivePressure,
+  getEconomyCoreState,
 } from '@ai-rpg-engine/modules';
 import {
   getDistrictForZone,
@@ -530,74 +535,46 @@ export function readFactionCognitionScalars(fcog: unknown): { alertLevel: number
 }
 
 // ─── Pressure System ─────────────────────────────────────────
+//
+// WO-A2-4 (slice A2 §5, deletion): buildPressureInputs (this file's own
+// app-side PressureInputs assembly) is deleted with its sole caller,
+// GameSession.evaluateAndTickPressures() (game.ts) — the engine's
+// runWorldTick now evaluates new pressures itself every round from world
+// truth (world-tick.ts's own buildPressureInputs, engine-owned, exported
+// from @ai-rpg-engine/modules), so the app never needs to assemble
+// PressureInputs by hand again this wave. See game-state.test.ts's
+// removed 'buildPressureInputs' describe blocks (F- this same commit).
 
-/** Build PressureInputs from current session state. */
-export function buildPressureInputs(
-  world: WorldState,
-  profile: CharacterProfile | null,
-  playerRumors: PlayerRumor[],
-  activePressures: WorldPressure[],
-  genre: string,
-  tick: number,
-  districtEconomies: Map<string, DistrictEconomy>,
-): PressureInputs {
-  const factionIds = Object.keys(world.factions);
-  const reputation = factionIds.map((factionId) => ({
-    factionId,
-    value: profile ? getReputation(profile, factionId) : 0,
-  }));
-  const factionStates: Record<string, { alertLevel: number; cohesion: number }> = {};
-  for (const factionId of factionIds) {
-    factionStates[factionId] = readFactionCognitionScalars(getFactionCognition(world, factionId));
-  }
-  const milestones = (profile?.milestones ?? []).map((m) => ({ label: m.label, tags: m.tags }));
-  const districtIds = getAllDistrictIds(world);
-  const districtMetrics: Record<string, { alertPressure: number; rumorDensity: number; stability: number }> = {};
-  for (const dId of districtIds) {
-    const dState = getDistrictState(world, dId);
-    if (dState) {
-      districtMetrics[dId] = {
-        alertPressure: dState.alertPressure,
-        rumorDensity: dState.rumorDensity,
-        stability: dState.stability,
-      };
-    }
-  }
-  return {
-    playerRumors,
-    reputation,
-    milestones,
-    factionStates,
-    districtMetrics: Object.keys(districtMetrics).length > 0 ? districtMetrics : undefined,
-    playerLevel: profile?.progression.level ?? 1,
-    totalTurns: profile?.totalTurns ?? 0,
-    activePressures,
-    genre,
-    currentTick: tick,
-    districtEconomies: districtEconomies.size > 0 ? districtEconomies : undefined,
-  };
-}
-
-/** Apply structured fallout effects to session state. Returns updated profile. */
+/**
+ * Apply structured fallout effects to session state. Returns updated profile.
+ *
+ * WO-A2-3/4 (slice A2 §4, write-through): `activePressures`/
+ * `districtEconomies` are dropped from this signature — a chain pressure
+ * (the 'spawn-pressure' effect) now lands on the world-tick namespace's own
+ * live array via pushActivePressure (honoring the engine's one-per-kind
+ * invariant, superseding the old ad hoc MAX_ACTIVE=3 cap), and an
+ * 'economy-shift' effect now lands on economy-core's own live districts
+ * Record via applyEconomyShiftToWorld — both write straight to `world`
+ * (already a param) instead of returning an array/Map for the caller to
+ * reassign onto a session field that is a VIEW from this wave on. The
+ * caller (GameSession.applyFalloutEffects, game.ts) refreshes its views
+ * after calling this.
+ */
 export function applyFalloutEffects(
   fallout: PressureFallout,
   profile: CharacterProfile | null,
   world: WorldState,
   playerRumors: PlayerRumor[],
-  activePressures: WorldPressure[],
   partyState: PartyState,
-  districtEconomies: Map<string, DistrictEconomy>,
   genre: string,
   tick: number,
 ): {
   profile: CharacterProfile | null;
   playerRumors: PlayerRumor[];
-  activePressures: WorldPressure[];
   titleChanged?: { oldTitle?: string; newTitle: string };
 } {
   let updatedProfile = profile;
   let updatedRumors = playerRumors;
-  let updatedPressures = activePressures;
   let titleChanged: { oldTitle?: string; newTitle: string } | undefined;
 
   for (const effect of fallout.effects) {
@@ -632,7 +609,7 @@ export function applyFalloutEffects(
 
       case 'spawn-pressure': {
         const MAX_ACTIVE = 3;
-        if (updatedPressures.length < MAX_ACTIVE) {
+        if (getActivePressures(world).length < MAX_ACTIVE) {
           const chainPressure = makePressure({
             kind: effect.kind,
             sourceFactionId: effect.sourceFactionId,
@@ -647,7 +624,7 @@ export function applyFalloutEffects(
           });
           (chainPressure as WorldPressure & { chainedFrom?: string }).chainedFrom =
             fallout.resolution.pressureId;
-          updatedPressures = [...updatedPressures, chainPressure];
+          pushActivePressure(world, chainPressure);
         }
         break;
       }
@@ -681,12 +658,12 @@ export function applyFalloutEffects(
         break;
 
       case 'economy-shift':
-        applyEconomyShiftToMap(districtEconomies, effect.districtId, effect.category, effect.delta, effect.cause);
+        applyEconomyShiftToWorld(world, effect.districtId, effect.category, effect.delta, effect.cause);
         break;
     }
   }
 
-  return { profile: updatedProfile, playerRumors: updatedRumors, activePressures: updatedPressures, titleChanged };
+  return { profile: updatedProfile, playerRumors: updatedRumors, titleChanged };
 }
 
 // ─── Economy ─────────────────────────────────────────────────
@@ -703,19 +680,15 @@ export function initializeDistrictEconomies(world: WorldState, genre: string): M
   return economies;
 }
 
-/** Tick all district economies — baseline-seeking decay, stability modulation. */
-export function tickDistrictEconomies(
-  districtEconomies: Map<string, DistrictEconomy>,
-  world: WorldState,
-  tick: number,
-): void {
-  for (const [districtId, economy] of districtEconomies) {
-    const dState = getDistrictState(world, districtId);
-    if (!dState) continue;
-    const updated = tickDistrictEconomy(economy, dState.commerce, dState.stability, tick);
-    districtEconomies.set(districtId, updated);
-  }
-}
+// WO-A2-4 (slice A2 §5, deletion): tickDistrictEconomies (this file's own
+// per-Map ticker) is deleted with its sole caller,
+// GameSession.tickDistrictEconomies() (game.ts) — the engine's
+// runWorldTick already ticks every district's economy itself each round
+// (economy-core.ts's own tickDistrictEconomy, driven from world-tick.ts's
+// step 0b over economy-core's live districts Record), so the app's
+// districtEconomies Map is now a pure post-tick VIEW
+// (new Map(Object.entries(getEconomyCoreState(world).districts))) and
+// never independently ticked.
 
 /**
  * F-afe91227: exported (was module-private) so session.ts's
@@ -751,6 +724,36 @@ export function applyEconomyShiftToMap(
     cause,
   });
   districtEconomies.set(districtId, updated);
+}
+
+/**
+ * WO-A2-3/4 (slice A2 §4, write-through): the world-truth twin of
+ * applyEconomyShiftToMap above — mutates economy-core's own live
+ * `districts` Record on `world` directly (getEconomyCoreState returns the
+ * live namespace reference, not a copy) instead of an app-side Map, since
+ * districtEconomies is a post-round VIEW from this wave on. The Map-based
+ * function above is kept (still directly unit-tested) but is no longer
+ * called by GameSession — this is the one live write path
+ * (GameSession.applyEconomyShiftEffect and this file's own
+ * applyFalloutEffects 'economy-shift' case both route through it).
+ */
+export function applyEconomyShiftToWorld(
+  world: WorldState,
+  districtId: string,
+  category: string,
+  delta: number,
+  cause: string,
+): void {
+  const state = getEconomyCoreState(world);
+  const economy = state.districts[districtId];
+  if (!economy) return;
+  if (!isValidSupplyCategory(category)) return; // Silently skip invalid categories
+  state.districts[districtId] = applyEconomyShift(economy, {
+    districtId,
+    category,
+    delta,
+    cause,
+  });
 }
 
 // ─── Arc Detection & Endgame ─────────────────────────────────

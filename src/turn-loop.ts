@@ -247,6 +247,20 @@ export type ExecuteTurnOpts = {
    * custom/non-pack worlds, same as every other optional context field.
    */
   packId?: string;
+  /**
+   * WO-A2-1 (slice A2 §1, the living-world driver): runs after
+   * engine.submitAction resolved the player's action and before
+   * presentation inference and narration. Returns the round's additional
+   * events (NPC agency, companions, the world tick) so narration, the
+   * presentation state machine, hooks, and history all see the whole
+   * round. game.ts's GameSession wires its own runWorldRound() here.
+   * Skipped when the action's own events are only an `action.rejected`
+   * (a dead menu entry costs the player nothing — the engine CLI's own
+   * rule): nothing else should react to a turn that didn't happen. A
+   * throw inside the hook is logged through debugLog and yields `[]` — a
+   * hint or tick failure must never kill a turn.
+   */
+  onResolved?: (actionEvents: ResolvedEvent[]) => ResolvedEvent[];
 };
 
 /**
@@ -346,6 +360,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
     tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
+    onResolved,
   } = opts;
   const previousLocationId = engine.world.locationId;
 
@@ -487,6 +502,33 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       // F-6bc0721e: no events resolved, so no transition happened.
       justDied: false,
     };
+  }
+
+  // WO-A2-1 (slice A2 §1, the living-world driver): the round callback runs
+  // immediately after the player's action resolved and BEFORE any
+  // presentation inference or narration below, so its returned events join
+  // `events` here and every downstream consumer of that variable — Step
+  // 3+4's narrateScene recentEvents, Step 4.5's immersion.processPresentation,
+  // extractProfileHints, and history.record below — sees the whole round,
+  // not just the player's own action. Skipped when the action was rejected
+  // (a dead menu entry costs the player nothing, the engine CLI's own
+  // rule): an `action.rejected`-only events array means engine.submitAction
+  // declined the action outright, so no NPC/world turn runs over a turn
+  // that didn't happen. A throw inside the hook is logged and yields `[]`
+  // — a hint or tick failure must never kill a turn.
+  const isRejectedOnly = events.length === 1 && events[0].type === 'action.rejected';
+  if (onResolved && !isRejectedOnly) {
+    let roundEvents: ResolvedEvent[] = [];
+    try {
+      roundEvents = onResolved(events) ?? [];
+    } catch (err) {
+      debugLog?.error('turn', 'onResolved hook threw', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error && err.stack ? err.stack : undefined,
+      });
+      roundEvents = [];
+    }
+    events = [...events, ...roundEvents];
   }
 
   // Step 3 + 4: Build scene context with perception filtering and narrate

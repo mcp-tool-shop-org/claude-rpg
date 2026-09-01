@@ -23,6 +23,18 @@ import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
 import type { OpportunityState, PlayerRumor } from '@ai-rpg-engine/modules';
+// WO-A2-5 (slice A2 §7, proofs): the same world-truth readers/setters
+// game.ts's own refreshWorldViews()/write-through paths use, verified
+// against the installed 3.11 dist (see game.ts's own import doc comment).
+import {
+  getActivePressures,
+  getWorldTickState,
+  getPersistedOpportunities,
+  setPersistedOpportunities,
+  makeOpportunity,
+  getPlayerRumorState,
+  getEconomyCoreState,
+} from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { loadNpcAgencyFromSession, type SavedSession } from './session/session.js';
 import { MAX_PLAYER_RUMORS } from './game/game-state.js';
@@ -2305,5 +2317,199 @@ describe('Slice A1 (WO-A1-6, WO-A1-7): generated-world GameSession boot + verb p
     // "before" sanity check) and below currently read/stay undefined.
     expect(engine.world.globals['player_heat']).toBe(5);
     expect(engine.world.globals['reputation_raiders']).toBe(-10);
+  });
+});
+
+// WO-A2-5 (slice A2 §7, docs/living-world-slice-a2.md): the A2-core proofs
+// owned by game-core -- round ordering, no double simulation, rejected
+// action, corpse gate, views deep-equal, write-through visibility. (The
+// determinism proof, §7's remaining item, is the "tests" domain's per this
+// wave's own addendum.)
+describe('Slice A2-core (WO-A2-5): the living-world driver proofs', () => {
+  // starter-fantasy's only registered faction (starter-fantasy's own
+  // content.js), authored reputation baseline 0.
+  const CHAPEL_UNDEAD = 'chapel-undead';
+
+  /**
+   * Seeds world.globals so pressure-system.js's evaluateUniversalRules
+   * 'bounty-issued' rule is guaranteed to fire on the NEXT tick, not
+   * merely probable: heat >= HEAT_WAKE_THRESHOLD (10) opens the spawn
+   * valve (world-tick.js step 5), and rep<=-50 + alertLevel>=60 matches
+   * the FIRST universal rule the scan tries (pressure-system.js's
+   * evaluateUniversalRules, checked before investigation-opened and
+   * every genre/economy rule) -- verified directly against the installed
+   * 3.11 dist rather than assumed. A fresh game has zero active
+   * pressures, so the scarcity guards (MAX_ACTIVE_PRESSURES,
+   * MIN_TURNS_BETWEEN_SPAWNS) never block the first spawn.
+   */
+  function seedBountyConditions(engine: Engine): void {
+    engine.world.globals['player_heat'] = 10;
+    engine.world.globals[`reputation_${CHAPEL_UNDEAD}`] = -50;
+    engine.world.globals[`faction_alert_${CHAPEL_UNDEAD}`] = 60;
+  }
+
+  it('round ordering: a tick-spawned pressure lands in the SAME turn (activePressures view, and the eventLog delta for that turn)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    seedBountyConditions(h.session.engine);
+
+    expect(h.session.activePressures.length).toBe(0);
+    const logBefore = h.session.engine.world.eventLog.length;
+
+    await h.play('look around');
+
+    // Same turn, not a subsequent one: the view already reflects the
+    // spawn right after this one play() call returns.
+    expect(h.session.activePressures.length).toBe(1);
+    expect(h.session.activePressures[0].kind).toBe('bounty-issued');
+    // And it is genuinely IN this turn's own event-log delta (runWorldRound
+    // runs inside THIS executeTurn call, before narration) -- not narrated
+    // one turn late. (describeEvent's own narration-line coverage for
+    // pressure.spawned is narrative-llm's §6 work this same wave -- this
+    // proof stays scoped to game-core's own contract: the event reaches
+    // the log and the view within the same round, not what prose it
+    // renders as.)
+    const delta = h.session.engine.world.eventLog.slice(logBefore);
+    expect(delta.some((e) => e.type === 'pressure.spawned')).toBe(true);
+  });
+
+  it("no double simulation: the spawned pressure's timer decrements exactly once per subsequent round", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    seedBountyConditions(h.session.engine);
+
+    await h.play('look around');
+    const pressureId = h.session.activePressures[0]?.id;
+    expect(pressureId).toBeDefined();
+    let previous = h.session.activePressures[0].turnsRemaining;
+
+    for (let i = 0; i < 3; i++) {
+      await h.play('look around');
+      const current = h.session.activePressures.find((p) => p.id === pressureId);
+      expect(current).toBeDefined();
+      expect(current!.turnsRemaining).toBe((previous as number) - 1);
+      previous = current!.turnsRemaining;
+    }
+  });
+
+  it('rejected action: an action.rejected-only turn runs no world round this turn (no pressure spawn even with wake conditions seeded)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    // F-d421875b's own precedent (turn-loop.ts): an unresolvable target
+    // makes engine.submitAction emit a non-throwing action.rejected event
+    // and return, rather than the low-confidence clarification path (which
+    // never reaches engine.submitAction at all). structuredData forces the
+    // interpreter past its fast-path (which never resolves a nonsense
+    // target name) to hand the engine a target id nothing in the world has.
+    const h = createHarness({
+      clientOpts: {
+        structuredData: {
+          verb: 'attack',
+          targetIds: ['totally-nonexistent-entity-xyz'],
+          toolId: null,
+          parameters: null,
+          confidence: 'high',
+          reasoning: 'test forces a target the engine cannot resolve',
+          alternatives: null,
+        },
+      },
+    });
+    seedBountyConditions(h.session.engine);
+
+    await h.play('attack the nonexistent one');
+
+    expect(h.session.activePressures.length).toBe(0);
+  });
+
+  it('corpse gate: a same-turn player-defeat turn runs no world round this turn (no pressure spawn even with wake conditions seeded)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    // Same forced-self-attack shape as the companion combat-reaction
+    // describe block's 'combat-lost priority' test above (this file) --
+    // a real combat-core hit resolves the player's own defeat, not a
+    // fabricated event.
+    const h = createHarness({
+      clientOpts: {
+        structuredData: {
+          verb: 'attack',
+          targetIds: ['player'],
+          toolId: null,
+          parameters: null,
+          confidence: 'high',
+          reasoning: 'a wild swing catches the wanderer',
+          alternatives: null,
+        },
+      },
+    });
+
+    // Filler turn BEFORE seeding wake conditions -- this turn's own
+    // runWorldRound must not have anything to spawn from yet, so the
+    // ONLY turn that could possibly spawn a pressure is the decisive
+    // self-attack below, which the corpse gate must suppress.
+    await h.play('look around');
+    seedBountyConditions(h.session.engine);
+
+    const player = h.session.engine.world.entities['player'];
+    player.resources.hp = 3;
+    await h.play('attack myself');
+
+    expect(player.resources.hp).toBe(0);
+    expect(h.session.activePressures.length).toBe(0);
+  });
+
+  it('views: after a round, each session field deep-equals its world-truth reader', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    seedBountyConditions(h.session.engine);
+    await h.play('look around');
+
+    const world = h.session.engine.world;
+    expect(h.session.activePressures).toEqual(getActivePressures(world));
+    expect(h.session.resolvedPressures).toEqual(getWorldTickState(world).resolvedPressures ?? []);
+    expect(h.session.activeOpportunities).toEqual(getPersistedOpportunities(world));
+    expect(h.session.playerRumors).toEqual(getPlayerRumorState(world).rumors);
+    expect(h.session.districtEconomies).toEqual(new Map(Object.entries(getEconomyCoreState(world).districts)));
+  });
+
+  it('write-through: accepting an opportunity through the app path is visible in getPersistedOpportunities before the next tick', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness({
+      clientOpts: {
+        structuredData: {
+          verb: 'opportunity',
+          targetIds: null,
+          toolId: null,
+          parameters: { subAction: 'accept' },
+          confidence: 'high',
+          reasoning: 'test scripts an opportunity accept',
+          alternatives: null,
+        },
+      },
+    });
+
+    const world = h.session.engine.world;
+    const opp = makeOpportunity({
+      kind: 'contract',
+      title: 'Test contract',
+      description: 'A test opportunity',
+      objectiveDescription: 'Do the thing',
+      urgency: 0.5,
+      turnsRemaining: 10,
+      visibility: 'offered',
+      rewards: [],
+      risks: [],
+      genre: 'fantasy',
+      currentTick: h.session.engine.tick,
+    });
+    setPersistedOpportunities(world, [opp]);
+    // Seed the session's own view the same way refreshWorldViews() itself
+    // reads it, so the accept path (which reads this.activeOpportunities
+    // to find the candidate) sees it -- a real round hasn't run yet to
+    // populate it any other way.
+    h.session.activeOpportunities = getPersistedOpportunities(world);
+
+    await h.play('accept the contract');
+
+    const persisted = getPersistedOpportunities(world).find((o) => o.id === opp.id);
+    expect(persisted?.status).toBe('accepted');
+    expect(h.session.activeOpportunities.find((o) => o.id === opp.id)?.status).toBe('accepted');
   });
 });

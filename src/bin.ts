@@ -26,7 +26,6 @@ import { createAdaptedClient } from './llm/claude-adapter.js';
 import { generateWorld, type WorldGenResult } from './foundry/world-gen.js';
 import {
   saveSession,
-  type SaveSessionInput,
   loadSession,
   loadProfileFromSession,
   loadRumorsFromSession,
@@ -58,6 +57,11 @@ import { renderPresentationCues, insertCuesBeforePrompt } from './cli/presentati
 import { validateEngineState } from './cli/engine-state-validator.js';
 import { runWorldTruthSeed } from './cli/world-truth-seed-runner.js';
 import { parseSaveSelection, formatSaveSelectionPrompt, formatInvalidSelectionMessage } from './cli/save-selection.js';
+// WO-A3-4 (slice A3): buildSaveInput extracted to cli/save-input-builder.ts
+// (F-bd2fef5a-style precedent — see that file's header) so its shape can be
+// exercised directly in save-input-builder.test.ts instead of only through
+// bin.ts's un-exported internals.
+import { buildSaveInput } from './cli/save-input-builder.js';
 import {
   formatSaveDetails, formatSaveSlotPrefix, formatSaveSlotIndent,
   SAVE_LISTING_CAP, formatOlderSavesFooter,
@@ -108,42 +112,6 @@ import {
   computeDistrictMood,
 } from '@ai-rpg-engine/modules';
 import { emitBootZoneEntry } from './cli/boot-zone-entry.js';
-
-/** Build a SaveSessionInput from a GameSession + save path. */
-function buildSaveInput(session: GameSession, savePath: string, packId?: string): SaveSessionInput {
-  return {
-    engine: session.engine,
-    history: session.history,
-    tone: session.tone,
-    savePath,
-    worldPrompt: session.worldPrompt,
-    profile: session.profile,
-    packId,
-    // Conversation memory (coordinator brief item 4c, wave-18/cli-display.md,
-    // director ruling R4: conversation memory IS PERSISTED): every
-    // saveSession call site in this file funnels through this one function,
-    // so this single edit covers all of them (the SIGINT autosave, the
-    // stdin-closed autosave, and the in-game "save" command).
-    npcConversations: session.npcConversations,
-    playerRumors: session.playerRumors,
-    activePressures: session.activePressures,
-    genre: session.genre,
-    resolvedPressures: session.resolvedPressures,
-    journal: session.journal,
-    npcProfiles: session.lastNpcProfiles,
-    npcActions: session.lastNpcActions,
-    npcObligations: session.npcObligations,
-    consequenceChains: session.activeConsequenceChains,
-    partyState: session.partyState,
-    districtEconomies: session.districtEconomies,
-    activeOpportunities: session.activeOpportunities,
-    resolvedOpportunities: session.resolvedOpportunities,
-    arcSnapshot: session.arcSnapshot,
-    endgameTriggers: session.endgameTriggers,
-    finaleOutline: session.finaleOutline,
-    campaignStatus: session.campaignStatus,
-  };
-}
 
 /**
  * F-4997779f: PFE-002's graceful SIGINT contract ("first Ctrl+C saves,
@@ -673,6 +641,13 @@ async function runLoad(): Promise<void> {
     packId: savedSession.packId,
     npcConversations: restoredNpcConversations,
     campaignStatus: savedSession.campaignStatus ?? 'active',
+    // WO-A3-4 (slice A3, design doc §3): the RumorEngine snapshot rides the
+    // save the way profile/chronicle do — handed to the constructor here so
+    // it is restored (RumorEngine.deserializeSafe) BEFORE
+    // session.seedWorldTruth(savedSession) runs below, per the design doc's
+    // ordering. `undefined` on a v1/v2 save is a legitimate "no RumorEngine
+    // data yet" case: the constructor starts a fresh engine instance.
+    rumorEngineSnapshot: savedSession.rumorEngine,
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   // Restore rumors, pressures, and fallout history into session

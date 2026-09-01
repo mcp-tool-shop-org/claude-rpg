@@ -16,6 +16,7 @@ import {
   followPlayer,
   syncCompanionMorale,
   inferCompanionRole,
+  drainQueuedCompanionReactions,
 } from './companion-bridge.js';
 
 function makeEntity(overrides: Partial<EntityState> = {}): EntityState {
@@ -672,5 +673,131 @@ describe('inferCompanionRole', () => {
     expect(inferCompanionRole({ tags: ['merchant', 'diplomat'] })).toBe('diplomat');
     expect(inferCompanionRole({ tags: ['mage', 'scout'] })).toBe('scout');
     expect(inferCompanionRole({ tags: ['scholar', 'smuggler'] })).toBe('smuggler');
+  });
+});
+
+// F-WO-A2-8: runWorldTick has no external "reaction queue" to drain (see this
+// function's own doc comment in companion-bridge.ts for the full correction
+// against the design doc's premise) -- applyCompanionReactions runs
+// synchronously INSIDE the tick and emits 'companion.reaction'/'companion.
+// departed' events straight onto world.eventLog. drainQueuedCompanionReactions
+// is the adapter over that real surface: it scans the round's own event-log
+// delta and maps those two event types back into the app's own
+// CompanionReaction[] shape.
+describe('drainQueuedCompanionReactions (WO-A2-8)', () => {
+  function makeEngineWithLog(eventLog: unknown[]): Engine {
+    return {
+      world: {
+        playerId: 'player',
+        entities: {},
+        zones: {},
+        modules: {},
+        eventLog,
+      },
+    } as unknown as Engine;
+  }
+
+  it('maps a companion.reaction event since sinceEventIndex into a CompanionReaction', () => {
+    const engine = makeEngineWithLog([
+      { id: 'e0', tick: 1, type: 'world.zone.entered', payload: {} },
+      {
+        id: 'e1',
+        tick: 1,
+        type: 'companion.reaction',
+        payload: {
+          npcId: 'npc-1',
+          trigger: 'district-grim',
+          moraleDelta: -3,
+          morale: 57,
+          narratorHint: 'grows uneasy at the district’s mood',
+        },
+      },
+    ]);
+
+    expect(drainQueuedCompanionReactions(engine, 1)).toEqual([
+      {
+        npcId: 'npc-1',
+        trigger: 'district-grim',
+        moraleDelta: -3,
+        narratorHint: 'grows uneasy at the district’s mood',
+      },
+    ]);
+  });
+
+  it('ignores companion.reaction events that landed before sinceEventIndex (a prior round)', () => {
+    const engine = makeEngineWithLog([
+      {
+        id: 'e0',
+        tick: 1,
+        type: 'companion.reaction',
+        payload: { npcId: 'npc-1', trigger: 'combat-won', moraleDelta: 2, narratorHint: 'x' },
+      },
+    ]);
+
+    expect(drainQueuedCompanionReactions(engine, 1)).toEqual([]);
+  });
+
+  it('marks a reaction as a departure when a matching companion.departed event fired the same round', () => {
+    const engine = makeEngineWithLog([
+      {
+        id: 'e0',
+        tick: 1,
+        type: 'companion.reaction',
+        payload: {
+          npcId: 'npc-1',
+          trigger: 'district-grim',
+          moraleDelta: -20,
+          morale: 2,
+          narratorHint: 'has had enough',
+        },
+      },
+      {
+        id: 'e1',
+        tick: 1,
+        type: 'companion.departed',
+        payload: { npcId: 'npc-1', npcName: 'Sister Maren', role: 'healer', reason: 'lost faith' },
+      },
+    ]);
+
+    expect(drainQueuedCompanionReactions(engine, 0)).toEqual([
+      {
+        npcId: 'npc-1',
+        trigger: 'district-grim',
+        moraleDelta: -20,
+        narratorHint: 'has had enough',
+        departure: true,
+        departureReason: 'lost faith',
+      },
+    ]);
+  });
+
+  it('returns [] when the round produced no companion reaction events at all', () => {
+    const engine = makeEngineWithLog([
+      { id: 'e0', tick: 1, type: 'world.zone.entered', payload: {} },
+    ]);
+
+    expect(drainQueuedCompanionReactions(engine, 0)).toEqual([]);
+  });
+
+  it('maps multiple companion.reaction events in the same round independently', () => {
+    const engine = makeEngineWithLog([
+      {
+        id: 'e0',
+        tick: 1,
+        type: 'companion.reaction',
+        payload: { npcId: 'npc-1', trigger: 'combat-won', moraleDelta: 2, narratorHint: 'a' },
+      },
+      {
+        id: 'e1',
+        tick: 1,
+        type: 'companion.reaction',
+        payload: { npcId: 'npc-2', trigger: 'pressure-resolved-badly', moraleDelta: -4, narratorHint: 'b' },
+      },
+    ]);
+
+    expect(drainQueuedCompanionReactions(engine, 0)).toEqual([
+      { npcId: 'npc-1', trigger: 'combat-won', moraleDelta: 2, narratorHint: 'a' },
+      { npcId: 'npc-2', trigger: 'pressure-resolved-badly', moraleDelta: -4, narratorHint: 'b' },
+    ]);
   });
 });

@@ -13,6 +13,7 @@ import {
   type CompanionRole,
   type CompanionState,
   type PartyState,
+  type CompanionReaction,
 } from '@ai-rpg-engine/modules';
 
 // --- Types ---
@@ -247,6 +248,94 @@ export function syncCompanionMorale(engine: Engine, party: PartyState): void {
   // stale morale from world.modules['companion-core'] even after recruit/
   // dismiss start writing it.
   setPartyState(engine.world, party);
+}
+
+// --- World-tick companion reaction drain (WO-A2-8) ---
+
+/**
+ * WO-A2-8 / slice-A2-core design doc §2 step 6: read back the companion
+ * reactions `runWorldTick` applied THIS round so `GameSession` can record
+ * them the way it records its own (`processCompanionReactions`).
+ *
+ * **Corrects the design doc's own premise.** The doc describes this as
+ * "drain the engine's queued companion reactions produced by the tick's
+ * district-mood transition step (companion-core's reaction queue)". Read
+ * against the installed 3.11 dist (`@ai-rpg-engine/modules`'s
+ * `world-tick.ts`, steps 0c/3c and the later betrayal-trigger dispatch),
+ * there is no queue for an external caller to drain: `runWorldTick` builds
+ * its OWN `reactionTriggers` array locally (combat outcomes from its own
+ * event-log scan, step 0c's district-mood transition, step 3's
+ * 'pressure-resolved-badly' expiries, and a later betrayal-trigger batch)
+ * and calls `applyCompanionReactions` on it SYNCHRONOUSLY, inside the same
+ * tick — which mutates `world.modules['companion-core']` directly via
+ * `setPartyState` (party state is already fully up to date the moment
+ * `runWorldTick` returns) and emits `companion.reaction` / (on departure)
+ * `companion.departed` events straight onto `world.eventLog` through
+ * `engine.store.emitEvent`. Nothing is queued for later; it is applied and
+ * narrated through the ordinary event-log mechanism, exactly like every
+ * other tick effect this slice's design doc lists in its view table.
+ *
+ * The equivalent adapter, over the surface that actually exists: scan the
+ * round's own event-log delta for those two event types and map them back
+ * into the app's `CompanionReaction[]` shape, matching what
+ * `processCompanionReactions` already produces for its own triggers so
+ * `GameSession.lastCompanionReactions` can fold in the tick's reactions the
+ * same way. Takes the event-log length CAPTURED BEFORE THE TICK RAN
+ * (`sinceEventIndex` — the design doc's own `const before =
+ * this.engine.world.eventLog.length` from §2 step 3, which the caller
+ * already holds) rather than a `PartyState` snapshot: a state diff cannot
+ * recover `trigger` or `narratorHint` (both needed to log/narrate the
+ * reaction the same way an app-triggered one is), nor disambiguate two
+ * different triggers landing on the same companion the same round: the
+ * event log can. If the caller reports calling this with the doc's
+ * originally-assumed `(engine, partyState)` shape, that call site needs
+ * updating to pass the pre-tick event-log length instead.
+ *
+ * A `companion.departed` event in the same window marks its matching
+ * `companion.reaction` entry with `departure: true` (the same field
+ * `evaluateCompanionReactions` sets), so a caller folding this into
+ * `lastCompanionReactions` doesn't have to separately reconcile the two
+ * event types.
+ */
+export function drainQueuedCompanionReactions(
+  engine: Engine,
+  sinceEventIndex: number,
+): CompanionReaction[] {
+  const log = engine.world.eventLog;
+  const start = Math.max(0, sinceEventIndex);
+
+  const departures = new Map<string, string>();
+  for (let i = start; i < log.length; i++) {
+    const event = log[i];
+    if (event.type !== 'companion.departed') continue;
+    const npcId = event.payload.npcId;
+    if (typeof npcId !== 'string') continue;
+    const reason = typeof event.payload.reason === 'string' ? event.payload.reason : 'left the party';
+    departures.set(npcId, reason);
+  }
+
+  const reactions: CompanionReaction[] = [];
+  for (let i = start; i < log.length; i++) {
+    const event = log[i];
+    if (event.type !== 'companion.reaction') continue;
+    const npcId = event.payload.npcId;
+    if (typeof npcId !== 'string') continue;
+
+    const trigger = typeof event.payload.trigger === 'string' ? event.payload.trigger : 'unknown';
+    const moraleDelta = typeof event.payload.moraleDelta === 'number' ? event.payload.moraleDelta : 0;
+    const narratorHint = typeof event.payload.narratorHint === 'string' ? event.payload.narratorHint : '';
+    const departureReason = departures.get(npcId);
+
+    reactions.push({
+      npcId,
+      trigger,
+      moraleDelta,
+      narratorHint,
+      ...(departureReason !== undefined ? { departure: true, departureReason } : {}),
+    });
+  }
+
+  return reactions;
 }
 
 // --- Role Inference ---

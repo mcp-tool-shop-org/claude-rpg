@@ -2,7 +2,7 @@
 
 import type { ResolvedEvent, WorldState } from '@ai-rpg-engine/core';
 import type { PresentationState } from '@ai-rpg-engine/presentation';
-import { isPlayerDefeatEvent, isPlayerAtZeroHp } from './hooks.js';
+import { isPlayerDefeatEvent, isPlayerAtZeroHp, hasLivingHostiles } from './hooks.js';
 
 export type { PresentationState } from '@ai-rpg-engine/presentation';
 
@@ -96,10 +96,29 @@ export class PresentationStateMachine {
       return 'menu';
     }
 
-    // Check for combat events
-    const hasCombat = events.some((e) =>
-      e.type.startsWith('combat.'),
-    );
+    // Check for combat events.
+    //
+    // F-62f5a5e5 (ambush timing): a mid-round ambush (world-tick.ts step 0 —
+    // encounter-spawn.ts:668, the zone-entry encounter check runNpcTurns'
+    // sibling) emits only `encounter.spawned`, never a `combat.*`-prefixed
+    // event -- combat itself hasn't started, hostiles have merely appeared.
+    // A bare `type.startsWith('combat.')` scan therefore never matched an
+    // ambush round at all, so presentation stayed 'exploration' the very
+    // turn hostiles spawned into the player's zone; combatStartHook's
+    // warning SFX + music-intensify cue landed one turn late, on the
+    // player's (or a hostile's) first actual combat.* action next turn,
+    // instead of riding the ambush's own narration. Treat a fresh
+    // `encounter.spawned` as combat-entering too, but — mirroring the
+    // combat-END side's own defensive posture (hasLivingHostiles guards
+    // fireEventHooks' legacyEncounterOver derivation below) — only when a
+    // supplied `world` confirms the spawn actually left living hostiles in
+    // the player's CURRENT zone; omitting `world` falls back to the plain
+    // event-based match, the same posture every other world-gated branch in
+    // this method already takes.
+    const hasAmbushSpawn =
+      events.some((e) => e.type === 'encounter.spawned') &&
+      (world === undefined || hasLivingHostiles(world));
+    const hasCombat = hasAmbushSpawn || events.some((e) => e.type.startsWith('combat.'));
     if (hasCombat) {
       const hasDefeat = events.some((e) => e.type === 'combat.entity.defeated');
       // F-99563c70: 'combat.encounter.cleared' (any outcome — 'victory' or 'retreat',

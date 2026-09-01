@@ -1324,6 +1324,90 @@ describe('immersion-runtime: combat-end waits for the whole encounter (F-d9fc231
   });
 });
 
+// ─── F-62f5a5e5 (ambush timing): a mid-round ambush (world-tick.ts step 0,
+// encounter-spawn.ts) emits only 'encounter.spawned', never a 'combat.*' event --
+// so combatStartHook's warning SFX + music-intensify cue used to land one turn
+// LATE (the ambushed player's or an enemy's first action next turn) instead of
+// riding the ambush's own narration the round it actually spawns. ───
+
+describe('immersion-runtime: combat-start fires the same round an ambush spawns (F-62f5a5e5)', () => {
+  const addHostile = (engine: Engine, id: string, hp: number): void => {
+    engine.store.addEntity({
+      id,
+      blueprintId: id,
+      type: 'enemy',
+      name: 'Bandit',
+      tags: ['hostile'],
+      stats: {},
+      resources: { hp },
+      statuses: [],
+      zoneId: engine.world.locationId,
+    });
+  };
+
+  it('fires combatStartHook (SFX + music-intensify) the same turn encounter.spawned lands, before any combat.* event', async () => {
+    const engine = createGame();
+    addHostile(engine, 'bandit-1', 10);
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'encounter.spawned', payload: { spawnedEntityIds: ['bandit-1'] } }] as any,
+      'move',
+    );
+
+    const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
+    expect(effectIds).toContain('alert_warning');
+    expect(setMusicSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'intensify' }),
+    );
+  });
+
+  it('does not re-fire combat-start the following turn once combat has genuinely started (no double sting)', async () => {
+    const engine = createGame();
+    addHostile(engine, 'bandit-1', 10);
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'encounter.spawned', payload: { spawnedEntityIds: ['bandit-1'] } }] as any,
+      'move',
+    );
+    expect(playSfxSpy.mock.calls.map(([cue]) => cue.effectId)).toContain('alert_warning');
+
+    playSfxSpy.mockClear();
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'combat.contact.hit', payload: {} }] as any,
+      'attack',
+    );
+    expect(playSfxSpy.mock.calls.map(([cue]) => cue.effectId)).not.toContain('alert_warning');
+  });
+
+  it('does not fire combat-start on an encounter.spawned event whose participants are not alive in the player zone', async () => {
+    const engine = createGame();
+    // No hostile added -- spawnedEntityIds references an entity that never landed
+    // in world.entities (e.g. a fixture/legacy stream), so hasLivingHostiles is false.
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const playSfxSpy = vi.spyOn(runtime.bridge, 'playSfx');
+
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'encounter.spawned', payload: { spawnedEntityIds: ['ghost-1'] } }] as any,
+      'move',
+    );
+
+    expect(playSfxSpy.mock.calls.map(([cue]) => cue.effectId)).not.toContain('alert_warning');
+  });
+});
+
 // ─── F-2126ffd0: the 'combat-end' hookPoint dispatch gate never fired for a 3.11
 // retreat-outcome combat.encounter.cleared (no combat.entity.defeated present at all),
 // so a successful escape got no audio acknowledgment in this domain -- the encounter

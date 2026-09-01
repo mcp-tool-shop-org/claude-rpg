@@ -8,6 +8,22 @@ import { randomBytes } from 'node:crypto';
 import { saveSession, loadSession, loadNpcConversationsFromSession, type SaveSessionInput } from './session.js';
 import { TurnHistory } from './history.js';
 import { CURRENT_SCHEMA_VERSION } from './migrate.js';
+import type { WorldGenProposal } from '../foundry/world-gen.js';
+
+// WO-A4-3 (slice A4 §4, design lock 5): minimal-but-shape-valid fixture —
+// saveSession never inspects this beyond JSON.stringify, so the content
+// only needs to satisfy the type, not validateWorldGenProposal.
+const FIXTURE_WORLDGEN_PROPOSAL: WorldGenProposal = {
+  title: 'The Sunken Wards',
+  theme: 'gothic fantasy',
+  toneGuide: 'grim, quiet dread',
+  ruleset: { id: 'r1', name: 'Ruleset One', stats: [], resources: [] },
+  zones: [],
+  factions: [],
+  npcs: [],
+  player: { name: 'Wanderer', stats: {}, resources: {}, startZoneId: 'z1' },
+  quests: [],
+};
 
 // Minimal engine mock for save/load round-trip
 function createMockEngine() {
@@ -65,6 +81,52 @@ describe('saveSession with SaveSessionInput (PB-005)', () => {
     expect(data.genre).toBe('sci-fi');
     expect(data.packId).toBe('test-pack');
     expect(data.campaignStatus).toBe('completed');
+  });
+
+  // WO-A4-3 (slice A4 §4, design lock 5): closes the wave-5 finding that a
+  // generated (packless) world had no resume path — a packless session's
+  // save must carry the proposal + seed pair; a pack session's save must
+  // carry neither (its own packId is the reconstruction key instead).
+  it('a packless session save carries both worldGenProposal and worldSeed', async () => {
+    const savePath = join(testDir, 'save-worldgen-packless.json');
+    const input: SaveSessionInput = {
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      worldGenProposal: FIXTURE_WORLDGEN_PROPOSAL,
+      worldSeed: 12345,
+    };
+    await saveSession(input);
+
+    const raw = await readFile(savePath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.packId).toBeUndefined();
+    expect(JSON.parse(data.worldGenProposal)).toEqual(FIXTURE_WORLDGEN_PROPOSAL);
+    expect(data.worldSeed).toBe(12345);
+  });
+
+  it('a pack session save carries neither worldGenProposal nor worldSeed', async () => {
+    const savePath = join(testDir, 'save-worldgen-pack.json');
+    const input: SaveSessionInput = {
+      engine: createMockEngine(),
+      history: new TurnHistory(),
+      tone: 'dark fantasy',
+      savePath,
+      packId: 'test-pack',
+      // A pack-launched session should never realistically carry these, but
+      // the write-side gate must hold even if a caller passed them by
+      // mistake — packId wins.
+      worldGenProposal: FIXTURE_WORLDGEN_PROPOSAL,
+      worldSeed: 12345,
+    };
+    await saveSession(input);
+
+    const raw = await readFile(savePath, 'utf-8');
+    const data = JSON.parse(raw);
+    expect(data.packId).toBe('test-pack');
+    expect(data.worldGenProposal).toBeUndefined();
+    expect(data.worldSeed).toBeUndefined();
   });
 
   // F-8c3e32b7: state-persistence expectation — the save file must carry

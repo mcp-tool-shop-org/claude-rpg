@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
 // F-6bc0721e (SLATE-6, contract amendment #6, brief ruled 2026-08-26):
@@ -37,8 +39,20 @@ import {
   getPersistedOpportunities,
   setPersistedOpportunities,
   makeOpportunity,
+  makePressure,
+  pushActivePressure,
   getPlayerRumorState,
   getEconomyCoreState,
+  // WO-A4-1 (slice A4 §1): the getter-backed fields can no longer be
+  // assigned directly — a test that used to seed
+  // session.lastNpcProfiles/lastNpcActions now seeds world truth instead,
+  // same discipline as the pressure/opportunity/rumor seeds above.
+  setPersistedNpcState,
+  getPersistedNpcObligations,
+  getPersistedNpcChains,
+  getPersistedNpcRecapEntries,
+  getPersistedMoveRecommendation,
+  setPersistedMoveRecommendation,
 } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
 import { loadNpcAgencyFromSession, type SavedSession, saveSession, loadSession, loadProfileFromSession } from './session/session.js';
@@ -245,8 +259,18 @@ describe('GameSession', () => {
       npcAgencySnapshot: JSON.stringify({ profiles: [], actions: 42 }),
     };
     const { profiles, actions } = loadNpcAgencyFromSession(fixtureSession);
-    h.session.lastNpcProfiles = profiles;
-    h.session.lastNpcActions = actions;
+    // WO-A4-1: lastNpcProfiles/lastNpcActions are live getters over world
+    // truth now — seed the world-tick namespace directly instead of the
+    // (no longer assignable) session fields.
+    const world = h.session.engine.world;
+    setPersistedNpcState(
+      world,
+      profiles,
+      actions,
+      getPersistedNpcObligations(world),
+      getPersistedNpcChains(world),
+      getPersistedNpcRecapEntries(world),
+    );
 
     const output = await h.play('look around');
     expect(output).toBeTruthy();
@@ -898,10 +922,11 @@ describe('GameSession', () => {
 
       // Seed directly to MAX_PLAYER_RUMORS (cheaper than MAX_PLAYER_RUMORS
       // real addRumor calls) so the very next call is the first to overflow.
-      // Coordinator stitch (slice A2 §3): playerRumors is a VIEW of the engine's
-      // player-rumor ledger now — seed the ledger, then refresh the view.
+      // WO-A4-1: playerRumors is a live getter over the engine's own
+      // player-rumor ledger now — seeding the ledger is enough, no refresh
+      // call needed (refreshWorldViews is deleted; the renamed
+      // refreshProfileViews only refreshes reputation, not this).
       setPlayerRumorState(session.engine.world, { rumors: Array.from({ length: MAX_PLAYER_RUMORS }, (_, i) => makeRumor(`r${i}`, 0.9)) });
-      (session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
 
       const addRumorPrivate = (session as unknown as { addRumor: (rumor: PlayerRumor) => void }).addRumor.bind(session);
 
@@ -996,10 +1021,10 @@ describe('GameSession', () => {
         createdAtTick: 0,
         genre: 'fantasy',
       };
-      // Coordinator stitch (slice A2 §3): activeOpportunities is a VIEW of
-      // world.modules['opportunity-core'] now — seed world truth, then refresh.
+      // WO-A4-1: activeOpportunities is a live getter over
+      // world.modules['opportunity-core'] now — seeding world truth is
+      // enough, no refresh call needed.
       setPersistedOpportunities(h.session.engine.world, [...getPersistedOpportunities(h.session.engine.world), opp]);
-      (h.session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
 
       await h.play('accept contract');
       expect(h.session.activeOpportunities.find((o) => o.id === opp.id)?.status).toBe('accepted');
@@ -1025,9 +1050,9 @@ describe('GameSession', () => {
       // inside the turn may SPAWN an opportunity before the post-turn
       // opportunity verb runs, so a full 'decline' turn can no longer be
       // relied on to find an empty ledger. The notice contract is proven
-      // directly: empty the world ledger, refresh the view, run the verb.
+      // directly: empty the world ledger, run the verb. WO-A4-1:
+      // activeOpportunities is a live getter now — no refresh call needed.
       setPersistedOpportunities(h.session.engine.world, []);
-      (h.session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
       const notice = (h.session as unknown as {
         processOpportunityAction: (t: unknown) => string | null;
       }).processOpportunityAction({ interpreted: { verb: 'opportunity', parameters: { subAction: 'decline' } } });
@@ -2541,11 +2566,10 @@ describe('Slice A2-core (WO-A2-5): the living-world driver proofs', () => {
       currentTick: h.session.engine.tick,
     });
     setPersistedOpportunities(world, [opp]);
-    // Seed the session's own view the same way refreshWorldViews() itself
-    // reads it, so the accept path (which reads this.activeOpportunities
-    // to find the candidate) sees it -- a real round hasn't run yet to
-    // populate it any other way.
-    h.session.activeOpportunities = getPersistedOpportunities(world);
+    // WO-A4-1: activeOpportunities is a live getter over world truth now —
+    // the accept path (which reads this.activeOpportunities to find the
+    // candidate) already sees this world-truth write on its very next
+    // access, no session-field seed needed.
 
     await h.play('accept the contract');
 
@@ -2562,7 +2586,7 @@ describe('Slice A2-core (WO-A2-5): the living-world driver proofs', () => {
 // dedicated unit suites (src/game/reputation-view.test.ts,
 // src/game/leverage-view.test.ts); this describe block proves game.ts's own
 // wiring (the private adjustFactionReputation/tickPlayerLeverage methods,
-// and refreshWorldViews' own view-refresh calls) actually uses them, via
+// and refreshProfileViews' own view-refresh calls) actually uses them, via
 // the same `(session as unknown as {...})` private-method-access pattern
 // this file already established (see the FT-B-008/F-51e110b9 describe
 // blocks above).
@@ -2588,7 +2612,7 @@ describe('Slice A2-truth (WO-A2T-2/3/4): reputation composition + leverage unifi
     }
   });
 
-  it('WO-A2T-2: adjustFactionReputation composes baseline + every accrued delta through a live GameSession, and refreshWorldViews keeps the view current', async () => {
+  it('WO-A2T-2: adjustFactionReputation composes baseline + every accrued delta through a live GameSession, and refreshProfileViews keeps the view current', async () => {
     const { createHarness } = await import('../test/helpers/game-harness.js');
     const h = createHarness();
     h.session.profile = makeTestProfile([{ factionId: CHAPEL_UNDEAD, value: 20 }]);
@@ -2607,7 +2631,7 @@ describe('Slice A2-truth (WO-A2T-2/3/4): reputation composition + leverage unifi
     expect(h.session.engine.world.globals[`claude_rpg.rep_baseline_${CHAPEL_UNDEAD}`]).toBe(20);
     expect(h.session.engine.world.globals[`reputation_${CHAPEL_UNDEAD}`]).toBe(-15);
 
-    // A subsequent round's own refreshWorldViews() (called via runWorldRound)
+    // A subsequent round's own refreshProfileViews() (called via runWorldRound)
     // reports the SAME composed value -- the profile field really is a VIEW,
     // not a value adjustFactionReputation happened to leave lying around.
     await h.play('look around');
@@ -2733,7 +2757,14 @@ describe('Slice A3 (WO-A3-2): the RumorEngine instance', () => {
     // GameSession.addRumor -- e.g. the tick's own NPC-originated rumors
     // (spawnNpcOriginatedRumor + setPlayerRumorState, world-tick.js's
     // npc-agency step) or game-state.ts's applyFalloutEffects rumor case.
-    h.session.playerRumors = [makeTestRumor({ id: 'bypassed-1', valence: 'tragic' })];
+    // WO-A4-1: playerRumors is a live getter over world truth now — seed
+    // the world-truth namespace directly instead of the (no longer
+    // assignable) session field.
+    const worldForBypass = h.session.engine.world;
+    setPlayerRumorState(worldForBypass, {
+      ...getPlayerRumorState(worldForBypass),
+      rumors: [makeTestRumor({ id: 'bypassed-1', valence: 'tragic' })],
+    });
     expect(h.session.rumorEngine.findBySubjectKey('player', 'bypassed-1')).toBeUndefined();
 
     mirrorUnmirroredRumors();
@@ -2750,7 +2781,14 @@ describe('Slice A3 (WO-A3-2): the RumorEngine instance', () => {
       mirrorUnmirroredRumors: () => void;
     }).mirrorUnmirroredRumors.bind(h.session);
 
-    h.session.playerRumors = [makeTestRumor({ id: 'idempotent-1' })];
+    // WO-A4-1: see the "bypassed-1" test above for why this seeds world
+    // truth directly rather than assigning the (no longer assignable)
+    // playerRumors session field.
+    const worldForIdempotent = h.session.engine.world;
+    setPlayerRumorState(worldForIdempotent, {
+      ...getPlayerRumorState(worldForIdempotent),
+      rumors: [makeTestRumor({ id: 'idempotent-1' })],
+    });
     mirrorUnmirroredRumors();
     mirrorUnmirroredRumors();
 
@@ -2827,5 +2865,230 @@ describe('Slice A3 (WO-A3-2): the RumorEngine instance', () => {
     expect(h.session.rumorEngine.activeCount()).toBe(0);
     const warnEntry = logger.getEntries().find((e) => e.level === 'warn' && e.subsystem === 'rumors');
     expect(warnEntry).toBeDefined();
+  });
+});
+
+// Slice A4 (WO-A4-1/2/3, docs/living-world-slice-a4.md, run
+// swarm-1788288802-f5a0, wave 7, "game-core" domain): read-back rewires —
+// the twelve world-backed session properties become live getters, the
+// per-turn situationHint source flips to the engine's own persisted
+// recommendation, and a generated (packless) session carries its
+// worldGenProposal/worldSeed forward for its own save.
+
+/** Same shape as the "Slice A3" describe block's own local helper above (that one is scoped to its own describe callback). */
+function makeA4TestRumor(overrides: Partial<PlayerRumor> = {}): PlayerRumor {
+  return {
+    id: 'test-rumor-1',
+    claim: 'defeated the Bone Collector',
+    subjectDescriptor: 'a grim wanderer',
+    sourceEvent: 'milestone',
+    confidence: 0.8,
+    distortion: 0,
+    mutationCount: 0,
+    valence: 'heroic',
+    spreadTo: [],
+    originTick: 0,
+    ...overrides,
+  };
+}
+
+describe('Slice A4 (WO-A4-1): live getters over world truth', () => {
+  it('WO-A4-1 source-text tripwire: src/game.ts never assigns to any of the twelve world-backed getter properties', () => {
+    const gameTsPath = join(dirname(fileURLToPath(import.meta.url)), 'game.ts');
+    const source = readFileSync(gameTsPath, 'utf8');
+    const getterNames = [
+      'playerRumors', 'activePressures', 'resolvedPressures', 'activeOpportunities',
+      'lastNpcActions', 'lastNpcProfiles', 'npcObligations', 'activeConsequenceChains',
+      'lastFactionActions', 'lastFactionProfiles', 'districtEconomies', 'partyState',
+    ];
+    for (const name of getterNames) {
+      // Matches `this.<name> =` but not `this.<name> ==`/`===`, a `get
+      // <name>(...)` declaration, or a `.push(`/`.set(`/`.get(` call — only
+      // a genuine assignment to the property itself.
+      const assignmentPattern = new RegExp(`this\\.${name}\\s*=(?!=)`);
+      expect(
+        source,
+        `this.${name} must never be assigned in game.ts — it is a live getter over world truth (slice A4 §1)`,
+      ).not.toMatch(assignmentPattern);
+    }
+  });
+
+  it('a pressure inserted into world truth directly (no session call) is present on the next activePressures read', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const world = h.session.engine.world;
+
+    expect(h.session.activePressures.length).toBe(0);
+    pushActivePressure(world, makePressure({
+      kind: 'bounty-issued',
+      sourceFactionId: 'chapel-undead',
+      triggeredBy: 'test-direct-insert',
+      description: 'a direct world-truth insert, no session call in between',
+      urgency: 0.5,
+      visibility: 'known',
+      turnsRemaining: 10,
+      potentialOutcomes: [],
+      tags: [],
+      currentTick: h.session.engine.tick,
+    }));
+
+    expect(h.session.activePressures.length).toBe(1);
+    expect(h.session.activePressures[0].description).toBe('a direct world-truth insert, no session call in between');
+  });
+
+  it('an opportunity written via setPersistedOpportunities directly is present on the next activeOpportunities read', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const world = h.session.engine.world;
+
+    expect(h.session.activeOpportunities.length).toBe(0);
+    const opp = makeOpportunity({
+      kind: 'contract',
+      title: 'Direct write test',
+      description: 'inserted via setPersistedOpportunities directly',
+      objectiveDescription: 'prove the getter, not a cache',
+      urgency: 0.4,
+      turnsRemaining: 10,
+      visibility: 'offered',
+      rewards: [],
+      risks: [],
+      genre: 'fantasy',
+      currentTick: h.session.engine.tick,
+    });
+    setPersistedOpportunities(world, [opp]);
+
+    expect(h.session.activeOpportunities.length).toBe(1);
+    expect(h.session.activeOpportunities[0].id).toBe(opp.id);
+  });
+
+  it('a rumor written via setPlayerRumorState directly is present on the next playerRumors read', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const world = h.session.engine.world;
+
+    expect(h.session.playerRumors.length).toBe(0);
+    setPlayerRumorState(world, {
+      ...getPlayerRumorState(world),
+      rumors: [makeA4TestRumor({ id: 'direct-write-1' })],
+    });
+
+    expect(h.session.playerRumors.some((r) => r.id === 'direct-write-1')).toBe(true);
+  });
+});
+
+describe('Slice A4 (WO-A4-2): situationHint sourced from the persisted move recommendation', () => {
+  it("RED-BEFORE-FIX documented: this session's own buildMoveRecommendation() never attaches situationHint, even for a non-'safe' tag, while the engine's persisted recommendation for the SAME state does", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const profile = createProfile(
+      { name: 'Aldric', archetypeId: 'penitent-knight', backgroundId: 'oath-breaker', traitIds: [] },
+      { vigor: 5, instinct: 5, will: 5 },
+      { hp: 20, stamina: 8 },
+      [],
+      'chapel-threshold',
+    );
+    const h = createHarness({ gameOpts: { profile } });
+    const world = h.session.engine.world;
+
+    // Seed an active pressure directly on world truth (no tick needed) so
+    // both recommendation sources see the SAME non-'safe' inputs.
+    pushActivePressure(world, makePressure({
+      kind: 'bounty-issued',
+      sourceFactionId: 'chapel-undead',
+      triggeredBy: 'test-red-before-fix',
+      description: 'a live threat for the recommendation to react to',
+      urgency: 0.9,
+      visibility: 'known',
+      turnsRemaining: 10,
+      potentialOutcomes: [],
+      tags: [],
+      currentTick: h.session.engine.tick,
+    }));
+
+    // The app's own recomputation (game-state.ts's buildMoveRecommendation
+    // -> recommendMoves(inputs) directly): confirmed against the installed
+    // 3.11 dist that recommendMoves() itself never sets `situationHint`
+    // (move-advisor.d.ts: "Attached by the world-tick caller, not by
+    // recommendMoves itself") -- so this session's own call is undefined
+    // here regardless of situationTag.
+    const ownRec = (h.session as unknown as {
+      buildMoveRecommendation: () => { situationTag: string; situationHint?: string };
+    }).buildMoveRecommendation();
+    expect(ownRec.situationHint).toBeUndefined();
+    // The gap holds regardless of situationTag -- recommendMoves() simply
+    // never has a situationHint field to set. WO-A4-2 closes it by
+    // sourcing situationHint from getPersistedMoveRecommendation(world)
+    // instead (the tick's own caller DOES attach it — see the next test).
+  });
+
+  it("a persisted 'crisis' recommendation (the tick's own, set directly on world truth) appears as the turn's situationHint", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const world = h.session.engine.world;
+
+    setPersistedMoveRecommendation(world, {
+      top3: [],
+      situationTag: 'crisis',
+      situationHint: 'MARKER-CRISIS-HINT-a4-wo2',
+    });
+
+    await h.play('look around');
+
+    expect(h.callLog.lastGeneratePrompt).toContain('MARKER-CRISIS-HINT-a4-wo2');
+  });
+
+  it("a persisted 'safe' recommendation's situationHint is gated out of the prompt (calm rounds add zero prompt text)", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const world = h.session.engine.world;
+
+    setPersistedMoveRecommendation(world, {
+      top3: [],
+      situationTag: 'safe',
+      situationHint: 'MARKER-SAFE-HINT-should-not-appear',
+    });
+
+    await h.play('look around');
+
+    expect(h.callLog.lastGeneratePrompt).not.toContain('MARKER-SAFE-HINT-should-not-appear');
+  });
+});
+
+describe('Slice A4 (WO-A4-3): generated-world save fields', () => {
+  it('getWorldGenProposal()/getWorldSeed() return the config values when the session is packless', () => {
+    const engine = createGame();
+    const proposal: WorldGenProposal = {
+      title: 'The Sunken Wards',
+      theme: 'gothic fantasy',
+      toneGuide: 'grim, quiet dread',
+      ruleset: { id: 'r1', name: 'Ruleset One', stats: [], resources: [] },
+      zones: [],
+      factions: [],
+      npcs: [],
+      player: { name: 'Wanderer', stats: {}, resources: {}, startZoneId: 'z1' },
+      quests: [],
+    };
+    const session = new GameSession({
+      engine,
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+      worldGenProposal: proposal,
+      worldSeed: 777,
+    });
+
+    expect(session.getWorldGenProposal()).toEqual(proposal);
+    expect(session.getWorldSeed()).toBe(777);
+  });
+
+  it('getWorldGenProposal()/getWorldSeed() are undefined when omitted (e.g. a pack-launched session)', () => {
+    const engine = createGame();
+    const session = new GameSession({
+      engine,
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+      packId: 'some-pack',
+    });
+
+    expect(session.getWorldGenProposal()).toBeUndefined();
+    expect(session.getWorldSeed()).toBeUndefined();
   });
 });

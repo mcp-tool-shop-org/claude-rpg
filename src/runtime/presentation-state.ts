@@ -102,7 +102,17 @@ export class PresentationStateMachine {
     );
     if (hasCombat) {
       const hasDefeat = events.some((e) => e.type === 'combat.entity.defeated');
-      if (hasDefeat) {
+      // F-99563c70: 'combat.encounter.cleared' (any outcome — 'victory' or 'retreat',
+      // engine engagement-core.ts) ends the combat presentation the same way a defeat
+      // does today — aftermath turns as for a victory; no separate state is invented
+      // for a retreat (design lock). At 3.10 this event only ever co-occurs with a
+      // combat.entity.defeated (so hasCleared is redundant with hasDefeat there); at
+      // 3.11 a retreat-outcome clear fires with NO combat.entity.defeated at all, so
+      // without this OR the retreat turn only matched the generic 'combat' branch
+      // below and the presentation stayed stuck in 'combat' forever after a
+      // successful escape.
+      const hasCleared = events.some((e) => e.type === 'combat.encounter.cleared');
+      if (hasDefeat || hasCleared) {
         this.aftermathTurns = 2;
         return 'aftermath';
       }

@@ -23,6 +23,7 @@ import { GameSession } from './game.js';
 import { createTestLogger, type DebugLogger } from './game/debug-logger.js';
 import { createProfile } from '@ai-rpg-engine/character-profile';
 import type { OpportunityState, PlayerRumor } from '@ai-rpg-engine/modules';
+import { setPlayerRumorState } from '@ai-rpg-engine/modules';
 // WO-A2-5 (slice A2 §7, proofs): the same world-truth readers/setters
 // game.ts's own refreshWorldViews()/write-through paths use, verified
 // against the installed 3.11 dist (see game.ts's own import doc comment).
@@ -254,22 +255,16 @@ describe('GameSession', () => {
 
     // Sabotage a subsystem to force an error in the post-turn tick block.
     // tickFactionAgency reads engine.world.factions — we make it throw.
-    const originalFactions = h.session.engine.world.factions;
-    Object.defineProperty(h.session.engine.world, 'factions', {
-      get() { throw new Error('simulated subsystem failure'); },
-      configurable: true,
-    });
+    // Coordinator stitch (slice A2): tickFactionAgency was deleted (the engine
+    // tick runs faction agency); sabotage a ticker the post-turn block still runs.
+    vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => { throw new Error('simulated subsystem failure'); });
 
     const output = await h.play('look around');
     expect(output).toContain('subsystem hiccupped');
     expect(output).toContain('processed safely');
 
     // Restore
-    Object.defineProperty(h.session.engine.world, 'factions', {
-      value: originalFactions,
-      configurable: true,
-      writable: true,
-    });
+    vi.restoreAllMocks();
   });
 
   it('should log turn start/end with debug logger (PB-004)', async () => {
@@ -294,11 +289,9 @@ describe('GameSession', () => {
     const h = createHarness({ gameOpts: { debugLogger: logger } });
 
     // Sabotage
-    const originalFactions = h.session.engine.world.factions;
-    Object.defineProperty(h.session.engine.world, 'factions', {
-      get() { throw new Error('boom'); },
-      configurable: true,
-    });
+    // Coordinator stitch (slice A2): tickFactionAgency was deleted (the engine
+    // tick runs faction agency); sabotage a ticker the post-turn block still runs.
+    vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => { throw new Error('boom'); });
 
     await h.play('look around');
 
@@ -312,11 +305,7 @@ describe('GameSession', () => {
     expect(errorEntry!.data?.stack).toContain('boom');
 
     // Restore
-    Object.defineProperty(h.session.engine.world, 'factions', {
-      value: originalFactions,
-      configurable: true,
-      writable: true,
-    });
+    vi.restoreAllMocks();
   });
 
   // F-f13ca236: debugLog is a true NoopLogger by default (debug-logger.ts) —
@@ -338,11 +327,9 @@ describe('GameSession', () => {
 
     expect(h.session.getSubsystemFailureCount()).toBe(0);
 
-    const originalFactions = h.session.engine.world.factions;
-    Object.defineProperty(h.session.engine.world, 'factions', {
-      get() { throw new Error('boom'); },
-      configurable: true,
-    });
+    // Coordinator stitch (slice A2): tickFactionAgency was deleted (the engine
+    // tick runs faction agency); sabotage a ticker the post-turn block still runs.
+    vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => { throw new Error('boom'); });
 
     await h.play('look around');
 
@@ -353,11 +340,7 @@ describe('GameSession', () => {
     expect(recent[0].tick).toBe(h.session.engine.tick);
 
     // Restore
-    Object.defineProperty(h.session.engine.world, 'factions', {
-      value: originalFactions,
-      configurable: true,
-      writable: true,
-    });
+    vi.restoreAllMocks();
   });
 
   it('does not count a normal turn as a subsystem failure (F-f13ca236)', async () => {
@@ -419,7 +402,7 @@ describe('GameSession', () => {
       // Spying on the private tickFactionAgency() method (one of the ~17
       // calls actually inside that try/catch, game.ts:967) targets only
       // this finding's failure path.
-      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+      vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => {
         throw new Error('boom');
       });
 
@@ -438,7 +421,7 @@ describe('GameSession', () => {
       const { createHarness } = await import('../test/helpers/game-harness.js');
       const h = createHarness({ gameOpts: makeStatusGameOpts() });
 
-      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+      vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => {
         throw new Error('boom');
       });
 
@@ -454,7 +437,7 @@ describe('GameSession', () => {
       const h = createHarness({ gameOpts: makeStatusGameOpts() });
       ensureImmersionInferAndTransitionStub(h.session);
 
-      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+      vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => {
         throw new Error('boom');
       });
 
@@ -730,7 +713,7 @@ describe('GameSession', () => {
       // sabotage would crash that call too instead of landing cleanly in
       // the post-turn tick's own try/catch.
       h.session.pendingAnnouncements.push('Level up! You are now level 5.');
-      vi.spyOn(h.session as any, 'tickFactionAgency').mockImplementation(() => {
+      vi.spyOn(h.session as any, 'tickItemRecognition').mockImplementation(() => {
         throw new Error('simulated subsystem failure');
       });
 
@@ -911,7 +894,10 @@ describe('GameSession', () => {
 
       // Seed directly to MAX_PLAYER_RUMORS (cheaper than MAX_PLAYER_RUMORS
       // real addRumor calls) so the very next call is the first to overflow.
-      session.playerRumors = Array.from({ length: MAX_PLAYER_RUMORS }, (_, i) => makeRumor(`r${i}`, 0.9));
+      // Coordinator stitch (slice A2 §3): playerRumors is a VIEW of the engine's
+      // player-rumor ledger now — seed the ledger, then refresh the view.
+      setPlayerRumorState(session.engine.world, { rumors: Array.from({ length: MAX_PLAYER_RUMORS }, (_, i) => makeRumor(`r${i}`, 0.9)) });
+      (session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
 
       const addRumorPrivate = (session as unknown as { addRumor: (rumor: PlayerRumor) => void }).addRumor.bind(session);
 
@@ -1006,7 +992,10 @@ describe('GameSession', () => {
         createdAtTick: 0,
         genre: 'fantasy',
       };
-      h.session.activeOpportunities.push(opp);
+      // Coordinator stitch (slice A2 §3): activeOpportunities is a VIEW of
+      // world.modules['opportunity-core'] now — seed world truth, then refresh.
+      setPersistedOpportunities(h.session.engine.world, [...getPersistedOpportunities(h.session.engine.world), opp]);
+      (h.session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
 
       await h.play('accept contract');
       expect(h.session.activeOpportunities.find((o) => o.id === opp.id)?.status).toBe('accepted');
@@ -1028,9 +1017,18 @@ describe('GameSession', () => {
       // the finding's own cited reachability example: ordinary phrasing
       // ("decline the offer") fast-matches the opportunity verb on syntax
       // alone with zero check that a matching opportunity exists.
-      const output = await h.play('decline the offer');
+      // Coordinator stitch (slice A2): with the living world on, the round
+      // inside the turn may SPAWN an opportunity before the post-turn
+      // opportunity verb runs, so a full 'decline' turn can no longer be
+      // relied on to find an empty ledger. The notice contract is proven
+      // directly: empty the world ledger, refresh the view, run the verb.
+      setPersistedOpportunities(h.session.engine.world, []);
+      (h.session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
+      const notice = (h.session as unknown as {
+        processOpportunityAction: (t: unknown) => string | null;
+      }).processOpportunityAction({ interpreted: { verb: 'opportunity', parameters: { subAction: 'decline' } } });
 
-      expect(output).toContain('No opportunity is available to decline');
+      expect(notice).toContain('No opportunity is available to decline');
       expect(h.session.activeOpportunities).toHaveLength(0);
       expect(h.session.resolvedOpportunities).toHaveLength(0);
     });
@@ -1135,6 +1133,12 @@ describe('GameSession', () => {
       // roll logic, not a fabricated event.
       const pilgrim = h.session.engine.world.entities['pilgrim'];
       pilgrim.resources.hp = 1;
+      // Coordinator stitch (slice A2): companion combat morale is the engine's
+      // (world-tick.ts collectCombatReactionTriggers): 'combat-won' fires on
+      // the defeat of an entity tagged enemy/hostile, drained into
+      // lastCompanionReactions by runWorldRound. The pilgrim is a neutral NPC,
+      // so the kill only counts as a win once the target is hostile.
+      pilgrim.tags = [...pilgrim.tags, 'hostile'];
 
       await h.play('attack pilgrim');
 
@@ -1329,9 +1333,11 @@ describe('GameSession', () => {
 
       await h.play('look around');
 
-      expect(h.session.lastCompanionReactions).toEqual([
-        expect.objectContaining({ npcId: 'brother-aldric', trigger: 'combat-won', moraleDelta: -1 }),
-      ]);
+      // Coordinator stitch (slice A2): the app no longer dispatches
+      // 'combat-won' from a cleared event — companion combat morale is the
+      // engine tick's, keyed on hostile defeats. An injected cleared event
+      // with no defeat produces no reaction (and no double application).
+      expect(h.session.lastCompanionReactions).toEqual([]);
     });
   });
 
@@ -2383,16 +2389,29 @@ describe('Slice A2-core (WO-A2-5): the living-world driver proofs', () => {
     expect(pressureId).toBeDefined();
     let previous = h.session.activePressures[0].turnsRemaining;
 
+    // Coordinator stitch (slice A2): the living world is live now — the
+    // engine's own faction-agency step may RESOLVE the bounty the very next
+    // round (observed: pressure.resolved + faction.action.resolved in round
+    // 2). The no-double proof therefore reads: in every round the pressure
+    // survives, its timer moved by exactly one; and it only ever leaves the
+    // active list together with a pressure.resolved / pressure.expired
+    // event in that same round's delta (a silent double-decrement or a
+    // silent drop would fail both clauses).
     for (let i = 0; i < 3; i++) {
+      const logBefore = h.session.engine.world.eventLog.length;
       await h.play('look around');
+      const delta = h.session.engine.world.eventLog.slice(logBefore);
       const current = h.session.activePressures.find((p) => p.id === pressureId);
-      expect(current).toBeDefined();
-      expect(current!.turnsRemaining).toBe((previous as number) - 1);
-      previous = current!.turnsRemaining;
+      if (!current) {
+        expect(delta.some((e) => e.type === 'pressure.resolved' || e.type === 'pressure.expired')).toBe(true);
+        break;
+      }
+      expect(current.turnsRemaining).toBe((previous as number) - 1);
+      previous = current.turnsRemaining;
     }
   });
 
-  it('rejected action: an action.rejected-only turn runs no world round this turn (no pressure spawn even with wake conditions seeded)', async () => {
+  it('rejected action: a free-text action the engine rejects STILL runs the world round (claude-rpg deviation from the engine CLI, wave-4 ruling) -- the seeded bounty spawns', async () => {
     const { createHarness } = await import('../test/helpers/game-harness.js');
     // F-d421875b's own precedent (turn-loop.ts): an unresolvable target
     // makes engine.submitAction emit a non-throwing action.rejected event
@@ -2417,7 +2436,11 @@ describe('Slice A2-core (WO-A2-5): the living-world driver proofs', () => {
 
     await h.play('attack the nonexistent one');
 
-    expect(h.session.activePressures.length).toBe(0);
+    // Coordinator stitch (slice A2 ruling): the engine tick advanced for the
+    // rejected free-text action, so the world reacts — the round runs and the
+    // seeded bounty spawns. Only the corpse gate skips a round.
+    expect(h.session.activePressures.length).toBe(1);
+    expect(h.session.activePressures[0].kind).toBe('bounty-issued');
   });
 
   it('corpse gate: a same-turn player-defeat turn runs no world round this turn (no pressure spawn even with wake conditions seeded)', async () => {

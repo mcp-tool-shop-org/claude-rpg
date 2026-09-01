@@ -159,7 +159,7 @@ describe('applyFalloutEffects', () => {
         tags: ['chain'],
       }],
     };
-    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {} } as any;
+    const world = { entities: {}, factions: {}, locationId: 'z1', playerId: 'p1', zones: {}, modules: {}, eventLog: [], globals: {} } as any; // stitch: fresh world-tick state reads eventLog
     applyFalloutEffects(fallout, profile, world, [], makeEmptyPartyState(), 'fantasy', 1);
     expect(getActivePressures(world).length).toBe(1);
   });

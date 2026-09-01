@@ -1068,7 +1068,11 @@ export class GameSession {
     this.partyState = getPartyState(this.engine.world);
     try {
       if (typeof companionBridge.drainQueuedCompanionReactions === 'function') {
-        const drained = companionBridge.drainQueuedCompanionReactions(this.engine, this.partyState);
+        // Coordinator stitch (wave 4): the engine has NO reaction queue — the
+        // tick applies companion reactions synchronously and emits
+        // companion.reaction / companion.departed onto the event log — so the
+        // drain reads the round's own delta from the pre-tick cursor.
+        const drained = companionBridge.drainQueuedCompanionReactions(this.engine, before);
         if (drained.length > 0) this.lastCompanionReactions = drained;
       }
     } catch (err) {
@@ -1472,21 +1476,27 @@ export class GameSession {
         // that flaw -- it gates on the `hostile`/`enemy` TAG convention, not
         // engine-wide type affiliation -- so it stays a correct fallback
         // signal for exactly this suppressed case.
-        const clearedEvent = turnResult.events.find(
-          (e) => e.type === 'combat.encounter.cleared',
-        );
-        const hasCombatWon = clearedEvent
-          ? ((clearedEvent.payload as { outcome?: string }).outcome ?? 'victory') === 'victory'
-          : turnResult.events.some((e) => e.type === 'combat.entity.defeated')
-            && !hasLivingHostiles(this.engine.world);
-        const hasCombatLost = turnResult.events.some(
+        // Coordinator ruling (slice A2 stitch): companion combat morale is
+        // the ENGINE's now. runWorldTick's own combat-trigger scan
+        // (world-tick.ts collectCombatReactionTriggers) reacts to every
+        // combat.entity.defeated in the round — 'combat-won' on a hostile's
+        // defeat, 'combat-lost' on a companion's — applies the morale
+        // deltas, and emits companion.reaction events that runWorldRound's
+        // drain folds into lastCompanionReactions. The app's former
+        // hasCombatWon/hasCombatLost dispatch (wave-2 F-ccd9dc08) would
+        // apply the same morale a second time, so it is deleted. The ONE
+        // case the tick can never see is the player's own defeat: the
+        // corpse gate skips the round, so the app still dispatches
+        // 'combat-lost' for it — no double application is possible there.
+        // Engine ask (recorded): the engine's combat reactions key per
+        // kill, not per encounter outcome, so a kill during a retreat still
+        // reads as 'combat-won' to companions.
+        const playerDefeated = turnResult.events.some(
           (e) => e.type === 'combat.entity.defeated' &&
             e.payload.entityId === this.engine.world.playerId,
         );
-        if (hasCombatLost) {
+        if (playerDefeated) {
           this.processCompanionReactions('combat-lost');
-        } else if (hasCombatWon) {
-          this.processCompanionReactions('combat-won');
         }
 
         // WO-A2-4 (slice A2 §5, deletion): the steady-state district-mood

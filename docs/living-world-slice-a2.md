@@ -50,11 +50,16 @@ Placement in `executeTurn`: immediately after the `engine.submitAction` try
 block succeeds, BEFORE `immersion.inferAndTransition` and BEFORE
 `narrateScene`. `events = [...actionEvents, ...roundEvents]` from that point on
 (narration `recentEvents`, `justDied`/player-defeat derivations, hooks,
-history). The hook is skipped when the action was REJECTED: if `actionEvents`
-contains an `action.rejected` event and nothing else, no NPC or world turn
-runs (the engine CLI's own rule — a dead menu entry costs the player nothing).
-The hook is wrapped: a throw inside it is logged through `debugLog` and yields
-`[]` — a hint or tick failure must never kill a turn (the standing law).
+history). **Ruling at the wave-4 stitch — the round runs on EVERY turn that
+advanced the engine tick, corpse-gated only.** The engine CLI skips its world
+turn on a rejected menu verb; claude-rpg deliberately deviates: the player
+types free prose, most narrated turns are actions the engine cannot resolve
+(`engine.submitAction` returns `[]` and records `action.declared` +
+`action.rejected`), and the engine tick still advances for them. A world that
+reacted only to engine-accepted verbs would stand frozen while the player
+looked around or talked. The hook is wrapped: a throw inside it is logged
+through `debugLog` and yields `[]` — a hint or tick failure must never kill a
+turn (the standing law).
 
 ### 2. The round callback in `GameSession` (`src/game.ts`)
 
@@ -69,11 +74,22 @@ The hook is wrapped: a throw inside it is logged through `debugLog` and yields
    — straight adoption, no feature flag. The result's `ok:false` is logged,
    never surfaced raw.
 5. Refresh the views (§3).
-6. Drain the engine's queued companion reactions produced by the tick's
-   district-mood transition step (companion-core's reaction queue — the
-   agent locates the exact API and reports it; the app's own steady-state
-   'district-grim' / 'district-prosperous' per-turn reaction in the post-turn
-   block is DELETED because the engine fires on TRANSITIONS only).
+6. Drain the tick's companion reactions. **Corrected at the wave-4 stitch:
+   the engine has NO reaction queue** — `runWorldTick` applies companion
+   reactions synchronously (district-mood transitions, combat triggers per
+   hostile/companion defeat, betrayal) and emits `companion.reaction` /
+   `companion.departed` onto the event log. The adapter
+   `drainQueuedCompanionReactions(engine, sinceEventIndex)` reads the
+   round's own delta from the pre-tick cursor and maps those events into the
+   app's `CompanionReaction[]`. The app's steady-state 'district-grim' /
+   'district-prosperous' per-turn reaction is DELETED (the engine fires on
+   TRANSITIONS only), and so is the app's own combat-won/combat-lost
+   dispatch — the tick applies combat morale itself and the two would double
+   up. The ONE app dispatch that survives is 'combat-lost' on the player's
+   own defeat, because the corpse gate means the tick never sees that turn.
+   Engine ask (recorded): the engine's combat reactions key per kill, not per
+   encounter outcome, so a kill during a retreat still reads as 'combat-won'
+   to companions.
 7. Return `this.engine.world.eventLog.slice(before)` — the round's delta.
 
 The engine's `runNpcTurns` / `runCompanionTurns` (hostile and companion
@@ -231,6 +247,22 @@ Verbs stay in `KNOWN_EXCLUDED_VERBS` (R6).
 No schema bump (A3). The existing fields are written FROM the views at save
 time, so a 2.0-adoption save still opens in a 1.7 build and the fields are
 correct as of the last round. `engineState` carries the truth.
+
+## Observed at the wave-4 stitch (inputs for later slices)
+
+- **Faction agency answers fast:** in the harness the engine's faction-agency
+  step resolved a freshly spawned bounty on the very next round
+  (`pressure.resolved` then `faction.action.resolved`). Correct living-world
+  behavior; a candidate single-lever for the A6 tuning program (how long a
+  pressure should stand before a faction moves on it).
+- **Chain-kind district drift:** the app's deleted `applyNpcEffects` carried a
+  bespoke district-metric drift keyed off consequence-chain kind that the
+  engine's own chain resolution does not reproduce (the engine drives
+  intruder-likelihood through `modifyDistrictMetric` only). Deferred to A5
+  as a depth item, not re-added app-side.
+- **Hidden pressures and the narrator:** `describeEvent` returns nothing for
+  a pressure event whose payload visibility is `hidden`; the player has not
+  learned of it, so it is not narrator context.
 
 ## Out of scope
 

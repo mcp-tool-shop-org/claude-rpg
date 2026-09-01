@@ -1175,7 +1175,9 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
       async generate() {
         return { ok: true, text: 'The scene unfolds.', inputTokens: 0, outputTokens: 0 };
       },
-      async generateStructured() {
+      // Coordinator stitch: the fake returns a concrete interpreter shape; the
+      // ClaudeClient contract is generic over T, so the method is widened as a whole.
+      generateStructured: (async () => {
         return {
           ok: true,
           data: {
@@ -1189,7 +1191,7 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
           },
           raw: '',
         };
-      },
+      }) as unknown as ClaudeClient['generateStructured'],
     };
   }
 
@@ -1199,8 +1201,12 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
     const history = new TurnHistory();
     const onResolved = vi.fn((_events: unknown[]) => []);
 
+    // Coordinator stitch: 'attack pilgrim' resolves through the interpreter's
+    // fast path into a real engine action (the pilgrim shares the player's
+    // starting zone), so the action events are non-empty; a bare 'look' is
+    // free prose the engine rejects with an empty events array.
     const result = await executeTurn({
-      engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+      engine, client, history, playerInput: 'attack pilgrim', tone: 'dark fantasy',
       onResolved: onResolved as unknown as ExecuteTurnOpts['onResolved'],
     });
 
@@ -1212,7 +1218,7 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
     expect(result.events).toEqual(callArgs);
   });
 
-  it('is skipped when the action is rejected (an action.rejected-only events array) -- a dead menu entry costs the player nothing', async () => {
+  it('still runs the round on a rejected action -- claude-rpg deviates from the engine CLI: free prose the engine cannot resolve still advanced the tick, so the world still reacts', async () => {
     const engine = createGame();
     const client = createRejectingActionClient();
     const history = new TurnHistory();
@@ -1225,7 +1231,7 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
 
     expect(result.events).toHaveLength(1);
     expect(result.events[0].type).toBe('action.rejected');
-    expect(onResolved).not.toHaveBeenCalled();
+    expect(onResolved).toHaveBeenCalledTimes(1);
   });
 
   it('a throwing hook is logged through debugLog and yields [] -- a normal narrated turn, never a killed one', async () => {
@@ -1236,7 +1242,7 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
     const onResolved = vi.fn(() => { throw new Error('hook boom'); });
 
     const result = await executeTurn({
-      engine, client, history, playerInput: 'look', tone: 'dark fantasy',
+      engine, client, history, playerInput: 'attack pilgrim', tone: 'dark fantasy',
       onResolved: onResolved as unknown as ExecuteTurnOpts['onResolved'],
       debugLog: logger,
     });

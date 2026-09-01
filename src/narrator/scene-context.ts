@@ -76,7 +76,10 @@ export function buildSceneContext(
   });
 
   // Map events to human-readable strings
-  const eventDescriptions = perceivedEvents.map((pe) => describeEvent(pe));
+  // Coordinator stitch (slice A2): describeEvent returns '' for a pressure
+  // event whose payload says visibility 'hidden' — the player has not
+  // learned of it, so it is not narrator context. Drop the empty lines.
+  const eventDescriptions = perceivedEvents.map((pe) => describeEvent(pe)).filter((d) => d.length > 0);
 
   // Map atmosphere
   const light = zone?.light ?? 5;
@@ -204,6 +207,7 @@ function describeEvent(event: ResolvedEvent): string {
     // Reported here rather than silently gapped.
 
     case 'pressure.spawned': {
+      if ((p as { visibility?: string }).visibility === 'hidden') return '';
       // world-tick.ts:1759 (a spawn-pressure NpcEffect chain), :2555/:2573
       // (fallout-chain spawn) and :2641 (the heat-gated spawn valve, step
       // 5). Reuses formatPressureForNarrator: the payload
@@ -223,17 +227,20 @@ function describeEvent(event: ResolvedEvent): string {
       // pressure.spawned above so the two are never confused.
       return `Pressure revealed: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;
     case 'pressure.escalated': {
+      if ((p as { visibility?: string }).visibility === 'hidden') return '';
       // world-tick.ts:2615 — urgency crossed a narrator band (the same
       // 0.4/0.7 bands formatPressureForNarrator itself uses).
       const band = (p as { band?: string }).band;
       return `Pressure escalating: ${formatPressureForNarrator(p as unknown as WorldPressure)}${band ? ` [${band}]` : ''}`;
     }
     case 'pressure.expired':
+      if ((p as { visibility?: string }).visibility === 'hidden') return '';
       // world-tick.ts:2555 — the natural-expiry branch (always stamps
       // 'expired-ignored'; the player-resolved path is pressure.resolved
       // below, per design doc §4).
       return `Pressure expired: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;
     case 'pressure.resolved':
+      if ((p as { visibility?: string }).visibility === 'hidden') return '';
       // world-tick.ts:2070 — a faction action closed a pressure directly
       // (runFactionAgencyTick's own resolution branch).
       return `Pressure resolved: ${formatPressureForNarrator(p as unknown as WorldPressure)}`;

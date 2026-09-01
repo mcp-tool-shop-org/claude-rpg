@@ -154,13 +154,25 @@ describe('WO-A2-11: living-world driver -- determinism + no-double-simulation (d
     // still running alongside the driver would decrement twice a round (the
     // double-simulation this proof exists to catch), which this loop would
     // catch on the very first iteration.
+    // Coordinator stitch (slice A2): the living world is live — the engine's
+    // faction-agency step may resolve the bounty the next round. So: in
+    // every round the pressure survives its timer moved by exactly one, and
+    // it only leaves the active list together with a pressure.resolved /
+    // pressure.expired event in that round's delta.
+    let expected = turnsAtSpawn;
     for (let round = 1; round <= ROUNDS - 1; round++) {
+      const logBefore = h.session.engine.world.eventLog.length;
       await h.play('look');
+      const delta = h.session.engine.world.eventLog.slice(logBefore);
       const pressure = getActivePressures(h.session.engine.world).find(
         (p) => p.kind === 'bounty-issued',
       );
-      expect(pressure).toBeDefined();
-      expect(pressure!.turnsRemaining).toBe(turnsAtSpawn - round);
+      if (!pressure) {
+        expect(delta.some((e) => e.type === 'pressure.resolved' || e.type === 'pressure.expired')).toBe(true);
+        break;
+      }
+      expected -= 1;
+      expect(pressure.turnsRemaining).toBe(expected);
     }
   });
 });

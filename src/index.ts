@@ -84,6 +84,9 @@ export { loadChronicleFromSession, loadObligationsFromSession, loadConsequenceCh
 // Pack-aware onboarding via help-system
 
 // v1.2: NPC Agency
-export { tickNpcAgency, buildNpcProfilesForDirector, applyNpcEffects } from './npc/agency.js';
+// A2-core (slice A2): tickNpcAgency / applyNpcEffects were deleted — runWorldTick's
+// step 5a runs NPC agency and applies every NpcEffect itself. The remaining
+// export is a view adapter over the persisted npc-agency namespace.
+export { buildNpcProfilesForDirector } from './npc/agency.js';
 export { buildNpcPresenceForDialogue, buildNpcPresenceForNarrator, getNpcDialogueHint } from './npc/presence.js';
 // NpcProfile, NpcAction, NpcActionResult, NpcGoal, NpcRelationship, NpcActionVerb, NpcEffect available via @ai-rpg-engine/modules

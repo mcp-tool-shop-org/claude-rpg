@@ -510,14 +510,24 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // `events` here and every downstream consumer of that variable — Step
   // 3+4's narrateScene recentEvents, Step 4.5's immersion.processPresentation,
   // extractProfileHints, and history.record below — sees the whole round,
-  // not just the player's own action. Skipped when the action was rejected
-  // (a dead menu entry costs the player nothing, the engine CLI's own
-  // rule): an `action.rejected`-only events array means engine.submitAction
-  // declined the action outright, so no NPC/world turn runs over a turn
-  // that didn't happen. A throw inside the hook is logged and yields `[]`
-  // — a hint or tick failure must never kill a turn.
-  const isRejectedOnly = events.length === 1 && events[0].type === 'action.rejected';
-  if (onResolved && !isRejectedOnly) {
+  // not just the player's own action.
+  //
+  // Coordinator ruling (slice A2 stitch, run swarm-1788288802-f5a0 wave 4):
+  // claude-rpg deliberately DEVIATES from the engine CLI's "a rejected
+  // action provokes no world turn" rule. The engine CLI's inputs are menu
+  // verbs, so a rejection there is a dead menu entry. Here the player types
+  // free prose; most narrated turns are actions the engine cannot resolve
+  // (engine.submitAction returns [] and records `action.declared` +
+  // `action.rejected` on the log) yet the engine tick STILL advances for
+  // them (core engine.ts: "the tick still advances, matching every other
+  // rejected action"). A world that only reacted to engine-accepted verbs
+  // would stand frozen while the player looked around, talked, or tried
+  // anything the interpreter could not map — the opposite of a living
+  // world. So the round runs on every turn that advanced the tick; the one
+  // gate is the corpse gate inside the host's hook (no tick over a dead
+  // player). A throw inside the hook is logged and yields `[]` — a hint or
+  // tick failure must never kill a turn.
+  if (onResolved) {
     let roundEvents: ResolvedEvent[] = [];
     try {
       roundEvents = onResolved(events) ?? [];

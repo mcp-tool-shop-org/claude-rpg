@@ -34,12 +34,16 @@ Rules:
 - Stats should use 3 core stats relevant to the genre
 - Resources should include hp and 1-2 genre-specific resources
 - Include sensory details for the tone guide
+- Pick "genre" from exactly these keys: colony, cyberpunk, detective, fantasy, horror, merchant, mystery, pirate, post-apocalyptic, weird-west, zombie
+- Author 2-4 districts grouping adjacent zones, with a controllingFaction where one faction clearly dominates a district
+- Author 1-3 encounters whose hostiles[].npcId each name an NPC of "type": "enemy"
 
 Respond with a single JSON object matching this structure:
 
 {
   "title": "string",
   "theme": "string",
+  "genre": "string, one of: colony | cyberpunk | detective | fantasy | horror | merchant | mystery | pirate | post-apocalyptic | weird-west | zombie",
   "ruleset": {
     "id": "string",
     "name": "string",
@@ -57,6 +61,13 @@ Respond with a single JSON object matching this structure:
     "noise": number (0-10),
     "hazards": ["string"] | [],
     "interactables": ["string"] | []
+  }],
+  "districts": [{
+    "id": "string",
+    "name": "string",
+    "zoneIds": ["zone-id"],
+    "tags": ["string"],
+    "controllingFaction": "faction-id"
   }],
   "factions": [{
     "id": "string",
@@ -88,6 +99,12 @@ Respond with a single JSON object matching this structure:
     "name": "string",
     "description": "string",
     "stages": [{ "id": "string", "description": "string" }]
+  }],
+  "encounters": [{
+    "id": "string",
+    "name": "string",
+    "zoneIds": ["zone-id"],
+    "hostiles": [{ "npcId": "npc-id", "count": number }]
   }]
 }`;
 

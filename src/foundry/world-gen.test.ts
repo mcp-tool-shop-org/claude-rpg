@@ -17,8 +17,7 @@ import {
   createCognitionCore,
   createPerceptionFilter,
   createSimulationInspector,
-  buildWorldStack,
-} from '@ai-rpg-engine/modules';
+  buildWorldStack, getQuestDefinitions } from '@ai-rpg-engine/modules';
 import { createTestLogger } from '../game/debug-logger.js';
 
 // WO-A1-1 (§1): a minimal, valid RulesetDefinition for the double-registration
@@ -1142,15 +1141,18 @@ describe('generateWorld WO-A1-2: encounter mapping (§2)', () => {
   });
 });
 
-// WO-A1-3 (§3): see the HONESTY FLOOR doc comment on mapQuestsFromProposal
-// (world-gen.ts) -- §3 authors no quest-level triggers, and
+// WO-A1-3 (§3): the runtime-foundry agent's honesty floor found that
 // createQuestCore's OWN runtime-vocabulary check (verified against the
-// installed 3.11 dist) requires at least one for ANY quest to ever be
-// offered. Every quest mapped under this slice's scope therefore fails that
-// check and is dropped with a warning; the world still boots (lock 3). This
-// is the correct, safe consequence of §3's stated scope, not a bug.
-describe('generateWorld WO-A1-3: quest mapping — honesty-floor consequence (§3)', () => {
-  it('drops the fixture single-stage quest for missing a quest-level offer trigger, warns naming the reason, and still boots the world', async () => {
+// installed 3.11 dist) requires at least one quest-level offer trigger for
+// ANY quest to ever be offered -- and the slice's first §3 authored none, so
+// every generated quest was warn-dropped (the composed floor caught it: the
+// WO-A1-9 sentinel went red after merge). Coordinator stitch: world-gen.ts
+// now synthesizes one offer trigger per quest (world.zone.entered on the
+// player's start zone, payload-equals, effect 'offer' -- starter-fantasy's
+// own authored shape), so generated quests register. This block pins the
+// corrected contract; the previous pin (drop + warn) was the old behavior.
+describe('generateWorld WO-A1-3: quest mapping — the synthesized offer trigger (§3, stitched)', () => {
+  it('registers the fixture quest with a synthesized offer trigger on the player start zone, warns nothing about triggers, and still boots the world', async () => {
     const proposal = makeValidProposal();
     proposal.title = 'Quest Trigger World';
     const client = makeMockClient(proposal);
@@ -1159,16 +1161,25 @@ describe('generateWorld WO-A1-3: quest mapping — honesty-floor consequence (§
     const result = await generateWorld(client, 'test', 1, { logger });
 
     expect(result.ok).toBe(true);
-    expect(result.engine!.world.modules['quest-core']).toBeFalsy();
-    expect(logger.getEntries()).toContainEqual(
+    const defs = getQuestDefinitions(result.engine!.world);
+    expect(defs.map((d) => d.id)).toEqual(proposal.quests.map((q) => q.id));
+    for (const def of defs) {
+      expect(def.triggers).toEqual([
+        {
+          event: 'world.zone.entered',
+          condition: { type: 'payload-equals', params: { key: 'zoneId', value: proposal.player.startZoneId } },
+          effect: { type: 'offer', params: {} },
+        },
+      ]);
+    }
+    expect(logger.getEntries()).not.toContainEqual(
       expect.objectContaining({
         level: 'warn',
-        subsystem: 'world-gen',
         message: expect.stringContaining('needs at least one quest-level trigger'),
       }),
     );
     // WorldGenResult.quests keeps returning the RAW proposal shape for
-    // existing callers, unaffected by the engine-side drop above.
+    // existing callers, unaffected by the engine-side registration above.
     expect(result.quests).toEqual(proposal.quests);
   });
 

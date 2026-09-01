@@ -564,6 +564,28 @@ function mapQuestsFromProposal(proposal: WorldGenProposal, logger?: DebugLogger)
     const mapped: QuestDefinition = {
       id: quest.id,
       name: quest.name,
+      // Coordinator stitch (slice A1, run swarm-1788288802-f5a0 wave 3): the
+      // engine's runtime validation (quest-core.ts validateQuestRuntimeContent)
+      // rejects a quest with no quest-level trigger -- "a quest with no offer
+      // trigger can never enter play". The proposal authors no triggers, so
+      // without this every generated quest was warn-dropped and R2's "quests
+      // stop being decorative" silently failed (the composed floor caught it:
+      // WO-A1-9 red after merge). The default offer surface is the player's
+      // starting zone: claude-rpg emits world.zone.entered for it on every
+      // fresh boot (src/cli/boot-zone-entry.ts), so the quest is offered the
+      // moment the world opens -- the same trigger shape starter-fantasy's
+      // authored quests use. Stage triggers stay unauthored (a stage without
+      // an advance trigger is offered and waits); slice A5 deepens them.
+      triggers: [
+        {
+          event: 'world.zone.entered',
+          condition: {
+            type: 'payload-equals',
+            params: { key: 'zoneId', value: proposal.player.startZoneId },
+          },
+          effect: { type: 'offer', params: {} },
+        },
+      ],
       stages: (quest.stages ?? []).map((stage) => ({
         id: stage.id,
         name: deriveQuestStageName(stage.description),

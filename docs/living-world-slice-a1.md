@@ -121,12 +121,20 @@ encounters?: Array<{
 - `stages[i].name` = the proposal stage's `description` truncated to a title
   (first clause, ≤ 60 chars) when no name is present; `description` kept
   whole; `objectives` = `[description]`.
-- No triggers/rewards/failConditions (optional in the schema).
-- `createQuestCore` is fail-loud by contract. Validate each mapped quest
-  with the engine's own `validateQuestDefinition` first; a quest that fails
-  is dropped with a `logger?.warn` naming the quest id and the first
-  problem, and the world still boots. Never let one bad LLM quest kill
-  world creation.
+- **One synthesized quest-level offer trigger per quest** (corrected at the
+  wave-3 stitch — the engine's runtime validation rejects a quest with no
+  offer trigger, so the original "no triggers" wording would have dropped
+  every generated quest): `world.zone.entered` with a `payload-equals`
+  condition on the player's `startZoneId` and the `offer` effect — the
+  shape starter-fantasy's authored quests use. The fresh-boot zone-entry
+  event (slice-adjacent, wave 2) fires it the moment the world opens. No
+  stage triggers, rewards, or failConditions this slice (a stage with no
+  advance trigger is offered and waits; A5 deepens generated quests).
+- `createQuestCore` is fail-loud by contract and runs BOTH
+  `validateQuestDefinition` and `validateQuestRuntimeContent`. Validate each
+  mapped quest with both first; a quest that fails is dropped with a
+  `logger?.warn` naming the quest id and the first problem, and the world
+  still boots. Never let one bad LLM quest kill world creation.
 - `WorldGenResult.quests` keeps returning the proposal shape (callers
   consume it today); its stale "when the engine supports it" TODO is
   rewritten to describe the real wiring.

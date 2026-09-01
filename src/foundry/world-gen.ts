@@ -8,19 +8,47 @@ import {
   combatCore,
   createCognitionCore,
   createPerceptionFilter,
-  createFactionCognition,
-  createRumorPropagation,
-  createDistrictCore,
-  createBeliefProvenance,
-  createObserverPresentation,
   createSimulationInspector,
-  createEnvironmentCore,
+  buildWorldStack,
+  validateQuestRuntimeContent,
   setBelief,
   getCognition,
 } from '@ai-rpg-engine/modules';
+import type {
+  FactionMembership,
+  DistrictDefinition,
+  EncounterSpawnContent,
+  EncounterParticipant,
+} from '@ai-rpg-engine/modules';
+import { validateQuestDefinition } from '@ai-rpg-engine/content-schema';
+import type { QuestDefinition } from '@ai-rpg-engine/content-schema';
 import type { ClaudeClient } from '../claude-client.js';
 import { WORLDGEN_SYSTEM, buildWorldGenPrompt } from '../prompts/world-gen.js';
 import type { DebugLogger } from '../game/debug-logger.js';
+
+/**
+ * WO-A1-2 (slice A1, §2): the union of economy-core.ts's GENRE_SUPPLY_DEFAULTS
+ * keys and pressure-system.ts's evaluateGenreRules switch cases, read from the
+ * installed 3.11 dist at implementation time (neither table is exported at
+ * runtime -- both are module-local consts/switches -- so this is a hand copy
+ * pinned by a test that reads the same dist files' source text, not
+ * re-derived from memory). An unknown value is dropped with a warn at the
+ * call site below; the world still boots on engine defaults (lock 2/3,
+ * ADDENDUM-COMMON.md).
+ */
+export const KNOWN_WORLDGEN_GENRES: ReadonlySet<string> = new Set([
+  'colony',
+  'cyberpunk',
+  'detective',
+  'fantasy',
+  'horror',
+  'merchant',
+  'mystery',
+  'pirate',
+  'post-apocalyptic',
+  'weird-west',
+  'zombie',
+]);
 
 export type WorldGenProposal = {
   title: string;
@@ -79,6 +107,35 @@ export type WorldGenProposal = {
     description: string;
     stages: Array<{ id: string; description: string }>;
   }>;
+  /**
+   * WO-A1-2 (§2): buyable-stock/starting-supply/crafting genre passthrough --
+   * validated against KNOWN_WORLDGEN_GENRES above. Optional so every existing
+   * fixture and every LLM reply that omits it stays valid (lock 2); an
+   * unknown value is dropped with a warn, never a validation error.
+   */
+  genre?: string;
+  /**
+   * WO-A1-2 (§2): district definitions. Optional -- when omitted, generateWorld
+   * derives one district per zone (see mapDistrictsFromProposal below).
+   */
+  districts?: Array<{
+    id: string;
+    name: string;
+    zoneIds: string[];
+    tags: string[];
+    controllingFaction?: string;
+  }>;
+  /**
+   * WO-A1-2 (§2): encounter content. Optional -- when omitted (or when every
+   * authored encounter fails validation), no encounter-spawn module joins the
+   * world stack (buildWorldStack's own presence-optional contract).
+   */
+  encounters?: Array<{
+    id: string;
+    name: string;
+    zoneIds: string[];
+    hostiles: Array<{ npcId: string; count?: number }>;
+  }>;
 };
 
 /**
@@ -114,8 +171,16 @@ export type WorldGenResult = {
   errors: string[];
   /** F-cbc186cb: which failure class `errors` came from. Undefined when ok is true. */
   errorKind?: WorldGenErrorKind;
-  /** FT-BR-006: Generated quests from the LLM proposal. Stored here so callers can consume them.
-   *  TODO: Wire quests into a proper quest journal / quest tracker system when the engine supports it. */
+  /**
+   * FT-BR-006: Generated quests from the LLM proposal, in the RAW proposal
+   * shape (callers already consume this shape -- kept stable, additive
+   * only). WO-A1-3 (§3): this is no longer the only place quests live -- a
+   * validated subset (each mapped through validateQuestDefinition, invalid
+   * ones dropped with a warn) is ALSO wired into the engine itself via
+   * buildWorldStack's `quests` config, so `createQuestCore`'s runtime (offer/
+   * advance/complete events, journal reads) is live for a generated world's
+   * `world.meta.gameId`, not merely returned for a caller to render once.
+   */
   quests: WorldGenProposal['quests'];
 };
 
@@ -249,6 +314,288 @@ export function validateWorldGenProposal(proposal: WorldGenProposal): string[] {
   }
 
   return errors;
+}
+
+/**
+ * WO-A1-2 (§2): validate proposal.genre against KNOWN_WORLDGEN_GENRES.
+ * Warn-and-drop, never fatal (lock 3, ADDENDUM-COMMON.md) -- an unknown or
+ * absent genre resolves to `undefined`, which every buildWorldStack genre
+ * passthrough (economyGenre/tradeGenre/craftingGenre) treats as "use the
+ * universal/default table only", not an error.
+ */
+function validateGenre(genre: string | undefined, logger?: DebugLogger): string | undefined {
+  if (!genre) return undefined;
+  if (!KNOWN_WORLDGEN_GENRES.has(genre)) {
+    logger?.warn('world-gen', `Unknown genre "${genre}" -- world boots on engine defaults`, { genre });
+    return undefined;
+  }
+  return genre;
+}
+
+/**
+ * WO-A1-2 (§2): the faction with the most members placed in `zoneId`, for the
+ * one-district-per-zone derivation fallback below. "Placed in the zone" means
+ * an NPC whose own zoneId matches AND whose id is named in the faction's
+ * memberIds. Ties resolve to whichever faction appears first in
+ * `proposal.factions` (strict `>` below never lets a later, equal-count
+ * faction displace an earlier one) -- deterministic, not written to
+ * discriminate a "correct" tie-break the design doc does not specify one for.
+ */
+function deriveControllingFactionForZone(proposal: WorldGenProposal, zoneId: string): string | undefined {
+  const npcIdsInZone = new Set(proposal.npcs.filter((n) => n.zoneId === zoneId).map((n) => n.id));
+  if (npcIdsInZone.size === 0) return undefined;
+
+  let best: { factionId: string; count: number } | undefined;
+  for (const faction of proposal.factions) {
+    const count = faction.memberIds.filter((id) => npcIdsInZone.has(id)).length;
+    if (count > 0 && (!best || count > best.count)) {
+      best = { factionId: faction.id, count };
+    }
+  }
+  return best?.factionId;
+}
+
+/**
+ * WO-A1-2 (§2): map proposal.districts -> DistrictDefinition[], or derive one
+ * district per zone when the proposal authored none. Warn-and-drop semantics
+ * throughout (lock 3): an authored district naming an unknown zoneId has that
+ * zoneId dropped (not the whole district, unless every zoneId was unknown); an
+ * authored district naming an unknown controllingFaction has just that field
+ * cleared. Never throws, never fails world creation.
+ */
+function mapDistrictsFromProposal(proposal: WorldGenProposal, logger?: DebugLogger): DistrictDefinition[] {
+  const zoneIds = new Set(proposal.zones.map((z) => z.id));
+  const factionIds = new Set(proposal.factions.map((f) => f.id));
+
+  if (proposal.districts && proposal.districts.length > 0) {
+    const districts: DistrictDefinition[] = [];
+    for (const district of proposal.districts) {
+      const validZoneIds = district.zoneIds.filter((zoneId) => {
+        const known = zoneIds.has(zoneId);
+        if (!known) {
+          logger?.warn('world-gen', `District "${district.id}" references unknown zone "${zoneId}" -- dropped`, {
+            districtId: district.id,
+            zoneId,
+          });
+        }
+        return known;
+      });
+      if (validZoneIds.length === 0) {
+        logger?.warn('world-gen', `District "${district.id}" has no valid zones after validation -- dropped`, {
+          districtId: district.id,
+        });
+        continue;
+      }
+
+      let controllingFaction = district.controllingFaction;
+      if (controllingFaction && !factionIds.has(controllingFaction)) {
+        logger?.warn(
+          'world-gen',
+          `District "${district.id}" references unknown controllingFaction "${controllingFaction}" -- dropped`,
+          { districtId: district.id, controllingFaction },
+        );
+        controllingFaction = undefined;
+      }
+
+      districts.push({
+        id: district.id,
+        name: district.name,
+        zoneIds: validZoneIds,
+        tags: district.tags,
+        ...(controllingFaction ? { controllingFaction } : {}),
+      });
+    }
+    return districts;
+  }
+
+  // Derivation fallback (§2): a generated world without districts is the
+  // dead district-core this slice retires -- one district per zone, so the
+  // economy/mood/safety systems have somewhere to move.
+  return proposal.zones.map((zone) => {
+    const controllingFaction = deriveControllingFactionForZone(proposal, zone.id);
+    return {
+      id: zone.id,
+      name: zone.name,
+      zoneIds: [zone.id],
+      tags: zone.tags,
+      ...(controllingFaction ? { controllingFaction } : {}),
+    };
+  });
+}
+
+/**
+ * WO-A1-2 (§2): map proposal.encounters -> EncounterSpawnContent, mirroring
+ * starter-fantasy's encounterSpawnContent shape (content.ts) and
+ * encounter-spawn.ts's own documented content shape. Returns undefined when
+ * the proposal authored no encounters, or when every authored encounter
+ * failed validation -- buildWorldStack only registers encounter-spawn when
+ * `encounterSpawn` is present (presence-optional, world-stack.ts).
+ *
+ * Validation is per-encounter, warn-and-drop (lock 3): an encounter with no
+ * valid zoneIds, no hostiles, or whose hostiles name no valid enemy-type NPC
+ * is dropped whole rather than aborting the whole encounters list.
+ */
+function mapEncountersFromProposal(proposal: WorldGenProposal, logger?: DebugLogger): EncounterSpawnContent | undefined {
+  const proposedEncounters = proposal.encounters;
+  if (!proposedEncounters || proposedEncounters.length === 0) return undefined;
+
+  const zoneIds = new Set(proposal.zones.map((z) => z.id));
+  const npcById = new Map(proposal.npcs.map((n) => [n.id, n]));
+
+  const encounters: EncounterSpawnContent['encounters'] = [];
+  const entityTemplatesById = new Map<string, EntityState>();
+  const zoneTables: Record<string, string[]> = {};
+
+  for (const encounter of proposedEncounters) {
+    const validZoneIds = (encounter.zoneIds ?? []).filter((zoneId) => zoneIds.has(zoneId));
+    if (validZoneIds.length === 0) {
+      logger?.warn('world-gen', `Encounter "${encounter.id}" has no valid zoneIds -- dropped`, {
+        encounterId: encounter.id,
+      });
+      continue;
+    }
+
+    const participants: EncounterParticipant[] = [];
+    for (const hostile of encounter.hostiles ?? []) {
+      const npc = npcById.get(hostile.npcId);
+      if (!npc || npc.type !== 'enemy') {
+        logger?.warn(
+          'world-gen',
+          `Encounter "${encounter.id}" hostile "${hostile.npcId}" does not name a proposal NPC of type "enemy" -- skipped`,
+          { encounterId: encounter.id, npcId: hostile.npcId },
+        );
+        continue;
+      }
+      if (!entityTemplatesById.has(npc.id)) {
+        // WO-A1-2: clone the proposal NPC's own shape (stats/resources/tags)
+        // into an entityTemplate, tagged 'hostile' and typed 'enemy' -- the
+        // spawn system clones a FRESH deterministic id off this template at
+        // spawn time (encounter-spawn.d.ts's own EncounterSpawnContent doc
+        // comment), so the authored instance here is never itself placed.
+        entityTemplatesById.set(npc.id, {
+          id: npc.id,
+          blueprintId: npc.id,
+          type: 'enemy',
+          name: npc.name,
+          tags: [...(npc.tags ?? []), 'hostile'],
+          stats: npc.stats ?? {},
+          resources: npc.resources ?? {},
+          statuses: [],
+        });
+      }
+      const count = hostile.count ?? 1;
+      for (let i = 0; i < count; i++) {
+        participants.push({ entityId: npc.id });
+      }
+    }
+
+    if (participants.length === 0) {
+      logger?.warn('world-gen', `Encounter "${encounter.id}" has no valid hostiles after validation -- dropped`, {
+        encounterId: encounter.id,
+      });
+      continue;
+    }
+
+    encounters.push({ id: encounter.id, name: encounter.name, participants });
+    // §2: repetition = weight; list once per zone (the hostile `count` loop
+    // above is where repetition already lives -- zoneTables is not a second
+    // weighting axis).
+    for (const zoneId of validZoneIds) {
+      (zoneTables[zoneId] ??= []).push(encounter.id);
+    }
+  }
+
+  if (encounters.length === 0) return undefined;
+
+  return { encounters, entityTemplates: [...entityTemplatesById.values()], zoneTables };
+}
+
+/**
+ * WO-A1-3 (§3): the proposal stage type carries no `name` field at all (only
+ * `id`/`description`) -- QuestStage.name is REQUIRED by the engine's schema,
+ * so a name is always synthesized here from the description: the first
+ * clause (text up to the first `.`/`!`/`?`/`;`, matching how a title reads
+ * naturally as the sentence's opening thought), truncated to
+ * MAX_QUEST_STAGE_NAME_LENGTH.
+ */
+const MAX_QUEST_STAGE_NAME_LENGTH = 60;
+
+function deriveQuestStageName(description: string): string {
+  const clauseMatch = description.match(/^[^.!?;]+/);
+  const clause = (clauseMatch ? clauseMatch[0] : description).trim();
+  return clause.length > MAX_QUEST_STAGE_NAME_LENGTH
+    ? clause.slice(0, MAX_QUEST_STAGE_NAME_LENGTH).trimEnd()
+    : clause;
+}
+
+/**
+ * WO-A1-3 (§3): map proposal.quests -> QuestDefinition[], validated before
+ * anything is handed to createQuestCore, which is fail-loud by contract
+ * (THROWS on any problem) -- a quest that fails is dropped with a
+ * logger?.warn naming the quest id and the first problem, and the world
+ * still boots (lock 3).
+ *
+ * HONESTY FLOOR (ADDENDUM-COMMON.md): §3 names only validateQuestDefinition
+ * (content-schema's SHAPE check) as the pre-construction gate, and says "No
+ * triggers/rewards/failConditions" are authored. Against the installed 3.11
+ * dist that is incomplete: createQuestCore (quest-core.ts:683, verified by a
+ * live throw during this wave's own test run) ALSO runs
+ * validateQuestRuntimeContent internally and THROWS "needs at least one
+ * quest-level trigger (the offer surface)" for any quest with zero
+ * quest-level triggers -- which EVERY quest mapped per §3's own "no
+ * triggers" instruction always has zero of. Pre-validating with
+ * validateQuestDefinition alone is therefore not sufficient to satisfy lock
+ * 3 ("never let content kill world creation") -- it lets a quest through
+ * that createQuestCore then throws on, uncaught, inside buildWorldStack.
+ * This function runs BOTH checks (validateQuestDefinition, then
+ * validateQuestRuntimeContent -- the same order createQuestCore itself
+ * uses) before a quest is ever handed to buildWorldStack, so the fail-loud
+ * contract never fires on content built here. The honest consequence: since
+ * this slice authors no quest-level triggers (§3, and no proposal field
+ * exists to carry one -- WorldGenProposal['quests'][number] has no
+ * `triggers`), every mapped quest currently fails the runtime check and is
+ * dropped with a warning naming exactly that reason; the world still boots
+ * (ok:true). Authoring quest-level triggers (and the proposal field/prompt
+ * support to carry them) is follow-up scope this wave does not claim.
+ */
+function mapQuestsFromProposal(proposal: WorldGenProposal, logger?: DebugLogger): QuestDefinition[] {
+  const quests: QuestDefinition[] = [];
+  for (const quest of proposal.quests ?? []) {
+    const mapped: QuestDefinition = {
+      id: quest.id,
+      name: quest.name,
+      stages: (quest.stages ?? []).map((stage) => ({
+        id: stage.id,
+        name: deriveQuestStageName(stage.description),
+        description: stage.description,
+        objectives: [stage.description],
+      })),
+    };
+
+    const shapeValidation = validateQuestDefinition(mapped);
+    if (!shapeValidation.ok) {
+      logger?.warn(
+        'world-gen',
+        `Quest "${quest.id}" failed shape validation -- dropped: ${shapeValidation.errors[0]?.message ?? 'unknown problem'}`,
+        { questId: quest.id, errors: shapeValidation.errors },
+      );
+      continue;
+    }
+
+    // HONESTY FLOOR above: createQuestCore's OWN second validation pass,
+    // replicated here so its fail-loud throw never reaches buildWorldStack.
+    const runtimeProblems = validateQuestRuntimeContent([mapped]);
+    if (runtimeProblems.length > 0) {
+      logger?.warn('world-gen', `Quest "${quest.id}" failed runtime validation -- dropped: ${runtimeProblems[0]}`, {
+        questId: quest.id,
+        problems: runtimeProblems,
+      });
+      continue;
+    }
+
+    quests.push(mapped);
+  }
+  return quests;
 }
 
 /**
@@ -398,10 +745,91 @@ export async function generateWorld(
     progressionModels: [],
   };
 
+  // WO-A1-1 (§1): the manifest id both names the engine AND becomes
+  // world.meta.gameId (core's Engine construction copies manifest.id
+  // verbatim -- world.js:333) -- computed ONCE and threaded into
+  // encounterSpawn/quests below so both registries key on the SAME id the
+  // world actually boots under.
+  const gameId = proposal.title.toLowerCase().replace(/\s+/g, '-');
+
+  // WO-A1-1 (§1): the ONE faction roster that feeds BOTH faction-cognition
+  // (cohesion) and defeat-fallout (membership only) inside buildWorldStack --
+  // the SAME array the F-105a5718 remap reconciliation below reads
+  // proposal.factions from, so nothing here can drift out of sync with it.
+  const factionRoster: FactionMembership[] = proposal.factions.map((f) => ({
+    factionId: f.id,
+    entityIds: f.memberIds,
+    cohesion: 0.7,
+  }));
+
+  const genre = validateGenre(proposal.genre, logger);
+  const districts = mapDistrictsFromProposal(proposal, logger);
+  const encounterSpawnContent = mapEncountersFromProposal(proposal, logger);
+  const questDefinitions = mapQuestsFromProposal(proposal, logger);
+
+  // WO-A1-1 (§1): buildWorldStack replaces the strategic tail this hand list
+  // used to register module-by-module (environment-core, faction-cognition,
+  // rumor-propagation, district-core, belief-provenance,
+  // observer-presentation -- every one of them REMOVED from the modules
+  // array below; a double registration throws at construction, which is
+  // exactly what the parity sentinel in world-gen.test.ts proves). The
+  // builder ALSO always includes economy-core/trade-core/companion-core/
+  // npc-agency/faction-agency/player-leverage/crafting-core/
+  // opportunity-core/defeat-fallout/world-tick -- modules a generated world
+  // never registered before this slice (F-d907f10e's dead district-core is
+  // retired the same way: fed real districts instead of `{ districts: [] }`).
+  const worldStack = buildWorldStack({
+    playerId: 'player',
+    factions: factionRoster,
+    environment: {
+      hazards: proposal.zones
+        .filter((z) => z.hazards && z.hazards.length > 0)
+        .flatMap((z) =>
+          (z.hazards ?? []).map((h) => ({
+            id: `${z.id}-${h.replace(/\s+/g, '-')}`,
+            triggerOn: 'world.zone.entered' as const,
+            condition: (zone: ZoneState) => zone.id === z.id,
+            // F-e57d6a60: this hazard mutates hp directly and returns no events, so
+            // it is a second, independent death path alongside combat that the
+            // runtime's death presentation used to miss entirely (it keyed
+            // exclusively on combat.entity.defeated). That is NOT fixable by
+            // changing this return value: environment-core.js's checkHazard() calls
+            // `hazard.effect(...)` for its side effect only and discards whatever it
+            // returns (verified in
+            // node_modules/@ai-rpg-engine/modules/dist/environment-core.js — the
+            // effect callback also has no event-bus handle to push an event through
+            // any other way; `world` here is a plain WorldState data bag, not the
+            // WorldStore/EventBus). The actual fix lives in
+            // src/runtime/hooks.ts's isPlayerAtZeroHp, which reads
+            // world.entities[playerId].resources.hp directly instead of waiting for
+            // an event this hazard has no way to deliver.
+            effect: (_zone: ZoneState, entity: EntityState) => {
+              entity.resources.hp = Math.max(0, (entity.resources.hp ?? 0) - 1);
+              return [];
+            },
+          })),
+        ),
+    },
+    rumors: { propagationDelay: 2 },
+    districts,
+    presentationRules: [],
+    economyGenre: genre,
+    tradeGenre: genre,
+    craftingGenre: genre,
+    ...(encounterSpawnContent ? { encounterSpawn: { gameId, ...encounterSpawnContent } } : {}),
+    ...(questDefinitions.length > 0 ? { quests: { gameId, quests: questDefinitions } } : {}),
+  });
+  // §1: warnings are surfaced through the existing logger channel, never
+  // thrown, never printed raw to the player (today: unspawnable
+  // encounter-spawn zone-table entries from validateEncounterSpawnContent).
+  for (const warning of worldStack.warnings) {
+    logger?.warn('world-gen', warning);
+  }
+
   // Instantiate engine
   const engine = new Engine({
     manifest: {
-      id: proposal.title.toLowerCase().replace(/\s+/g, '-'),
+      id: gameId,
       title: proposal.title,
       version: '1.0.0',
       // F-f28c3098 (3.9 slice): a semver RANGE, per the engine's own
@@ -416,6 +844,12 @@ export async function generateWorld(
     },
     seed: seed ?? Math.floor(Math.random() * 100000),
     ruleset,
+    // WO-A1-1 (§1): traversal/status/combat/cognition-core/perception-filter/
+    // simulation-inspector are the ONLY hand-listed modules left -- kept
+    // ahead of the stack's modules per the stack's own prerequisite contract
+    // (cognition-core + perception-filter must precede faction-cognition/
+    // rumor-propagation/belief-provenance/observer-presentation, all inside
+    // worldStack.modules).
     modules: [
       traversalCore,
       statusCore,
@@ -424,65 +858,8 @@ export async function generateWorld(
         decay: { baseRate: 0.02, pruneThreshold: 0.05, instabilityFactor: 0.5 },
       }),
       createPerceptionFilter(),
-      createEnvironmentCore({
-        hazards: proposal.zones
-          .filter((z) => z.hazards && z.hazards.length > 0)
-          .flatMap((z) =>
-            (z.hazards ?? []).map((h) => ({
-              id: `${z.id}-${h.replace(/\s+/g, '-')}`,
-              triggerOn: 'world.zone.entered' as const,
-              condition: (zone: ZoneState) => zone.id === z.id,
-              // F-e57d6a60: this hazard mutates hp directly and returns no events, so
-              // it is a second, independent death path alongside combat that the
-              // runtime's death presentation used to miss entirely (it keyed
-              // exclusively on combat.entity.defeated). That is NOT fixable by
-              // changing this return value: environment-core.js's checkHazard() calls
-              // `hazard.effect(...)` for its side effect only and discards whatever it
-              // returns (verified in
-              // node_modules/@ai-rpg-engine/modules/dist/environment-core.js — the
-              // effect callback also has no event-bus handle to push an event through
-              // any other way; `world` here is a plain WorldState data bag, not the
-              // WorldStore/EventBus). The actual fix lives in
-              // src/runtime/hooks.ts's isPlayerAtZeroHp, which reads
-              // world.entities[playerId].resources.hp directly instead of waiting for
-              // an event this hazard has no way to deliver.
-              effect: (_zone: ZoneState, entity: EntityState) => {
-                entity.resources.hp = Math.max(0, (entity.resources.hp ?? 0) - 1);
-                return [];
-              },
-            })),
-          ),
-      }),
-      createFactionCognition({
-        factions: proposal.factions.map((f) => ({
-          factionId: f.id,
-          entityIds: f.memberIds,
-          cohesion: 0.7,
-        })),
-      }),
-      createRumorPropagation({ propagationDelay: 2 }),
-      // F-d907f10e: registered with ZERO district definitions, unlike every
-      // sibling module in this construction block, which is fully configured
-      // from the LLM world-gen proposal. Deliberately unfed, not an
-      // oversight-in-waiting: no module registered in this list depends on
-      // district-core (checked dependsOn on all of them -- only district-core
-      // itself declares one, ['environment-core'], and nothing declares a
-      // reverse dependency on district-core), so nothing here structurally
-      // requires its presence. Effect, verified against ai-rpg-engine
-      // packages/modules/src/district-core.ts: the world.zone.entered handler
-      // (lines 176-184) returns early because state.definitions is empty, and
-      // processDistrictTick's own loop (lines 337-342) iterates
-      // state.districts, which is always {} -- dead by construction. Its two
-      // resolveEntityFaction call sites (district-core.ts:191 intruder-
-      // likelihood, :380 surveillance count) are therefore unreachable in
-      // every world this file generates today. Feeding it (e.g. deriving
-      // districts from proposal zone tags or faction territory) or removing
-      // the registration outright is a Director-gated design decision, not
-      // resolved here.
-      createDistrictCore({ districts: [] }),
-      createBeliefProvenance(),
-      createObserverPresentation({ rules: [] }),
       createSimulationInspector(),
+      ...worldStack.modules,
     ],
   });
 

@@ -1,9 +1,40 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateWorldGenProposal, generateWorld } from './world-gen.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { validateWorldGenProposal, generateWorld, KNOWN_WORLDGEN_GENRES } from './world-gen.js';
 import type { WorldGenProposal, WorldGenAttemptInfo } from './world-gen.js';
 import type { ClaudeClient } from '../claude-client.js';
-import { getFactionMembers } from '@ai-rpg-engine/modules';
+import { Engine } from '@ai-rpg-engine/core';
+import type { RulesetDefinition } from '@ai-rpg-engine/core';
+import {
+  getFactionMembers,
+  getAllDistrictIds,
+  getDistrictDefinition,
+  traversalCore,
+  statusCore,
+  combatCore,
+  createCognitionCore,
+  createPerceptionFilter,
+  createSimulationInspector,
+  buildWorldStack,
+} from '@ai-rpg-engine/modules';
 import { createTestLogger } from '../game/debug-logger.js';
+
+// WO-A1-1 (§1): a minimal, valid RulesetDefinition for the double-registration
+// proof below, which constructs an Engine directly (not through
+// generateWorld) so it can deliberately duplicate a stack module.
+const MINIMAL_RULESET: RulesetDefinition = {
+  id: 'dup-test-rules',
+  name: 'Dup Test Rules',
+  version: '1.0.0',
+  stats: [{ id: 'str', name: 'Strength', min: 0, max: 100, default: 10 }],
+  resources: [{ id: 'hp', name: 'HP', min: 0, max: 100, default: 100 }],
+  verbs: [],
+  formulas: [],
+  defaultModules: [],
+  progressionModels: [],
+};
 
 function makeValidProposal(): WorldGenProposal {
   return {
@@ -771,5 +802,392 @@ describe('generateWorld PBR-001: defensive NPC coercion', () => {
 
     const result = await generateWorld(client, 'test', 1);
     expect(result.ok).toBe(true);
+  });
+});
+
+// WO-A1-1 (§1, §5): buildWorldStack replaces the strategic tail of the
+// modules array. The cross-domain parity sentinel (generated-vs-pack module
+// set) lives in test/integration ("tests" domain, per the slice's ownership
+// table); this narrower proof stays in-domain: it demonstrates DIRECTLY that
+// hand-listing a module the stack already registers throws at construction
+// -- which is exactly why every stack-registered module (environment-core,
+// faction-cognition, rumor-propagation, district-core, belief-provenance,
+// observer-presentation) had to be REMOVED from world-gen.ts's hand list.
+describe('generateWorld WO-A1-1: buildWorldStack adoption — double-registration proof (§1, §5)', () => {
+  function makeEngineWithModules(modules: unknown[]): () => Engine {
+    return () =>
+      new Engine({
+        manifest: {
+          id: 'dup-test',
+          title: 'Dup Test',
+          version: '1.0.0',
+          engineVersion: '>=3.9.0 <4.0.0',
+          ruleset: MINIMAL_RULESET.id,
+          modules: [],
+          contentPacks: [],
+        },
+        seed: 1,
+        ruleset: MINIMAL_RULESET,
+        modules: modules as never,
+      });
+  }
+
+  it('throws when a stack-registered module set is hand-listed a SECOND time alongside buildWorldStack -- proving removal from the hand list was required', () => {
+    const stack = buildWorldStack({ playerId: 'player', factions: [] });
+
+    const constructTwice = makeEngineWithModules([
+      traversalCore,
+      statusCore,
+      combatCore,
+      createCognitionCore({ decay: { baseRate: 0.02, pruneThreshold: 0.05, instabilityFactor: 0.5 } }),
+      createPerceptionFilter(),
+      createSimulationInspector(),
+      ...stack.modules,
+      ...stack.modules, // deliberate duplicate -- the exact bug this slice fixes
+    ]);
+
+    expect(constructTwice).toThrow(/already registered/);
+  });
+
+  it('the real (single-registration) construction succeeds -- the contrast case proving the fix is correct, not merely non-throwing by omission', () => {
+    const stack = buildWorldStack({ playerId: 'player', factions: [] });
+
+    const constructOnce = makeEngineWithModules([
+      traversalCore,
+      statusCore,
+      combatCore,
+      createCognitionCore({ decay: { baseRate: 0.02, pruneThreshold: 0.05, instabilityFactor: 0.5 } }),
+      createPerceptionFilter(),
+      createSimulationInspector(),
+      ...stack.modules,
+    ]);
+
+    expect(constructOnce).not.toThrow();
+  });
+
+  it('world.meta.gameId equals the manifest id derived from the title -- encounterSpawn/quests key off the SAME id (§1)', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Gameid Parity World';
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.meta.gameId).toBe('gameid-parity-world');
+  });
+});
+
+describe('generateWorld WO-A1-2: district derivation and mapping (§2)', () => {
+  it('derives one district per zone when the proposal authors none, with controllingFaction set to the faction holding the most members placed in that zone', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'District Derivation World';
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+
+    const world = result.engine!.world;
+    expect(getAllDistrictIds(world).sort()).toEqual(['market', 'town-square']);
+
+    const townSquare = getDistrictDefinition(world, 'town-square');
+    expect(townSquare?.zoneIds).toEqual(['town-square']);
+    // guard-1 (the faction's only member) is placed in town-square.
+    expect(townSquare?.controllingFaction).toBe('guard');
+
+    const market = getDistrictDefinition(world, 'market');
+    // No faction member is placed in market -- no controllingFaction to derive.
+    expect(market?.controllingFaction).toBeUndefined();
+  });
+
+  it('maps authored districts 1:1 when the proposal provides them (no derivation)', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Authored District World';
+    proposal.districts = [
+      { id: 'old-town', name: 'Old Town', zoneIds: ['town-square', 'market'], tags: ['historic'], controllingFaction: 'guard' },
+    ];
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+
+    const world = result.engine!.world;
+    expect(getAllDistrictIds(world)).toEqual(['old-town']);
+    expect(getDistrictDefinition(world, 'old-town')).toEqual({
+      id: 'old-town',
+      name: 'Old Town',
+      zoneIds: ['town-square', 'market'],
+      tags: ['historic'],
+      controllingFaction: 'guard',
+    });
+  });
+
+  it('drops an unknown zoneId from an authored district with a warning, keeping the district when a valid zone remains', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Partial Zone District World';
+    proposal.districts = [{ id: 'old-town', name: 'Old Town', zoneIds: ['town-square', 'nonexistent-zone'], tags: [] }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+
+    expect(getDistrictDefinition(result.engine!.world, 'old-town')?.zoneIds).toEqual(['town-square']);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('unknown zone'),
+      }),
+    );
+  });
+
+  it('drops a district entirely when every authored zoneId is unknown', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'All Unknown Zone District World';
+    proposal.districts = [{ id: 'ghost-town', name: 'Ghost Town', zoneIds: ['nowhere'], tags: [] }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    expect(getAllDistrictIds(result.engine!.world)).toEqual([]);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('no valid zones'),
+      }),
+    );
+  });
+
+  it('clears (not drops) an unknown controllingFaction with a warning, keeping the district itself', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Unknown Faction District World';
+    proposal.districts = [
+      { id: 'old-town', name: 'Old Town', zoneIds: ['town-square'], tags: [], controllingFaction: 'nonexistent-faction' },
+    ];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+
+    const district = getDistrictDefinition(result.engine!.world, 'old-town');
+    expect(district).toBeTruthy();
+    expect(district?.controllingFaction).toBeUndefined();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('unknown controllingFaction'),
+      }),
+    );
+  });
+});
+
+describe('generateWorld WO-A1-2: genre validation (§2)', () => {
+  it('passes a known genre through without any "Unknown genre" warning', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Known Genre World';
+    proposal.genre = 'cyberpunk';
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    expect(logger.getEntries().some((e) => e.message.includes('Unknown genre'))).toBe(false);
+  });
+
+  it('drops an unknown genre with a warning and still boots the world on engine defaults', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Unknown Genre World';
+    proposal.genre = 'steampunk'; // not in KNOWN_WORLDGEN_GENRES
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('Unknown genre "steampunk"'),
+      }),
+    );
+  });
+});
+
+// WO-A1-2 (§2): "Resolve the exact list from the installed 3.11 dist at
+// implementation time and pin it in a test that reads the engine, not a hand
+// copy." Neither GENRE_SUPPLY_DEFAULTS (economy-core.ts) nor
+// evaluateGenreRules' switch (pressure-system.ts) is exported at runtime --
+// both are module-local -- so KNOWN_WORLDGEN_GENRES in world-gen.ts is
+// necessarily a hand copy. This test keeps that hand copy honest by reading
+// the SAME installed dist's source text directly and comparing key sets,
+// instead of trusting the hand copy against memory of what those tables
+// contain.
+describe('KNOWN_WORLDGEN_GENRES pin (§2): matches the installed 3.11 dist, not a hand copy', () => {
+  // @ai-rpg-engine/modules is ESM-only (its package.json "exports" carries
+  // only an "import" condition), so a CJS require.resolve() cannot resolve
+  // it -- walk up from this test file's own directory (Node module
+  // resolution's own algorithm) to find the installed dist directly. The
+  // worktree this test may run from has no node_modules of its own, so this
+  // walk lands on the MAIN repo's install (E:/AI/claude-rpg/node_modules),
+  // exactly the "installed 3.11 dist" lock 4 (ADDENDUM-COMMON.md) requires.
+  function findModulesDistDir(): string {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 20; i++) {
+      const candidate = join(dir, 'node_modules', '@ai-rpg-engine', 'modules', 'dist');
+      if (existsSync(join(candidate, 'economy-core.js'))) return candidate;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    throw new Error('Could not locate @ai-rpg-engine/modules/dist by walking up from the test file');
+  }
+
+  it('equals the union of economy-core.ts GENRE_SUPPLY_DEFAULTS keys and pressure-system.ts evaluateGenreRules case keys', () => {
+    const distDir = findModulesDistDir();
+
+    const economySource = readFileSync(join(distDir, 'economy-core.js'), 'utf8');
+    const economyBlockMatch = economySource.match(/const GENRE_SUPPLY_DEFAULTS = \{([\s\S]*?)\n\};/);
+    expect(economyBlockMatch).not.toBeNull();
+    const economyKeys = [...(economyBlockMatch?.[1] ?? '').matchAll(/^\s*(?:'([a-z-]+)'|([a-z-]+)):\s*\{/gm)].map(
+      (m) => m[1] ?? m[2],
+    );
+    // Sanity floor: this dist-reading approach must actually find keys, or a
+    // future dist reshuffle would silently pass an empty-set comparison.
+    expect(economyKeys.length).toBeGreaterThan(0);
+
+    const pressureSource = readFileSync(join(distDir, 'pressure-system.js'), 'utf8');
+    const pressureKeys = [...pressureSource.matchAll(/case '([a-z-]+)':/g)].map((m) => m[1]);
+    expect(pressureKeys.length).toBeGreaterThan(0);
+
+    const expectedUnion = new Set([...economyKeys, ...pressureKeys]);
+    expect(new Set(KNOWN_WORLDGEN_GENRES)).toEqual(expectedUnion);
+  });
+});
+
+describe('generateWorld WO-A1-2: encounter mapping (§2)', () => {
+  function makeEnemyNpc(overrides: Partial<WorldGenProposal['npcs'][number]> = {}): WorldGenProposal['npcs'][number] {
+    return {
+      id: 'bandit-1',
+      name: 'Bandit',
+      type: 'enemy',
+      tags: ['bandit'],
+      zoneId: 'market',
+      personality: 'aggressive',
+      goals: ['rob travelers'],
+      stats: { str: 10 },
+      resources: { hp: 30 },
+      beliefs: [],
+      ...overrides,
+    };
+  }
+
+  it('registers a valid encounter and its entity template when every hostile names a valid enemy-type NPC in a valid zone', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Valid Encounter World';
+    proposal.npcs.push(makeEnemyNpc());
+    proposal.encounters = [
+      { id: 'market-ambush', name: 'Market Ambush', zoneIds: ['market'], hostiles: [{ npcId: 'bandit-1', count: 2 }] },
+    ];
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.modules['encounter-spawn']).toBeTruthy();
+  });
+
+  it('drops a hostile referencing a non-enemy-type proposal NPC with a warning -- the whole encounter is dropped when nothing else survives', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Bad Hostile Type World';
+    // guard-1 is type 'npc' in the base fixture, not 'enemy' -- invalid hostile.
+    proposal.encounters = [{ id: 'bad-encounter', name: 'Bad Encounter', zoneIds: ['market'], hostiles: [{ npcId: 'guard-1' }] }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.modules['encounter-spawn']).toBeFalsy();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('does not name a proposal NPC of type "enemy"'),
+      }),
+    );
+  });
+
+  it('drops an encounter that names no valid zoneIds', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Bad Zone Encounter World';
+    proposal.npcs.push(makeEnemyNpc());
+    proposal.encounters = [
+      { id: 'nowhere-encounter', name: 'Nowhere Encounter', zoneIds: ['nonexistent-zone'], hostiles: [{ npcId: 'bandit-1' }] },
+    ];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.modules['encounter-spawn']).toBeFalsy();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('no valid zoneIds'),
+      }),
+    );
+  });
+});
+
+// WO-A1-3 (§3): see the HONESTY FLOOR doc comment on mapQuestsFromProposal
+// (world-gen.ts) -- §3 authors no quest-level triggers, and
+// createQuestCore's OWN runtime-vocabulary check (verified against the
+// installed 3.11 dist) requires at least one for ANY quest to ever be
+// offered. Every quest mapped under this slice's scope therefore fails that
+// check and is dropped with a warning; the world still boots (lock 3). This
+// is the correct, safe consequence of §3's stated scope, not a bug.
+describe('generateWorld WO-A1-3: quest mapping — honesty-floor consequence (§3)', () => {
+  it('drops the fixture single-stage quest for missing a quest-level offer trigger, warns naming the reason, and still boots the world', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Quest Trigger World';
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.modules['quest-core']).toBeFalsy();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('needs at least one quest-level trigger'),
+      }),
+    );
+    // WorldGenResult.quests keeps returning the RAW proposal shape for
+    // existing callers, unaffected by the engine-side drop above.
+    expect(result.quests).toEqual(proposal.quests);
+  });
+
+  it('drops a quest whose only stage has a blank description -- the synthesized stage name fails shape validation before the runtime-trigger check even runs', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Blank Stage World';
+    proposal.quests = [{ id: 'q-blank', name: 'Blank Quest', description: 'x', stages: [{ id: 's1', description: '   ' }] }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+
+    expect(result.ok).toBe(true);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('Quest "q-blank" failed shape validation'),
+      }),
+    );
   });
 });

@@ -678,17 +678,17 @@ describe('renderConcludeOutput — the /conclude terminal screen (F-4905e69f)', 
     expect(lines.length).toBe(11);
   });
 
-  // F-4905e69f (parallel-wave caveat): game-presenter.ts's header/footer
-  // rules are built as '  ═'.repeat(30) / '  ─'.repeat(30) -- repeating the
-  // WHOLE 3-character "  ═" pattern rather than the bare rule character,
-  // which produces a gapped "  ═  ═  ═ ..." line 90 columns wide, not a
-  // solid rule within a sane terminal width. This is a known target of a
-  // sibling wave-16 fix in game-core/cli-display's own worktree (outside
-  // this domain's src/game/game-presenter.ts), asserted here against the
-  // CORRECT post-fix invariant. EXPECTED TO FAIL in THIS worktree until
-  // that sibling fix lands in the cumulative tree -- see this agent's
-  // summary for the cross-worktree divergence note; do not weaken this
-  // assertion to match the current buggy output.
+  // F-4905e69f: game-presenter.ts's header/footer rules used to be built as
+  // '  ═'.repeat(30) / '  ─'.repeat(30) -- repeating the WHOLE 3-character
+  // "  ═" pattern rather than the bare rule character, producing a gapped
+  // "  ═  ═  ═ ..." line 90 columns wide instead of a solid rule within a
+  // sane terminal width. Landed: src/game/game-presenter.ts's own doc
+  // comment above renderConcludeOutput now records the fix (a bare, solid
+  // repeated glyph with no baked-in indent, sized via play-renderer.ts's
+  // getTerminalWidth()), matching the sibling pattern already used by
+  // sheet.ts's DIVIDER, chronicle-renderer.ts's HEAVY_DIVIDER, and
+  // play-renderer.ts's makeDivider. This pins the current, correct
+  // invariant.
   it('header and footer rules render as a single solid character at a terminal-safe width <= 80 (F-4905e69f)', () => {
     // F-3e8bd7ed: the divider width is play-renderer.ts's getTerminalWidth(),
     // which reads process.stdout.columns (clamped 40-120, fallback 60) --

@@ -15,26 +15,24 @@
 // end-to-end regression lock has to go through the real spawned CLI
 // process, not the in-process harness.
 //
-// RED baseline (verified directly against this worktree's
+// Pipeline shape (verified directly against this worktree's
 // src/cli/presentation-renderer.ts, AND empirically against a real spawned
-// process -- see below): renderSfxLine() prints `  · ${effect} sounds` with
-// the RAW params.effect token -- combatStartHook (src/runtime/hooks.ts)
-// queues effectId 'alert_warning' on every combat-entry turn,
-// deterministically (no RNG dependency -- the cue fires purely because
-// presentationState becomes 'combat', independent of hit/miss).
+// process -- see below): combatStartHook (src/runtime/hooks.ts) queues
+// effectId 'alert_warning' on every combat-entry turn, deterministically (no
+// RNG dependency -- the cue fires purely because presentationState becomes
+// 'combat', independent of hit/miss). audio-bridge.ts's playSfx()
+// (src/runtime/audio-bridge.ts:72-73) first resolves cue.effectId through
+// the installed @ai-rpg-engine/soundpack-core SoundRegistry
+// (`entry?.voiceSoundboardEffect ?? cue.effectId`), which maps
+// 'alert_warning' to the shorter registry label 'warning' before it ever
+// reaches renderSfxLine -- so the value actually reachable end-to-end is
+// 'warning', not the routed finding's own unit-level example's raw
+// 'alert_warning'.
 //
-// Empirical correction (disclosed): the routed finding's own unit-level
-// example feeds renderPresentationCues() a hand-built
-// `{effect:'alert_warning',...}` params object directly. The REAL pipeline
-// doesn't reach the renderer with that raw string -- audio-bridge.ts's
-// playSfx() (src/runtime/audio-bridge.ts:72-73) first resolves
-// cue.effectId through the installed @ai-rpg-engine/soundpack-core
-// SoundRegistry (`entry?.voiceSoundboardEffect ?? cue.effectId`), which
-// maps 'alert_warning' to the shorter label 'warning' before it ever
-// reaches renderSfxLine -- confirmed by running this exact scenario and
-// inspecting real stdout, which renders "  · warning sounds", not
-// "  · alert_warning sounds". This asserts against the value actually
-// reachable end-to-end, not the unit test's hand-fed one.
+// Landed: renderSfxLine() (commit 6f071f4, F-7eb33249) now maps that
+// registry label through SFX_LABELS ('warning' -> 'a warning tone') before
+// building the line, so real stdout renders "  · a warning tone sounds",
+// never the bare "  · warning sounds" this test guards against.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
@@ -79,7 +77,7 @@ afterAll(async () => {
 });
 
 describe('sfx cue humanization reaches real player-visible stdout (F-9998efb0)', () => {
-  it('red in-worktree, green expected at merge: a real combat-entry turn never prints the raw registry-resolved "warning sounds" token line to the player', async () => {
+  it('a real combat-entry turn never prints the raw registry-resolved "warning sounds" token line to the player (landed in commit 6f071f4)', async () => {
     const homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-sfx-humanize-home-'));
     await writeFantasySave(join(homeDir, '.claude-rpg', 'saves'));
     // Two successful narration calls needed: the opening narration on load,
@@ -113,12 +111,12 @@ describe('sfx cue humanization reaches real player-visible stdout (F-9998efb0)',
       cli.sendLine('attack pilgrim');
       await cli.waitForStdoutCount('  > ', promptCountBeforeTurn + 1);
 
-      // "warning sounds" is today's exact raw-template-plus-registry-label
+      // "warning sounds" was the pre-fix raw-template-plus-registry-label
       // output (renderSfxLine's `  · ${effect} sounds`, effect resolved to
-      // 'warning' by the soundpack registry) -- empirically confirmed
-      // against real stdout from this exact scenario. A genuinely humanized
-      // line (full prose, e.g. "A warning blares!") would not reproduce
-      // this literal token-plus-suffix shape.
+      // 'warning' by the soundpack registry, with no SFX_LABELS lookup).
+      // Now that F-7eb33249 (commit 6f071f4) humanizes the label first, real
+      // stdout renders "  · a warning tone sounds" -- this guards against a
+      // regression back to the bare unhumanized shape.
       expect(cli.stdout()).not.toContain('warning sounds');
     } finally {
       await cleanupCliTestResources({ cli, server, homeDir });

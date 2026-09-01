@@ -152,6 +152,20 @@ describe('real-process retry path — dialogue turn (F-e44285c0)', () => {
 
       cli.sendLine('talk to pilgrim');
       await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(20000));
+      // Coordinator stitch (run swarm-1788288802-f5a0, wave 2): the prompt
+      // marker reappearing is NOT a settled point for the request ledger --
+      // CI run 33550215403 (Node 20 job) read 1 of the 3 requests here while
+      // the forced retry was still in flight and failed on `expected 1 to be
+      // 3`; the re-run and three local CI-scaled runs passed. Wait for the
+      // ledger itself to settle (bounded) before reading it, so the
+      // assertion below measures the turn, not the race. Call-counts are
+      // read only at settled points (the spawned-CLI harness law).
+      {
+        const deadline = Date.now() + scaledWaitMs(10000);
+        while (server.callCount() - callsBeforeTurn < 3 && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
 
       const callsForThisTurn = server.callCount() - callsBeforeTurn;
       // Measured at this wave's HEAD (2026-08-31, this exact scenario): a

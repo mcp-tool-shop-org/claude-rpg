@@ -314,23 +314,23 @@ export function buildNPCDialogueContext(
   // F-5c8be67d: source authoritatively from persisted world state (mirrors
   // dialogue-core.ts's own private dialogueHintForSpeaker) when the caller
   // doesn't explicitly pass one, instead of silently producing no hint the
-  // way an omitted optional param used to. NOTE (verified, not assumed):
-  // getPersistedNpcLastActions(world) reads world.modules['npc-agency'],
-  // which claude-rpg never populates today -- runNpcAgencyTick (this
-  // domain's own npc/agency.ts) returns its NpcActionResult[] directly to
-  // its caller and nothing in this app calls setPersistedNpcState -- so this
-  // fallback resolves to [] in production exactly like the old `undefined`
-  // did. The one production caller (dialogue-mind.ts's generateDialogue)
-  // still delivers real hints via its own explicit lastNpcActions argument,
-  // which takes precedence here (`??` only falls through when the caller
-  // omits it entirely). This removes the silent-omission failure mode for
-  // ANY caller that doesn't thread the array (this file's own tests
-  // included), and activates for free the moment a future write-side fix
-  // calls setPersistedNpcState.
+  // way an omitted optional param used to. The one production caller
+  // (dialogue-mind.ts's generateDialogue) delivers real hints via its own
+  // explicit lastNpcActions argument, which takes precedence here (`??`
+  // only falls through when the caller omits it entirely).
   // Coordinator ruling (b) (wave-13 RULING-persisted-namespaces.md): the
-  // getPersistedNpcLastActions fallback was removed — that namespace is
-  // never populated in this app; the threaded param (already live from
-  // turn-loop) is the sole source.
+  // getPersistedNpcLastActions(world) fallback was removed — at the time,
+  // world.modules['npc-agency'] was never populated in this app (npc/
+  // agency.ts's tickNpcAgency returned its NpcActionResult[] directly to
+  // game.ts, which never called setPersistedNpcState), so the fallback
+  // would always have resolved to [] anyway. STALE AS OF slice A2-core
+  // (WO-A2-7): runWorldTick's own step 5a now calls setPersistedNpcState
+  // every round a named NPC exists, so the namespace this function still
+  // doesn't read IS populated in production today. The ruling's OUTCOME
+  // (threaded param is the sole source here) is UNCHANGED this wave — no
+  // signature change (ADDENDUM-narrative-llm.md, WO-A2-7) — this is a
+  // documentation-only correction; A4 is where readers are rewired to read
+  // world truth directly, which may revisit this fallback's absence.
   const effectiveLastActions = lastNpcActions ?? [];
   const recentActionHint = getNpcDialogueHint(npcId, effectiveLastActions);
   if (recentActionHint) npcRecentAction = recentActionHint;

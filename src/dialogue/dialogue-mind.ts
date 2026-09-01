@@ -2,7 +2,7 @@
 
 import type { WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
-import type { PlayerRumor, WorldPressure, NpcActionResult, OpportunityState } from '@ai-rpg-engine/modules';
+import type { PlayerRumor, WorldPressure, NpcActionResult, OpportunityState, NpcObligationLedger } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
 import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
@@ -156,6 +156,13 @@ function pickRepeatedStallLine(consecutiveFallbacks: number): string {
  *   already computes one for scene narration (e.g. via game-state.ts's
  *   getPartyPresence) can reuse the identical string here. Omitted, behavior
  *   is unchanged from before this fix.
+ * @param obligations WO-A4-5 (slice A4, §2 lock 4): the NPC's obligation
+ *   ledger, forwarded straight through to buildNPCDialogueContext (npc-
+ *   context.ts), which threads it to buildNpcProfile's sixth argument --
+ *   see that file's own doc comment for the "read it from the world"
+ *   default. Additive; omitted, buildNPCDialogueContext reads
+ *   getPersistedNpcObligations(world).get(npcId) itself, so no existing
+ *   caller has to change for obligations to reach goal derivation.
  */
 export async function generateDialogue(
   client: ClaudeClient,
@@ -176,8 +183,9 @@ export async function generateDialogue(
   consecutiveFallbacks?: number,
   activeOpportunities?: OpportunityState[],
   partyPresence?: string,
+  obligations?: NpcObligationLedger,
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence, obligations);
   if (context && economyContext) context.economyContext = economyContext;
   if (context && craftingContext) context.craftingContext = craftingContext;
   if (context && opportunityContext) context.opportunityContext = opportunityContext;

@@ -17,7 +17,7 @@ vi.mock('@ai-rpg-engine/modules', async (importOriginal) => {
   };
 });
 
-import { getCognition, getEntityFaction, getRumorsFrom, formatOpportunityForDialogue, type CognitionState, type RumorRecord, type NpcActionResult, type OpportunityState } from '@ai-rpg-engine/modules';
+import { getCognition, getEntityFaction, getRumorsFrom, formatOpportunityForDialogue, resolveEntityFaction, registerFactionMembership, createObligation, setPersistedNpcState, type CognitionState, type RumorRecord, type NpcActionResult, type OpportunityState, type WorldPressure } from '@ai-rpg-engine/modules';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { buildNPCDialogueContext, deriveNpcPersonality } from './npc-context.js';
@@ -474,5 +474,150 @@ describe('buildNPCDialogueContext F-ff0b4af6: partyPresence', () => {
     const ctx = buildNPCDialogueContext(makeWorld(), 'npc-1', 'hello', 'dark fantasy');
 
     expect(ctx!.partyPresence).toBeUndefined();
+  });
+});
+
+// WO-A4-5 (slice A4, §2 lock 4): buildNpcProfile already accepted an
+// `obligations` sixth argument (loyalty-breakpoint/goal-priority math), but
+// nothing on the dialogue path ever supplied it -- buildNPCDialogueContext's
+// call site passed only 5 arguments, so an NPC's favors/debts/betrayals never
+// reached goal derivation no matter what was written into the persisted
+// ledger. RED before this wave: with the old 5-argument call site, writing
+// the obligation below changed nothing -- afterObligation.npcGoal stayed
+// 'Warn an ally' identically to baseline.
+//
+// Real engine fixture (not makeWorld()) because deriveNpcGoals/
+// deriveNpcRelationship/deriveLoyaltyBreakpoint are NOT mocked in this file
+// (only getCognition/getEntityFaction/getRumorsFrom are) -- they need
+// world.meta.tick, a resolvable faction (resolveEntityFaction, membership-
+// registry backed), and district/faction-cognition module state, which only
+// a real createGame() world provides safely.
+describe('buildNPCDialogueContext WO-A4-5: obligations reach buildNpcProfile', () => {
+  it('flips the derived goal when a persisted "player owes NPC" obligation outweighs the un-adjusted priority order', () => {
+    const engine = createGame();
+    const playerZoneId = engine.world.entities[engine.world.playerId].zoneId;
+    const npcId = Object.keys(engine.world.entities).find(
+      (id) => id !== engine.world.playerId
+        && engine.world.entities[id].zoneId === playerZoneId,
+    );
+    expect(npcId).toBeDefined();
+    // This pack's own starting-zone NPCs carry no faction membership (only
+    // its enemy factions do) -- register one explicitly so underPressure
+    // (which requires a resolvable factionId) can be exercised without
+    // depending on any particular pack's zone layout.
+    const factionId = 'wo-a4-5-test-faction';
+    registerFactionMembership(engine.world, factionId, npcId!);
+
+    const npc = engine.world.entities[npcId!] as unknown as {
+      ai?: unknown;
+      custom?: Record<string, unknown>;
+      relations?: Record<string, unknown>;
+    };
+    // `ai` gates buildNPCDialogueContext's whole goal/agency block.
+    npc.ai = { profileId: 'cautious', goals: [], fears: [], alertLevel: 0, knowledge: {} };
+    // trust=25 (>20) + underPressure (the faction-summons pressure below)
+    // -> deriveNpcGoals rule 4 fires a 'warn' goal at a FIXED priority of
+    // 0.75 -- the goal to beat.
+    npc.relations = { ...(npc.relations ?? {}), 'player-trust': 25 };
+    // greed=75 (>60) + same-zone player (already true -- npcId was picked
+    // from the player's own zone) -> rule 5 fires a 'bargain' goal at
+    // priority 0.5 + (75-60)*0.01 = 0.65, LOWER than warn's 0.75 until the
+    // obligation-influenced adjustment below (+0.15 for netWeight <= -3)
+    // pushes it to 0.80, overtaking warn.
+    npc.custom = { ...(npc.custom ?? {}), greed: 75 };
+    mockedGetEntityFaction.mockReturnValue(factionId);
+    mockedGetCognition.mockReturnValue(makeCognition());
+    mockedGetRumorsFrom.mockReturnValue([]);
+
+    const pressure: WorldPressure = {
+      id: 'pressure-0',
+      kind: 'faction-summons',
+      sourceFactionId: factionId,
+      description: 'The faction calls its people to muster.',
+      triggeredBy: 'test',
+      urgency: 0.5,
+      visibility: 'known',
+      turnsRemaining: null,
+      potentialOutcomes: [],
+      tags: [],
+      createdAtTick: 0,
+    };
+
+    const baseline = buildNPCDialogueContext(
+      engine.world, npcId!, 'hello', 'dark fantasy',
+      undefined, undefined, undefined, [pressure],
+    );
+    expect(baseline!.npcGoal).toBe('Warn an ally');
+
+    // Write a "player owes NPC" favor (magnitude 5) into the persisted
+    // npc-agency namespace -- getNetObligationWeight nets to -5 (<= -3),
+    // which deriveNpcGoals' obligation-influenced adjustment reads as
+    // "boost bargain priority" (+0.15), flipping the top goal.
+    setPersistedNpcState(
+      engine.world,
+      [],
+      [],
+      new Map([[npcId!, {
+        obligations: [createObligation('favor', 'player-owes-npc', npcId!, engine.world.playerId, 5, 'test', 0)],
+      }]]),
+    );
+
+    const afterObligation = buildNPCDialogueContext(
+      engine.world, npcId!, 'hello', 'dark fantasy',
+      undefined, undefined, undefined, [pressure],
+    );
+    expect(afterObligation!.npcGoal).toBe('Strike a deal');
+  });
+
+  it('an explicitly-passed obligations argument overrides the world-truth default', () => {
+    const engine = createGame();
+    const playerZoneId = engine.world.entities[engine.world.playerId].zoneId;
+    const npcId = Object.keys(engine.world.entities).find(
+      (id) => id !== engine.world.playerId
+        && engine.world.entities[id].zoneId === playerZoneId,
+    );
+    expect(npcId).toBeDefined();
+    // This pack's own starting-zone NPCs carry no faction membership (only
+    // its enemy factions do) -- register one explicitly so underPressure
+    // (which requires a resolvable factionId) can be exercised without
+    // depending on any particular pack's zone layout.
+    const factionId = 'wo-a4-5-test-faction';
+    registerFactionMembership(engine.world, factionId, npcId!);
+
+    const npc = engine.world.entities[npcId!] as unknown as {
+      ai?: unknown;
+      custom?: Record<string, unknown>;
+      relations?: Record<string, unknown>;
+    };
+    npc.ai = { profileId: 'cautious', goals: [], fears: [], alertLevel: 0, knowledge: {} };
+    npc.relations = { ...(npc.relations ?? {}), 'player-trust': 25 };
+    npc.custom = { ...(npc.custom ?? {}), greed: 75 };
+    mockedGetEntityFaction.mockReturnValue(factionId);
+    mockedGetCognition.mockReturnValue(makeCognition());
+    mockedGetRumorsFrom.mockReturnValue([]);
+
+    const pressure: WorldPressure = {
+      id: 'pressure-0',
+      kind: 'faction-summons',
+      sourceFactionId: factionId,
+      description: 'The faction calls its people to muster.',
+      triggeredBy: 'test',
+      urgency: 0.5,
+      visibility: 'known',
+      turnsRemaining: null,
+      potentialOutcomes: [],
+      tags: [],
+      createdAtTick: 0,
+    };
+
+    // Nothing persisted in world truth -- the explicit argument is the only
+    // source of the obligation, proving the param, not just the fallback,
+    // reaches buildNpcProfile.
+    const ctx = buildNPCDialogueContext(
+      engine.world, npcId!, 'hello', 'dark fantasy',
+      undefined, undefined, undefined, [pressure], undefined, undefined, undefined,
+      { obligations: [createObligation('favor', 'player-owes-npc', npcId!, engine.world.playerId, 5, 'test', 0)] },
+    );
+    expect(ctx!.npcGoal).toBe('Strike a deal');
   });
 });

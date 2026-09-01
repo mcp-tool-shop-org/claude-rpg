@@ -18,12 +18,14 @@ import {
   getOpportunitiesForNpc,
   formatOpportunityForDialogue,
   generateNpcTextures,
+  getPersistedNpcObligations,
   type Belief,
   type Memory,
   type PlayerRumor,
   type WorldPressure,
   type NpcActionResult,
   type OpportunityState,
+  type NpcObligationLedger,
 } from '@ai-rpg-engine/modules';
 import type { DialogueInput } from '../prompts/dialogue-npc.js';
 import { resolveVoiceArchetype } from '../prompts/dialogue-npc.js';
@@ -98,6 +100,21 @@ export function buildNPCDialogueContext(
    * formatPartyPresence) can pass it straight through.
    */
   partyPresence?: string,
+  /**
+   * WO-A4-5 (slice A4, §2 lock 4): the NPC's obligation ledger — favors,
+   * debts, betrayals — forwarded to buildNpcProfile's sixth argument so
+   * goal derivation (deriveNpcGoals' obligation-influenced priority
+   * adjustments, deriveLoyaltyBreakpoint's netOblWeight check) reflects
+   * them. Additive and optional, with a "read it from the world" default:
+   * when omitted, this function reads getPersistedNpcObligations(world)
+   * .get(npcId) itself, so no existing caller (game-core's turn-loop.ts,
+   * this domain's own ambient-dialogue.ts) has to change to pick this up
+   * — the same shape the world already flows through (`world` is this
+   * function's first parameter). A caller that already has a ledger in
+   * hand (e.g. a test, or a future caller with a more specific one) can
+   * still pass it explicitly to override the world read.
+   */
+  obligations?: NpcObligationLedger,
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -280,7 +297,15 @@ export function buildNPCDialogueContext(
   let textureHint: string | undefined;
 
   if (npc.ai) {
-    const profile = buildNpcProfile(world, npcId, world.playerId, activePressures ?? [], playerRumors);
+    // F-4e8dbbad / WO-A4-5: the sixth argument buildNpcProfile already
+    // accepts — obligations were never threaded to it before this wave, so
+    // goal derivation and the loyalty breakpoint were blind to favors owed,
+    // debts, and betrayals. `obligations` (the param) wins when a caller
+    // passes one explicitly; otherwise this reads world truth directly,
+    // same as the getPersistedNpcObligations(world) reads the getters
+    // elsewhere in this codebase use post-A4.
+    const npcObligations = obligations ?? getPersistedNpcObligations(world).get(npcId);
+    const profile = buildNpcProfile(world, npcId, world.playerId, activePressures ?? [], playerRumors, npcObligations);
     const topGoal = profile.goals[0];
     if (topGoal) {
       npcGoal = topGoal.label;

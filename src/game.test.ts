@@ -3366,3 +3366,241 @@ describe('Slice A5 (WO-A5-5): "the world moved" ledger (design doc §7)', () => 
     expect(session2.getWorldMovedSnapshot()).toBe(h.session.getWorldMovedSnapshot());
   });
 });
+
+describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)', () => {
+  it('resolveTuning() with no override equals DEFAULT_LIVING_WORLD_TUNING, whose fields equal TODAY\'s measured literals; a fresh GameSession\'s getTuning() matches it (RED before this WO: game/tuning.ts did not exist, GameConfig had no `tuning` field, and GameSession had no getTuning() method)', async () => {
+    const { resolveTuning, DEFAULT_LIVING_WORLD_TUNING } = await import('./game/tuning.js');
+    expect(resolveTuning()).toEqual(DEFAULT_LIVING_WORLD_TUNING);
+    expect(DEFAULT_LIVING_WORLD_TUNING).toEqual({
+      rumorStanceFadeTicks: 24,
+      rumorBelieveSuspicionBelow: 50,
+      rumorSpreadScope: 'district',
+      worldMovedCap: 200,
+      narrationPressureLines: 10,
+      narrationOpportunityLines: Infinity,
+      narrationRumorLines: Infinity,
+      ambushHeadline: 'always',
+    });
+
+    const session = new GameSession({
+      engine: createGame(),
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+    });
+    expect(session.getTuning()).toEqual(DEFAULT_LIVING_WORLD_TUNING);
+  });
+
+  it('GameConfig.tuning partially overrides the resolved defaults, leaving every other field at its measured default', () => {
+    const session = new GameSession({
+      engine: createGame(),
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+      tuning: { worldMovedCap: 3, ambushHeadline: 'never' },
+    });
+    expect(session.getTuning().worldMovedCap).toBe(3);
+    expect(session.getTuning().ambushHeadline).toBe('never');
+    // Untouched fields still read their measured default.
+    expect(session.getTuning().rumorStanceFadeTicks).toBe(24);
+    expect(session.getTuning().rumorSpreadScope).toBe('district');
+  });
+
+  it('worldMovedCap tunes pushWorldMoved\'s eviction ceiling (RED before this WO: pushWorldMoved always capped at the hard-coded MAX_WORLD_MOVED_ENTRIES literal, ignoring any override)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness({ gameOpts: { tuning: { worldMovedCap: 3 } } });
+
+    const pushWorldMoved = (h.session as unknown as {
+      pushWorldMoved: (kind: string, headline: string) => void;
+    }).pushWorldMoved.bind(h.session);
+    for (let i = 0; i < 5; i++) pushWorldMoved('ambush', `entry-${i}`);
+
+    expect(h.session.worldMovedLedger.length).toBe(3);
+    expect(h.session.worldMovedLedger[0].headline).toBe('entry-2'); // oldest 2 evicted
+    expect(h.session.worldMovedLedger[2].headline).toBe('entry-4');
+  });
+
+  it('ambushHeadline: \'never\' suppresses getAmbushHeadline() even when the round DID spawn an encounter; \'always\' (default) renders it (RED before this WO: the buildAmbushHeadline call site was unconditional -- no lever existed to suppress it)', () => {
+    const alwaysSession = new GameSession({
+      engine: createGame(),
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+    });
+    const neverSession = new GameSession({
+      engine: createGame(),
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+      tuning: { ambushHeadline: 'never' },
+    });
+
+    const fakeEncounterEvent: ResolvedEvent = {
+      id: 'ev-1',
+      tick: 1,
+      type: 'encounter.spawned',
+      payload: { encounterName: 'Bandit ambush', zoneName: 'Rustwater Alley' },
+    };
+    const getAmbush = (s: GameSession) =>
+      (s as unknown as { getAmbushHeadline: (events: ResolvedEvent[]) => string | undefined })
+        .getAmbushHeadline([fakeEncounterEvent]);
+
+    expect(getAmbush(alwaysSession)).toBe('Ambush: Bandit ambush in Rustwater Alley');
+    expect(getAmbush(neverSession)).toBeUndefined();
+  });
+
+  it('rumorBelieveSuspicionBelow tunes the first-hearing stance rule (RED before this WO: the threshold was hard-coded to the literal `50`, so an NPC at DEFAULT_SUSPICION (0) always believed with no way to force doubt)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+
+    // Default (50): pilgrim's suspicion (0, cognition-core's DEFAULT_SUSPICION)
+    // is below the default threshold -> believes.
+    const believeHarness = createHarness();
+    ensureImmersionInferAndTransitionStub(believeHarness.session);
+    believeHarness.session.rumorEngine.create({
+      claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
+      value: true, sourceId: 'some-witness', originTick: believeHarness.session.engine.tick, confidence: 0.8,
+    });
+    await believeHarness.play('look around');
+    expect(believeHarness.session.getHearerRumors('pilgrim')[0]?.stance).toBe('believe');
+
+    // Threshold 0: suspicion (0) < 0 is false, and this fixture's rumor has
+    // no faction uptake -> doubts instead.
+    const doubtHarness = createHarness({ gameOpts: { tuning: { rumorBelieveSuspicionBelow: 0 } } });
+    ensureImmersionInferAndTransitionStub(doubtHarness.session);
+    doubtHarness.session.rumorEngine.create({
+      claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
+      value: true, sourceId: 'some-witness', originTick: doubtHarness.session.engine.tick, confidence: 0.8,
+    });
+    await doubtHarness.play('look around');
+    expect(doubtHarness.session.getHearerRumors('pilgrim')[0]?.stance).toBe('doubt');
+  });
+
+  it('rumorSpreadScope: \'zone\' reaches fewer hearers than \'district\' on a fixture with named NPCs in two zones of one district (pilgrim @ chapel-entrance, the player\'s own starting zone; brother-aldric @ chapel-nave, same chapel-grounds district) (RED before this WO: the per-hearer spread filter always used the district-wide `getDistrictForZone(...) === playerDistrictId` clause, with no zone-scoped option)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+
+    // Default ('district'): both pilgrim (same zone) AND brother-aldric
+    // (same district, different zone) hear it -- this is the EXISTING
+    // WO-A5-4 proof's own assertion, re-verified here as the lever's
+    // null hypothesis baseline.
+    const districtHarness = createHarness();
+    ensureImmersionInferAndTransitionStub(districtHarness.session);
+    districtHarness.session.rumorEngine.create({
+      claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
+      value: true, sourceId: 'some-witness', originTick: districtHarness.session.engine.tick, confidence: 0.8,
+    });
+    await districtHarness.play('look around');
+    expect(districtHarness.session.getHearerRumors('pilgrim').length).toBe(1);
+    expect(districtHarness.session.getHearerRumors('brother-aldric').length).toBe(1);
+
+    // 'zone': only pilgrim (the player's own zone) hears it; brother-aldric
+    // (a different zone of the SAME district) does not.
+    const zoneHarness = createHarness({ gameOpts: { tuning: { rumorSpreadScope: 'zone' } } });
+    ensureImmersionInferAndTransitionStub(zoneHarness.session);
+    zoneHarness.session.rumorEngine.create({
+      claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
+      value: true, sourceId: 'some-witness', originTick: zoneHarness.session.engine.tick, confidence: 0.8,
+    });
+    await zoneHarness.play('look around');
+    expect(zoneHarness.session.getHearerRumors('pilgrim').length).toBe(1);
+    expect(zoneHarness.session.getHearerRumors('brother-aldric').length).toBe(0);
+  });
+});
+
+describe('Slice A6 (WO-A6-2): per-round metrics (design doc §5, design lock 2)', () => {
+  it('getRoundMetrics() yields one entry per played round, tick-ordered, with every count a non-negative number (RED before this WO: GameSession had no getRoundMetrics() method and no round-metrics capture at all)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    expect(h.session.getRoundMetrics()).toEqual([]);
+
+    for (let i = 0; i < 5; i++) {
+      await h.play('look around');
+    }
+
+    const metrics = h.session.getRoundMetrics();
+    expect(metrics.length).toBe(5);
+    let prevTick = -Infinity;
+    for (const m of metrics) {
+      expect(m.tick).toBeGreaterThan(prevTick);
+      prevTick = m.tick;
+      expect(typeof m.heat).toBe('number');
+      expect(typeof m.quietRounds).toBe('number');
+      expect(m.kills).toBeGreaterThanOrEqual(0);
+      expect(m.pressuresActive).toBeGreaterThanOrEqual(0);
+      expect(m.pressuresSpawned).toBeGreaterThanOrEqual(0);
+      expect(m.pressuresResolved).toBeGreaterThanOrEqual(0);
+      expect(m.pressuresExpired).toBeGreaterThanOrEqual(0);
+      expect(m.factionActions).toBeGreaterThanOrEqual(0);
+      expect(m.opportunitiesSpawned).toBeGreaterThanOrEqual(0);
+      expect(m.opportunitiesAccepted).toBeGreaterThanOrEqual(0);
+      expect(m.opportunitiesExpired).toBeGreaterThanOrEqual(0);
+      expect(m.ambushes).toBeGreaterThanOrEqual(0);
+      expect(typeof m.moodTransition).toBe('boolean');
+      expect(m.rumorsCreated).toBeGreaterThanOrEqual(0);
+      expect(m.rumorsMutated).toBeGreaterThanOrEqual(0);
+      expect(m.rumorHearers).toBeGreaterThanOrEqual(0);
+      expect(m.stanceBelieve).toBeGreaterThanOrEqual(0);
+      expect(m.stanceDoubt).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('capOldestFirst evicts at MAX_ROUND_METRICS (RED before this WO: no round-metrics ledger existed to cap)', async () => {
+    const { MAX_ROUND_METRICS } = await import('./game/round-metrics.js');
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    // Directly drive the private capture method past the cap rather than
+    // playing MAX_ROUND_METRICS+ real turns (slow, and the fake client's
+    // call log would grow unboundedly) -- same "reach into the private
+    // method with a documented cast" allowance the tuning suite above uses
+    // for pushWorldMoved.
+    const capture = (h.session as unknown as {
+      captureRoundMetrics: (events: ResolvedEvent[]) => void;
+    }).captureRoundMetrics.bind(h.session);
+    for (let i = 0; i < MAX_ROUND_METRICS + 10; i++) capture([]);
+
+    expect(h.session.getRoundMetrics().length).toBe(MAX_ROUND_METRICS);
+  });
+
+  it('rumorsCreated counts a mirrored rumor whose originTick is the current round; rumorHearers is a snapshot of all-time distinct hearers', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    h.session.rumorEngine.create({
+      claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
+      value: true, sourceId: 'some-witness', originTick: h.session.engine.tick, confidence: 0.8,
+    });
+    await h.play('look around');
+
+    const metrics = h.session.getRoundMetrics();
+    const last = metrics[metrics.length - 1];
+    // spreadPath starts as `[sourceId]` at RumorEngine.create() time (this
+    // rumor's sourceId is 'some-witness' -- engine.js:59), THEN pilgrim AND
+    // brother-aldric both hear it this round (WO-A5-4's own fixture,
+    // re-used above) -- three distinct spreadPath entries total.
+    expect(last.rumorHearers).toBe(3);
+    // Only pilgrim/brother-aldric get a first-hearing STANCE this round
+    // (setStance is only called for the two named-NPC receivers, never for
+    // the origin witness) -- two stance events, not three.
+    expect(last.stanceBelieve + last.stanceDoubt).toBe(2);
+  });
+});
+
+describe('Slice A6 (WO-A6-3): the /tuning data (design doc §5)', () => {
+  it('getTuningView() reports the resolved tuning, the last round\'s metrics, and the round count (RED before this WO: GameSession had no getTuningView() method)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    const emptyView = h.session.getTuningView();
+    expect(emptyView.rounds).toBe(0);
+    expect(emptyView.lastRound).toBeUndefined();
+    expect(emptyView.tuning).toEqual(h.session.getTuning());
+
+    await h.play('look around');
+    await h.play('look around');
+
+    const view = h.session.getTuningView();
+    expect(view.rounds).toBe(2);
+    expect(view.lastRound).toEqual(h.session.getRoundMetrics()[1]);
+  });
+});

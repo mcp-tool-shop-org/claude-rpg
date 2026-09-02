@@ -319,6 +319,21 @@ export type ExecuteTurnOpts = {
    * it yet).
    */
   getMoodTransition?: () => MoodTransitionInfo | undefined;
+  /**
+   * WO-A6-1 (slice A6 §3, design lock 1, ADDENDUM-COMMON): the resolved
+   * narration prompt budget (game/tuning.ts's `narrationPressureLines` /
+   * `narrationOpportunityLines` / `narrationRumorLines`) — threaded straight
+   * through to narrateScene's own `budget` option, the SAME additive-field
+   * pattern `getMoodTransition` above already established (WO-A5-2).
+   *
+   * narrator.ts's own NarrateSceneOpts (narrative-llm's file, this same
+   * wave's WO-A6-4) gains a matching `budget` field for buildNarratePrompt
+   * to actually cap lines by — green expected once that lands alongside
+   * this call site on the merged tree (this worktree cannot see it yet).
+   * Measured defaults (10 / Infinity / Infinity) keep every existing prompt
+   * byte-identical until a tuning wave overrides one.
+   */
+  budget?: { pressureLines: number; opportunityLines: number; rumorLines: number };
 };
 
 /**
@@ -418,7 +433,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
     tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
-    onResolved, getMoodTransition,
+    onResolved, getMoodTransition, budget,
   } = opts;
   const previousLocationId = engine.world.locationId;
 
@@ -667,6 +682,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       // NarrateSceneOpts gains the matching field (narrative-llm's own
       // worktree, this same wave) — green expected at merge.
       moodTransition,
+      // WO-A6-1 (slice A6 §3, design lock 1): additive optional param — see
+      // ExecuteTurnOpts.budget's own doc comment above. Excess-property
+      // under strict literal checking until narrator.ts's NarrateSceneOpts
+      // gains the matching field (narrative-llm's own worktree, this same
+      // wave, WO-A6-4) — green expected at merge, same pattern as
+      // moodTransition above.
+      budget,
     });
   } catch (err) {
     // F-c4332895: engine.submitAction() above has already mutated world

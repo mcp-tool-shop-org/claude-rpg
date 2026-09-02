@@ -207,7 +207,7 @@ import {
   DISTRICT_STABILITY_BASE,
 } from '@ai-rpg-engine/modules';
 import { formatRumorBoard, type RumorBoardLine } from '@ai-rpg-engine/rumor-system';
-import { type WorldMovedEntry, type WorldMovedKind, MAX_WORLD_MOVED_ENTRIES } from './game/world-moved.js';
+import { type WorldMovedEntry, type WorldMovedKind } from './game/world-moved.js';
 import { getReputation } from '@ai-rpg-engine/character-profile';
 import {
   getPlayerDistrictId as _getPlayerDistrictId,
@@ -261,6 +261,10 @@ import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpda
 import type { ConversationExchange } from './prompts/dialogue-npc.js';
 import { executeDirectorCommand, renderDirectorHelp, formatWorldLedgerLine } from './display/director-renderer.js';
 import { buildAmbushHeadline } from './game/ambush-headline.js';
+// WO-A6-1/WO-A6-2 (slice A6 §3/§5, design locks 1/2, ADDENDUM-COMMON): the
+// tuning surface + round-metrics shape this wave introduces.
+import { resolveTuning, type LivingWorldTuning } from './game/tuning.js';
+import { MAX_ROUND_METRICS, type RoundMetrics } from './game/round-metrics.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { hasLivingHostiles } from './runtime/hooks.js';
 // F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
@@ -508,6 +512,15 @@ export type GameConfig = {
    * restore" convention worldGenProposal/worldSeed above already have.
    */
   worldMoved?: WorldMovedEntry[];
+  /**
+   * WO-A6-1 (slice A6 §3, design lock 1): partial overrides onto
+   * `DEFAULT_LIVING_WORLD_TUNING` (game/tuning.ts) — omitted fields keep
+   * their measured default, so a session that never sets this is
+   * byte-identical to pre-wave behavior. `GameSession.getTuning()` returns
+   * the resolved object; the tuning waves (T1…Tn, post-Phase-9) are the only
+   * intended callers of this override this cycle.
+   */
+  tuning?: Partial<LivingWorldTuning>;
 };
 
 export class GameSession {
@@ -730,9 +743,51 @@ export class GameSession {
    * lastMoodTransition is.
    */
   private lastLeverageIncome: Partial<Record<LeverageCurrency, number>> = {};
+  /**
+   * WO-A6-1 (slice A6 §3, design lock 1): resolved once at construction
+   * (`resolveTuning(config.tuning)`) — every hard-coded site this wave
+   * rewires reads THIS field, never the literal it replaced. See
+   * `getTuning()` below and `GameConfig.tuning`'s own doc comment.
+   */
+  private readonly tuning: LivingWorldTuning;
+  /**
+   * WO-A6-2 (slice A6 §5, design lock 2): one entry per played round,
+   * oldest-first-capped at MAX_ROUND_METRICS. NOT persisted (design doc §5:
+   * "Round metrics are read, not persisted") — see `getRoundMetrics()` and
+   * `captureRoundMetrics()` below for where entries are built and pushed.
+   */
+  private readonly roundMetrics: RoundMetrics[] = [];
+  /**
+   * WO-A6-2: this round's faction-agency action count — captured inside
+   * runWorldRound from the SAME reference-identity diff (prevFactionByFaction)
+   * the chronicle-derivation loop already computes, so this doesn't re-pay
+   * for a second diff pass. Reset every round (runWorldRound always
+   * reassigns it, even to 0), read by captureRoundMetrics().
+   */
+  private lastRoundFactionActions = 0;
+  /**
+   * WO-A6-2: this round's first-hearing stance counts, tallied inside the
+   * per-hearer rumor-spread step (runWorldRound) alongside the existing
+   * `rumor-mutated` world-moved push. Reset every round.
+   */
+  private lastRoundStanceBelieve = 0;
+  private lastRoundStanceDoubt = 0;
+  /**
+   * WO-A6-2: incremented by processOpportunityAction's 'accept' case — a
+   * documented POST-turn step (same timing as applyProfileHints' player
+   * pressure-resolution branch), so this counter is read-and-reset by
+   * captureRoundMetrics() at the END of a turn's processing rather than
+   * inside runWorldRound itself. See RoundMetrics.opportunitiesAccepted's
+   * own doc comment for the full honesty-floor note.
+   */
+  private opportunitiesAcceptedThisRound = 0;
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
+    // WO-A6-1: resolved BEFORE the RumorEngine is constructed below — its
+    // config reads this.tuning.rumorStanceFadeTicks instead of the literal
+    // `24` this wave replaces.
+    this.tuning = resolveTuning(config.tuning);
     this.client = config.client ?? createAdaptedClient(config.clientConfig);
     this.history = config.history ?? new TurnHistory();
     this.packId = config.packId;
@@ -789,7 +844,10 @@ export class GameSession {
     // above (this.debugLog = config.debugLogger ?? createDebugLogger()),
     // so a restore warning has somewhere safe to go before the constructor
     // finishes.
-    const rumorEngineConfig = { stanceFadeTicks: 24 };
+    // WO-A6-1 (slice A6 §3, design lock 1): reads this.tuning instead of the
+    // literal `24` this wave replaces — measured default is unchanged (see
+    // LivingWorldTuning.rumorStanceFadeTicks's own doc comment, game/tuning.ts).
+    const rumorEngineConfig = { stanceFadeTicks: this.tuning.rumorStanceFadeTicks };
     if (config.rumorEngineSnapshot) {
       let parsed: EngineSnapshot | undefined;
       try {
@@ -1071,6 +1129,43 @@ export class GameSession {
    */
   getWorldMovedSnapshot(): string | undefined {
     return this.worldMovedLedger.length > 0 ? JSON.stringify(this.worldMovedLedger) : undefined;
+  }
+
+  /**
+   * WO-A6-1 (slice A6 §3, design lock 1): the resolved tuning object —
+   * `DEFAULT_LIVING_WORLD_TUNING` merged with `GameConfig.tuning`'s partial
+   * override, computed once at construction (see the constructor's own
+   * comment). Every app lever this wave introduces reads FROM this object;
+   * nothing recomputes it per-round.
+   */
+  getTuning(): LivingWorldTuning {
+    return this.tuning;
+  }
+
+  /**
+   * WO-A6-2 (slice A6 §5, design lock 2): the round-by-round metrics ledger
+   * — NOT persisted (design doc §5). See `RoundMetrics`'s own doc comment
+   * (game/round-metrics.ts) for what each field means and where it's
+   * captured.
+   */
+  getRoundMetrics(): RoundMetrics[] {
+    return this.roundMetrics;
+  }
+
+  /**
+   * WO-A6-3 (slice A6 §5): the read-only data cli-display's `/tuning`
+   * director command (WO-A6-5, their own worktree this wave) renders —
+   * threaded into the director-mode call site below as `tuningView`
+   * (ExecuteDirectorCommandOptions gains the matching field on cli-display's
+   * side; excess property here until then — "green expected at merge," same
+   * pattern as `worldLedger`/`marketQuotes`/`rumorBoard` above it).
+   */
+  getTuningView(): { tuning: LivingWorldTuning; lastRound?: RoundMetrics; rounds: number } {
+    return {
+      tuning: this.tuning,
+      lastRound: this.roundMetrics[this.roundMetrics.length - 1],
+      rounds: this.roundMetrics.length,
+    };
   }
 
   /**
@@ -1609,10 +1704,31 @@ export class GameSession {
     // eligible to spread the SAME round it's mirrored, not one round
     // behind. No-op when the player has no district or no named NPCs live
     // there this round.
+    //
+    // WO-A6-2: this round's first-hearing stance tally, reset every round
+    // (even one that never enters this block) — read by
+    // captureRoundMetrics().
+    this.lastRoundStanceBelieve = 0;
+    this.lastRoundStanceDoubt = 0;
     if (playerDistrictId) {
+      // WO-A6-1 (slice A6 §3, design lock 1): 'zone' restricts spread to the
+      // player's own zone instead of the whole district — measured default
+      // ('district') keeps today's `getDistrictForZone(...) ===
+      // playerDistrictId` filter byte-identical; the outer `if
+      // (playerDistrictId)` gate above is unchanged for either scope value
+      // (a 'zone'-scoped session still needs the player standing in SOME
+      // district today — narrowing that gate is out of this wave's scope,
+      // since every lever this wave ships must stay byte-identical at
+      // defaults and the composed-proof fixtures all place named NPCs
+      // inside a district).
+      const playerZoneId = this.engine.world.entities[this.engine.world.playerId]?.zoneId;
       const namedNpcIds = Object.values(this.engine.world.entities)
         .filter((e) => isNamedNpc(e, this.engine.world.playerId))
-        .filter((e) => e.zoneId !== undefined && getDistrictForZone(this.engine.world, e.zoneId) === playerDistrictId)
+        .filter((e) => e.zoneId !== undefined && (
+          this.tuning.rumorSpreadScope === 'zone'
+            ? e.zoneId === playerZoneId
+            : getDistrictForZone(this.engine.world, e.zoneId) === playerDistrictId
+        ))
         .map((e) => e.id);
 
       if (namedNpcIds.length > 0) {
@@ -1660,15 +1776,18 @@ export class GameSession {
             // Stance on first hearing (design lock 6, one rule, documented
             // — A6 tunes): believe if the rumor's faction uptake already
             // includes the hearer's own faction, OR the hearer's suspicion
-            // is low (< 50 — the SAME threshold cognition-core.js's own
-            // intent evaluation uses for "increasingly suspicious"
+            // is low (< this.tuning.rumorBelieveSuspicionBelow — WO-A6-1;
+            // measured default 50, the SAME threshold cognition-core.js's
+            // own intent evaluation uses for "increasingly suspicious"
             // behavior; DEFAULT_SUSPICION is 0, so an NPC nothing has
             // provoked reads as low-suspicion by default); doubt
             // otherwise.
             const suspicion = getCognition(this.engine.world, npcId).suspicion;
             const believes = (receiverFactionId !== undefined && spread.factionUptake.includes(receiverFactionId))
-              || suspicion < 50;
+              || suspicion < this.tuning.rumorBelieveSuspicionBelow;
             this.rumorEngine.setStance(npcId, spread.id, believes ? 'believe' : 'doubt', this.engine.tick);
+            // WO-A6-2: tally this round's first-hearing stance split.
+            if (believes) this.lastRoundStanceBelieve++; else this.lastRoundStanceDoubt++;
 
             if (spread.mutationCount > mutationCountBefore) {
               this.pushWorldMoved('rumor-mutated', `${spread.claim} (x${spread.mutationCount})`);
@@ -1701,8 +1820,14 @@ export class GameSession {
         this.journal.record(entry);
       }
     }
+    // WO-A6-2: this round's faction-agency action count, reset every round
+    // — read by captureRoundMetrics(). Counted from the SAME
+    // reference-identity diff the chronicle derivation below already pays
+    // for.
+    this.lastRoundFactionActions = 0;
     for (const result of this.lastFactionActions) {
       if (prevFactionByFaction.get(result.action.factionId) === result) continue;
+      this.lastRoundFactionActions++;
       const source: ChronicleEventSource = {
         kind: 'faction-action',
         action: result.action,
@@ -1821,6 +1946,12 @@ export class GameSession {
         // doc comment — cli-display's /rumors renderer (its own worktree)
         // gains the matching field; green expected at merge.
         rumorBoard: this.getRumorBoard(),
+        // WO-A6-3 (slice A6 §5): see getTuningView()'s own doc comment —
+        // cli-display's /tuning director command (WO-A6-5, their own
+        // worktree this wave) gains the matching
+        // ExecuteDirectorCommandOptions field; green expected at merge,
+        // same pattern as worldLedger/marketQuotes/rumorBoard above.
+        tuningView: this.getTuningView(),
       });
     }
 
@@ -1972,6 +2103,14 @@ export class GameSession {
         // AFTER onResolved's round has run — see
         // ExecuteTurnOpts.getMoodTransition's own doc comment.
         getMoodTransition: () => this.lastMoodTransition,
+        // WO-A6-1 (slice A6 §3, design lock 1): the resolved narration
+        // budget — see ExecuteTurnOpts.budget's own doc comment
+        // (turn-loop.ts) for the cross-domain contract.
+        budget: {
+          pressureLines: this.tuning.narrationPressureLines,
+          opportunityLines: this.tuning.narrationOpportunityLines,
+          rumorLines: this.tuning.narrationRumorLines,
+        },
         districtDescriptor,
         partyPresence: partyPresenceStr,
         // WO-A4-2 (slice A4 §2, design lock 3): situationHint is pre-gated
@@ -2252,6 +2391,24 @@ export class GameSession {
     }
     this.debugLog.info('turn', 'turn-end', { tick: this.engine.tick });
 
+    // WO-A6-2 (slice A6 §5, design lock 2): capture this round's metrics.
+    // Placed HERE — after applyProfileHints/processOpportunityAction (both
+    // already ran above, inside the try block that just closed) — rather
+    // than inside runWorldRound() itself, so a same-turn player-driven
+    // pressure resolution or opportunity accept (both documented POST-turn
+    // steps that run strictly AFTER runWorldRound returns) is still counted
+    // in the round it actually happened in. See captureRoundMetrics()'s own
+    // doc comment for the full honesty-floor note against the design doc's
+    // literal "captured inside runWorldRound" phrasing. A metrics-capture
+    // failure must never damage a turn that already completed.
+    try {
+      this.captureRoundMetrics(turnResult.events);
+    } catch (err) {
+      this.debugLog.error('subsystem', 'round-metrics capture failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     // Move advisor + contextual suggestions
     const leverageStatus = this.profile
       ? formatLeverageStatus(getLeverageState(this.profile.custom))
@@ -2316,7 +2473,9 @@ export class GameSession {
           // Stitch (wave 8, WO-A5-15 routed from cli-display): the round's
           // encounter.spawned event, rendered by the same describeEvent line
           // the narration prompt carries, becomes the play screen's headline.
-          ambushHeadline: buildAmbushHeadline(turnResult.events),
+          // WO-A6-1 (slice A6 §3, design lock 1): gated on the resolved
+          // `ambushHeadline` policy via getAmbushHeadline() below.
+          ambushHeadline: this.getAmbushHeadline(turnResult.events),
           suggestions,
           hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
           // Contract A (turn divider): cli-display's play-renderer consumes this
@@ -2506,10 +2665,119 @@ export class GameSession {
    * resolveOpportunity(), and evaluateEndgameTrigger() below to cap
    * resolvedPressures/resolvedOpportunities/endgameTriggers.
    */
+  /**
+   * WO-A6-1 (slice A6 §3, design lock 1): the ambush-headline policy gate,
+   * pulled out of the renderPlayOutput call site into its own method so it's
+   * independently testable without a real combat/encounter fixture (a
+   * private-method proof, same access pattern game.test.ts's WO-A5-5 suite
+   * already uses for pushWorldMoved). Measured default 'always' keeps this
+   * byte-identical to the unconditional `buildAmbushHeadline(...)` call it
+   * replaces.
+   */
+  private getAmbushHeadline(events: ResolvedEvent[]): string | undefined {
+    return this.tuning.ambushHeadline === 'never' ? undefined : buildAmbushHeadline(events);
+  }
+
   private capOldestFirst<T>(arr: T[], max: number): void {
     while (arr.length > max) {
       arr.shift();
     }
+  }
+
+  /**
+   * WO-A6-2 (slice A6 §5, design lock 2): build and push one RoundMetrics
+   * entry for the round that just finished, from `turnEvents` (this turn's
+   * FULL event delta — turn-loop.ts's own `events` array, the player's own
+   * action plus runWorldRound's tick delta concatenated) and the persisted
+   * readers this session already exposes as live getters.
+   *
+   * Called from processInput() AFTER applyProfileHints/
+   * processOpportunityAction have both already run for this turn (see that
+   * call site's own comment) — NOT literally inside runWorldRound()'s own
+   * method body, despite the design doc's "captured inside runWorldRound"
+   * phrasing (docs/living-world-slice-a6-phase9.md §5 via
+   * ADDENDUM-game-core WO-A6-2). Honesty-floor correction: `resolvePressure`
+   * (applyProfileHints' player pressure-resolution branch, this file's own
+   * comment at the corpse-gate step above: "applyProfileHints is a
+   * post-turn step, after runWorldRound's...") and processOpportunityAction's
+   * 'accept' case are BOTH documented post-turn steps that run strictly
+   * AFTER runWorldRound() returns for a turn — the only call site game.ts
+   * has for resolvePressure() and the only call site for opportunity-accept
+   * are neither one inside runWorldRound. Capturing metrics strictly inside
+   * that method would silently miss a same-turn player-driven pressure
+   * resolution or opportunity accept (undercounting `pressuresResolved`/
+   * `opportunitiesAccepted` for the round they actually happened in). This
+   * call site still produces exactly ONE entry per played round, keyed by
+   * the SAME `tick` value throughout a turn (ticks don't advance mid-turn),
+   * so the entry correctly describes "this round" either way — it is simply
+   * assembled once the round's full event stream (tick + post-turn steps)
+   * has actually happened, not partway through it.
+   *
+   * worldMovedLedger-derived counts (pressuresSpawned/Resolved/Expired,
+   * ambushes, rumorsMutated) are filtered by `entry.tick === tick` rather
+   * than tracked via a second parallel counter — pushWorldMoved() already
+   * tags every entry with the round's tick (including the ones
+   * resolvePressure() pushes from its post-turn call site), so this reuses
+   * that existing accumulation instead of re-deriving it.
+   */
+  private captureRoundMetrics(turnEvents: ResolvedEvent[]): void {
+    const tick = this.engine.tick;
+    const world = this.engine.world;
+    const heatRaw = world.globals[HEAT_KEY];
+    const heat = typeof heatRaw === 'number' ? heatRaw : 0;
+    const quietRounds = getWorldTickState(world).quietRounds;
+
+    const kills = turnEvents.filter(
+      (e) => e.type === 'combat.entity.defeated' && e.payload.entityId !== world.playerId,
+    ).length;
+
+    const thisRoundMoved = this.worldMovedLedger.filter((e) => e.tick === tick);
+    const countKind = (kind: WorldMovedKind) => thisRoundMoved.filter((e) => e.kind === kind).length;
+
+    // rumorsCreated: RumorEngine entries whose originTick is THIS round —
+    // rumor-mirror.ts's mirrorPlayerRumor writes the mirrored 4-valence
+    // rumor's OWN originTick (not the mirror-call tick), so this correctly
+    // reflects true creation tick even when mirroring happens a round late
+    // (mirrorUnmirroredRumors' own doc comment, this file).
+    const rumorsCreated = this.rumorEngine.query({}).filter((r) => r.originTick === tick).length;
+
+    // rumorHearers: a SNAPSHOT (all-time distinct hearers so far), not an
+    // event count — see RoundMetrics.rumorHearers' own doc comment.
+    const hearerSet = new Set<string>();
+    for (const r of this.rumorEngine.aboutSubject('player')) {
+      for (const id of r.spreadPath) hearerSet.add(id);
+    }
+
+    const priceQuote = this.buildMarketQuote()?.quotedPrice;
+
+    const entry: RoundMetrics = {
+      tick,
+      heat,
+      quietRounds,
+      kills,
+      pressuresActive: this.activePressures.length,
+      pressuresSpawned: countKind('pressure-spawned'),
+      pressuresResolved: countKind('pressure-resolved'),
+      pressuresExpired: countKind('pressure-expired'),
+      factionActions: this.lastRoundFactionActions,
+      opportunitiesSpawned: countKind('opportunity-offered'),
+      opportunitiesAccepted: this.opportunitiesAcceptedThisRound,
+      opportunitiesExpired: countKind('opportunity-expired'),
+      ambushes: countKind('ambush'),
+      moodTransition: this.lastMoodTransition !== undefined,
+      rumorsCreated,
+      rumorsMutated: countKind('rumor-mutated'),
+      rumorHearers: hearerSet.size,
+      stanceBelieve: this.lastRoundStanceBelieve,
+      stanceDoubt: this.lastRoundStanceDoubt,
+      priceQuote,
+    };
+    this.roundMetrics.push(entry);
+    this.capOldestFirst(this.roundMetrics, MAX_ROUND_METRICS);
+
+    // Post-turn-step counters are per-round accumulators consumed by THIS
+    // entry — reset for the next round now that they've been read.
+    this.opportunitiesAcceptedThisRound = 0;
   }
 
   /**
@@ -2519,7 +2787,11 @@ export class GameSession {
    */
   private pushWorldMoved(kind: WorldMovedKind, headline: string): void {
     this.worldMovedLedger.push({ tick: this.engine.tick, kind, headline });
-    this.capOldestFirst(this.worldMovedLedger, MAX_WORLD_MOVED_ENTRIES);
+    // WO-A6-1 (slice A6 §3, design lock 1): reads the resolved tuning's
+    // worldMovedCap instead of the MAX_WORLD_MOVED_ENTRIES literal — measured
+    // default is that SAME constant (game/tuning.ts), so this stays
+    // byte-identical.
+    this.capOldestFirst(this.worldMovedLedger, this.tuning.worldMovedCap);
   }
 
   /**
@@ -2765,6 +3037,10 @@ export class GameSession {
           getPersistedOpportunities(this.engine.world).map((o) => o.id === target.id ? target : o),
         );
         this.refreshProfileViews();
+        // WO-A6-2: tally this round's opportunity-accept count — see
+        // RoundMetrics.opportunitiesAccepted's own doc comment (this counter
+        // is read-and-reset by captureRoundMetrics()).
+        this.opportunitiesAcceptedThisRound++;
         // Chronicle
         const source: ChronicleEventSource = { kind: 'opportunity-accepted', opportunity: target, tick: this.engine.tick };
         for (const entry of deriveChronicleEvents(source, this.engine.world.playerId)) {

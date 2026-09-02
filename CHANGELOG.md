@@ -40,6 +40,13 @@ replaced the human Phase-9 gate and shaped the last two waves.
   named cost; **recognition** — helping a genuine ask earns a same-round
   acknowledgment, faction standing, a rumor about the deed, gratitude that
   repays later, and an honorific.
+- **A reeling warning**: the round your condition drops into `reeling`, the
+  combat channel says so and names the exits (`You are reeling — flee
+  (Chapel Nave · Vestry Passage) before you fall.`) — the fifth family
+  playtest showed seats fighting to the death at 4 HP with `flee` on screen.
+- **A debug-only start lever** (`CLAUDE_RPG_DEBUG_SEED_PRESSURE`) that seeds a
+  faction's standing and alert so a pressure exists from the first rounds,
+  for playtests.
 - **Follow-ups from the playtests**: a sentence typed at the NPC who just
   spoke is speech, not a clarification; `/go`, `/move`, `/zone <exit>` and
   `/rumors` in play mode; a bare NPC name talks, a bare exit moves; one

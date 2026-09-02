@@ -178,6 +178,36 @@ import {
   computeDistrictModifiers,
   formatDistrictMoodForNarrator,
 } from '@ai-rpg-engine/modules';
+// WO-A5 (slice A5, wave 8): additive engine reads for the world-reaches-
+// the-player surfaces — signatures verified against the installed 3.11 dist
+// (node_modules/@ai-rpg-engine/modules/dist/*.d.ts) per the wave addendum's
+// engine-reuse lock.
+import {
+  // WO-A5-1 (§1, lock 1): the engine's own buy-price quote + the flat
+  // constant every quote prices from (SELL_BASE_VALUE) — no hand-rolled
+  // price math on this domain's side (see buildMarketQuote()'s own doc
+  // comment for the honesty-floor correction to the design doc's "per
+  // district" framing).
+  quoteBuyPrice,
+  inferSupplyCategory,
+  getBuyableStock,
+  SELL_BASE_VALUE,
+  // WO-A5-3 (§4, lock 4): /leverage's quiet-round denominator, re-exposed
+  // on the extended worldLedger.
+  QUIET_ROUNDS_BEFORE_DECAY,
+  type LeverageCurrency,
+  // WO-A5-4 (§6, lock 6): named-NPC predicate, faction identity resolution,
+  // per-entity suspicion, and the district-stability formula
+  // DISTRICT_STABILITY_BASE's own doc comment documents (world-tick.d.ts:
+  // "clamp(0, 100, base + district_<id>_safety)").
+  isNamedNpc,
+  resolveEntityFaction,
+  getCognition,
+  getDistrictForZone,
+  DISTRICT_STABILITY_BASE,
+} from '@ai-rpg-engine/modules';
+import { formatRumorBoard, type RumorBoardLine } from '@ai-rpg-engine/rumor-system';
+import { type WorldMovedEntry, type WorldMovedKind, MAX_WORLD_MOVED_ENTRIES } from './game/world-moved.js';
 import { getReputation } from '@ai-rpg-engine/character-profile';
 import {
   getPlayerDistrictId as _getPlayerDistrictId,
@@ -223,7 +253,7 @@ import { renderWelcomeScreen, renderThinkingIndicator, renderOpeningOutput, rend
 import { createAdaptedClient } from './llm/claude-adapter.js';
 import type { ClaudeClient, ClaudeClientConfig, StreamCallback } from './claude-client.js';
 import { TurnHistory } from './session/history.js';
-import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints } from './turn-loop.js';
+import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpdateHints, type HearerRumorView, type MoodTransitionInfo } from './turn-loop.js';
 // F-462792bb (SLATE-2, persisted per Director ruling R2): NPC conversation
 // memory. ConversationExchange is prompts/dialogue-npc.ts's own type
 // (narrative-llm-owned) -- generateDialogue/dialogue-mind.ts already imports
@@ -469,6 +499,14 @@ export type GameConfig = {
    * identical world from the SAME proposal + seed pair.
    */
   worldSeed?: number;
+  /**
+   * WO-A5-5 (slice A5 §7): restored "the world moved" ledger for resumed
+   * sessions, read from a save via session.ts's
+   * loadWorldMovedFromSession(). Omitted (new game, or a save that
+   * predates this field) starts empty, same "absence means nothing to
+   * restore" convention worldGenProposal/worldSeed above already have.
+   */
+  worldMoved?: WorldMovedEntry[];
 };
 
 export class GameSession {
@@ -580,6 +618,17 @@ export class GameSession {
   lastLeverageResolution: LeverageResolution | null = null;
   lastCompanionReactions: CompanionReaction[] = [];
   resolvedOpportunities: OpportunityFallout[] = [];
+  /**
+   * WO-A5-5 (slice A5 §7): the round-by-round "the world moved" ledger —
+   * session HISTORY (like resolvedOpportunities above), not a world-truth
+   * view. See game/world-moved.ts's WorldMovedEntry doc comment for the
+   * shape and why it's uniform across kinds. Capped oldest-first via
+   * capOldestFirst (pushWorldMoved(), below) — same discipline as
+   * resolvedOpportunities/endgameTriggers. Restored from a save via
+   * GameConfig.worldMoved in the constructor; persisted via
+   * getWorldMovedSnapshot() (see its own doc comment).
+   */
+  worldMovedLedger: WorldMovedEntry[];
   arcSnapshot: ArcSnapshot | null = null;
   endgameTriggers: EndgameTrigger[] = [];
   finaleOutline: FinaleOutline | null = null;
@@ -659,6 +708,27 @@ export class GameSession {
    * Session-local, deliberately not persisted (meaningless between turns).
    */
   private turnStartZoneId: string | undefined;
+  /**
+   * WO-A5-2 (slice A5 §2, design lock 2): this round's district-mood
+   * transition for the PLAYER's district, or undefined when the round's
+   * before/after districtTones comparison found no change (or the player
+   * has no district). Recomputed every round in runWorldRound — never
+   * accumulated, so a quiet round correctly reports "nothing changed this
+   * round" rather than replaying a stale transition from several rounds
+   * back. Read by getMoodTransition() below, threaded into executeTurn's
+   * getMoodTransition opts callback (design lock 2's threading contract).
+   */
+  private lastMoodTransition: MoodTransitionInfo | undefined;
+  /**
+   * WO-A5-3 (slice A5 §4, design lock 4): this round's leverage-currency
+   * deltas — getLeverageState(player.custom) after the tick's own
+   * runLeverageIncomeStep minus before it ran. {} on a round that granted
+   * nothing (never undefined, so buildWorldLedger()'s `income` field is
+   * always a real object cli-display can iterate with no null-check).
+   * Recomputed fresh every round for the same "this round only" reason
+   * lastMoodTransition is.
+   */
+  private lastLeverageIncome: Partial<Record<LeverageCurrency, number>> = {};
 
   constructor(config: GameConfig) {
     this.engine = config.engine;
@@ -667,6 +737,8 @@ export class GameSession {
     this.packId = config.packId;
     this.worldGenProposal = config.worldGenProposal;
     this.worldSeed = config.worldSeed;
+    // WO-A5-5 (slice A5 §7): see GameConfig.worldMoved's doc comment.
+    this.worldMovedLedger = config.worldMoved ?? [];
     if (config.campaignStatus) this.campaignStatus = config.campaignStatus;
     this.tone = config.tone ?? 'dark fantasy, concise, atmospheric';
     this.title = config.title ?? 'claude-rpg';
@@ -781,6 +853,18 @@ export class GameSession {
     quietRounds: number;
     factionAlerts: Record<string, number>;
     districtTone?: string;
+    /**
+     * WO-A5-3 (slice A5 §4, design lock 4): this round's leverage-currency
+     * deltas — see lastLeverageIncome's own doc comment. {} on a quiet
+     * round, never undefined.
+     */
+    income: Partial<Record<LeverageCurrency, number>>;
+    /**
+     * WO-A5-3: the SAME quiet-round decay denominator quietRounds counts
+     * toward — re-exposed here so /leverage's "N/decayAfter quiet rounds to
+     * cooling" line doesn't need its own separate import of the constant.
+     */
+    decayAfter: number;
   } {
     const world = this.engine.world;
     const heatRaw = world.globals[HEAT_KEY];
@@ -799,6 +883,81 @@ export class GameSession {
       quietRounds: tickState.quietRounds,
       factionAlerts,
       ...(districtTone ? { districtTone } : {}),
+      income: this.lastLeverageIncome,
+      decayAfter: QUIET_ROUNDS_BEFORE_DECAY,
+    };
+  }
+
+  /**
+   * WO-A5-1 (slice A5 §1, design lock 1): market-quote data for /market and
+   * /trade — the engine's own `quoteBuyPrice(world, itemId, genre)` on a
+   * representative item, plus the flat constant every quote prices from
+   * (`SELL_BASE_VALUE`), so cli-display can compute a markup line
+   * ("Merchants here mark you up 15%") without this domain doing any price
+   * arithmetic of its own.
+   *
+   * HONESTY-FLOOR CORRECTION (node_modules/@ai-rpg-engine/modules/dist/
+   * trade-core.js:348-350): the design doc frames this as "per district"
+   * data, but `quoteBuyPrice` takes no district parameter at all — it
+   * ALWAYS derives its district from `world.playerId`'s own current zone
+   * (`getDistrictForZone(world, player.zoneId)`), by design (its own doc
+   * comment: "this function is deliberately world-level... buyHandler
+   * routes through it, so the quote and the purchase read the SAME
+   * composition"). Calling it in a loop over every district would return
+   * the identical number every time — the player's OWN district's quote —
+   * mislabeled under every other district's id, which is a caller-visible
+   * lie, not a "per district" survey. The only honest quote this domain can
+   * hand cli-display is the one district the engine can actually price:
+   * wherever the player is standing right now. cli-display's own worktree
+   * (§1) decides whether to render this line only when the requested/
+   * displayed districtId matches the returned `districtId`.
+   */
+  private buildMarketQuote(): {
+    districtId: string;
+    controllingFactionId?: string;
+    sampleItemId: string;
+    quotedPrice: number;
+    basePrice: number;
+  } | undefined {
+    const districtId = this.getPlayerDistrictId();
+    if (!districtId) return undefined;
+    const economy = this.districtEconomies.get(districtId);
+    if (!economy || !this.itemCatalog || this.itemCatalog.items.length === 0) return undefined;
+
+    // "the pack's item catalog's first tradeable in that district's supply
+    // categories (fallback: the first catalog item)" (WO-A5-1): the first
+    // catalog item that IS one of the fixed ids getBuyableStock actually
+    // offers for its own inferred SupplyCategory — not merely an item
+    // whose category happens to have SOME stock offered (findBuyableCategory,
+    // trade-core.js:308-314, requires the exact itemId to appear in that
+    // list; quoteBuyPrice returns undefined for anything short of that, so
+    // checking only the category would hand quoteBuyPrice an item it will
+    // silently refuse to price). Falls back to the catalog's own first item
+    // when nothing in the catalog is currently offered here (a
+    // black-market-only or newly-seeded district, say) — quoteBuyPrice
+    // then honestly returns undefined for it below, same as any other
+    // untradeable/ungated case.
+    let sampleItemId: string | undefined;
+    for (const item of this.itemCatalog.items) {
+      const category = inferSupplyCategory(item.id);
+      if (getBuyableStock(economy, category, this.genre).includes(item.id)) {
+        sampleItemId = item.id;
+        break;
+      }
+    }
+    sampleItemId ??= this.itemCatalog.items[0]?.id;
+    if (!sampleItemId) return undefined;
+
+    const quotedPrice = quoteBuyPrice(this.engine.world, sampleItemId, this.genre);
+    if (quotedPrice === undefined) return undefined;
+
+    const controllingFactionId = getDistrictDefinition(this.engine.world, districtId)?.controllingFaction;
+    return {
+      districtId,
+      ...(controllingFactionId ? { controllingFactionId } : {}),
+      sampleItemId,
+      quotedPrice,
+      basePrice: SELL_BASE_VALUE,
     };
   }
 
@@ -861,6 +1020,56 @@ export class GameSession {
    */
   getRumorEngineSnapshot(): string {
     return JSON.stringify(this.rumorEngine.serialize());
+  }
+
+  /**
+   * WO-A5-4 (slice A5 §6, design lock 6): per-hearer rumor view for the
+   * dialogue prompt — REPLACES `DialogueInput.playerRumors`' 4-valence
+   * shape on narrative-llm's own dialogue path (their own worktree this
+   * wave; turn-loop.ts's ExecuteTurnOpts.getHearerRumors threads this
+   * straight through). `heardBy(npcId)` already excludes dead rumors and
+   * sorts by confidence; `stanceOf` defaults to `'unknown'` for a rumor
+   * this engine has no recorded stance for — shouldn't happen for anything
+   * `heardBy` returns given runWorldRound's own spread step (below) always
+   * sets a stance the SAME round a named NPC first hears a rumor, but an
+   * honest reading either way: heard, no stance recorded.
+   */
+  getHearerRumors(npcId: string): HearerRumorView[] {
+    return this.rumorEngine.heardBy(npcId).map((r) => ({
+      claim: r.claim,
+      stance: this.rumorEngine.stanceOf(npcId, r.id),
+      confidence: r.confidence,
+      mutationCount: r.mutationCount,
+    }));
+  }
+
+  /**
+   * WO-A5-4 (slice A5 §6, design lock 6): the /rumors board — the engine's
+   * own `formatRumorBoard` view of what the player's OWN rumors (subject
+   * 'player') have become across every hearer (mutation count, faction
+   * uptake, denial). cli-display's /rumors renderer (its own worktree)
+   * reads this instead of the deleted 4-valence formatter/
+   * getRumorsKnownToFaction path. `query({ subject: 'player' })`
+   * deliberately includes dead rumors — formatRumorBoard's own default
+   * (`includeDead: false`) is what filters them, matching how the board
+   * is documented to behave ("live statuses only" unless asked).
+   */
+  getRumorBoard(): RumorBoardLine[] {
+    return formatRumorBoard(this.rumorEngine.query({ subject: 'player' }), {
+      resolveName: (entityId) => this.engine.world.entities[entityId]?.name ?? entityId,
+    });
+  }
+
+  /**
+   * WO-A5-5 (slice A5 §7): pre-serialized worldMovedLedger for the save
+   * path — cli-display's buildSaveInput (bin.ts) reads this and threads it
+   * into SaveSessionInput.worldMoved, same pass-through discipline as
+   * getRumorEngineSnapshot() above. Undefined when the ledger is empty
+   * (same "omit when nothing to persist" convention resolvedOpportunities/
+   * endgameTriggers already have in saveSession itself).
+   */
+  getWorldMovedSnapshot(): string | undefined {
+    return this.worldMovedLedger.length > 0 ? JSON.stringify(this.worldMovedLedger) : undefined;
   }
 
   /**
@@ -1287,6 +1496,21 @@ export class GameSession {
     const prevNpcByNpc = new Map(this.lastNpcActions.map((r) => [r.action.npcId, r]));
     const prevFactionByFaction = new Map(this.lastFactionActions.map((r) => [r.action.factionId, r]));
 
+    // WO-A5-2 (slice A5 §2, design lock 2): before-snapshot for this
+    // round's district-mood transition — compared against the after value
+    // once the tick has run, below.
+    const playerDistrictId = this.getPlayerDistrictId();
+    const moodBefore = playerDistrictId
+      ? getWorldTickState(this.engine.world).districtTones?.[playerDistrictId]
+      : undefined;
+    // WO-A5-3 (slice A5 §4, design lock 4): before-snapshot for this
+    // round's leverage-currency income — the tick's own
+    // runLeverageIncomeStep (world-tick.js) writes back onto THIS SAME
+    // entity object's `.custom` (`player.custom = custom`), so `player`
+    // here — already captured at step 1's corpse gate, above — sees the
+    // write with no extra lookup once the tick returns.
+    const leverageBefore = getLeverageState(player?.custom ?? {});
+
     // 3. Capture the eventLog cursor before the tick.
     const before = this.engine.world.eventLog.length;
 
@@ -1300,6 +1524,54 @@ export class GameSession {
       // and logged its own bounded line already (runWorldTick's own
       // contract) — logged here too, never surfaced raw to the player.
       this.debugLog.error('subsystem', 'world tick failed', { tick: this.engine.tick });
+    }
+
+    // WO-A5-2 (design lock 2): detect this round's transition — undefined
+    // when nothing changed (recomputed fresh every round, never
+    // accumulated). moodBefore/moodAfter are both undefined on a district's
+    // very first observation (world-tick.ts's own "establish the baseline
+    // silently" contract, districtTones' own doc comment) — the `!==
+    // undefined` guards below mean that round correctly reports no
+    // transition rather than a spurious one from nothing.
+    this.lastMoodTransition = undefined;
+    if (playerDistrictId) {
+      const moodAfter = getWorldTickState(this.engine.world).districtTones?.[playerDistrictId];
+      if (moodBefore !== undefined && moodAfter !== undefined && moodBefore !== moodAfter) {
+        this.lastMoodTransition = { districtId: playerDistrictId, from: moodBefore, to: moodAfter };
+        this.pushWorldMoved('mood-transition', `${playerDistrictId}: ${moodBefore} -> ${moodAfter}`);
+      }
+    }
+
+    // WO-A5-3 (design lock 4): this round's leverage-currency income —
+    // {} when the tick granted nothing (a quiet round, or a world with no
+    // leverage activity at all yet — runLeverageIncomeStep's own SEED-0
+    // gate).
+    const leverageAfter = getLeverageState(player?.custom ?? {});
+    const leverageIncome: Partial<Record<LeverageCurrency, number>> = {};
+    for (const currency of Object.keys(leverageAfter) as LeverageCurrency[]) {
+      const delta = leverageAfter[currency] - leverageBefore[currency];
+      if (delta !== 0) leverageIncome[currency] = delta;
+    }
+    this.lastLeverageIncome = leverageIncome;
+
+    // WO-A5-5 (slice A5 §7): "the world moved" — pressures spawned/
+    // expired, opportunities offered/expired, and ambushes, all sourced
+    // straight from this round's own WorldTickResult (pressure-resolved is
+    // pushed from resolvePressure() instead — see its own doc comment).
+    for (const p of tickResult.spawned) {
+      this.pushWorldMoved('pressure-spawned', `${p.kind}: ${p.description}`);
+    }
+    for (const fallout of tickResult.expired) {
+      this.pushWorldMoved('pressure-expired', `${fallout.resolution.pressureKind}: ${fallout.summary}`);
+    }
+    for (const opp of tickResult.opportunitiesSpawned) {
+      this.pushWorldMoved('opportunity-offered', opp.title);
+    }
+    for (const fallout of tickResult.opportunitiesExpired) {
+      this.pushWorldMoved('opportunity-expired', fallout.summary);
+    }
+    for (const enc of tickResult.encounters) {
+      this.pushWorldMoved('ambush', `${enc.encounterName} in ${enc.zoneId}`);
     }
 
     // resolvedOpportunities: append this round's expiry fallout (design
@@ -1326,6 +1598,84 @@ export class GameSession {
     // this.addRumor. Idempotent (mirrorPlayerRumor's own findBySubjectKey
     // guard), so re-scanning already-mirrored rumors every round is safe.
     this.mirrorUnmirroredRumors();
+
+    // WO-A5-4 (slice A5 §6, design lock 6): per-hearer rumor spread — for
+    // each active RumorEngine rumor about the player, spread once per
+    // round to every named NPC in the player's current district who
+    // hasn't heard it yet (spreadPath), then set that NPC's FIRST-hearing
+    // stance. Runs after the mirror sweep (this method's own step 5.5,
+    // above) so a rumor mirrored into the RumorEngine THIS round is
+    // eligible to spread the SAME round it's mirrored, not one round
+    // behind. No-op when the player has no district or no named NPCs live
+    // there this round.
+    if (playerDistrictId) {
+      const namedNpcIds = Object.values(this.engine.world.entities)
+        .filter((e) => isNamedNpc(e, this.engine.world.playerId))
+        .filter((e) => e.zoneId !== undefined && getDistrictForZone(this.engine.world, e.zoneId) === playerDistrictId)
+        .map((e) => e.id);
+
+      if (namedNpcIds.length > 0) {
+        // environmentInstability = 1 - (district stability / 100), clamped
+        // (design lock 6) — the SAME 0-100 composed-safety stability
+        // buildPressureInputs derives (world-tick.d.ts's
+        // DISTRICT_STABILITY_BASE doc comment: "clamp(0, 100, base +
+        // district_<id>_safety)"), NOT district-core's own ~0-10 raw
+        // metric (a different scale entirely, per that same doc comment).
+        // No public single-district accessor exists for this composed
+        // figure short of buildPressureInputs' full PressureInputs sweep
+        // (a whole-world pass this per-round rumor step has no other
+        // reason to pay for), so this reads the documented formula
+        // directly off the same global buildPressureInputs itself reads.
+        const safetyRaw = this.engine.world.globals[`district_${playerDistrictId}_safety`];
+        const safetyDelta = typeof safetyRaw === 'number' ? safetyRaw : 0;
+        const stability = Math.min(100, Math.max(0, DISTRICT_STABILITY_BASE + safetyDelta));
+        const environmentInstability = Math.min(1, Math.max(0, 1 - stability / 100));
+
+        for (const rumor of this.rumorEngine.aboutSubject('player')) {
+          // "spreaderId = the rumor's last spreader" (WO-A5-4): resolved
+          // ONCE per rumor (not per hearer) so every named NPC this round
+          // hears it from the SAME source — the rumor's own state as of
+          // this round's start, not a live chain that would otherwise
+          // depend on namedNpcIds' arbitrary iteration order.
+          const spreaderId = rumor.spreadPath.length > 0
+            ? rumor.spreadPath[rumor.spreadPath.length - 1]
+            : rumor.sourceId;
+          const spreaderFactionId = resolveEntityFaction(this.engine.world, spreaderId);
+
+          for (const npcId of namedNpcIds) {
+            if (rumor.spreadPath.includes(npcId)) continue; // already heard
+            const mutationCountBefore = rumor.mutationCount;
+            const receiverFactionId = resolveEntityFaction(this.engine.world, npcId);
+            const spread = this.rumorEngine.spread(rumor.id, {
+              spreaderId,
+              spreaderFactionId,
+              receiverId: npcId,
+              receiverFactionId,
+              environmentInstability,
+              hopCount: rumor.spreadPath.length,
+              currentTick: this.engine.tick,
+            });
+
+            // Stance on first hearing (design lock 6, one rule, documented
+            // — A6 tunes): believe if the rumor's faction uptake already
+            // includes the hearer's own faction, OR the hearer's suspicion
+            // is low (< 50 — the SAME threshold cognition-core.js's own
+            // intent evaluation uses for "increasingly suspicious"
+            // behavior; DEFAULT_SUSPICION is 0, so an NPC nothing has
+            // provoked reads as low-suspicion by default); doubt
+            // otherwise.
+            const suspicion = getCognition(this.engine.world, npcId).suspicion;
+            const believes = (receiverFactionId !== undefined && spread.factionUptake.includes(receiverFactionId))
+              || suspicion < 50;
+            this.rumorEngine.setStance(npcId, spread.id, believes ? 'believe' : 'doubt', this.engine.tick);
+
+            if (spread.mutationCount > mutationCountBefore) {
+              this.pushWorldMoved('rumor-mutated', `${spread.claim} (x${spread.mutationCount})`);
+            }
+          }
+        }
+      }
+    }
 
     // WO-A2-4 (slice A2 §5, kept branch): chronicle entries for NPC and
     // faction actions new THIS round only (see the reference-identity
@@ -1457,6 +1807,16 @@ export class GameSession {
         // that landing, per the addendum's "code against the doc's
         // contract" instruction — green expected at merge.
         worldLedger: this.buildWorldLedger(),
+        // WO-A5-1 (slice A5 §1, design lock 1): see buildMarketQuote()'s
+        // own doc comment — cli-display's /market and /trade renderers
+        // (their own worktree this wave) gain the matching
+        // ExecuteDirectorCommandOptions field; green expected at merge,
+        // same pattern as worldLedger above.
+        marketQuote: this.buildMarketQuote(),
+        // WO-A5-4 (slice A5 §6, design lock 6): see getRumorBoard()'s own
+        // doc comment — cli-display's /rumors renderer (its own worktree)
+        // gains the matching field; green expected at merge.
+        rumorBoard: this.getRumorBoard(),
       });
     }
 
@@ -1591,7 +1951,11 @@ export class GameSession {
         characterPresence: presence.narrator,
         npcPlayerPresence: presence.npc,
         playerProfile: this.profile,
-        playerRumors: this.playerRumors,
+        // WO-A5-4 (slice A5 §6, design lock 6): REPLACES the old
+        // playerRumors (4-valence) threading — see
+        // ExecuteTurnOpts.getHearerRumors' own doc comment (turn-loop.ts)
+        // for the cross-domain contract with dialogue-mind.ts.
+        getHearerRumors: (npcId: string) => this.getHearerRumors(npcId),
         pressureContext: pressureCtx,
         worldPressures: this.activePressures,
         lastNpcActions: this.lastNpcActions,
@@ -1600,6 +1964,10 @@ export class GameSession {
         // own action resolves and before narration (turn-loop.ts's
         // ExecuteTurnOpts.onResolved contract).
         onResolved: (actionEvents) => this.runWorldRound(actionEvents),
+        // WO-A5-2 (slice A5 §2, design lock 2): resolved by turn-loop.ts
+        // AFTER onResolved's round has run — see
+        // ExecuteTurnOpts.getMoodTransition's own doc comment.
+        getMoodTransition: () => this.lastMoodTransition,
         districtDescriptor,
         partyPresence: partyPresenceStr,
         // WO-A4-2 (slice A4 §2, design lock 3): situationHint is pre-gated
@@ -2087,6 +2455,9 @@ export class GameSession {
         npcConversations: this.npcConversations,
         // WO-A3-2 (slice A3 §3): see SavedSession.rumorEngine's doc comment.
         rumorEngine: this.getRumorEngineSnapshot(),
+        // WO-A5-5 (slice A5 §7): see SavedSession.worldMoved's doc comment
+        // (session.ts) — same pass-through discipline as rumorEngine above.
+        worldMoved: this.getWorldMovedSnapshot(),
       };
       await saveSession(input);
       this.debugLog.info('autosave', 'autosave-complete', { path: savePath });
@@ -2131,6 +2502,16 @@ export class GameSession {
     while (arr.length > max) {
       arr.shift();
     }
+  }
+
+  /**
+   * WO-A5-5 (slice A5 §7): append one "the world moved" entry and cap
+   * oldest-first — same discipline capOldestFirst already applies to
+   * resolvedOpportunities/endgameTriggers above.
+   */
+  private pushWorldMoved(kind: WorldMovedKind, headline: string): void {
+    this.worldMovedLedger.push({ tick: this.engine.tick, kind, headline });
+    this.capOldestFirst(this.worldMovedLedger, MAX_WORLD_MOVED_ENTRIES);
   }
 
   /**
@@ -2284,6 +2665,12 @@ export class GameSession {
     while (resolved.length > RESOLVED_PRESSURES_KEPT) resolved.shift();
     state.resolvedPressures = resolved;
     this.refreshProfileViews();
+
+    // WO-A5-5 (slice A5 §7): "the world moved" — the player/faction-
+    // resolved half of "pressures spawned/resolved/expired"; the other two
+    // (spawned/expired) are pushed in runWorldRound from the tick's own
+    // WorldTickResult, below.
+    this.pushWorldMoved('pressure-resolved', `${pressure.kind}: ${fallout.summary}`);
 
     // Companion reactions to pressure resolution
     if (this.partyState.companions.length > 0) {

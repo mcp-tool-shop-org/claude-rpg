@@ -5,7 +5,10 @@
 import type { Engine, ResolvedEvent, WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { NarrationPlan } from '@ai-rpg-engine/presentation';
-import { getEntityFaction, getCognition, type PlayerRumor, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
+import { getEntityFaction, getCognition, type WorldPressure, type ResolutionType, type NpcActionResult } from '@ai-rpg-engine/modules';
+// WO-A5-4 (slice A5 §6, design lock 6): the per-hearer rumor line's stance
+// field — same package GameSession's RumorEngine (game.ts) already imports.
+import type { RumorStance } from '@ai-rpg-engine/rumor-system';
 import type { ClaudeClient, StreamCallback } from './claude-client.js';
 import { interpretAction, type InterpretedAction } from './action-interpreter.js';
 import { narrateScene, FATAL_NARRATION_FALLBACK, type NarrationResult } from './narrator/narrator.js';
@@ -73,6 +76,27 @@ import type { DebugLogger } from './game/debug-logger.js';
 type ImmersionRuntimeWithInference = ImmersionRuntime & {
   inferAndTransition(engine: Engine, events: ResolvedEvent[], verb: string): StateTransition;
 };
+
+/**
+ * WO-A5-4 (slice A5 §6, design lock 6): one per-hearer rumor line —
+ * `DialogueInput.playerRumors` (4-valence) is REPLACED by an array of these
+ * (`GameSession.getHearerRumors(npcId)`, game.ts), sourced from the
+ * RumorEngine's own `heardBy(npcId)` + `stanceOf(npcId, rumor.id)`.
+ */
+export type HearerRumorView = {
+  claim: string;
+  stance: RumorStance;
+  confidence: number;
+  mutationCount: number;
+};
+
+/**
+ * WO-A5-2 (slice A5 §2, design lock 2): the player's district's mood
+ * transition detected THIS round (game.ts's runWorldRound, comparing
+ * `getWorldTickState(world).districtTones[districtId]` before/after the
+ * tick) — undefined when no transition happened this round.
+ */
+export type MoodTransitionInfo = { districtId: string; from: string; to: string };
 
 export type ProfileUpdateHints = {
   xpGained: number;
@@ -182,7 +206,23 @@ export type ExecuteTurnOpts = {
   characterPresence?: string;
   npcPlayerPresence?: string;
   playerProfile?: CharacterProfile | null;
-  playerRumors?: PlayerRumor[];
+  /**
+   * WO-A5-4 (slice A5 §6, design lock 6): per-hearer rumor lines for the
+   * NPC currently being spoken to — REPLACES the old `playerRumors` (4-
+   * valence) field this exact call site (Step 5, generateDialogue() below)
+   * used to thread straight through. A callback, not a pre-resolved array,
+   * for the SAME reason `conversationHistory` below is one: game.ts calls
+   * executeTurn() before Step 1 resolves which NPC is being spoken to, so
+   * it hands over `(npcId) => this.getHearerRumors(npcId)` and Step 5 below
+   * calls it once `interpreted.targetIds[0]` is known.
+   *
+   * dialogue-mind.ts's own generateDialogue() (narrative-llm's file, this
+   * same wave's WO for that domain) takes this array at the SAME
+   * positional slot `playerRumors` used to occupy — green expected once
+   * that signature change lands alongside this call site on the merged
+   * tree (parallel-wave honesty floor: this worktree cannot see it yet).
+   */
+  getHearerRumors?: (npcId: string) => HearerRumorView[];
   pressureContext?: string[];
   worldPressures?: WorldPressure[];
   lastNpcActions?: NpcActionResult[];
@@ -261,6 +301,24 @@ export type ExecuteTurnOpts = {
    * hint or tick failure must never kill a turn.
    */
   onResolved?: (actionEvents: ResolvedEvent[]) => ResolvedEvent[];
+  /**
+   * WO-A5-2 (slice A5 §2, design lock 2): called AFTER onResolved's round
+   * has run (so the transition it returns reflects the round that just
+   * executed), BEFORE narrateScene — the additive optional param the design
+   * doc calls threading `moodTransition` into narrateScene (the wave-13
+   * threading pattern: a hint computed by game.ts and forwarded through
+   * this opts object, here as a getter because the value isn't known until
+   * mid-turn, the same reason onResolved above is a callback rather than a
+   * static field). Undefined when the host has no mood-transition source,
+   * or when nothing transitioned this round.
+   *
+   * narrator.ts's own NarrateSceneOpts (narrative-llm's file, this same
+   * wave's WO for that domain) gains a matching `moodTransition` field to
+   * render ONE mechanical line from it — green expected once that lands
+   * alongside this call site on the merged tree (this worktree cannot see
+   * it yet).
+   */
+  getMoodTransition?: () => MoodTransitionInfo | undefined;
 };
 
 /**
@@ -354,13 +412,13 @@ export function filterSupportedVerbs(rawVerbs: string[]): string[] {
 export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   const {
     engine, client, history, playerInput, tone, immersion,
-    characterPresence, npcPlayerPresence, playerProfile, playerRumors,
+    characterPresence, npcPlayerPresence, playerProfile, getHearerRumors,
     pressureContext, worldPressures, lastNpcActions, districtDescriptor,
     partyPresence, activeOpportunities, situationHint,
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
     tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
-    onResolved,
+    onResolved, getMoodTransition,
   } = opts;
   const previousLocationId = engine.world.locationId;
 
@@ -541,6 +599,23 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     events = [...events, ...roundEvents];
   }
 
+  // WO-A5-2 (slice A5 §2, design lock 2): resolved AFTER onResolved's round
+  // has run, so this reflects the transition (if any) THIS round's own
+  // world tick just produced -- not a stale value snapshotted before the
+  // round started. A throw here must not kill the turn any more than a
+  // missing situationHint does; getMoodTransition's own game.ts
+  // implementation never throws, but this stays defensive the same way
+  // onResolved's own try/catch above is.
+  let moodTransition: MoodTransitionInfo | undefined;
+  try {
+    moodTransition = getMoodTransition?.();
+  } catch (err) {
+    debugLog?.error('turn', 'getMoodTransition hook threw', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    moodTransition = undefined;
+  }
+
   // Step 3 + 4: Build scene context with perception filtering and narrate
   const recentNarration = history.getRecentNarration(3);
   // F-4ec3609b: infer + apply THIS turn's presentation-state transition
@@ -585,6 +660,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       onChunk: onNarrationChunk,
       chronicleContext,
       consecutiveFallbacks,
+      // WO-A5-2 (slice A5 §2, design lock 2): additive optional param —
+      // see getMoodTransition's own doc comment above and
+      // ExecuteTurnOpts.getMoodTransition for the cross-domain contract.
+      // Excess-property under strict literal checking until narrator.ts's
+      // NarrateSceneOpts gains the matching field (narrative-llm's own
+      // worktree, this same wave) — green expected at merge.
+      moodTransition,
     });
   } catch (err) {
     // F-c4332895: engine.submitAction() above has already mutated world
@@ -687,7 +769,10 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
         tone,
         npcPlayerPresence,
         playerProfile,
-        playerRumors,
+        // WO-A5-4 (slice A5 §6, design lock 6): resolved for the SAME npcId
+        // being spoken to, same positional slot `playerRumors` used to
+        // occupy — see ExecuteTurnOpts.getHearerRumors's doc comment.
+        getHearerRumors ? getHearerRumors(interpreted.targetIds[0]) : [],
         worldPressures,
         lastNpcActions,
         economyContext,

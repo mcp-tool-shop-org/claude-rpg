@@ -27,6 +27,11 @@ import type { ConversationExchange } from '../prompts/dialogue-npc.js';
 // split in world-gen.ts; this file only serializes an already-validated
 // proposal object through to the save).
 import type { WorldGenProposal } from '../foundry/world-gen.js';
+// WO-A5-5 (slice A5 §7): the "world moved" ledger entry shape — shared with
+// game.ts (src/game/world-moved.ts is within this domain's src/game/**
+// glob), so both sides agree on what a WorldMovedEntry looks like without
+// this file re-declaring its own copy.
+import { VALID_WORLD_MOVED_KINDS, type WorldMovedEntry } from '../game/world-moved.js';
 
 export type SavedSession = {
   schemaVersion: number;
@@ -144,6 +149,16 @@ export type SavedSession = {
    * from the identical proposal + seed pair.
    */
   worldSeed?: number;
+  /**
+   * WO-A5-5 (slice A5 §7): JSON of GameSession.worldMovedLedger (the
+   * round-by-round "the world moved" ledger — see src/game/world-moved.ts's
+   * WorldMovedEntry doc comment), from
+   * GameSession.getWorldMovedSnapshot(). Same "omit when nothing to
+   * persist" convention as resolvedOpportunities/endgameTriggers above.
+   * Absent on every pre-A5 save and on a v3+ session that has never
+   * accumulated an entry.
+   */
+  worldMoved?: string;
 };
 
 export type SaveSlotSummary = {
@@ -215,6 +230,13 @@ export type SaveSessionInput = {
   worldGenProposal?: WorldGenProposal;
   /** WO-A4-3: see worldGenProposal's doc comment; the seed instantiateWorld used. */
   worldSeed?: number;
+  /**
+   * WO-A5-5 (slice A5 §7): pre-serialized by
+   * GameSession.getWorldMovedSnapshot() — saveSession writes it through
+   * unchanged, same pass-through discipline as rumorEngine above. See
+   * SavedSession.worldMoved's doc comment.
+   */
+  worldMoved?: string;
 };
 
 export async function saveSession(input: SaveSessionInput): Promise<void> {
@@ -223,7 +245,7 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
     genre, journal, resolvedOpportunities,
     arcSnapshot, endgameTriggers, finaleOutline, campaignStatus,
     presentationState, npcConversations, rumorEngine,
-    worldGenProposal, worldSeed,
+    worldGenProposal, worldSeed, worldMoved,
   } = input;
 
   const session: SavedSession = {
@@ -282,6 +304,10 @@ export async function saveSession(input: SaveSessionInput): Promise<void> {
       ? JSON.stringify(worldGenProposal)
       : undefined,
     worldSeed: !packId ? worldSeed : undefined,
+    // WO-A5-5 (slice A5 §7): pre-serialized by
+    // GameSession.getWorldMovedSnapshot() — passed through unchanged, same
+    // discipline as rumorEngine above.
+    worldMoved,
   };
 
   const dir = dirname(savePath);
@@ -1106,6 +1132,48 @@ export function loadResolvedOpportunitiesFromSession(session: SavedSession): Opp
         result.push(value);
       } else if (isDebugEnabled()) {
         console.warn(`[session] Dropping malformed resolvedOpportunities entry at index ${index} on load — shape mismatch.`);
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * WO-A5-5 (slice A5 §7): shape guard for a single WorldMovedEntry —
+ * mirrors isValidOpportunityFallout's per-entry validate/drop-with-warning
+ * discipline immediately above.
+ */
+function isValidWorldMovedEntry(value: unknown): value is WorldMovedEntry {
+  if (value == null || typeof value !== 'object') return false;
+  const e = value as Record<string, unknown>;
+  return (
+    typeof e.tick === 'number' &&
+    typeof e.kind === 'string' &&
+    (VALID_WORLD_MOVED_KINDS as readonly string[]).includes(e.kind) &&
+    typeof e.headline === 'string'
+  );
+}
+
+/**
+ * WO-A5-5 (slice A5 §7): load the "the world moved" ledger from a saved
+ * session — same per-entry validate/drop-with-warning shape as
+ * loadResolvedOpportunitiesFromSession immediately above. [] on a
+ * pre-A5 save (no `worldMoved` field) or a session that never
+ * accumulated an entry.
+ */
+export function loadWorldMovedFromSession(session: SavedSession): WorldMovedEntry[] {
+  if (!session.worldMoved) return [];
+  try {
+    const parsed: unknown = JSON.parse(session.worldMoved);
+    if (!Array.isArray(parsed)) return [];
+    const result: WorldMovedEntry[] = [];
+    for (const [index, value] of parsed.entries()) {
+      if (isValidWorldMovedEntry(value)) {
+        result.push(value);
+      } else if (isDebugEnabled()) {
+        console.warn(`[session] Dropping malformed worldMoved entry at index ${index} on load — shape mismatch.`);
       }
     }
     return result;

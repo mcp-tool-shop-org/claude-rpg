@@ -1,50 +1,60 @@
 # Slice B2 — the starter-fantasy cast sheet (cloud run, 2026-09-02)
 
 **Proof 6 of `docs/living-world-slice-b2.md`:** the starter-fantasy cast rendered
-through the pinned workflow for the Director's ruling. This first sheet is the
-**cloud** backend (Comfy Cloud via the hosted MCP plugin); the local-backend
-parity sheet follows when the local ComfyUI can have the GPU.
+through the pinned workflow for the Director's ruling. Cloud backend (Comfy
+Cloud via the hosted MCP plugin); the local-backend parity sheet follows when
+the local ComfyUI can have the GPU.
 
-![cast sheet](../dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02.jpg)
+## Second sheet — descriptions from prompt-craft contracts (current)
+
+The Director's ruling on the first sheet: the pilgrim had rendered as a nun
+and is **male**, and descriptions must come from **prompt-craft** contracts so
+that a description makes a proper character. The cast was re-authored as
+contracts (`dogfood/portraits/contracts/{factions,characters}`, validated by
+`pcraft`), the prompts derived from their atoms, and the cast re-rendered.
+
+![cast sheet, contract-built](../dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02-contracts.jpg)
 
 Rows: Suspicious Pilgrim · Brother Aldric · Sister Maren · Crypt Stalker · Ash
-Ghoul · Crypt Warden. Columns: the three candidates per entity (seed, seed+1,
-seed+2 — design §3, best-of-3). Nothing here has passed the gate yet; the gate
-(SigLIP2 + a local vision model, eight questions each, style plate check) runs
-per entity with `portrait-forge accept` and writes the registry.
+Ghoul · Crypt Warden. Columns: seed, seed+1, seed+2.
+
+Coordinator reading, before the gate:
+
+- **Pilgrim:** a middle-aged man — hood half back, stubble, scallop badge, red
+  patch, staff. Every atom present; the correction landed.
+- **Aldric, Maren, Stalker, Warden:** on contract. Maren's veil rendered black
+  over a white coif where the atom says "plain white veil" — the gate's veil
+  question will decide, and the contract may need the word "wimple-less" made
+  explicit as a must_not.
+- **Ash Ghoul:** "the charred remnants of a plain sexton's work tunic" was read
+  by the model as a modern work shirt and overalls. That is a contract-authoring
+  lesson, not a model failure: "work tunic" is one paraphrase from "work
+  clothes". The atom will be rewritten as a period garment ("a burnt,
+  threadbare medieval tunic and hose") and `no_modern` raised to required.
+
+## First sheet — hand-written slot descriptions (superseded)
+
+![cast sheet, slot-built](../dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02.jpg)
+
+Kept for the record of the ruling: the pilgrim in row one is the nun the
+Director rejected. Its prompts were the coordinator's prose, not contracts.
 
 ## How it was made
 
 | Item | Value |
 |---|---|
-| Tool | `portrait-forge` (private, `mcp-tool-shop-org/portrait-forge`), `scripts/emit-graphs.mjs` |
-| Workflow | `workflows/qwen-sfhd.portrait.json`, SHA-256 `0f586da32e7e…` (full hash in the index file beside the sheet) |
-| Base | `qwen_image_2512_fp8_e4m3fn.safetensors` (fp8: the bf16 base trips this rig's VRAM ceiling) |
-| LoRA | `sfhd_style_v1_000001250` at 0.85 — on Comfy Cloud under its imported name `SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors` |
+| Tool | `portrait-forge` (private, `mcp-tool-shop-org/portrait-forge`): `scripts/from-contracts.mjs` → `scripts/emit-graphs.mjs` |
+| Contracts | `dogfood/portraits/contracts/` — `faction:chapel-folk`, `faction:crypt-undead`, six `char:*` (each `pcraft validate` clean; `pcraft synth` is the provenance witness) |
+| Workflow | `workflows/qwen-sfhd.portrait.json`, SHA-256 `0f586da32e7e…` (full hash in the index file beside each sheet) |
+| Base | `qwen_image_2512_fp8_e4m3fn.safetensors` |
+| LoRA | `sfhd_style_v1_000001250` at 0.85 (on Comfy Cloud as `SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors`) |
 | Sampler | euler / simple, 50 steps, cfg 4.0, shift 3.1, 832×1216 |
-| Prompt | the frozen slot template (design §1): `sfhd style, [species/body] [age] [face] [hair] [garb] [mood] [palette] [shot]`, fillers from `casts/starter-fantasy.json` |
-| Seeds | derived: low 53 bits of SHA-256(packId, entityId, descriptionHash) — listed per graph in the index file |
-| Backend | Comfy Cloud, one `submit_workflow` (pilgrim r0-0) + one `submit_batch` of 17; all 18 completed, none failed |
-
-## What the sheet shows (coordinator reading, before the gate)
-
-- The house look holds across all six: one painterly register, one lighting
-  model, plain pale ground, silhouette-first readability — the bible's look.
-- Within each row the three seeds agree on identity (face, garb, prop, palette);
-  the variance is pose and rendering detail, which is what a best-of-3 wants.
-- Slot fidelity by eye: pilgrim (wimple, scallop badge, red patch, staff) ✓;
-  Aldric (tonsure, beard, rope belt, pendant, candle-gold) ✓; Maren (veil,
-  black-and-white habit, ink-stained fingers, satchel of papers) ✓; stalker
-  (gaunt, hook, wrappings, grave grey/violet) ✓; ghoul (hairless, cracked
-  scalp, ember accents, charred cleric's tunic reading as a cassock) ✓;
-  warden (great-helm, black iron, tabard, greatsword, green witch-light) ✓.
-- Two things for the Director's eye: the ghoul's "sexton's tunic" rendered as a
-  priest's cassock with crosses (a strong read, arguably better than the
-  brief); Maren's shot came out three-quarter rather than bust on two of
-  three (the gate's questions do not test shot, by design).
+| Prompt | `sfhd style, [every expected-yes atom, contract order], [shot]`; negative = every expected-no atom + the frozen technical negatives |
+| Seeds | low 53 bits of SHA-256(packId, entityId, descriptionHash); the description hash is the contract's atoms |
+| Backend | Comfy Cloud, one `submit_batch` of 18; all completed, none failed |
 
 ## Next
 
-1. Gate each entity (`portrait-forge accept --entity casts/starter-fantasy/<id>.json --candidates _cloud/starter-fantasy/out/<id>`) → registry manifests with the questions, answers, and style scores; append the accepted column here.
-2. Local-backend parity sheet (same graphs, local ComfyUI, pinned local LoRA name).
-3. The Director rules on the sheet; then wave 11 wires the adapters (runtime-foundry `src/runtime/portraits.ts`, cli-display caption / inline / `/portrait`).
+1. Gate each entity (`scripts/gate-cast.sh casts/starter-fantasy _cloud/starter-fantasy-v2/out`): one question per contract atom through SigLIP2 and `qwen3.6:27b`; registry manifests record every answer.
+2. Rewrite the ghoul's garment atom; re-render the ghoul only.
+3. Local-backend parity sheet; then the Director rules on the sheet; wave 11 wires the adapters.

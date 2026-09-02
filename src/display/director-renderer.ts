@@ -152,6 +152,7 @@ const DIRECTOR_COMMANDS: { cmd: string; desc: string }[] = [
   { cmd: '/finale', desc: 'Campaign finale outline (if concluded)' },
   { cmd: '/status', desc: 'Compact strategic snapshot' },
   { cmd: '/stats', desc: 'Session balance metrics' },
+  { cmd: '/tuning', desc: 'Living-world tuning levers + last round metrics' },
   { cmd: '/help leverage', desc: 'Full leverage verb reference' },
   { cmd: '/help <pack-id>', desc: 'Pack-specific quickstart guide' },
   { cmd: '/chronicle [mode]', desc: 'View campaign chronicle (timeline|bardic|director)' },
@@ -258,6 +259,178 @@ export type MarketQuoteSummary = {
   basePrice: number;
 };
 
+/**
+ * WO-A6-5 (slice A6 §3, lock 1): structurally identical to game-core's
+ * WO-A6-1 `LivingWorldTuning` (`src/game/tuning.ts`, not yet on this branch
+ * -- "green expected at merge" per ADDENDUM-COMMON lock 6). Field set and
+ * defaults are the design doc's own §3 / ADDENDUM-COMMON lock 1 list; once
+ * game-core's real module lands, this domain should import its type instead
+ * of mirroring it (a stitch-time follow-up, not this wave's job).
+ */
+export type LivingWorldTuning = {
+  rumorStanceFadeTicks: number;
+  rumorBelieveSuspicionBelow: number;
+  rumorSpreadScope: 'district' | 'zone';
+  worldMovedCap: number;
+  narrationPressureLines: number;
+  narrationOpportunityLines: number;
+  narrationRumorLines: number;
+  ambushHeadline: 'always' | 'never';
+};
+
+/**
+ * WO-A6-5: `QUIET_ROUNDS_BEFORE_DECAY` above is imported live from the
+ * engine because /status and /leverage already depend on it never drifting.
+ * `PRESSURES_MAX_COUNT` (src/prompts/narrate-scene.ts, value 10) is an
+ * app-side constant this domain does not own (src/prompts/** is out of
+ * scope) and does not export publicly, so it is re-stated here as a named
+ * fallback rather than imported -- if that constant ever changes, this
+ * default drifts from it until game-core's real DEFAULT_LIVING_WORLD_TUNING
+ * (WO-A6-1) replaces this mirror entirely.
+ */
+const PRESSURES_MAX_COUNT_FALLBACK = 10;
+
+/**
+ * WO-A6-5: the defaults ADDENDUM-COMMON lock 1 names as "the value the code
+ * uses TODAY, measured, not guessed" for six of the eight levers
+ * (rumorStanceFadeTicks 24, rumorBelieveSuspicionBelow 50, rumorSpreadScope
+ * 'district', worldMovedCap 200, narrationPressureLines 10 == the engine's
+ * own PRESSURES_MAX_COUNT, ambushHeadline 'always'). The remaining two
+ * (narrationOpportunityLines, narrationRumorLines) are game-core's WO-A6-1
+ * job to measure from the prompt builders (src/prompts/narrate-scene.ts,
+ * src/narrator/scene-context.ts) -- this domain's own read of those files
+ * found no existing per-turn line cap for either (opportunityContext is a
+ * single pre-built string, not a capped list; scene-context.ts's rumor
+ * handling has no analogous MAX_COUNT constant), so this mirror uses the
+ * SAME "no cap today -> Infinity-equivalent" fallback rule the lock itself
+ * names, honestly provisional until WO-A6-1 lands its measured value.
+ */
+const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
+  rumorStanceFadeTicks: 24,
+  rumorBelieveSuspicionBelow: 50,
+  rumorSpreadScope: 'district',
+  worldMovedCap: 200,
+  narrationPressureLines: PRESSURES_MAX_COUNT_FALLBACK,
+  narrationOpportunityLines: Infinity,
+  narrationRumorLines: Infinity,
+  ambushHeadline: 'always',
+};
+
+/**
+ * WO-A6-5: structurally identical to game-core's WO-A6-2 `RoundMetrics`
+ * (`src/game/round-metrics.ts`, not yet on this branch -- green expected at
+ * merge). Field set is ADDENDUM-COMMON lock 2's list, verbatim.
+ */
+export type RoundMetrics = {
+  tick: number;
+  heat: number;
+  quietRounds: number;
+  kills: number;
+  pressuresActive: number;
+  pressuresSpawned: number;
+  pressuresResolved: number;
+  pressuresExpired: number;
+  factionActions: number;
+  opportunitiesSpawned: number;
+  opportunitiesAccepted: number;
+  opportunitiesExpired: number;
+  ambushes: number;
+  moodTransition: boolean;
+  rumorsCreated: number;
+  rumorsMutated: number;
+  rumorHearers: number;
+  stanceBelieve: number;
+  stanceDoubt: number;
+  priceQuote?: number;
+};
+
+/**
+ * WO-A6-5: game-core's WO-A6-3 `GameSession.getTuningView()` return shape,
+ * threaded into director opts as `tuningView` the same way `worldLedger` is
+ * (ADDENDUM-game-core.md WO-A6-3: "thread it into the director opts the way
+ * `worldLedger` is").
+ */
+export type TuningView = {
+  tuning: LivingWorldTuning;
+  lastRound?: RoundMetrics;
+  rounds: number;
+};
+
+/** Formats a tuning lever's value; an Infinity-valued cap reads as "unlimited" (see DEFAULT_LIVING_WORLD_TUNING's doc comment on the two unmeasured caps). */
+function formatTuningLeverValue(value: number | string): string {
+  if (typeof value === 'number' && !Number.isFinite(value)) return 'unlimited';
+  return String(value);
+}
+
+/**
+ * WO-A6-5: "/tuning renders two boxes ... LIVING WORLD TUNING (one line per
+ * lever: name, value, and (default) when it equals the default) and LAST
+ * ROUND (the round metrics, one line per non-zero counter; absent when no
+ * round has run)" -- ADDENDUM-cli-display.md verbatim. View only, no verb,
+ * no mutation (R6).
+ */
+function renderTuningView(view: TuningView): string {
+  const { tuning, lastRound, rounds } = view;
+  const lines: string[] = ['', divider(), `  ${bold('LIVING WORLD TUNING')}`, divider(), ''];
+  const leverRows: [string, LivingWorldTuning[keyof LivingWorldTuning]][] = [
+    ['Rumor stance fade (ticks)', tuning.rumorStanceFadeTicks],
+    ['Rumor believe threshold (suspicion below)', tuning.rumorBelieveSuspicionBelow],
+    ['Rumor spread scope', tuning.rumorSpreadScope],
+    ['World-moved ledger cap', tuning.worldMovedCap],
+    ['Narration pressure lines', tuning.narrationPressureLines],
+    ['Narration opportunity lines', tuning.narrationOpportunityLines],
+    ['Narration rumor lines', tuning.narrationRumorLines],
+    ['Ambush headline', tuning.ambushHeadline],
+  ];
+  const defaultsByLabel = new Map<string, unknown>([
+    ['Rumor stance fade (ticks)', DEFAULT_LIVING_WORLD_TUNING.rumorStanceFadeTicks],
+    ['Rumor believe threshold (suspicion below)', DEFAULT_LIVING_WORLD_TUNING.rumorBelieveSuspicionBelow],
+    ['Rumor spread scope', DEFAULT_LIVING_WORLD_TUNING.rumorSpreadScope],
+    ['World-moved ledger cap', DEFAULT_LIVING_WORLD_TUNING.worldMovedCap],
+    ['Narration pressure lines', DEFAULT_LIVING_WORLD_TUNING.narrationPressureLines],
+    ['Narration opportunity lines', DEFAULT_LIVING_WORLD_TUNING.narrationOpportunityLines],
+    ['Narration rumor lines', DEFAULT_LIVING_WORLD_TUNING.narrationRumorLines],
+    ['Ambush headline', DEFAULT_LIVING_WORLD_TUNING.ambushHeadline],
+  ]);
+  for (const [label, value] of leverRows) {
+    const isDefault = value === defaultsByLabel.get(label);
+    lines.push(`  ${label}: ${formatTuningLeverValue(value)}${isDefault ? ' (default)' : ''}`);
+  }
+
+  lines.push('', divider(), `  ${bold('LAST ROUND')}`, divider(), '');
+  if (!lastRound) {
+    lines.push('  No rounds played yet.');
+  } else {
+    lines.push(`  Round tick ${lastRound.tick} (${rounds} round${rounds === 1 ? '' : 's'} recorded)`);
+    const counterRows: [string, number][] = [
+      ['Heat', lastRound.heat],
+      ['Quiet rounds', lastRound.quietRounds],
+      ['Kills', lastRound.kills],
+      ['Pressures active', lastRound.pressuresActive],
+      ['Pressures spawned', lastRound.pressuresSpawned],
+      ['Pressures resolved', lastRound.pressuresResolved],
+      ['Pressures expired', lastRound.pressuresExpired],
+      ['Faction actions', lastRound.factionActions],
+      ['Opportunities spawned', lastRound.opportunitiesSpawned],
+      ['Opportunities accepted', lastRound.opportunitiesAccepted],
+      ['Opportunities expired', lastRound.opportunitiesExpired],
+      ['Ambushes', lastRound.ambushes],
+      ['Rumors created', lastRound.rumorsCreated],
+      ['Rumors mutated', lastRound.rumorsMutated],
+      ['Rumor hearers', lastRound.rumorHearers],
+      ['Stance: believe', lastRound.stanceBelieve],
+      ['Stance: doubt', lastRound.stanceDoubt],
+    ];
+    for (const [label, count] of counterRows) {
+      if (count !== 0) lines.push(`  ${label}: ${count}`);
+    }
+    if (lastRound.moodTransition) lines.push('  Mood transition: yes');
+    if (lastRound.priceQuote != null) lines.push(`  Price quote: ${lastRound.priceQuote}`);
+  }
+  lines.push('', divider(), '');
+  return lines.join('\n');
+}
+
 export type ExecuteDirectorCommandOptions = {
   command: string;
   world: WorldState;
@@ -300,6 +473,14 @@ export type ExecuteDirectorCommandOptions = {
    */
   /** Stitch (wave 8): game-core's getRumorBoard() hands the engine's formatRumorBoard lines with entity names resolved; this side renders them. */
   rumorBoard?: RumorBoardLine[];
+  /**
+   * WO-A6-5 (slice A6 §3, lock 1): game-core's `GameSession.getTuningView()`
+   * (WO-A6-3), threaded the way `worldLedger` is. Absent (no session has
+   * wired it yet, or "green expected at merge" before game-core's WO-A6-1/
+   * WO-A6-3 land) -> `/tuning` reports no data, matching every other
+   * optional-data command in this switch.
+   */
+  tuningView?: TuningView;
 };
 
 /**
@@ -481,7 +662,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     leverageState, strategicMap, statusData, suggestedMove, situationTag, profileCustom,
     npcProfiles, lastNpcActions, npcObligations, partyState, profile, itemCatalog,
     districtEconomies, genre, activeOpportunities, arcSnapshot, endgameTriggers, finaleOutline,
-    worldLedger, marketQuotes, rumorBoard,
+    worldLedger, marketQuotes, rumorBoard, tuningView,
   } = opts;
 
   const parts = command.trim().split(/\s+/);
@@ -809,6 +990,11 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     case '/stats': {
       if (!profileCustom) return '  No stats data available.';
       return renderStats(profileCustom);
+    }
+
+    case '/tuning': {
+      if (!tuningView) return '  No tuning data available.';
+      return renderTuningView(tuningView);
     }
 
     case '/help': {

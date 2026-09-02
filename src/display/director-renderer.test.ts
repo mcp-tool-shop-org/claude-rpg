@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { executeDirectorCommand, renderDirectorHelp } from './director-renderer.js';
+import { createObligation, type NpcProfile, type NpcObligationLedger } from '@ai-rpg-engine/modules';
+import type { Rumor } from '@ai-rpg-engine/rumor-system';
 
 // Minimal world stub for tests
 function makeWorld(): any {
@@ -243,6 +245,349 @@ describe('executeDirectorCommand', () => {
   it('should return "No player rumors" when rumors list is empty', () => {
     const result = executeDirectorCommand({ command: '/rumors', world: makeWorld(), playerRumors: [] });
     expect(result).toContain('No player rumors');
+  });
+
+  // WO-A5-16 (slice A5 §6, lock 6): "What the street believes" -- rendered
+  // from the engine's own formatRumorBoard(...) output. Coded against
+  // ADDENDUM-game-core.md's WO-A5-4 `getRumorBoard()` contract, not yet
+  // landed on this branch -- this exercises cli-display's renderer directly
+  // (formatRumorBoard is a real installed 3.11 dep, not a mock), so it is
+  // green today; only game.ts/bin.ts's real call site building
+  // `rumorBoardInput` from the RumorEngine is "green expected at merge".
+  describe('/rumors board (WO-A5-16)', () => {
+    function makePlayerRumor(): any {
+      return {
+        id: 'prumor_1',
+        claim: 'player helped the chapel',
+        subjectDescriptor: 'a stranger',
+        sourceEvent: 'milestone',
+        confidence: 0.8,
+        distortion: 0.1,
+        mutationCount: 0,
+        valence: 'heroic',
+        spreadTo: [],
+        originTick: 1,
+      };
+    }
+
+    function makeRumor(overrides: Partial<Rumor> = {}): Rumor {
+      return {
+        id: 'rumor_1',
+        claim: 'player helped the chapel',
+        subject: 'player',
+        key: 'helped_chapel',
+        value: true,
+        originalValue: true,
+        sourceId: 'npc_witness',
+        originTick: 1,
+        confidence: 0.8,
+        emotionalCharge: 0.2,
+        spreadPath: ['npc_witness'],
+        mutationCount: 0,
+        factionUptake: [],
+        status: 'spreading',
+        lastSpreadTick: 1,
+        ...overrides,
+      };
+    }
+
+    it('appends "WHAT THE STREET BELIEVES" after the player-side rumor list when board input is present', () => {
+      const result = executeDirectorCommand({
+        command: '/rumors',
+        world: makeWorld(),
+        playerRumors: [makePlayerRumor()],
+        rumorBoardInput: [makeRumor()],
+      });
+      expect(result).toContain('WHAT THE STREET BELIEVES');
+      expect(result).toContain('player helped the chapel');
+      const playerListIdx = result.indexOf('PLAYER RUMORS');
+      const boardIdx = result.indexOf('WHAT THE STREET BELIEVES');
+      expect(boardIdx).toBeGreaterThan(playerListIdx);
+    });
+
+    it('shows a mutated line with hop count when the rumor mutated during spread', () => {
+      const result = executeDirectorCommand({
+        command: '/rumors',
+        world: makeWorld(),
+        playerRumors: [makePlayerRumor()],
+        rumorBoardInput: [makeRumor({ mutationCount: 2, spreadPath: ['npc_witness', 'npc_two', 'npc_three'] })],
+      });
+      expect(result).toContain('mutated over 2 hops');
+    });
+
+    it('renders the board even when there are no player-side rumors to list', () => {
+      const result = executeDirectorCommand({
+        command: '/rumors',
+        world: makeWorld(),
+        playerRumors: [],
+        rumorBoardInput: [makeRumor()],
+      });
+      expect(result).toContain('No player rumors yet.');
+      expect(result).toContain('WHAT THE STREET BELIEVES');
+    });
+
+    it('omits the board section entirely when rumorBoardInput is absent (existing callers unaffected)', () => {
+      const result = executeDirectorCommand({
+        command: '/rumors',
+        world: makeWorld(),
+        playerRumors: [makePlayerRumor()],
+      });
+      expect(result).not.toContain('WHAT THE STREET BELIEVES');
+    });
+  });
+
+  // WO-A5-12 (slice A5 §1, lock 1): the /market and /trade quote line.
+  // Coded against ADDENDUM-game-core.md's WO-A5-1 `{ districtId,
+  // controllingFactionId, sampleItemId, quotedPrice, basePrice }` contract,
+  // not yet landed on this branch -- this exercises cli-display's renderer
+  // directly, so it is green today; only game.ts/bin.ts's real call site
+  // building `marketQuotes` from `quoteBuyPrice` is "green expected at
+  // merge".
+  describe('/market and /trade quote line (WO-A5-12)', () => {
+    function makeMarketWorld(): any {
+      return {
+        ...makeWorld(),
+        locationId: 'district_chapel',
+        globals: { reputation_chapel_undead: -40 },
+        factions: {
+          chapel_undead: { name: 'Chapel Undead', reputation: 0 },
+        },
+      };
+    }
+
+    const economy = {
+      supplies: {
+        medicine: { category: 'medicine', level: 50, trend: 'stable' },
+        weapons: { category: 'weapons', level: 50, trend: 'stable' },
+        ammunition: { category: 'ammunition', level: 50, trend: 'stable' },
+        food: { category: 'food', level: 50, trend: 'stable' },
+        fuel: { category: 'fuel', level: 50, trend: 'stable' },
+        luxuries: { category: 'luxuries', level: 50, trend: 'stable' },
+        components: { category: 'components', level: 50, trend: 'stable' },
+        contraband: { category: 'contraband', level: 50, trend: 'stable' },
+      },
+      tradeVolume: 50,
+      blackMarketActive: false,
+      lastUpdateTick: 0,
+    } as any;
+
+    const itemCatalog = {
+      items: [{ id: 'iron_sword', name: 'Iron Sword' }],
+    } as any;
+
+    it('/trade appends the reputation quote line after the economy summary', () => {
+      const districtEconomies = new Map([['district_chapel', economy]]);
+      const result = executeDirectorCommand({
+        command: '/trade district_chapel',
+        world: makeMarketWorld(),
+        districtEconomies,
+        itemCatalog,
+        marketQuotes: [{
+          districtId: 'district_chapel',
+          controllingFactionId: 'chapel_undead',
+          sampleItemId: 'iron_sword',
+          quotedPrice: 46,
+          basePrice: 40,
+        }],
+      });
+      expect(result).toContain('Merchants here quote Iron Sword at 46 (+15% vs base · Chapel Undead: hostile)');
+    });
+
+    it('/trade omits the quote line when the district has no controlling faction', () => {
+      const districtEconomies = new Map([['district_chapel', economy]]);
+      const result = executeDirectorCommand({
+        command: '/trade district_chapel',
+        world: makeMarketWorld(),
+        districtEconomies,
+        itemCatalog,
+        marketQuotes: [{
+          districtId: 'district_chapel',
+          sampleItemId: 'iron_sword',
+          quotedPrice: 40,
+          basePrice: 40,
+        }],
+      });
+      expect(result).not.toContain('Merchants here quote');
+    });
+
+    it('/market lists a MARKET QUOTES section with one line per district that has quote data', () => {
+      const districtEconomies = new Map([['district_chapel', economy]]);
+      const result = executeDirectorCommand({
+        command: '/market',
+        world: makeMarketWorld(),
+        districtEconomies,
+        itemCatalog,
+        marketQuotes: [{
+          districtId: 'district_chapel',
+          controllingFactionId: 'chapel_undead',
+          sampleItemId: 'iron_sword',
+          quotedPrice: 46,
+          basePrice: 40,
+        }],
+      });
+      expect(result).toContain('MARKET QUOTES');
+      expect(result).toContain('Merchants here quote Iron Sword at 46 (+15% vs base · Chapel Undead: hostile)');
+    });
+
+    it('/market renders unchanged (no MARKET QUOTES section) when marketQuotes is absent', () => {
+      const districtEconomies = new Map([['district_chapel', economy]]);
+      const withoutQuotes = executeDirectorCommand({
+        command: '/market', world: makeMarketWorld(), districtEconomies, itemCatalog,
+      });
+      const withEmptyQuotes = executeDirectorCommand({
+        command: '/market', world: makeMarketWorld(), districtEconomies, itemCatalog, marketQuotes: [],
+      });
+      expect(withoutQuotes).not.toContain('MARKET QUOTES');
+      expect(withEmptyQuotes).toBe(withoutQuotes);
+    });
+  });
+
+  // WO-A5-13 (slice A5 §4, lock 4): the /leverage ledger block. Coded
+  // against ADDENDUM-game-core.md's WO-A5-3 `worldLedger` extension
+  // (`income`, `decayAfter`), not yet landed on this branch -- green today
+  // via direct renderer exercise; game.ts/bin.ts's real call site is "green
+  // expected at merge".
+  describe('/leverage ledger block (WO-A5-13)', () => {
+    const leverageState = {
+      favor: 10, debt: 0, blackmail: 0, influence: 5, heat: 0, legitimacy: 0,
+    } as any;
+
+    it('renders heat/quiet-rounds, faction alerts above zero, and income this round', () => {
+      const result = executeDirectorCommand({
+        command: '/leverage',
+        world: makeWorld(),
+        leverageState,
+        worldLedger: {
+          heat: 15,
+          quietRounds: 5,
+          decayAfter: 37,
+          factionAlerts: { 'chapel-undead': 20, 'quiet-guild': 0 },
+          income: { favor: 2, influence: 1, debt: 0 },
+        },
+      });
+      expect(result).toContain('Heat 15 · 5/37 quiet rounds to cooling');
+      expect(result).toContain('Alerts: chapel-undead 20');
+      expect(result).not.toContain('quiet-guild');
+      expect(result).toContain('Income this round: +2 favor · +1 influence');
+    });
+
+    it('shows "cooling" instead of the fraction once quietRounds reaches decayAfter', () => {
+      const result = executeDirectorCommand({
+        command: '/leverage',
+        world: makeWorld(),
+        leverageState,
+        worldLedger: { heat: 0, quietRounds: 37, decayAfter: 37, factionAlerts: {} },
+      });
+      expect(result).toContain('Heat 0 · cooling');
+      expect(result).not.toContain('37/37');
+    });
+
+    it('omits the income line when there is no income this round', () => {
+      const result = executeDirectorCommand({
+        command: '/leverage',
+        world: makeWorld(),
+        leverageState,
+        worldLedger: { heat: 0, quietRounds: 0, factionAlerts: {} },
+      });
+      expect(result).not.toContain('Income this round');
+    });
+
+    it('renders unchanged (no ledger block) when worldLedger is absent', () => {
+      const result = executeDirectorCommand({ command: '/leverage', world: makeWorld(), leverageState });
+      expect(result).not.toContain('quiet rounds to cooling');
+      expect(result).not.toContain('Income this round');
+    });
+  });
+
+  // WO-A5-14 (slice A5 §3, lock 3): /npc's goal + obligation lines --
+  // deliberately the same DRAFT wording as narrative-llm's WO-A5-6 dialogue
+  // prompt lines (ADDENDUM-narrative-llm.md), verified here as an
+  // independent implementation from the same engine-typed inputs.
+  describe('/npc goal + obligation lines (WO-A5-14)', () => {
+    function makeNpcProfile(overrides: Partial<NpcProfile> = {}): NpcProfile {
+      return {
+        npcId: 'npc_merchant',
+        name: 'Merchant Alara',
+        factionId: null,
+        goals: [
+          { id: 'g1', label: 'protect the chapel', priority: 0.9, verb: 'protect', reason: 'faith' },
+          { id: 'g2', label: 'earn coin', priority: 0.3, verb: 'bargain', reason: 'trade' },
+        ],
+        relationship: { trust: 0, fear: 0, greed: 0, loyalty: 0 },
+        breakpoint: 'wavering',
+        dominantAxis: 'trust',
+        leverageAngle: 'none',
+        knownRumors: [],
+        underPressure: false,
+        ...overrides,
+      };
+    }
+
+    function npcWorld(): any {
+      return { ...makeWorld(), playerId: 'player', entities: { ...makeWorld().entities } };
+    }
+
+    it('shows the top-priority goal as "Current goal: ..."', () => {
+      const result = executeDirectorCommand({
+        command: '/npc npc_merchant',
+        world: npcWorld(),
+        npcProfiles: [makeNpcProfile()],
+      });
+      expect(result).toContain('Current goal: protect the chapel');
+      expect(result).not.toContain('Current goal: earn coin');
+    });
+
+    it('shows "owes you a favor" when the NPC owes the player', () => {
+      const ledger: NpcObligationLedger = {
+        obligations: [createObligation('favor', 'npc-owes-player', 'npc_merchant', 'player', 3, 'saved-life', 1)],
+      };
+      const result = executeDirectorCommand({
+        command: '/npc npc_merchant',
+        world: npcWorld(),
+        npcProfiles: [makeNpcProfile()],
+        npcObligations: new Map([['npc_merchant', ledger]]),
+      });
+      expect(result).toContain('Standing with you: owes you a favor');
+    });
+
+    it('shows "you owe them a debt" for a plain player-owes-npc obligation', () => {
+      const ledger: NpcObligationLedger = {
+        obligations: [createObligation('debt', 'player-owes-npc', 'npc_merchant', 'player', 2, 'borrowed-coin', 1)],
+      };
+      const result = executeDirectorCommand({
+        command: '/npc npc_merchant',
+        world: npcWorld(),
+        npcProfiles: [makeNpcProfile()],
+        npcObligations: new Map([['npc_merchant', ledger]]),
+      });
+      expect(result).toContain('Standing with you: you owe them a debt');
+    });
+
+    it('shows "was betrayed by you" for a betrayed player-owes-npc obligation, even alongside a plain debt', () => {
+      const ledger: NpcObligationLedger = {
+        obligations: [
+          createObligation('debt', 'player-owes-npc', 'npc_merchant', 'player', 2, 'borrowed-coin', 1),
+          createObligation('betrayed', 'player-owes-npc', 'npc_merchant', 'player', 6, 'sold-secret', 2),
+        ],
+      };
+      const result = executeDirectorCommand({
+        command: '/npc npc_merchant',
+        world: npcWorld(),
+        npcProfiles: [makeNpcProfile()],
+        npcObligations: new Map([['npc_merchant', ledger]]),
+      });
+      expect(result).toContain('Standing with you: was betrayed by you');
+      expect(result).not.toContain('you owe them a debt');
+    });
+
+    it('omits the "Standing with you" line when there is no obligation toward the player', () => {
+      const result = executeDirectorCommand({
+        command: '/npc npc_merchant',
+        world: npcWorld(),
+        npcProfiles: [makeNpcProfile()],
+      });
+      expect(result).not.toContain('Standing with you');
+    });
   });
 
   // --- /pressures output ---

@@ -424,6 +424,58 @@ describe('renderPlayScreen ambient lines (F-61e67d85)', () => {
 });
 
 /**
+ * WO-A5-15 (slice A5 §5, lock 5): the round's `encounter.spawned`
+ * describeEvent line ("Ambush: {name} in {zone}") surfaced as this screen's
+ * own banner register, above the narration block, when present. Before this
+ * wave `renderPlayScreen` had no `ambushHeadline` option at all -- this
+ * describe block was red (the option didn't exist, so it couldn't render)
+ * until the opts field + render branch were added just above in this file.
+ */
+describe('renderPlayScreen ambush headline (WO-A5-15)', () => {
+  it('renders the ambush headline as a banner above the narration block when present', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'You step into the alley.',
+      world: engine.world,
+      availableActions: [],
+      ambushHeadline: 'Ambush: Bandit ambush in Rustwater Alley',
+    });
+    expect(output).toContain('Ambush: Bandit ambush in Rustwater Alley');
+    const headlineIdx = output.indexOf('Ambush: Bandit ambush in Rustwater Alley');
+    const narrationIdx = output.indexOf('You step into the alley.');
+    expect(headlineIdx).toBeGreaterThan(-1);
+    expect(narrationIdx).toBeGreaterThan(headlineIdx);
+  });
+
+  it('renders no banner when ambushHeadline is absent (existing callers unaffected)', () => {
+    const engine = createGame();
+    const base = { narration: 'Test.', world: engine.world, availableActions: [] };
+    const withoutField = renderPlayScreen(base);
+    const withUndefined = renderPlayScreen({ ...base, ambushHeadline: undefined });
+    expect(withUndefined).toBe(withoutField);
+    expect(withoutField).not.toContain('Ambush:');
+  });
+
+  it('uses critical() (bold red) for the ambush banner when colors are enabled', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./play-renderer.js');
+    const engine = createGame();
+    const output = mod.renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      ambushHeadline: 'Ambush: Wolves in the Hollow',
+    });
+    expect(output).toContain('\x1b[31m'); // red
+    expect(output).toContain('\x1b[1m'); // bold
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = undefined;
+    delete process.env.NO_COLOR;
+  });
+});
+
+/**
  * F-7484bd2e (SLATE-6): nothing rendered a distinct on-screen consequence
  * when the presentation state machine reached 'menu' (player death) -- the
  * screen fell straight back to the ordinary "What do you do?" prompt as if

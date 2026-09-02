@@ -610,7 +610,11 @@ async function runLoad(): Promise<void> {
     // construction (GameConfig.itemCatalog stays undefined).
     try {
       const proposal = JSON.parse(resumePath.proposalJson) as WorldGenProposal;
-      engine = instantiateWorld(proposal, resumePath.seed);
+      // Stitch (wave 7): `seed` is `number | undefined` on the resume path (a
+      // generated save from before worldSeed was persisted). The construction
+      // seed only shapes the pre-restore engine; restoreEngineStateFromSave
+      // overwrites rngState + world from the envelope, so 0 is a safe stand-in.
+      engine = instantiateWorld(proposal, resumePath.seed ?? 0);
       restoreEngineStateFromSave(engine, savedSession);
     } catch (err) {
       presentError(err, 'load', debugMode);

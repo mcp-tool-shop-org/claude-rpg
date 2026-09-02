@@ -229,7 +229,7 @@ import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpda
 // (narrative-llm-owned) -- generateDialogue/dialogue-mind.ts already imports
 // and re-exports through that same path.
 import type { ConversationExchange } from './prompts/dialogue-npc.js';
-import { executeDirectorCommand, renderDirectorHelp } from './display/director-renderer.js';
+import { executeDirectorCommand, renderDirectorHelp, formatWorldLedgerLine } from './display/director-renderer.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { hasLivingHostiles } from './runtime/hooks.js';
 // F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
@@ -1500,7 +1500,10 @@ export class GameSession {
           // WO-A4-4 (slice A4 §3, design lock 6): see the director-mode
           // /status call site's identical note above — cli-display's
           // status-compact.ts gains this field in their own worktree.
-          worldLedger: this.buildWorldLedger(),
+          // Stitch (wave 7): cli-display's renderCompactStatus takes the
+          // PRE-FORMATTED line (`worldLedgerLine`), formatted by the same
+          // helper the director-mode /status path uses.
+          worldLedgerLine: formatWorldLedgerLine(this.buildWorldLedger()),
         });
         // F-9319b8d8: appended after the rendered box (see
         // buildSubsystemHealthIndicator()'s doc comment for why it isn't a

@@ -13,6 +13,7 @@ import { createGame } from '@ai-rpg-engine/starter-fantasy';
 // world-truth-seed.js import last wave).
 import { RumorEngine, type RumorEngineConfig, type EngineSnapshot } from '@ai-rpg-engine/rumor-system';
 import type { Engine } from '@ai-rpg-engine/core';
+import { setPartyState } from '@ai-rpg-engine/modules';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
 import { GameSession, type GameConfig } from '../../src/game.js';
 import { createFakeClient, createCallLog, type FakeClientOptions, type CallLog } from './fake-claude-client.js';
@@ -366,9 +367,14 @@ export async function resumeHarness(
   // world" implies indefinitely, not just once) -- absent entirely for a
   // pack session, matching every other optional field's "omit if absent"
   // convention.
-  const savedSessionExtras = savedSession as unknown as { worldGenProposal?: string; worldSeed?: number };
+  // Stitch (wave 7): SavedSession carries the proposal as a JSON string;
+  // GameConfig wants the parsed WorldGenProposal (game-core's contract).
+  const resumedProposal: WorldGenProposal | undefined =
+    savedSession.worldGenProposal !== undefined
+      ? (JSON.parse(savedSession.worldGenProposal) as WorldGenProposal)
+      : undefined;
 
-  const gameConfig: GameConfig & { worldGenProposal?: string; worldSeed?: number } = {
+  const gameConfig: GameConfig = {
     engine,
     client,
     tone: savedSession.tone,
@@ -389,8 +395,8 @@ export async function resumeHarness(
     // the serialized snapshot itself (GameConfig.rumorEngineSnapshot); the
     // deserializeSafe above runs only to expose restore warnings to tests.
     ...(rumorSnapshotRaw ? { rumorEngineSnapshot: rumorSnapshotRaw } : {}),
-    ...(savedSessionExtras.worldGenProposal !== undefined ? { worldGenProposal: savedSessionExtras.worldGenProposal } : {}),
-    ...(savedSessionExtras.worldSeed !== undefined ? { worldSeed: savedSessionExtras.worldSeed } : {}),
+    ...(resumedProposal !== undefined ? { worldGenProposal: resumedProposal } : {}),
+    ...(savedSession.worldSeed !== undefined ? { worldSeed: savedSession.worldSeed } : {}),
     ...opts.gameOpts,
   };
   const session = new GameSession(gameConfig);
@@ -412,7 +418,9 @@ export async function resumeHarness(
   const seedReport = session.seedWorldTruth(savedSession);
 
   // Fields NOT covered by the design doc's view table stay direct restores.
-  session.partyState = restoredParty;
+  // Stitch (wave 7): partyState is a live getter over companion-core (A4);
+  // the restore writes the module namespace, matching bin.ts runLoad.
+  setPartyState(session.engine.world, restoredParty);
   if (restoredArcSnapshot) session.arcSnapshot = restoredArcSnapshot;
   session.endgameTriggers = restoredEndgameTriggers;
   if (restoredFinale) session.finaleOutline = restoredFinale;
@@ -464,8 +472,7 @@ export async function saveHarness(h: GameHarness, savePath: string): Promise<voi
   // save this helper writes -- the correct red for a packless-generated
   // save/resume round trip until the coordinator merges game-core's change
   // in, not a bug in this helper.
-  const sessionExtras = session as unknown as { worldGenProposal?: string; worldSeed?: number };
-  const input: SaveSessionInput & { worldGenProposal?: string; worldSeed?: number } = {
+  const input: SaveSessionInput = {
     engine: session.engine,
     history: session.history,
     tone: session.tone,
@@ -484,8 +491,8 @@ export async function saveHarness(h: GameHarness, savePath: string): Promise<voi
     // Coordinator stitch (slice A3): the save carries the serialized snapshot,
     // exactly as bin.ts's buildSaveInput does.
     rumorEngine: session.getRumorEngineSnapshot(),
-    ...(sessionExtras.worldGenProposal !== undefined ? { worldGenProposal: sessionExtras.worldGenProposal } : {}),
-    ...(sessionExtras.worldSeed !== undefined ? { worldSeed: sessionExtras.worldSeed } : {}),
+    ...(session.getWorldGenProposal() !== undefined ? { worldGenProposal: session.getWorldGenProposal() } : {}),
+    ...(session.getWorldSeed() !== undefined ? { worldSeed: session.getWorldSeed() } : {}),
   };
   await saveSession(input as SaveSessionInput);
 }
@@ -525,13 +532,16 @@ export async function createGeneratedHarness(
   }
 
   const playClient = createFakeClient(clientOpts);
-  const gameConfig: GameConfig & { worldGenProposal?: string; worldSeed?: number } = {
+  // Stitch (wave 7): GameConfig.worldGenProposal is the parsed object; the
+  // save writer (session.ts) is the single JSON.stringify site. Passing a
+  // pre-stringified proposal here double-encoded it on save.
+  const gameConfig: GameConfig = {
     engine: result.engine,
     client: playClient,
     title: proposal.title,
     tone: result.tone,
     genre: proposal.genre ?? 'fantasy',
-    worldGenProposal: JSON.stringify(result.proposal ?? proposal),
+    worldGenProposal: result.proposal ?? proposal,
     worldSeed: opts.seed,
     ...opts.gameOpts,
   };

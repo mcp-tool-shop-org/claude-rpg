@@ -263,7 +263,7 @@ export type ExecuteDirectorCommandOptions = {
  * riding alongside it in parens, e.g.:
  *   "Heat 12 (3/37 quiet) · Alerts: chapel-undead 60 · District: tense"
  */
-function formatWorldLedgerLine(ledger: WorldLedgerSummary | undefined): string | undefined {
+export function formatWorldLedgerLine(ledger: WorldLedgerSummary | undefined): string | undefined {
   if (!ledger) return undefined;
   const alertEntries = Object.entries(ledger.factionAlerts ?? {}).filter(([, level]) => level > 0);
   const hasHeat = ledger.heat > 0;

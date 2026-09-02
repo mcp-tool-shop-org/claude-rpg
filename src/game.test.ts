@@ -2324,7 +2324,12 @@ describe('Slice A1 (WO-A1-6, WO-A1-7): generated-world GameSession boot + verb p
     // module list, not assumed. This allowlist documents that boundary,
     // mirroring the parity sentinel's own "subtract the pack's content-only
     // modules by an explicit allowlist" discipline (design doc §5).
-    const OUT_OF_SCOPE_FOR_THIS_SLICE = new Set(['speak', 'use', 'equip', 'unequip']);
+    // Stitch (wave 7, slice A4): 'speak' left this allowlist -- world-gen.ts
+    // now composes createDialogueCore([]) into the generated stack (the
+    // WO-A4-9 generated-world dialogue proof surfaced that no generated
+    // world could resolve a talk turn), so speak parity with the pack holds
+    // and is asserted from here on.
+    const OUT_OF_SCOPE_FOR_THIS_SLICE = new Set(['use', 'equip', 'unequip']);
     const generatedVerbs = filterSupportedVerbs(result.engine.getRegisteredVerbs()).sort();
     const packVerbsInStackScope = filterSupportedVerbs(packEngine.getRegisteredVerbs())
       .filter((v) => !OUT_OF_SCOPE_FOR_THIS_SLICE.has(v))

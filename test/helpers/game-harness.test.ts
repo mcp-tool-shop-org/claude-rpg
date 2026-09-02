@@ -65,9 +65,9 @@ describe('resumeHarness — session-state continuity (F-95191273)', () => {
     });
     // Coordinator stitch (slice A2/A3): activePressures is a view of world
     // truth and a v3 save carries pressures only inside engineState — seed
-    // the world-tick namespace, then refresh the view.
+    // the world-tick namespace. Since slice A4 activePressures is a live
+    // getter over that namespace, so no refresh call is needed (stitch, wave 7).
     getWorldTickState(h1.session.engine.world).pressures.push(pressure);
-    (h1.session as unknown as { refreshWorldViews: () => void }).refreshWorldViews();
 
     await saveSession({
       engine: h1.session.engine,

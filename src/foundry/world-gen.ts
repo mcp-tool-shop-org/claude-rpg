@@ -7,6 +7,7 @@ import {
   statusCore,
   combatCore,
   createCognitionCore,
+  createDialogueCore,
   createPerceptionFilter,
   createSimulationInspector,
   buildWorldStack,
@@ -928,6 +929,14 @@ export function instantiateWorld(proposal: WorldGenProposal, seed: number, logge
       traversalCore,
       statusCore,
       combatCore,
+      // Stitch (wave 7, surfaced by WO-A4-9's generated-world dialogue proof):
+      // the `speak` verb is registered by dialogue-core, which every starter
+      // pack composes and this path never did -- so a generated world listed
+      // no speak action, the interpreter's fast path could not resolve
+      // "talk to <npc>", and every talk turn fell through to the LLM
+      // interpreter. Authored dialogues are a pack concern; generated worlds
+      // get LLM dialogue app-side (turn-loop step 5), so the registry is empty.
+      createDialogueCore([]),
       createCognitionCore({
         decay: { baseRate: 0.02, pruneThreshold: 0.05, instabilityFactor: 0.5 },
       }),

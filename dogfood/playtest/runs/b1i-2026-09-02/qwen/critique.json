@@ -1,0 +1,134 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through autonomous actions: an ambush occurred upon entering the chapel nave, pressures escalated without player input, and NPC actions like the courier's plea and the pilgrim's shifting stance revealed hidden tensions. The district mood shifted from 'lively' to 'on edge,' and rumors evolved based on player choices. The game maintained coherence and clear feedback, with meaningful consequences for inaction.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Upon entering the Chapel Nave (turn 26), the game announced: '── Ambush: Chapel Patrol in Chapel Nave ──', a headline-style encounter not requested by the player.",
+      "turn": 26
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "After killing enemies (turns 12, 27, 28, 32), the session recap showed 'alertPressure rose sharply' for Chapel Grounds and Crypt Depths, indicating the world raised pressure autonomously.",
+      "turn": 12
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The 'investigation' opportunity 'Investigate the black market activity' expired twice (turns 40 and 41) without player action, showing pressure resolved by world time, not player choice.",
+      "turn": 40
+    },
+    {
+      "id": "price-reacts",
+      "met": true,
+      "evidence": "The Healing Draught price showed '+30% vs base' in the market view, and later the Chapel Undead faction was marked as 'hostile'—indicating market pricing reacted to faction stance.",
+      "turn": 7
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "A shivering pilgrim said: 'I've heard whispers on the wind about you... some say you kept faith when tested.' This reflects a rumor with belief, and the session recap later noted 'rumors mutated' with witness counts.",
+      "turn": 35
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session recap showed: 'Chapel Grounds: \"lively despite everything\" → \"on edge, jumpy\"' and 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"', indicating autonomous mood shifts.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "The courier on the vestry stair (turn 39) initiated a request: 'Would you carry this to the district for me? I can't make the trip myself.' This was not prompted by player action.",
+      "turn": 39
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session recap listed: 'Ambushes: 1', 'Mood transitions: 2', 'Rumors mutated: 2', 'Marks the street left on you: 1', 'Help left ungiven: 1', 'Deeds recognized: 2', showing a full world recap.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in location, NPC, or fact were observed. All events followed a consistent narrative and mechanical logic.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "All possible actions were clearly listed in the prompt, and commands like /jobs, /help, and /leverage were consistently available and explained.",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "After attacking the Crypt Stalker (turn 12), the game printed: 'Your strike lands — Crypt Stalker: unhurt.' This is a deterministic combat line naming the kill attempt.",
+      "turn": 12
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "On turn 12, the game printed: 'Crypt Stalker's attack finds you — 2 damage.' The player's HP dropped from 20 to 18, and a telegraph line ('readies') appeared the round before.",
+      "turn": 12
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "The shivering pilgrim claimed to have been helped, but later revealed: 'a shivering pilgrim's story wasn't true.' This was fair—cues included the pilgrim's nervousness, the empty vial, and the contradiction in their story.",
+      "turn": 32
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "After helping the courier (turn 39), the recap noted: 'Deeds recognized: 2 — a courier on the vestry stair will remember who stood up for a stranger.' This shows the world acknowledged the deed.",
+      "turn": 39
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "When the player typed 'quit' (turn 42), the game responded with 'Saved to ~/.claude-rpg/saves/Wanderer-1788335298659.json'—a correction and confirmation without costing a turn.",
+      "turn": 42
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "When the player answered 'accept Investigate the black market activity' (turn 35), the game treated it as dialogue and responded with a new opportunity, not asking for clarification.",
+      "turn": 35
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "When the player typed 'go Chapel Nave' (turn 6), the game moved them and updated the location. The command was recognized and executed.",
+      "turn": 6
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "The market line 'Healing Draught 13 (+30% vs base)' appeared in the play screen without the player opening /market or /trade.",
+      "turn": 7
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": true,
+      "evidence": "The session recap showed 'alertPressure rose sharply' for Chapel Grounds and Crypt Depths, but no pressure line appeared on the play screen during the turn it happened. However, the ambush (turn 26) was announced with a headline, which counts as a pressure-line-seen equivalent.",
+      "turn": 26
+    }
+  ],
+  "highlights": [
+    "Turn 26: The ambush on entry was dramatic and well-announced, immediately raising stakes.",
+    "Turn 35: The pilgrim's rumor about the player felt organic and layered with tension.",
+    "Turn 42: The session recap was rich with world moves, showing the game's autonomy clearly."
+  ],
+  "deadSpots": [
+    "Turn 38: The player accepted the investigation opportunity in the Shadowed Alcove, but the game did not update the status or provide new context—felt like a dead end.",
+    "Turn 40: The player was told to flee before falling, but no new action was possible—felt like a forced pause."
+  ],
+  "confusions": [
+    "Turn 32: The player used a healing draught, but the pilgrim said: 'you've already given me your healing draught'—this contradicted the player's memory, causing confusion about whether the item was consumed.",
+    "Turn 39: The courier asked for help, but the player was not given a clear way to accept or decline—only 'help a courier' was listed, which felt ambiguous."
+  ],
+  "wouldPlayAgain": true
+}

@@ -1,0 +1,150 @@
+[DEBUG][tick:0][session] seed-pressure {"factionId":"chapel-undead","reputation":-60,"alertLevel":70}
+[DEBUG][tick:0][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Suspicious Pilgrim"}
+[immersion] state: exploration -> dialogue (speak)
+[INFO][tick:1][turn] turn-start {"input":"talk to the pilgrim","tick":1}
+[DEBUG][tick:1][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:1][turn] turn-end {"tick":1}
+[DEBUG][tick:1][interpret] action-reasoning {"verb":"look","confidence":"high","reasoning":"Look around"}
+[immersion] state: dialogue -> exploration (look)
+[INFO][tick:2][turn] turn-start {"input":"inspect the chapel nave","tick":2}
+[DEBUG][tick:2][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:2][turn] turn-end {"tick":2}
+[DEBUG][tick:2][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
+[INFO][tick:3][turn] turn-start {"input":"go Chapel Nave","tick":3}
+[DEBUG][tick:3][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:3][turn] turn-end {"tick":3}
+[DEBUG][tick:3][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Brother Aldric"}
+[immersion] state: exploration -> dialogue (speak)
+[INFO][tick:4][turn] turn-start {"input":"talk to Brother Aldric","tick":4}
+[DEBUG][tick:4][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:4][turn] turn-end {"tick":4}
+[DEBUG][tick:4][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Brother Aldric"}
+[immersion] state: director -> dialogue (speak)
+[INFO][tick:5][turn] turn-start {"input":"`","tick":5}
+[DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:5][turn] turn-end {"tick":5}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:5][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
+[immersion] state: dialogue -> combat (move)
+[INFO][tick:6][turn] turn-start {"input":"go Vestry Passage","tick":6}
+[DEBUG][tick:6][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:6][turn] turn-end {"tick":6}
+[DEBUG][tick:6][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Clear attack command targeting a specific enemy type. Selected the first Crypt Stalker entity as 'nearest'."}
+[INFO][tick:8][turn] turn-start {"input":"attack nearest Crypt Stalker","tick":8}
+[DEBUG][tick:8][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:8][turn] turn-end {"tick":8}
+[DEBUG][tick:8][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Clear attack command targeting a Crypt Stalker. Using the first Crypt Stalker entity as the nearest one."}
+[INFO][tick:10][turn] turn-start {"input":"attack nearest Crypt Stalker","tick":10}
+[DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:10][turn] turn-end {"tick":10}
+[DEBUG][tick:10][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
+[INFO][tick:12][turn] turn-start {"input":"attack Ash Ghoul","tick":12}
+[DEBUG][tick:12][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:12][turn] turn-end {"tick":12}
+[DEBUG][tick:12][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Player wants to move to 'Crypt Antechamber' which matches the available exit 'crypt-chamber'"}
+[immersion] state: combat -> exploration (move)
+[INFO][tick:13][turn] turn-start {"input":"go Crypt Antechamber```markdown","tick":13}
+[DEBUG][tick:13][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:13][turn] turn-end {"tick":13}
+[INFO][tick:13][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:13][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[immersion] state: exploration -> combat (attack)
+[INFO][tick:15][turn] turn-start {"input":"attack Crypt Warden","tick":15}
+[DEBUG][tick:15][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:15][turn] turn-end {"tick":15}
+[DEBUG][tick:15][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
+[INFO][tick:17][turn] turn-start {"input":"attack Ash Ghoul","tick":17}
+[DEBUG][tick:17][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:17][turn] turn-end {"tick":17}
+[DEBUG][tick:17][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[INFO][tick:19][turn] turn-start {"input":"attack Crypt Warden","tick":19}
+[DEBUG][tick:19][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:19][turn] turn-end {"tick":19}
+[DEBUG][tick:19][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[INFO][tick:21][turn] turn-start {"input":"attack Crypt Warden","tick":21}
+[DEBUG][tick:21][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:21][turn] turn-end {"tick":21}
+[DEBUG][tick:21][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Player clearly wants to attack the Crypt Warden enemy"}
+[INFO][tick:23][turn] turn-start {"input":"attack Crypt Warden```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```markdown```ma","tick":23}
+[DEBUG][tick:23][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:23][turn] turn-end {"tick":23}
+[INFO][tick:23][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:23][interpret] action-reasoning {"verb":"disengage","confidence":"high","reasoning":"Flee the fight"}
+[immersion] state: combat -> menu (disengage)
+[INFO][tick:25][turn] turn-start {"input":"flee```markdown```markdown```markdown```markdown```markdown```markdown```markdow```markdown```markdow```m```markdow```markdow```ma```markd```ma```ma```m```m```m```m","tick":25}
+[DEBUG][tick:25][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:25][turn] turn-end {"tick":25}
+[DEBUG][tick:25][interpret] action-reasoning {"verb":"look","confidence":"low","reasoning":"The input 'continue' is ambiguous and doesn't clearly map to any specific action verb. Using 'look' as fallback to provide current situation context."}
+[INFO][tick:25][turn] turn-start {"input":"continue","tick":25}
+[DEBUG][tick:25][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:25][turn] turn-end {"tick":25}
+[DEBUG][tick:25][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[INFO][tick:27][turn] turn-start {"input":"attack Crypt Warden","tick":27}
+[DEBUG][tick:27][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:27][turn] turn-end {"tick":27}
+[DEBUG][tick:27][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[immersion] state: menu -> combat (attack)
+[INFO][tick:29][turn] turn-start {"input":"attack Crypt Warden","tick":29}
+[DEBUG][tick:29][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:29][turn] turn-end {"tick":29}
+[DEBUG][tick:29][interpret] action-reasoning {"verb":"look","confidence":"low","reasoning":"Input '1' is unclear - could be a menu selection, targeting first entity, or movement choice. Using fallback 'look' verb."}
+[INFO][tick:29][turn] turn-start {"input":"1","tick":29}
+[DEBUG][tick:29][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:29][turn] turn-end {"tick":29}
+[INFO][tick:29][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:29][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
+[INFO][tick:31][turn] turn-start {"input":"attack Ash Ghoul","tick":31}
+[DEBUG][tick:31][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:31][turn] turn-end {"tick":31}
+[DEBUG][tick:31][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to a woman at the chapel door"}
+[INFO][tick:33][turn] turn-start {"input":"talk to a woman at the chapel door","tick":33}
+[DEBUG][tick:33][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:33][turn] turn-end {"tick":33}
+[DEBUG][tick:33][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a woman at the chapel door"}
+[immersion] state: combat -> menu (speak)
+[INFO][tick:35][turn] turn-start {"input":"Yes","tick":35}
+[DEBUG][tick:35][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:35][turn] turn-end {"tick":35}
+[DEBUG][tick:35][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a woman at the chapel door"}
+[INFO][tick:37][turn] turn-start {"input":"continue","tick":37}
+[DEBUG][tick:37][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:37][turn] turn-end {"tick":37}
+[DEBUG][tick:37][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
+[INFO][tick:39][turn] turn-start {"input":"go Vestry Passage","tick":39}
+[DEBUG][tick:39][profile] hints-applied {"xp":22,"milestone":null}
+[INFO][tick:39][turn] turn-end {"tick":39}
+[INFO][tick:39][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:39][interpret] action-reasoning {"verb":"disengage","confidence":"high","reasoning":"Flee the fight"}
+[immersion] state: menu -> combat (disengage)
+[INFO][tick:40][turn] turn-start {"input":"flee","tick":40}
+[DEBUG][tick:40][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:40][turn] turn-end {"tick":40}
+[DEBUG][tick:40][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Player wants to 'talk to a shivering pilgrim' which clearly maps to the speak verb with the pilgrim as target"}
+[immersion] state: combat -> dialogue (speak)
+[INFO][tick:41][turn] turn-start {"input":"talk to a shivering pilgrim runes I'll protect you or show me the way down if you prefer not to go alone. I'm a penitent knight not some helpless victim. Tell me your name. I haven't the patience for","tick":41}
+[DEBUG][tick:41][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:41][turn] turn-end {"tick":41}
+[DEBUG][tick:41][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a shivering pilgrim"}
+[INFO][tick:42][turn] turn-start {"input":"go Chapel Nave attack Crypt Stalker attack Crypt Stalker attack Ash Ghoul flee flee flee go Chapel Nave go Chapel Nave go Chapel Nave attack Crypt Stalker attack Crypt Stalker attack Ash Ghoul flee fl","tick":42}
+[DEBUG][tick:42][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:42][turn] turn-end {"tick":42}
+[DEBUG][tick:42][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
+[immersion] state: dialogue -> exploration (move)
+[INFO][tick:43][turn] turn-start {"input":"go Chapel Nave","tick":43}
+[DEBUG][tick:43][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:43][turn] turn-end {"tick":43}
+[DEBUG][tick:43][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to a shivering pilgrim"}
+[immersion] state: exploration -> dialogue (speak)
+[INFO][tick:44][turn] turn-start {"input":"talk to a shivering pilgrim","tick":44}
+[DEBUG][tick:44][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:44][turn] turn-end {"tick":44}
+[INFO][tick:44][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:44][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a shivering pilgrim"}
+[INFO][tick:45][turn] turn-start {"input":"go Chapel Nave attack Ash Ghoul attack Crypt Stalker attack Crypt Stalker attack Ash Ghoul flee go Crypt Antechamber go Crypt Antechamber go Crypt Antechambe attack Ash Ghoul attack Crypt Stalker atta","tick":45}
+[DEBUG][tick:45][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:45][turn] turn-end {"tick":45}
+[DEBUG][tick:45][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to crypt-chamber"}
+[immersion] state: dialogue -> exploration (move)
+[INFO][tick:46][turn] turn-start {"input":"go Crypt Antechamber","tick":46}
+[DEBUG][tick:46][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:46][turn] turn-end {"tick":46}

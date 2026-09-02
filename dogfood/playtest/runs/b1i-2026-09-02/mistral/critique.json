@@ -1,0 +1,137 @@
+{
+  "alive": true,
+  "summary": "The world felt alive with dynamic encounters, shifting moods, and reactive NPCs. The chapel and crypt areas reacted to the player's presence with ambushes, undead hostility, and evolving rumors. The session recap confirmed multiple world-driven events, including ambushes, mood transitions, and NPC interactions. The game maintained coherence with no contradictions or errors.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Ambush announced in Vestry Passage (Turn 11): 'Ambush: Chapel Patrol in Vestry Passage — Crypt Stalker readies an attack against you.'",
+      "turn": 11
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Session recap (Turn 42) shows 'Pressures spawned: 1' and 'alertPressure rose sharply' for Chapel Grounds and Crypt Depths.",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Session recap (Turn 42) shows 'alertPressure rose sharply' for Chapel Grounds and Crypt Depths, indicating escalation without player action.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No market lines or /market views showed faction standing-based markup or discounts.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "NPCs (e.g., shivering pilgrim, woman at chapel door) reflected rumors about the player's state or actions (Turns 28, 32, 37). Session recap (Turn 42) also listed 'WHAT PEOPLE ARE SAYING' for Chapel Undead.",
+      "turn": 28
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session recap (Turn 42) shows 'Crypt Depths: subdued, fearful → dangerous and despairing' and 'Chapel Grounds: lively despite everything → alertPressure rose sharply'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "NPCs acted without direct player input: Suspicious Pilgrim shifted position (Turn 2), Sister Maren's hands paused (Turn 4), Brother Aldric rose (Turn 10), and the shivering pilgrim reacted to combat (Turn 32).",
+      "turn": 2
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session recap (Turn 42) listed world actions: ambushes, mood transitions, opportunities offered/expired, and NPC asks/help left ungiven.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed. Locations, characters, and events remained consistent (e.g., Brother Aldric's name and role, undead hostility, chapel layout).",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Prompts and menus were clear (e.g., 'Type actions in plain English', 'You can: talk to Brother Aldric · go Ruined Chapel Entrance', hints like 'Type /help leverage for social action reference').",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Combat lines named kills deterministically (e.g., Turn 12: 'Your strike lands — Crypt Stalker: unhurt.', Turn 18: 'Your strike lands — Crypt Warden: hurt.').",
+      "turn": 12
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Enemies hit the player with telegraphed attacks and named damage (e.g., Turn 12: 'Crypt Stalker's attack finds you — 2 damage.', Turn 17: 'Ash Ghoul's attack finds you — 2 damage.').",
+      "turn": 12
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con reveals observed; all NPC asks were genuine (e.g., escorts) or left unanswered.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No immediate acknowledgment or later standing changes for helping NPCs were observed.",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Unknown command /world (Turn 7) was corrected with a helpful response. /rumor (Turn 37) was also corrected.",
+      "turn": 7
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Plain sentences to NPCs were treated as dialogue (e.g., Turn 2: 'talk to the pilgrim' led to NPC reply, Turn 27: 'Yes' was accepted as a response to the woman's ask).",
+      "turn": 2
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Movement commands worked (e.g., 'go Vestry Passage' moved the player, Turn 11). /jobs and /people were recognized and functional.",
+      "turn": 11
+    },
+    {
+      "id": "price-seen",
+      "met": false,
+      "evidence": "No market lines with standing-based markup were shown on the play screen; only /market views were available.",
+      "turn": null
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "No pressure escalation/resolution lines were shown on the play screen; only the session recap (Turn 42) listed pressure changes.",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Ambush announcement in Vestry Passage (Turn 11) with clear combat setup and telegraphed attacks.",
+    "Dynamic NPC reactions: Suspicious Pilgrim and Sister Maren's subtle shifts (Turns 2, 4), Brother Aldric's rising tension (Turn 10).",
+    "Session recap (Turn 42) comprehensively listed world actions: ambushes, mood transitions, opportunities, and NPC interactions.",
+    "Combat lines with deterministic kill messages and damage tracking (Turns 12, 18)."
+  ],
+  "deadSpots": [
+    "Turn 34-36: Repetitive combat with no progress, leading to frustration. Player input was ignored or misparsed (e.g., 'go Chapel Nave attack Ash Ghoul...' was not executed as intended).",
+    "Turn 26-27: Player input was misparsed ('I'm not sure what you mean...'), causing confusion and wasted turns.",
+    "Turn 32-37: NPC dialogue became repetitive and unhelpful, with the pilgrim's accusations cycling without resolution."
+  ],
+  "confusions": [
+    "Turn 26-27: Game misparsed multi-action inputs (e.g., 'go Chapel Nave attack Ash Ghoul'), requiring single-action commands.",
+    "Turn 32: Player confusion over whether NPC asks were genuine or cons; no clear cues to distinguish.",
+    "Turn 37: /rumor command was unknown, and /people did not show rumors with stance counts."
+  ],
+  "wouldPlayAgain": true
+}

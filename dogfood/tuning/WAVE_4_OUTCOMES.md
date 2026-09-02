@@ -36,14 +36,17 @@ playtest, where the seats seek fights.
 | b1f | 1.0 | — | — | — | 5 / 5 |
 | b1g | 0.5 | — | — | — | 4 / 5 |
 | b1h | 0.5 | — | yes | — | 3 / 5 |
-| b1i | 0.5 | 1 | yes | yes | *(this wave's run; recorded in its COORDINATOR.md)* |
+| b1i | 0.5 | 1 | yes | yes | **1 / 5** (alive 5/5, would play again 5/5) |
 
 ## Classification
 
-Filled from `b1i`: the Director's exit bar is fewer than half the seats
-downed. P0 if three or more fall again with the cap in place; P1 if one or
-two fall and the transcripts show a choice (fighting on at reeling) rather
-than a mechanism.
+**P1.** One seat of five fell, by choice: mistral attacked the Crypt Warden
+(the boss) at 8 of 20 HP and fought on past the warning. The seat that used
+the mechanism (qwen: warning at 5 HP, `flee to …` twice) survived. The
+Director's exit bar (fewer than half the seats downed) is met; the
+enemy-damage program closes with `enemyDamageScale` 0.5 and
+`maxHostileAttackersPerRound` 1 as the defaults. No P0 in the last three
+waves; the P1s did not repeat; outcomes converged (5/5 → 4/5 → 3/5 → 1/5).
 
 ## Not touched
 

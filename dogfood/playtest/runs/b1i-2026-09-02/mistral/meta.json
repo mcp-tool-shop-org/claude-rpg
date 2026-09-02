@@ -1,0 +1,16 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "label": "b1i-2026-09-02",
+  "seat": {
+    "id": "mistral",
+    "family": "mistral",
+    "model": "mistralai/mistral-small-2603"
+  },
+  "turns": 40,
+  "turnsPlayed": 42,
+  "endedBy": "turns",
+  "error": null,
+  "critiqueError": null,
+  "durationMs": 269681,
+  "finishedAt": "2026-09-02T07:47:55.536Z"
+}

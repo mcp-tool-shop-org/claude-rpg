@@ -1,0 +1,133 @@
+{
+  "alive": true,
+  "summary": "The world demonstrated strong autonomous behavior with multiple ambushes, faction pressures, and NPC actions occurring without player prompting. The chapel-undead faction actively pursued the player with bounties and investigations, while district moods shifted and rumors spread organically. The session maintained coherence throughout with clear systems and responsive feedback.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Entering Chapel Nave triggered 'Ambush: Chapel Patrol in Chapel Nave' announced by the game",
+      "turn": 5
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Multiple '[bounty-issued: chapel-undead has placed a bounty on the player]' and '[investigation-opened: chapel-undead has opened an investigation]' messages appeared",
+      "turn": 22
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Session summary shows 8 pressures spawned and 6 resolved by the world without player action",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "Market showed Healing Draught 13 (+30% vs base) but no explicit faction standing reference",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "NPC dialogue reflected rumors about the player with varying stances ('I heard whispers...')",
+      "turn": 26
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session summary shows Chapel Grounds and Crypt Depths mood transitions",
+      "turn": null
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Sister Maren announced bounty without player prompting, pilgrims shifted positions",
+      "turn": 27
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary detailed world actions including pressures, ambushes, mood transitions, and rumors",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed across the entire session",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts and action lists provided every turn with helpful hints",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Combat lines like 'Your strike lands — Ash Ghoul: unhurt' appeared in reserved blocks",
+      "turn": 10
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Multiple enemy hits with telegraphs ('readies an attack') and damage reports",
+      "turn": 8
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "Multiple asks for help with later reveals ('a shivering pilgrim's story wasn't true')",
+      "turn": 25
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "Multiple 'will remember who...' acknowledgments for helping genuine petitioners",
+      "turn": 13
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "/jobs command worked immediately without turn cost or in-world action",
+      "turn": 33
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Plain sentence 'I hunt the restless dead.' was treated as dialogue and NPC replied",
+      "turn": 27
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Movement commands like 'go Chapel Nave' worked consistently",
+      "turn": 5
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "Market line with price shown on play screen without opening /market",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": true,
+      "evidence": "Pressure messages appeared on play screen when they happened",
+      "turn": 22
+    }
+  ],
+  "highlights": [
+    "Turn 5: Ambush triggered naturally on location entry",
+    "Turn 22: Faction pressure system activated with bounty issuance",
+    "Turn 27: Sister Maren unprompted bounty announcement",
+    "Turn 42: Comprehensive session recap showing world autonomy"
+  ],
+  "deadSpots": [
+    "Turn 30: Some dialogue responses felt slightly disconnected from previous context"
+  ],
+  "confusions": [
+    "Turn 29: Turn numbering discrepancy (showed Turn 27 twice)"
+  ],
+  "wouldPlayAgain": true
+}

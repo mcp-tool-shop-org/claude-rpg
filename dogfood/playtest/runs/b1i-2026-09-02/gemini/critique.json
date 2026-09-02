@@ -1,0 +1,134 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through its dynamic NPCs and environmental shifts. Characters reacted to player choices, and the atmosphere of locations changed subtly. The game also presented opportunities and tracked their expiration, adding a sense of urgency and consequence.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session summary shows 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"' and 'alertPressure rose sharply'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Brother Aldric's dialogue in turn 40, 'The crypt-depths are sealed to you by their decree... But I know other paths through these sacred grounds—paths that predate their authority,' is an unprompted offer of help or information.",
+      "turn": 40
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The 'SESSION SUMMARY' at turn 42 includes sections like 'DISTRICT CHANGES', 'FACTION SHIFTS', 'WHAT PEOPLE ARE SAYING', 'NOTABLE CHARACTERS', 'OPPORTUNITIES & CONTRACTS', and 'THE WORLD MOVED', detailing various world actions.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": false,
+      "evidence": "Sister Maren contradicts herself regarding 'Aldric' and 'one-armed veteran' from turn 8 to turn 12, despite the player quoting her own words.",
+      "turn": 8
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The game consistently provides 'You can:' lists and 'hint:' lines, clearly indicating possible actions and available commands.",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "When the player says 'I seek what stirs the dead.' (Turn 3), 'I hunt the truth.' (Turn 4), 'I bear no blessing.' (Turn 33), 'A penitent one.' (Turn 34), 'I seek to atone.' (Turn 35), 'I cannot speak of it.' (Turn 36), 'I will not harm you.' (Turn 37), 'Through both.' (Turn 38), and 'I will be what is needed.' (Turn 39), the game treats these as dialogue and the NPCs reply directly.",
+      "turn": 3
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "The command 'Go Chapel Nave' successfully moved the player to the Chapel Nave location in turn 13 and turn 30.",
+      "turn": 13
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "The market line 'Market: Healing Draught 13 (+30% vs base)' is consistently displayed on the play screen from turn 2 onwards.",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "The dynamic dialogue and reactions of the pilgrim and Sister Maren to the player's presence and choices (Turns 2-7).",
+    "The game's ability to remember and reference past dialogue, even when an NPC denies it, creating an interesting meta-narrative (Turns 8-12).",
+    "The consistent display of market information and available actions, making the interface clear (Turns 2-41).",
+    "Brother Aldric's unprompted offer of alternative paths, showing NPC agency (Turn 40).",
+    "The comprehensive session summary, providing a clear recap of world changes (Turn 42)."
+  ],
+  "deadSpots": [
+    "The contradiction regarding 'Aldric' and 'one-armed veteran' between Sister Maren's dialogue and the player's memory (Turns 8-12). This broke immersion and coherence."
+  ],
+  "confusions": [
+    "The game's internal state regarding the 'one-armed veteran' and 'Aldric' seemed to conflict with the narrative presented to the player, leading to confusion about who was who and what had been said (Turns 8-12)."
+  ],
+  "wouldPlayAgain": true
+}

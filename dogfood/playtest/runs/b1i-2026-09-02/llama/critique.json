@@ -1,0 +1,133 @@
+{
+  "alive": true,
+  "summary": "The world felt alive as it reacted to my actions and maintained coherence throughout the session. I encountered various characters, including a suspicious pilgrim and a one-armed veteran, who had their own agendas and stories. The environment also changed in response to my actions, with the chapel's atmosphere shifting from sacred to hostile. However, there were moments where the world felt scripted, such as when the bounty hunters appeared, and some interactions felt a bit predictable.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 5: Ambush: Chapel Patrol in Chapel Nave",
+      "turn": 5
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Turn 11: Brother Aldric says 'The chapel's bounty hunters will come for you now'",
+      "turn": 11
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Turn 25: investigation-opened: investigation opened expired without resolution",
+      "turn": 25
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No evidence of price changes in response to faction standing",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Turn 27: a one-armed veteran says a stranger walked the dark path for them",
+      "turn": 27
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Turn 36: Chapel Grounds: 'lively despite everything' → 'on edge, jumpy'",
+      "turn": 36
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Turn 29: Sister Maren draws her blade",
+      "turn": 29
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary lists pressures spawned, resolved, and expired",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed throughout the session",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts and menus guided my actions",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 9: The Crypt Stalker falls",
+      "turn": 9
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Turn 7: Ash Ghoul's attack finds you — 2 damage",
+      "turn": 7
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was revealed during the session",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "Turn 32: a one-armed veteran will remember who walked the dark path",
+      "turn": 32
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": false,
+      "evidence": "No unknown commands were entered during the session",
+      "turn": null
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Turn 2: Suspicious Pilgrim responds to my question",
+      "turn": 2
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Turn 5: I moved to the Chapel Nave",
+      "turn": 5
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "Turn 2: Market: Healing Draught 13 (+30% vs base)",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": true,
+      "evidence": "Turn 11: bounty-issued: chapel-undead has placed a bounty on the player",
+      "turn": 11
+    }
+  ],
+  "highlights": [
+    "Turn 5: Ambush in the Chapel Nave",
+    "Turn 11: Brother Aldric's warning",
+    "Turn 27: a one-armed veteran's story"
+  ],
+  "deadSpots": [
+    "Turn 25: investigation-opened expired without resolution",
+    "Turn 30: Suspicious Pilgrim's sudden aggression"
+  ],
+  "confusions": [
+    "Turn 4: Suspicious Pilgrim's identity confusion"
+  ],
+  "wouldPlayAgain": true
+}

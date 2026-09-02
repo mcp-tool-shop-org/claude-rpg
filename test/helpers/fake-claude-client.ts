@@ -60,10 +60,22 @@ export type CallLog = {
    * in-memory field assignment.
    */
   lastGeneratePrompt?: string;
+  /**
+   * WO-P9-1 (Phase 9 §1, run swarm-1788288802-f5a0, wave 9): char-length of
+   * EVERY generate()/generateStream() prompt across this client's whole
+   * lifetime, push-only, in call order — `lastGeneratePrompt` above keeps
+   * only the most recent one, which is all the pre-existing callers
+   * (resumeHarness()'s restore proofs) ever needed. The Phase-9 matrix
+   * runner needs the full per-turn distribution (max/median narration
+   * prompt size across a played 30-round world), which a single retained
+   * string can't answer. Additive and default-empty: every existing caller
+   * of createCallLog()/createFakeClient() is unaffected.
+   */
+  promptLengths: number[];
 };
 
 export function createCallLog(): CallLog {
-  return { generate: 0, generateStructured: 0, generateStream: 0 };
+  return { generate: 0, generateStructured: 0, generateStream: 0, promptLengths: [] };
 }
 
 /** Resolves a (possibly call-count-scripted) generateFailure option to the kind that should fail THIS call, if any. */
@@ -93,6 +105,7 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
     async generate(genOpts): Promise<GenerateResult> {
       log.generate++;
       log.lastGeneratePrompt = genOpts.prompt;
+      log.promptLengths.push(genOpts.prompt.length);
 
       const failure = resolveGenerateFailure(opts.generateFailure, log.generate);
       if (failure) {
@@ -153,6 +166,7 @@ export function createFakeClient(opts: FakeClientOptions = {}): ClaudeClient {
     }): Promise<GenerateResult> => {
       log.generateStream++;
       log.lastGeneratePrompt = streamOpts.prompt;
+      log.promptLengths.push(streamOpts.prompt.length);
 
       const failure = resolveGenerateFailure(opts.generateFailure, log.generateStream);
       if (failure) {

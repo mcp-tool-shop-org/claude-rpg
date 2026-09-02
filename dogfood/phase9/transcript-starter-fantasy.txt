@@ -1407,9 +1407,34 @@ The scene unfolds before you.
    [prompt lines the LLM saw this turn]
    | World pressures:
 
-═══ beat 9 ── > go to chapel entrance
+═══ beat 9 ── > talk to brother aldric
 
 ═════════════════════════ Turn 25 ══════════════════════════
+
+The scene unfolds before you.
+
+····························································
+  Brother Aldric: "The scene unfolds before you."
+
+····························································
+  Hero (Lv2 penitent-knight) | HP: 20/20
+  Blackmail: 23
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+  hint: The black-market-boom grows urgent — intervene now
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  [autosaved]
+   [prompt lines the LLM saw this turn]
+   | Rumors about the player:
+   | - "angered the Chapel Undead" (heard, doubt)
+   | Standing with you: owes you a favor
+
+═══ beat 9 ── > go to chapel entrance
+
+═════════════════════════ Turn 26 ══════════════════════════
 
 The scene unfolds before you.
 
@@ -1424,37 +1449,19 @@ The scene unfolds before you.
   hint: Black market activity detected — contraband may be available
 
   What do you do?
-
-  [autosaved]
    [prompt lines the LLM saw this turn]
    | World pressures:
 
-═══ beat 9 ── > talk to sister maren
-
-═════════════════════════ Turn 26 ══════════════════════════
-
-The scene unfolds before you.
-
-····························································
-  Sister Maren: "The scene unfolds before you."
-
-····························································
-  Hero (Lv2 penitent-knight) | HP: 20/20
-  Blackmail: 23
-  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
-────────────────────────────────────────────────────────────
-  hint: The black-market-boom grows urgent — intervene now
-  hint: Black market activity detected — contraband may be available
-
-  What do you do?
-
-═══ beat 10 ── > look
+═══ beat 9 ── > talk to pilgrim
 
 ═════════════════════════ Turn 27 ══════════════════════════
 
 The scene unfolds before you.
 
 ····························································
+  Suspicious Pilgrim: "The scene unfolds before you."
+
+····························································
   Hero (Lv2 penitent-knight) | HP: 20/20
   Blackmail: 23
   Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
@@ -1464,7 +1471,8 @@ The scene unfolds before you.
 
   What do you do?
    [prompt lines the LLM saw this turn]
-   | World pressures:
+   | Rumors about the player:
+   | - "angered the Chapel Undead" (heard, doubt)
 
 ═══ beat 10 ── > look
 
@@ -1499,6 +1507,26 @@ The scene unfolds before you.
   hint: Black market activity detected — contraband may be available
 
   What do you do?
+   [prompt lines the LLM saw this turn]
+   | World pressures:
+
+═══ beat 10 ── > look
+
+═════════════════════════ Turn 30 ══════════════════════════
+
+The scene unfolds before you.
+
+····························································
+  Hero (Lv2 penitent-knight) | HP: 20/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+  hint: The black-market-boom grows urgent — intervene now
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  [autosaved]
    [prompt lines the LLM saw this turn]
    | World pressures:
 
@@ -1593,7 +1621,7 @@ The scene unfolds before you.
 
   [black-market-boom] black market activity is spreading across multiple districts
     Source: market | Urgency: 65% | Visibility: known
-    Expires: 1 turns | Triggered by: economy:black-market:2
+    Expires: 0 turns | Triggered by: economy:black-market:2
     Tags: economic, black-market
     Outcomes:
       - Contraband becomes more available but authorities crack down
@@ -1690,7 +1718,7 @@ The scene unfolds before you.
 ────────────────────────────────────────────────────────────
   Hero (Lv2 penitent-knight) | HP: 20/20
   Blackmail: 23
-  Heat 10 (11/37 quiet) · Alerts: chapel-undead 15 · District: tense
+  Heat 10 (12/37 quiet) · Alerts: chapel-undead 15 · District: tense
   Market: medicine scarce
   Jobs: 1 available
   Arc: descent (steady)
@@ -1713,7 +1741,7 @@ The scene unfolds before you.
 
 ────────────────────────────────────────────────────────────
 
-  Heat: 10 (11/37 quiet rounds to cooling)
+  Heat: 10 (12/37 quiet rounds to cooling)
   Alerts: chapel-undead 15
 
 ═══ beat 11 ── > /director
@@ -1806,7 +1834,7 @@ The scene unfolds before you.
 ────────────────────────────────────────────────────────────
 
   Rumor stance fade (ticks): 24 (default)
-  Rumor believe threshold (suspicion below): 50 (default)
+  Rumor believe threshold (suspicion below): 0 (default)
   Rumor spread scope: district (default)
   World-moved ledger cap: 200 (default)
   Narration pressure lines: 10 (default)
@@ -1818,10 +1846,11 @@ The scene unfolds before you.
   LAST ROUND
 ────────────────────────────────────────────────────────────
 
-  Round tick 29 (29 rounds recorded)
+  Round tick 30 (30 rounds recorded)
   Heat: 10
-  Quiet rounds: 11
+  Quiet rounds: 12
   Pressures active: 1
+  Faction actions: 1
   Rumor hearers: 3
   Price quote: 13
 
@@ -1910,7 +1939,7 @@ The scene unfolds before you.
 
 ────────────────────────────────────────────────────────────
 
-═══ end ── tick 29, heat 10, world moved entries 8
+═══ end ── tick 30, heat 10, world moved entries 8
 ═══ beat 12 ── the "world moved" ledger the recap reads (session.worldMovedLedger, mechanical)
    tick 1  opportunity-offered: Investigate the black market activity
    tick 3  ambush: Chapel Patrol in chapel-nave

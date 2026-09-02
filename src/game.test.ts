@@ -3373,7 +3373,7 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
     expect(resolveTuning()).toEqual(DEFAULT_LIVING_WORLD_TUNING);
     expect(DEFAULT_LIVING_WORLD_TUNING).toEqual({
       rumorStanceFadeTicks: 24,
-      rumorBelieveSuspicionBelow: 50,
+      rumorBelieveSuspicionBelow: 0, // A6 wave T1 default (WAVE_1_OUTCOMES.md)
       rumorSpreadScope: 'district',
       worldMovedCap: 200,
       narrationPressureLines: 10,
@@ -3448,9 +3448,10 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
   it('rumorBelieveSuspicionBelow tunes the first-hearing stance rule (RED before this WO: the threshold was hard-coded to the literal `50`, so an NPC at DEFAULT_SUSPICION (0) always believed with no way to force doubt)', async () => {
     const { createHarness } = await import('../test/helpers/game-harness.js');
 
-    // Default (50): pilgrim's suspicion (0, cognition-core's DEFAULT_SUSPICION)
-    // is below the default threshold -> believes.
-    const believeHarness = createHarness();
+    // Threshold 50 (the pre-T1 default): pilgrim's suspicion (0,
+    // cognition-core's DEFAULT_SUSPICION) is below it -> believes. Since A6
+    // wave T1 the default is 0, so the believing side is set explicitly.
+    const believeHarness = createHarness({ gameOpts: { tuning: { rumorBelieveSuspicionBelow: 50 } } });
     ensureImmersionInferAndTransitionStub(believeHarness.session);
     believeHarness.session.rumorEngine.create({
       claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
@@ -3459,8 +3460,8 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
     await believeHarness.play('look around');
     expect(believeHarness.session.getHearerRumors('pilgrim')[0]?.stance).toBe('believe');
 
-    // Threshold 0: suspicion (0) < 0 is false, and this fixture's rumor has
-    // no faction uptake -> doubts instead.
+    // Threshold 0 (the T1 default): suspicion (0) < 0 is false, and this
+    // fixture's rumor has no faction uptake -> doubts instead.
     const doubtHarness = createHarness({ gameOpts: { tuning: { rumorBelieveSuspicionBelow: 0 } } });
     ensureImmersionInferAndTransitionStub(doubtHarness.session);
     doubtHarness.session.rumorEngine.create({

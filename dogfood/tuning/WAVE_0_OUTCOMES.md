@@ -53,7 +53,7 @@ No world stopped producing turns, no heat spiral, no unbounded prompt (max
    uptake includes the hearer's faction OR the hearer's suspicion is below
    `rumorBelieveSuspicionBelow` (50); `DEFAULT_SUSPICION` is 0, so the second
    clause is always true. Lever: `rumorBelieveSuspicionBelow` (T1 candidate:
-   1 — suspicion must be zero to believe outright) and, if the metric does
+   0 — suspicion alone never earns belief) and, if the metric does
    not move, a second axis in the rule (a hostile faction doubts). Target
    band: doubt ≥ 1 on at least 6 of the 9 rumor-producing worlds.
 2. **Rumor reach is thin: NPC hearers ≤ 2 on every world; 0 on four of the
@@ -95,7 +95,9 @@ No world stopped producing turns, no heat spiral, no unbounded prompt (max
 
 ## Wave T1 — proposed (one lever)
 
-**Lever:** `rumorBelieveSuspicionBelow` 50 → 1 (P1 #1).
+**Lever:** `rumorBelieveSuspicionBelow` 50 → 0 (P1 #1). (First written as 1;
+the rule reads `suspicion < threshold` and suspicion starts at 0, so 1 admits
+every hearer — corrected before the run, see WAVE_1_OUTCOMES.md.)
 **Null hypothesis:** stanceDoubtCount ≥ 1 on ≥ 6 of the 9 rumor-producing
 worlds; every other column of the sheet byte-identical (the lever touches
 stance only).

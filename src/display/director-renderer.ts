@@ -305,16 +305,11 @@ const PRESSURES_MAX_COUNT_FALLBACK = 10;
  * SAME "no cap today -> Infinity-equivalent" fallback rule the lock itself
  * names, honestly provisional until WO-A6-1 lands its measured value.
  */
-const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
-  rumorStanceFadeTicks: 24,
-  rumorBelieveSuspicionBelow: 50,
-  rumorSpreadScope: 'district',
-  worldMovedCap: 200,
-  narrationPressureLines: PRESSURES_MAX_COUNT_FALLBACK,
-  narrationOpportunityLines: Infinity,
-  narrationRumorLines: Infinity,
-  ambushHeadline: 'always',
-};
+// Coordinator stitch (A6 wave T1): the defaults are game-core's ONE list --
+// a local copy drifted the moment T1 changed a value (the (default) marker
+// went stale). Two independently maintained copies of one list is this
+// codebase's recurring bug shape; the import ends it here.
+import { DEFAULT_LIVING_WORLD_TUNING } from '../game/tuning.js';
 
 /**
  * WO-A6-5: structurally identical to game-core's WO-A6-2 `RoundMetrics`

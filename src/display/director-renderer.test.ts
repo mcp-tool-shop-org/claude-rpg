@@ -884,7 +884,7 @@ describe('director-renderer section headers are bolded (F-de13eb60)', () => {
 describe('/tuning director view (WO-A6-5)', () => {
   const defaultTuning = {
     rumorStanceFadeTicks: 24,
-    rumorBelieveSuspicionBelow: 50,
+    rumorBelieveSuspicionBelow: 0,
     rumorSpreadScope: 'district' as const,
     worldMovedCap: 200,
     narrationPressureLines: 10,
@@ -915,7 +915,7 @@ describe('/tuning director view (WO-A6-5)', () => {
     // still-provisional narrationOpportunityLines/narrationRumorLines
     // fallback (see DEFAULT_LIVING_WORLD_TUNING's doc comment).
     expect(result).toContain('Rumor stance fade (ticks): 24 (default)');
-    expect(result).toContain('Rumor believe threshold (suspicion below): 50 (default)');
+    expect(result).toContain('Rumor believe threshold (suspicion below): 0 (default)');
     expect(result).toContain('Rumor spread scope: district (default)');
     expect(result).toContain('World-moved ledger cap: 200 (default)');
     expect(result).toContain('Narration pressure lines: 10 (default)');

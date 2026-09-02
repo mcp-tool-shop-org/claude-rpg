@@ -29,10 +29,10 @@ export type LivingWorldTuning = {
    * The first-hearing stance rule's suspicion threshold (design lock 6,
    * runWorldRound's per-hearer spread step): a hearer whose cognition-core
    * suspicion is BELOW this value believes the rumor by default (absent
-   * shared faction uptake). Measured default: 50 -- the SAME threshold
-   * cognition-core.js's own intent evaluation uses for "increasingly
-   * suspicious" behavior (game.ts's pre-wave comment at the `suspicion < 50`
-   * site).
+   * shared faction uptake). Measured pre-tuning value: 50 -- the SAME
+   * threshold cognition-core.js's own intent evaluation uses for
+   * "increasingly suspicious" behavior. A6 wave T1 set the default to 0
+   * (dogfood/tuning/WAVE_1_OUTCOMES.md): suspicion alone never earns belief.
    */
   rumorBelieveSuspicionBelow: number;
   /**
@@ -105,7 +105,10 @@ export type LivingWorldTuning = {
  */
 export const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
   rumorStanceFadeTicks: 24,
-  rumorBelieveSuspicionBelow: 50,
+  // A6 wave T1 (dogfood/tuning/WAVE_1_OUTCOMES.md): 50 -> 0. Suspicion alone
+  // never earns belief; a hearer believes a rumor about the player only when
+  // their faction has already taken it up, and doubts it otherwise.
+  rumorBelieveSuspicionBelow: 0,
   rumorSpreadScope: 'district',
   worldMovedCap: MAX_WORLD_MOVED_ENTRIES,
   narrationPressureLines: 10,

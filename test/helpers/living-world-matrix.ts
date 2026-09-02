@@ -1,4 +1,5 @@
 import { createProfile, type CharacterProfile } from '@ai-rpg-engine/character-profile';
+import type { LivingWorldTuning } from '../../src/game/tuning.js';
 // WO-P9-1 (Phase 9 §1, docs/living-world-slice-a6-phase9.md, run
 // swarm-1788288802-f5a0, wave 9, "tests" domain, ADDENDUM-COMMON design
 // lock #4): the composed-proof matrix runner. Boots a world (a starter
@@ -263,13 +264,14 @@ function buildMatrixProfile(engine: Engine, packId: string, catalog?: { archetyp
   );
 }
 
-async function buildHarnessForWorld(input: MatrixWorldInput, seed: number): Promise<GameHarness> {
+async function buildHarnessForWorld(input: MatrixWorldInput, seed: number, tuning?: Partial<LivingWorldTuning>): Promise<GameHarness> {
   if (input.kind === 'pack') {
     const engine = input.pack.createGame(seed);
     return createHarness({
       gameOpts: {
         engine,
         profile: buildMatrixProfile(engine, input.pack.meta.id, input.pack.buildCatalog as never),
+        ...(tuning ? { tuning } : {}),
         itemCatalog: input.pack.itemCatalog,
         genre: input.pack.meta.genres?.[0] ?? 'fantasy',
         title: input.pack.meta.name,
@@ -285,6 +287,7 @@ async function buildHarnessForWorld(input: MatrixWorldInput, seed: number): Prom
       // The generated fixture has no pack catalog; a fantasy build stands in
       // (the profile's pack id only names the catalog the build came from).
       profile: undefined,
+      ...(tuning ? { tuning } : {}),
     },
   });
   harness.session.profile = buildMatrixProfile(harness.session.engine, 'chapel-threshold', undefined);
@@ -414,8 +417,8 @@ function mirrorMarketQuote(session: GameSession): number | undefined {
 }
 
 /** Plays one world through the fixed deterministic script and reduces it to a WorldRunResult. */
-async function playWorld(input: MatrixWorldInput, rounds: number, seed: number): Promise<WorldRunResult> {
-  const harness = await buildHarnessForWorld(input, seed);
+async function playWorld(input: MatrixWorldInput, rounds: number, seed: number, tuning?: Partial<LivingWorldTuning>): Promise<WorldRunResult> {
+  const harness = await buildHarnessForWorld(input, seed, tuning);
   const session = harness.session;
 
   const visitedZones = new Set<string>();
@@ -688,15 +691,20 @@ async function playWorld(input: MatrixWorldInput, rounds: number, seed: number):
  */
 export async function runLivingWorldMatrix(
   worlds: MatrixWorldInput[],
-  opts: { rounds?: number; label?: string; seed?: number } = {},
+  opts: { rounds?: number; label?: string; seed?: number; tuning?: Partial<LivingWorldTuning> } = {},
 ): Promise<{ sheet: MatrixSheet; worlds: WorldRunResult[] }> {
   const rounds = opts.rounds ?? MATRIX_ROUNDS;
+  // A6 tuning waves (coordinator, wave T1+): one lever per wave, passed as
+  // `opts.tuning` or `LIVING_WORLD_TUNING_JSON` (a Partial<LivingWorldTuning>
+  // object); absent -> the resolved defaults, byte-identical to the baseline.
+  const tuning: Partial<LivingWorldTuning> | undefined =
+    opts.tuning ?? (process.env.LIVING_WORLD_TUNING_JSON ? (JSON.parse(process.env.LIVING_WORLD_TUNING_JSON) as Partial<LivingWorldTuning>) : undefined);
   const seed = opts.seed ?? MATRIX_SEED;
   const label = opts.label ?? process.env.LIVING_WORLD_MATRIX_LABEL ?? 'baseline';
 
   const results: WorldRunResult[] = [];
   for (const world of worlds) {
-    results.push(await playWorld(world, rounds, seed));
+    results.push(await playWorld(world, rounds, seed, tuning));
   }
   results.sort((a, b) => a.label.localeCompare(b.label));
 

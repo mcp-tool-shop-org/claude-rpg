@@ -55,7 +55,10 @@ import {
   setPersistedMoveRecommendation,
 } from '@ai-rpg-engine/modules';
 import type { McpToolCall } from './runtime/audio-bridge.js';
-import { loadNpcAgencyFromSession, type SavedSession, saveSession, loadSession, loadProfileFromSession } from './session/session.js';
+import { loadNpcAgencyFromSession, type SavedSession, saveSession, loadSession, loadProfileFromSession, loadWorldMovedFromSession } from './session/session.js';
+// WO-A5 (slice A5, wave 8) test-only imports.
+import type { ItemCatalog } from '@ai-rpg-engine/equipment';
+import { SELL_BASE_VALUE, QUIET_ROUNDS_BEFORE_DECAY, getDistrictState } from '@ai-rpg-engine/modules';
 import { MAX_PLAYER_RUMORS } from './game/game-state.js';
 // Slice A1 (WO-A1-6, WO-A1-7, docs/living-world-slice-a1.md): generated-world
 // boot + verb-parity + defeat-fallout proofs, built against world-gen.ts's
@@ -3095,5 +3098,269 @@ describe('Slice A4 (WO-A4-3): generated-world save fields', () => {
 
     expect(session.getWorldGenProposal()).toBeUndefined();
     expect(session.getWorldSeed()).toBeUndefined();
+  });
+});
+
+// Slice A5 (wave 8, run swarm-1788288802-f5a0): "the world reaches the
+// player" -- docs/living-world-slice-a5.md. game-core's own WO-A5-1/2/3/4/5
+// proofs (§8's played-scene contract, scoped to this domain's data-assembly
+// half; the rendering half of each is cli-display's/narrative-llm's own
+// worktree this same wave, coded against per the addendum's "green expected
+// at merge" allowance -- see each WO's implementation-site doc comment in
+// game.ts/turn-loop.ts for the specific cross-domain contract).
+describe('Slice A5 (WO-A5-1): market quote data (design lock 1)', () => {
+  it('quotes the player\'s OWN district via the engine\'s quoteBuyPrice, priced against the flat SELL_BASE_VALUE constant (no hand-rolled price math)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const itemCatalog: ItemCatalog = {
+      items: [{ id: 'iron-scrap', name: 'Iron Scrap', description: 'Scrap metal.', slot: 'tool', rarity: 'common' }],
+    };
+    const h = createHarness({ gameOpts: { itemCatalog } });
+
+    // RED before this WO: buildMarketQuote() did not exist on GameSession
+    // at all -- this cast would throw "buildMarketQuote is not a
+    // function".
+    const quote = (h.session as unknown as {
+      buildMarketQuote: () => {
+        districtId: string;
+        controllingFactionId?: string;
+        sampleItemId: string;
+        quotedPrice: number;
+        basePrice: number;
+      } | undefined;
+    }).buildMarketQuote();
+
+    expect(quote).toBeDefined();
+    // The player starts in chapel-entrance -> chapel-grounds (no
+    // controllingFaction authored for that district -- crypt-depths is the
+    // one with 'chapel-undead').
+    expect(quote!.districtId).toBe('chapel-grounds');
+    expect(quote!.controllingFactionId).toBeUndefined();
+    expect(quote!.sampleItemId).toBe('iron-scrap');
+    expect(quote!.basePrice).toBe(SELL_BASE_VALUE);
+    expect(quote!.quotedPrice).toBeGreaterThan(0);
+  });
+
+  it('returns undefined (not a thrown error) when the session has no itemCatalog at all', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    const quote = (h.session as unknown as { buildMarketQuote: () => unknown }).buildMarketQuote();
+    expect(quote).toBeUndefined();
+  });
+});
+
+describe('Slice A5 (WO-A5-2): district mood transition threading (design lock 2)', () => {
+  it('detects a real before/after tone change for the player\'s own district this round, and clears again on the next quiet round', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+    const world = h.session.engine.world;
+    const districtId = 'chapel-grounds'; // player starts in chapel-entrance
+
+    // Seed a baseline tone the tick's own step 0c will compare THIS
+    // round's freshly computed tone against.
+    getWorldTickState(world).districtTones = { [districtId]: 'calm' };
+
+    // Force district-core metrics toward the opposite extreme so this
+    // round's tone genuinely differs from the seeded baseline (a real
+    // engine-derived transition, not a hand-authored one).
+    const dState = getDistrictState(world, districtId)!;
+    dState.alertPressure = 100;
+    dState.stability = 0;
+    dState.commerce = 0;
+    dState.morale = 0;
+
+    // RED before this WO: GameSession had no lastMoodTransition field at
+    // all -- runWorldRound never compared before/after districtTones.
+    await h.play('look around');
+
+    const transition = (h.session as unknown as {
+      lastMoodTransition?: { districtId: string; from: string; to: string };
+    }).lastMoodTransition;
+    expect(transition).toBeDefined();
+    expect(transition!.districtId).toBe(districtId);
+    expect(transition!.from).toBe('calm');
+    expect(transition!.to).not.toBe('calm');
+
+    // A quiet round with metrics unchanged reports no transition -- never
+    // accumulated, recomputed fresh every round (design lock 2).
+    await h.play('look around');
+    const quiet = (h.session as unknown as { lastMoodTransition?: unknown }).lastMoodTransition;
+    expect(quiet).toBeUndefined();
+  });
+
+  it('threads getMoodTransition into executeTurn\'s opts so turn-loop.ts can read this round\'s own transition (the additive-callback contract, ExecuteTurnOpts.getMoodTransition)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+    const world = h.session.engine.world;
+    const districtId = 'chapel-grounds';
+    getWorldTickState(world).districtTones = { [districtId]: 'calm' };
+    const dState = getDistrictState(world, districtId)!;
+    dState.alertPressure = 100;
+    dState.stability = 0;
+    dState.commerce = 0;
+    dState.morale = 0;
+
+    const turnLoopModule = await import('./turn-loop.js');
+    const spy = vi.spyOn(turnLoopModule, 'executeTurn');
+
+    await h.play('look around');
+
+    expect(spy).toHaveBeenCalled();
+    const opts = spy.mock.calls[0][0] as { getMoodTransition?: () => unknown };
+    expect(typeof opts.getMoodTransition).toBe('function');
+    expect(opts.getMoodTransition!()).toMatchObject({ districtId, from: 'calm' });
+    spy.mockRestore();
+  });
+});
+
+describe('Slice A5 (WO-A5-3): leverage income capture + extended worldLedger (design lock 4)', () => {
+  it('captures this round\'s leverage-currency income (a reputationDelta -> favor gain) and folds it into the extended worldLedger', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+    // First-ever observation of a nonzero faction reputation reads as a
+    // reputationDelta of the full value (state.lastReputation starts
+    // undefined) -- the tick's own runLeverageIncomeStep grants favor+5
+    // for it (computeLeverageGains' own reputationDelta table).
+    h.session.engine.world.factions['chapel-undead'].reputation = 10;
+
+    // RED before this WO: GameSession had no lastLeverageIncome field, and
+    // buildWorldLedger()'s return type had no income/decayAfter fields.
+    await h.play('look around');
+
+    const income = (h.session as unknown as {
+      lastLeverageIncome: Partial<Record<string, number>>;
+    }).lastLeverageIncome;
+    expect(income.favor).toBe(5);
+
+    const ledger = (h.session as unknown as {
+      buildWorldLedger: () => { income: Record<string, number>; decayAfter: number };
+    }).buildWorldLedger();
+    expect(ledger.income).toEqual(income);
+    expect(ledger.decayAfter).toBe(QUIET_ROUNDS_BEFORE_DECAY);
+  });
+
+  it('reports {} on a round that grants nothing (a quiet round is never mistaken for a mystery income source)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    await h.play('look around');
+
+    const income = (h.session as unknown as { lastLeverageIncome: Record<string, number> }).lastLeverageIncome;
+    expect(income).toEqual({});
+  });
+});
+
+describe('Slice A5 (WO-A5-4): per-hearer rumor spread + stance (design lock 6)', () => {
+  it('spreads an active player rumor to every named NPC in the player\'s district within one round, sets a first-hearing stance, and surfaces both via getHearerRumors/getRumorBoard', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    const rumor = h.session.rumorEngine.create({
+      claim: 'the stranger killed a merchant',
+      subject: 'player',
+      key: 'killed-merchant',
+      value: true,
+      sourceId: 'some-witness',
+      originTick: h.session.engine.tick,
+      confidence: 0.8,
+    });
+    expect(rumor.spreadPath).not.toContain('pilgrim');
+
+    // RED before this WO: GameSession had no getHearerRumors/getRumorBoard
+    // methods, and runWorldRound never called rumorEngine.spread/setStance
+    // at all -- a named NPC could never hear a player rumor.
+    expect(h.session.getHearerRumors('pilgrim')).toEqual([]);
+
+    await h.play('look around');
+
+    // pilgrim (chapel-entrance) and brother-aldric (chapel-nave) are both
+    // named NPCs in chapel-grounds -- the player's own starting district.
+    const pilgrimRumors = h.session.getHearerRumors('pilgrim');
+    expect(pilgrimRumors.length).toBe(1);
+    expect(['believe', 'doubt']).toContain(pilgrimRumors[0].stance);
+
+    const aldricRumors = h.session.getHearerRumors('brother-aldric');
+    expect(aldricRumors.length).toBe(1);
+    expect(['believe', 'doubt']).toContain(aldricRumors[0].stance);
+
+    const board = h.session.getRumorBoard();
+    expect(board.some((line) => line.subject === 'player' && line.key === 'killed-merchant')).toBe(true);
+  });
+});
+
+describe('Slice A5 (WO-A5-5): "the world moved" ledger (design doc §7)', () => {
+  let tmpDir: string | undefined;
+  afterEach(async () => {
+    if (tmpDir) {
+      await rm(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  it('accumulates entries oldest-first-capped, and getWorldMovedSnapshot() omits an empty ledger', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    // RED before this WO: GameSession had no worldMovedLedger field and no
+    // getWorldMovedSnapshot()/pushWorldMoved() methods at all.
+    expect(h.session.getWorldMovedSnapshot()).toBeUndefined();
+
+    const pushWorldMoved = (h.session as unknown as {
+      pushWorldMoved: (kind: string, headline: string) => void;
+    }).pushWorldMoved.bind(h.session);
+
+    for (let i = 0; i < 205; i++) {
+      pushWorldMoved('ambush', `entry-${i}`);
+    }
+
+    expect(h.session.worldMovedLedger.length).toBe(200); // MAX_WORLD_MOVED_ENTRIES
+    expect(h.session.worldMovedLedger[0].headline).toBe('entry-5'); // oldest 5 evicted
+    expect(h.session.worldMovedLedger[h.session.worldMovedLedger.length - 1].headline).toBe('entry-204');
+    expect(h.session.getWorldMovedSnapshot()).toBeDefined();
+  });
+
+  it('round-trips through save/load (session.ts\'s worldMoved field + loadWorldMovedFromSession, GameConfig.worldMoved restore)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    tmpDir = await mkdtemp(join(tmpdir(), 'claude-rpg-a5-worldmoved-'));
+    const savePath = join(tmpDir, 'save.json');
+    const h = createHarness();
+
+    const pushWorldMoved = (h.session as unknown as {
+      pushWorldMoved: (kind: string, headline: string) => void;
+    }).pushWorldMoved.bind(h.session);
+    pushWorldMoved('mood-transition', 'chapel-grounds: calm -> grim');
+
+    await saveSession({
+      engine: h.session.engine,
+      history: h.session.history,
+      tone: h.session.tone,
+      savePath,
+      genre: h.session.genre,
+      worldMoved: h.session.getWorldMovedSnapshot(),
+    });
+
+    const loaded = await loadSession(savePath);
+    const restored = loadWorldMovedFromSession(loaded.session);
+    expect(restored).toEqual(h.session.worldMovedLedger);
+
+    // GameConfig.worldMoved restores it onto a fresh session -- bin.ts's
+    // own runLoad wiring (out of this domain's glob) is expected to build
+    // this exact call; this proves the game-core half of the contract. A
+    // FRESH engine (not h.session.engine) -- registerLeverageVerbs() would
+    // otherwise throw "verb already registered" reusing an engine that
+    // already has a live GameSession's verbs claimed on it.
+    const session2 = new GameSession({
+      engine: createGame(),
+      title: 'Test Game',
+      clientConfig: { apiKey: 'test-key' },
+      worldMoved: restored,
+    });
+    expect(session2.worldMovedLedger).toEqual(restored);
+    expect(session2.getWorldMovedSnapshot()).toBe(h.session.getWorldMovedSnapshot());
   });
 });

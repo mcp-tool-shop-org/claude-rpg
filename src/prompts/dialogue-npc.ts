@@ -83,12 +83,36 @@ export const DIALOGUE_RULES_OPPORTUNITY = `
   - NPCs who offered contracts may raise the stakes or sweeten the deal if the player hesitates
   - Deadlines create urgency — NPCs mention time pressure, look stressed, or warn of consequences`;
 
+/**
+ * WO-B1-9 (slice B1 §4, design lock 7): conditional rule block appended only
+ * when this NPC is making an ask of the player. The engine decides,
+ * deterministically and in advance, whether the ask is genuine or predatory
+ * (`ask.signature` below) — this file's job is ONLY to render the speaker's
+ * surface behavior the finding supports, never the truth itself (finding 25:
+ * every con is engine-authored and provably intentional; the narrator never
+ * improvises one, and never confirms or denies one either).
+ */
+export const DIALOGUE_RULES_ASK = `
+- This NPC is making a request of the player (an "ask", given below under "Ask:"). The engine has already decided, deterministically, whether this ask is genuine or a con — you are never told which, and you must never state or hint at the truth either way.
+  - If the ask's signature is "direct": answer questions about it plainly, no hedging.
+  - If the ask's signature is "evasive": stall before answering, over-elaborate on details nobody asked for, and dodge at least one direct question per exchange with a deflection — these are surface speech behaviors only (findings 24/28), never a tell about truth or falsehood`;
+
+/**
+ * WO-B1-10 (slice B1 §5, design lock 8): conditional rule block appended only
+ * when the player carries an honorific earned on the street (`/leverage`'s
+ * reputation-threshold title, threaded in as DialogueInput.honorific below).
+ */
+export const DIALOGUE_RULES_HONORIFIC = `
+- The player carries an honorific title earned on the street (given below as "Address:"). Use it naturally, once per exchange — not a formal salutation, just how this NPC would actually refer to them mid-conversation`;
+
 /** Build the full dialogue system prompt, appending conditional blocks only when relevant context is present. */
-export function buildDialogueSystemPrompt(input: Pick<DialogueInput, 'economyContext' | 'craftingContext' | 'opportunityContext'>): string {
+export function buildDialogueSystemPrompt(input: Pick<DialogueInput, 'economyContext' | 'craftingContext' | 'opportunityContext' | 'ask' | 'honorific'>): string {
   let prompt = DIALOGUE_SYSTEM_BASE;
   if (input.economyContext) prompt += DIALOGUE_RULES_ECONOMY;
   if (input.craftingContext) prompt += DIALOGUE_RULES_CRAFTING;
   if (input.opportunityContext) prompt += DIALOGUE_RULES_OPPORTUNITY;
+  if (input.ask) prompt += DIALOGUE_RULES_ASK;
+  if (input.honorific) prompt += DIALOGUE_RULES_HONORIFIC;
   return prompt;
 }
 
@@ -223,6 +247,30 @@ export type DialogueInput = {
   // way scene narration already does (narrate-scene.ts's own partyPresence
   // field).
   partyPresence?: string;
+  /**
+   * WO-B1-9 (slice B1 §4, design lock 7): this NPC is making a request of
+   * the player right now. `surface` is the ask's player-visible wording
+   * (identical text regardless of truth); `signature` is the ONLY truth-
+   * adjacent field this file ever sees — game-core passes 'evasive' for a
+   * predatory ask, 'direct' for a genuine one — and it drives speech
+   * SURFACE BEHAVIOR only (stalling/over-elaboration/dodging vs. plain
+   * answers), never a stated or hinted truth value (finding 25). Omitted:
+   * byte-identical to before this wave.
+   */
+  ask?: {
+    kind: 'carry' | 'lend' | 'guide' | 'hold' | 'vouch';
+    surface: string;
+    stake: number;
+    signature: 'direct' | 'evasive';
+  };
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): the player's current honorific
+   * (`tuning.honorificAt` reputation threshold, game-core), rendered as an
+   * "Address:" line and used naturally by the NPC once per exchange
+   * (DIALOGUE_RULES_HONORIFIC above). Omitted: byte-identical to before
+   * this wave.
+   */
+  honorific?: string;
 };
 
 /**
@@ -275,6 +323,28 @@ function formatHearerRumors(
     return `  - "${r.claim}" (${conf}, ${r.stance}${mutated})`;
   });
   return `\nRumors about the player:\n${lines.join('\n')}\n`;
+}
+
+/**
+ * WO-B1-9 (slice B1 §4, design lock 7): render the ask's player-visible
+ * surface only — `signature` deliberately never appears in the rendered text
+ * itself (it only gates which DIALOGUE_RULES_ASK behavior clause applies at
+ * the system-prompt layer above); this function's job is to hand the model
+ * the request's content, not any truth-adjacent metadata.
+ */
+function formatAsk(ask?: DialogueInput['ask']): string {
+  if (!ask) return '';
+  return `\nAsk: "${ask.surface}"\n`;
+}
+
+/**
+ * WO-B1-10 (slice B1 §5, design lock 8): render the player's current
+ * honorific as its own labeled line, paired with DIALOGUE_RULES_HONORIFIC's
+ * "use it naturally, once per exchange" instruction above.
+ */
+function formatHonorific(honorific?: string): string {
+  if (!honorific) return '';
+  return `\nAddress: ${honorific}\n`;
 }
 
 /** Format conversation history, capping at ~200 tokens (~800 chars). */
@@ -373,7 +443,7 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${formatVoiceStyle(input)}${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.textureHint ? `\n${input.textureHint}\n` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${input.opportunityHint ? `\nDirect dealings with you: ${input.opportunityHint}\n` : ''}${formatHearerRumors(input.hearerRumors)}${formatActivePressures(input.activePressures)}${formatWorldPressureHint(input.worldPressureHint)}${formatNpcAgencyContext(input)}${formatConversationHistory(input.conversationHistory)}
+${formatVoiceStyle(input)}${formatHonorific(input.honorific)}${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.textureHint ? `\n${input.textureHint}\n` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${input.opportunityHint ? `\nDirect dealings with you: ${input.opportunityHint}\n` : ''}${formatAsk(input.ask)}${formatHearerRumors(input.hearerRumors)}${formatActivePressures(input.activePressures)}${formatWorldPressureHint(input.worldPressureHint)}${formatNpcAgencyContext(input)}${formatConversationHistory(input.conversationHistory)}
 Player says:
 <player_speech>
 ${sanitizePlayerUtterance(input.playerUtterance)}

@@ -123,7 +123,20 @@ export type WorldMovedEventKind =
   | 'opportunity-expired'
   | 'ambush'
   | 'mood-transition'
-  | 'rumor-mutated';
+  | 'rumor-mutated'
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): a genuine ask the player helped —
+   * headline is game-core's same-round recognitionLine text (or an
+   * equivalent past-tense recap of it), never invented here.
+   */
+  | 'ask-helped'
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): a predatory ask's sting, or a
+   * genuine ask's ignored-consequence, landing several rounds after the
+   * offer — headline is produced by scene-context.ts's describeAskReveal
+   * (WO-B1-11), naming the planted cues.
+   */
+  | 'ask-revealed';
 
 export type WorldMovedEvent = {
   kind: WorldMovedEventKind;
@@ -155,6 +168,11 @@ const WORLD_MOVED_KIND_ORDER: readonly WorldMovedEventKind[] = [
   'ambush',
   'mood-transition',
   'rumor-mutated',
+  // WO-B1-10: appended after the pre-existing eight — never reorders them,
+  // preserving this cycle's determinism proof for every session that
+  // predates slice B1.
+  'ask-helped',
+  'ask-revealed',
 ];
 
 const WORLD_MOVED_KIND_LABELS: Record<WorldMovedEventKind, string> = {
@@ -166,6 +184,10 @@ const WORLD_MOVED_KIND_LABELS: Record<WorldMovedEventKind, string> = {
   'ambush': 'Ambushes',
   'mood-transition': 'Mood transitions',
   'rumor-mutated': 'Rumors mutated',
+  // WO-B1-10 (slice B1 §5, design lock 8): draft labels, listed verbatim
+  // per ADDENDUM-narrative-llm.md — coordinator ratifies at stitch.
+  'ask-helped': 'Deeds remembered',
+  'ask-revealed': 'Marks the street left on you',
 };
 
 // --- Computation ---

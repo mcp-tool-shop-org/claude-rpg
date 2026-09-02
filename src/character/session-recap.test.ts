@@ -477,6 +477,48 @@ describe('renderFullRecap worldMovedLedger (WO-A5-9)', () => {
     };
     expect(renderWithLedger(ledger)).not.toBe('');
   });
+
+  // WO-B1-10 (slice B1 §5, design lock 8): "Deeds remembered" / "Marks the
+  // street left on you" — draft labels for the ask-helped/ask-revealed
+  // ledger kinds, listed verbatim per ADDENDUM-narrative-llm.md. RED before
+  // this wave: 'ask-helped' and 'ask-revealed' were not valid
+  // WorldMovedEventKind values at all.
+  it('renders "Deeds remembered" for ask-helped events', () => {
+    const ledger: WorldMovedLedger = {
+      events: [
+        { kind: 'ask-helped', headline: 'Sister Maren remembers who carried the water.' },
+      ],
+    };
+    const result = renderWithLedger(ledger);
+    expect(result).toContain('Deeds remembered: 1 — "Sister Maren remembers who carried the water."');
+  });
+
+  it('renders "Marks the street left on you" for ask-revealed events', () => {
+    const ledger: WorldMovedLedger = {
+      events: [
+        { kind: 'ask-revealed', headline: 'The coin you lent the courier is gone, and so is he.' },
+      ],
+    };
+    const result = renderWithLedger(ledger);
+    expect(result).toContain('Marks the street left on you: 1 — "The coin you lent the courier is gone, and so is he."');
+  });
+
+  it('renders ask-helped and ask-revealed after the pre-existing eight kinds, in a fixed order', () => {
+    const ledger: WorldMovedLedger = {
+      events: [
+        { kind: 'ask-revealed', headline: 'a con reveals itself' },
+        { kind: 'rumor-mutated', headline: 'a claim mutates' },
+        { kind: 'ask-helped', headline: 'a deed is remembered' },
+      ],
+    };
+    const result = renderWithLedger(ledger);
+    const rumorIdx = result.indexOf('Rumors mutated');
+    const helpedIdx = result.indexOf('Deeds remembered');
+    const revealedIdx = result.indexOf('Marks the street left on you');
+    expect(rumorIdx).toBeGreaterThan(-1);
+    expect(helpedIdx).toBeGreaterThan(rumorIdx);
+    expect(revealedIdx).toBeGreaterThan(helpedIdx);
+  });
 });
 
 // F-4b8a3a39: DIVIDER/HEAVY_DIVIDER were still hardcoded 60-char module

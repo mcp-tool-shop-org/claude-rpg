@@ -159,6 +159,23 @@ export function buildNPCDialogueContext(
    * prompts/dialogue-npc.ts), matching this file's other pass-through fields.
    */
   hearerRumors?: DialogueInput['hearerRumors'],
+  /**
+   * WO-B1-9 (slice B1 §4, design lock 7): straight pass-through onto
+   * DialogueInput.ask — game-core's asks ledger (src/game/asks.ts, outside
+   * this domain) computes the ask's kind/surface/stake and the deterministic
+   * `signature` ('direct' | 'evasive'); this file has no ask state of its
+   * own to derive one from. Omitted, no ask section renders (formatAsk's
+   * absent-is-silent contract, prompts/dialogue-npc.ts) — unchanged from
+   * before this wave.
+   */
+  ask?: DialogueInput['ask'],
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): straight pass-through onto
+   * DialogueInput.honorific — game-core's `tuning.honorificAt`
+   * reputation-threshold check (outside this domain) computes the string.
+   * Omitted, no honorific section renders — unchanged from before this wave.
+   */
+  honorific?: string,
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -428,5 +445,7 @@ export function buildNPCDialogueContext(
     isBargaining,
     isWarning,
     npcAgencyPresence,
+    ask,
+    honorific,
   };
 }

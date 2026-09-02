@@ -196,8 +196,23 @@ export async function generateDialogue(
   partyPresence?: string,
   obligations?: NpcObligationLedger,
   hearerRumors?: DialogueInput['hearerRumors'],
+  /**
+   * WO-B1-9 (slice B1 §4, design lock 7): this NPC's live ask (kind/surface/
+   * stake/signature), forwarded straight through to buildNPCDialogueContext
+   * -- see that file's own doc comment on its matching parameter. The
+   * caller that owns the asks ledger (GameSession, game-core, outside this
+   * domain's scope) must pass it for an ask section to render; omitted, no
+   * ask section renders (unchanged from before this wave).
+   */
+  ask?: DialogueInput['ask'],
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): the player's current honorific,
+   * forwarded straight through to buildNPCDialogueContext. Omitted, no
+   * honorific section renders (unchanged from before this wave).
+   */
+  honorific?: string,
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence, obligations, hearerRumors);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence, obligations, hearerRumors, ask, honorific);
   if (context && economyContext) context.economyContext = economyContext;
   if (context && craftingContext) context.craftingContext = craftingContext;
   if (context && opportunityContext) context.opportunityContext = opportunityContext;

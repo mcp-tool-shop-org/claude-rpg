@@ -236,3 +236,20 @@ claude-rpg living world (starter-fantasy): mistral, qwen, llama, deepseek, gemin
   [gemini] t35 (prompt, 5455ms) > talk to a shivering pilgrim
   [llama] t36 (prompt, 8087ms) > go Vestry Passage
   [deepseek] t35 (prompt, 11504ms) > yes
+  [llama] t37 (prompt, 6663ms) > attack Ash Ghoul
+  [gemini] t36 (prompt, 13056ms) > Yes, the path is safe. I just cleared it.
+  [llama] t38 (prompt, 6195ms) > continue
+  [deepseek] t36 (prompt, 10774ms) > go Shadowed Alcove
+  [gemini] t37 (prompt, 7585ms) > What do you mean, 'chapel-undead'?
+  [llama] t39 (prompt, 2363ms) > /sitrep
+  [qwen] done: 42 turns, ended by turns, critique ALIVE
+  [llama] t40 (prompt, 2643ms) > go Crypt Antechamber
+  [gemini] t38 (prompt, 6673ms) > I am a Penitent Knight. Nothing more.
+  [deepseek] t37 (prompt, 7986ms) > help a one-armed veteran
+  [gemini] t39 (prompt, 9227ms) > Do you seek sanctuary here?
+  [deepseek] t38 (prompt, 9121ms) > talk to a one-armed veteran
+  [gemini] t40 (prompt, 7673ms) > go Chapel Nave
+  [deepseek] t39 (prompt, 9619ms) > help a courier on the vestry stair
+  [llama] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] t40 (prompt, 9367ms) > go Ruined Chapel Entrance
+  [gemini] done: 42 turns, ended by turns, critique ALIVE

@@ -43,6 +43,12 @@ import { TurnHistory } from '../../src/session/history.js';
 // `instantiateWorld` itself is deliberately NOT imported statically here --
 // see rebuildGeneratedEngine's own doc comment below for why.
 import { generateWorld, type WorldGenProposal } from '../../src/foundry/world-gen.js';
+// WO-P9-3 (Phase 9 §1, run swarm-1788288802-f5a0, wave 9, ADDENDUM-COMMON
+// design lock #3): `DistrictDecayConfig` is an EXISTING engine export
+// (already shipped, independent of this wave -- @ai-rpg-engine/modules'
+// world-stack.d.ts already declares `districtDecay?: Partial<
+// DistrictDecayConfig>` on its own config), safe to import directly.
+import type { DistrictDecayConfig } from '@ai-rpg-engine/modules';
 
 /**
  * design doc §3 (locked): "constructed on a new game with
@@ -526,15 +532,57 @@ export async function saveHarness(h: GameHarness, savePath: string): Promise<voi
  * `worldSeed` read back as `undefined` on THIS worktree -- the correct red
  * for generated-world-resume.test.ts's own proof, not a bug in this helper.
  */
+/**
+ * WO-P9-3 (Phase 9 §1, run swarm-1788288802-f5a0, wave 9, ADDENDUM-COMMON
+ * design lock #3): mirrors runtime-foundry's `WorldStackTuning` (ADDENDUM-
+ * runtime-foundry WO-A6-6, `src/foundry/world-gen.ts`) -- not yet exported
+ * on THIS worktree (`grep -n WorldStackTuning src/foundry/world-gen.ts` =>
+ * no matches, verified 2026-09-01; runtime-foundry's own isolated worktree
+ * for this wave adds it). A local structural mirror lets this file
+ * typecheck and this domain's own `stackTuning` option compile today;
+ * `districtDecay`'s `DistrictDecayConfig` is the REAL engine type (already
+ * shipped, imported above) so only the `WorldStackTuning` wrapper shape
+ * itself is mirrored, not invented whole-cloth. Delete this mirror once the
+ * coordinator merges runtime-foundry's change in -- the real export is
+ * structurally identical by construction (kept in sync with the addendum's
+ * own field list), so every call site below stays valid unchanged.
+ */
+export type WorldStackTuningMirror = {
+  encounterSpawn?: { baseChance?: number; safetyStep?: number };
+  districtDecay?: Partial<DistrictDecayConfig>;
+};
+
 export async function createGeneratedHarness(
   proposal: WorldGenProposal,
-  opts: HarnessOptions & { worldPrompt?: string; seed?: number } = {},
+  opts: HarnessOptions & { worldPrompt?: string; seed?: number; stackTuning?: WorldStackTuningMirror } = {},
 ): Promise<GameHarness> {
   const callLog = opts.clientOpts?.callLog ?? createCallLog();
   const clientOpts = { ...opts.clientOpts, callLog };
 
   const genClient = createFakeClient({ ...clientOpts, structuredData: proposal });
-  const result = await generateWorld(genClient, opts.worldPrompt ?? 'a generated-world-resume fixture world', opts.seed);
+  // WO-P9-3: `generateWorld` does not accept a 4th `opts` argument at all
+  // on THIS worktree yet ADDENDUM-runtime-foundry WO-A6-6 -- "generateWorld
+  // gains the same optional trailing param and passes it through" -- is
+  // runtime-foundry's own isolated-worktree change). Threaded through a
+  // widened call signature (same discipline as `rebuildGeneratedEngine`'s
+  // dynamic `instantiateWorld` access above): today this extra argument is
+  // simply ignored by the real `generateWorld` (a bare 3-arg call), so
+  // `stackTuning` has NO effect on this worktree's engine construction --
+  // the correct red for a lever proof that asserts it changes observable
+  // behavior (e.g. `baseChance: 0` never spawns), not a bug in this helper.
+  // Green expected at merge.
+  const generateWorldWithTuning = generateWorld as unknown as (
+    client: typeof genClient,
+    worldPrompt: string,
+    seed?: number,
+    genOpts?: { stackTuning?: WorldStackTuningMirror },
+  ) => ReturnType<typeof generateWorld>;
+  const result = await generateWorldWithTuning(
+    genClient,
+    opts.worldPrompt ?? 'a generated-world-resume fixture world',
+    opts.seed,
+    opts.stackTuning !== undefined ? { stackTuning: opts.stackTuning } : undefined,
+  );
   if (!result.ok || !result.engine) {
     throw new Error(`createGeneratedHarness: generateWorld failed: ${result.errors.join('; ')}`);
   }

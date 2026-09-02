@@ -211,7 +211,7 @@ describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits',
       expect(exitCode).toBe(0);
       expect(cli.stdout()).toContain('Farewell.');
     },
-    20000,
+    scaledWaitMs(20000),
   );
 
   it('stdin EOF autosave that escapes the save directory prints the rejection message and still exits cleanly', async () => {

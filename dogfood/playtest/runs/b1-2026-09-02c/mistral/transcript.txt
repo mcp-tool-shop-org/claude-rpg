@@ -1,0 +1,1285 @@
+# ai-playtest transcript -- claude-rpg living world (starter-fantasy) -- seat mistral (mistral: mistralai/mistral-small-2603) -- label b1-2026-09-02c
+# turns 42, ended by turns, 243s
+
+═══ setup ── screen (1527ms)
+  Type "cancel" at any prompt to stop character creation.
+
+  World: The Chapel Threshold (preselected via --world)
+
+  The Chapel Threshold: Explore a ruined chapel and descend into its cursed crypt. Face an ash ghoul, speak with a suspicious pilgrim, and survive the threshold.
+
+  Character name:
+> Wanderer
+
+═══ setup ── screen (1305ms)
+
+  Choose your archetype:
+
+    1. Penitent Knight — A warrior burdened by an oath
+    2. Gravewalker — Stalker of the dead, sharp and quiet
+    3. Chapel Seer — Vessel of divine whispers
+
+  Choose (1-3):
+> 1
+
+═══ setup ── screen (1310ms)
+
+  Choose your background:
+
+    1. Oath-Breaker — Once swore a holy vow, then shattered
+      it
+    2. Temple Orphan — Raised by chapel priests, steeped in
+      ritual
+    3. Gravedigger — Buried the dead for years — knows what
+      comes back
+
+  Choose (1-3):
+> 1
+
+═══ setup ── screen (1203ms)
+
+  Choose traits (at least 1 flaw required): (pick up to 3)
+
+    1. Iron Frame (perk) — Unusually resilient body
+    2. Second Sight (perk) — Sees what others cannot
+    3. Glass Faith (flaw) — Faith cracks under pressure
+    4. Cursed Blood (flaw) — Dark lineage seeps through
+
+  Choose (1-4, or "done"):
+> 3
+
+═══ setup ── screen (1201ms)
+  Selected: Glass Faith (flaw)
+  Choose (1-4, or "done") [1 selected]:
+> done
+
+═══ setup ── screen (1306ms)
+  Choose a secondary discipline? (y/n):
+> n
+
+═══ setup ── screen (1302ms)
+
+  You have 3 stat points to allocate.
+
+    Vigor (vigor, max 3):
+> 1
+
+═══ setup ── screen (1203ms)
+    Instinct (instinct, max 2):
+> 1
+
+═══ setup ── screen (1204ms)
+    Will (will, max 1):
+> 1
+
+═══ setup ── screen (1300ms)
+
+════════════════════════════════════════════════════════════
+  CHARACTER SUMMARY
+════════════════════════════════════════════════════════════
+
+  Name: Wanderer
+  Archetype: Penitent Knight
+  Background: Oath-Breaker
+  Traits: Glass Faith
+  Stats: vigor: 8, instinct: 5, will: 2
+  Resources: hp: 20, stamina: 8, coin: 0, maxHp: 20
+
+════════════════════════════════════════════════════════════
+
+  Accept this character? (y/n):
+> y
+
+═══ turn 1 ── screen (prompt, 5313ms)
+
+────────────────────────────────────────────────────────────
+  The Chapel Threshold
+  dark fantasy, concise, atmospheric, foreboding
+────────────────────────────────────────────────────────────
+
+  Type actions in plain English. Type "quit" to exit, "save" to save.
+  Type "/director" to inspect hidden truth, "/sheet" to view character.
+  Type "/help" for the full command reference.
+
+  ... thinking
+
+────────────────────────────────────────────────────────────
+
+You step through the weathered stone archway into the chapel's entrance hall. Pale light filters through cracked stained glass, casting fractured colors across worn flagstones. The air carries the scent of old incense and damp stone. A figure in pilgrim's robes lingers near a collection box, their face obscured by shadow, while another person in religious vestments tends to flickering votive candles. Despite the ruin around you, voices drift from deeper within the chapel grounds—this sacred place still draws the faithful.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+····························································
+  Sacred ground, corrupted below. The dead stir beneath crumbling stones.
+
+  TRY:
+    > talk to the pilgrim
+    > inspect the chapel nave
+    > bribe the pilgrim for safe passage
+  WARNING: The Ash Ghoul hits hard. Build Favor before descending.
+  Type /help for commands, /help leverage for social verbs.
+
+  >
+> /rumors
+
+═══ turn 2 ── screen (prompt, 1787ms)
+  ... thinking
+  Unknown command /rumors. Did you mean /rumors? /rumors lives in director mode — type /director. Right now you can: /help · /status · /leverage
+  >
+> /status
+
+═══ turn 3 ── screen (prompt, 1747ms)
+  ... thinking
+
+────────────────────────────────────────────────────────────
+  STATUS — safe
+────────────────────────────────────────────────────────────
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+────────────────────────────────────────────────────────────
+
+  >
+> /director
+
+═══ turn 4 ── screen (prompt, 1821ms)
+  ... thinking
+
+────────────────────────────────────────────────────────────
+  DIRECTOR MODE — inspect the hidden truth
+────────────────────────────────────────────────────────────
+
+  /inspect <entity-id>              Show entity cognition
+                                    state
+  /faction <faction-id>             Show faction beliefs and
+                                    alert
+  /zone <zone-id>                   Show zone properties
+  /trace <entity> <subject> <key>   Trace belief provenance
+  /rumors [faction-id]              Show player rumors
+                                    (optionally filtered)
+  /pressures                        Show active world
+                                    pressures
+  /world                            Show resolved pressures
+                                    and fallout
+  /aftermath                        Alias for /world
+  /factions                         Show faction agency
+                                    (goals, actions,
+                                    profiles)
+  /people [zone]                    Show named NPCs (goals,
+                                    stance, last action)
+  /npc <npc-id>                     Inspect individual NPC
+                                    agency state
+  /leverage                         Show player leverage
+                                    currencies
+  /map                              Show strategic map
+                                    (districts + factions)
+  /party                            Show companion party
+                                    state
+  /item <item-id>                   Inspect item provenance,
+                                    chronicle, relic state
+  /districts                        Show all districts with
+                                    mood + metrics
+  /district <id>                    Deep inspect a specific
+                                    district
+  /market                           Show all district
+                                    economies at a glance
+  /trade <district-id>              Detailed district
+                                    economy + value
+                                    modifiers
+  /craft                            List available recipes
+                                    and material costs
+  /materials                        Show current material
+                                    inventory
+  /salvage <item-id>                Preview salvage yields
+                                    without executing
+  /jobs                             Available + accepted
+                                    opportunities
+  /contracts                        Alias for /jobs
+  /contract <id>                    Detailed opportunity
+                                    view
+  /accepted                         List
+                                    accepted/in-progress
+                                    opportunities
+  /arcs                             Campaign arc signals +
+                                    dominant arc
+  /endgame                          Endgame trigger history
+  /finale                           Campaign finale outline
+                                    (if concluded)
+  /status                           Compact strategic
+                                    snapshot
+  /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
+  /help leverage                    Full leverage verb
+                                    reference
+  /help <pack-id>                   Pack-specific quickstart
+                                    guide
+  /chronicle [mode]                 View campaign chronicle
+                                    (timeline|bardic|director)
+  /history [entity-id]              View event history for
+                                    an entity
+  /snapshot                         Full simulation snapshot
+  /divergences                      Show perception
+                                    divergences
+  /back                             Return to play mode
+
+────────────────────────────────────────────────────────────
+
+  >
+> /people
+
+═══ turn 5 ── screen (prompt, 1667ms)
+  ... thinking
+  No named NPCs found.
+  >
+> /leverage
+
+═══ turn 6 ── screen (prompt, 1812ms)
+  ... thinking
+
+────────────────────────────────────────────────────────────
+  PLAYER LEVERAGE
+────────────────────────────────────────────────────────────
+
+  Favor        ░░░░░░░░░░░░░░░░░░░░ 0
+  Debt         ░░░░░░░░░░░░░░░░░░░░ 0
+  Blackmail    ░░░░░░░░░░░░░░░░░░░░ 0
+  Influence    ░░░░░░░░░░░░░░░░░░░░ 0
+  Heat         ░░░░░░░░░░░░░░░░░░░░ 0
+  Legitimacy   ░░░░░░░░░░░░░░░░░░░░ 0
+
+────────────────────────────────────────────────────────────
+
+  Heat: 0 (0/37 quiet rounds to cooling)
+
+  >
+> inspect collection box
+
+═══ turn 7 ── screen (prompt, 4558ms)
+  ... thinking
+
+══════════════════════════ Turn 2 ══════════════════════════
+
+The pilgrim's eyes follow your movements as you remain in the entrance hall, their gaze lingering on your armor with what might be calculating interest. Sister Maren continues her quiet work among the candles, but you catch her glancing toward the shadowed figure with barely concealed wariness.
+
+The atmosphere grows heavier, as if unseen tensions pull at the very air between the stone walls. Something unspoken hangs in this sacred space—an opportunity that waits for your decision.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+  hint: Try "bribe" or "intimidate" a target to spend leverage
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  >
+> talk to the pilgrim
+
+═══ turn 8 ── screen (prompt, 7919ms)
+  ... thinking
+
+══════════════════════════ Turn 3 ══════════════════════════
+
+The weight of unspoken tension continues to press against the chapel's cracked walls. The pilgrim's shadowed features remain turned toward you, their stillness carrying an almost predatory patience, while Sister Maren's hands pause over the candle wax, her attention clearly divided between her holy duties and whatever concern the robed figure represents.
+
+The fractured light from the stained glass seems to flicker more restlessly now, and you sense that this moment of quiet observation cannot last much longer.
+
+····························································
+  Suspicious Pilgrim: "*looks up from adjusting travel pack, studying you with wary but not unfriendly eyes*
+
+Another soul walking the dark roads, I see. The path ahead grows more treacherous with each passing day - are you bound for the same shrines as the rest of us, or does your journey lead elsewhere?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> I am bound for the crypt beneath this chapel
+
+═══ turn 9 ── screen (prompt, 3752ms)
+  ... thinking
+
+══════════════════════════ Turn 4 ══════════════════════════
+
+I'm not sure what you mean. Did you want to move or move or inspect Suspicious Pilgrim or inspect Sister Maren?
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> talk to Sister Maren
+
+═══ turn 10 ── screen (prompt, 6195ms)
+  ... thinking
+
+══════════════════════════ Turn 5 ══════════════════════════
+
+The pilgrim shifts slightly beneath their heavy robes, and you catch the faint scrape of metal against stone—perhaps a weapon, perhaps coin. Their hood turns away from you with what seems like disappointment, attention drifting toward the deeper shadows of the chapel nave beyond.
+
+Sister Maren releases a barely audible breath, her shoulders relaxing as she returns to her candle-tending with renewed focus. The wax drips steadily in the dim light, each drop marking time in the sacred silence that has settled over the entrance hall once more.
+
+····························································
+  Sister Maren: "Peace be with you, wanderer. I sense the weight of penance upon your shoulders - what brings a knight of your order to these shadowed halls?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+  hint: Type /help leverage for social action reference
+
+  What do you do?
+
+  >
+> I seek to understand the dead that do not stay buried
+
+═══ turn 11 ── screen (prompt, 9194ms)
+  ... thinking
+
+══════════════════════════ Turn 6 ══════════════════════════
+
+The pilgrim's attention has shifted away from you entirely now, their hooded form angled toward the chapel's inner depths as if listening for something beyond your perception. The metallic scraping you heard earlier falls silent, leaving only the soft whisper of their robes and the rhythmic dripping of Sister Maren's candles.
+
+The nun's movements have grown more deliberate, each gesture carrying the weight of unfinished business, though her eyes occasionally dart toward the shadowed alcove where deeper mysteries seem to lurk. The fractured light continues its restless dance across the cracked stone, and you sense that whatever fragile equilibrium exists here grows more precarious with each passing moment.
+
+····························································
+  Sister Maren: "Ah, the restless dead plague these lands like a festering wound. I have tended to many who speak of corpses that rise beneath the pale moon, driven by hungers that should have died with the flesh. Tell me, knight - have you witnessed such abominations yourself, or do you seek knowledge to prepare for what may come?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  [autosaved]
+  >
+> go to chapel nave
+
+═══ turn 12 ── screen (prompt, 4755ms)
+  ... thinking
+
+══════════════════════════ Turn 7 ══════════════════════════
+
+You step into the chapel nave, where dusty light filters through cracked stained glass windows, painting fractured rainbows across worn stone floors. The vaulted ceiling stretches above you, its ancient arches scarred but still proud, while rows of empty pews face a simple altar draped in faded cloth.
+
+A robed figure kneels before the altar in quiet prayer, though something in their posture suggests contemplation rather than devotion. Brother Aldric, you recall—though the shadows make it difficult to discern his exact features or expression. The air carries the familiar scent of old incense and something else, perhaps the weight of unspoken decisions lingering in the sacred space.
+
+  · Brother Aldric stands quietly, lost in thought.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> talk to Brother Aldric
+
+═══ turn 13 ── screen (prompt, 8257ms)
+  ... thinking
+
+══════════════════════════ Turn 8 ══════════════════════════
+
+Brother Aldric rises from his kneeling position with deliberate slowness, his robed form turning to face you with measured precision. His features remain partially obscured by the interplay of dusty light and shadow, but you catch the glint of calculating eyes studying you with quiet intensity.
+
+"Another seeker walks these sacred grounds," he says, his voice carrying the weight of careful consideration. The way he speaks suggests he has been expecting something—or someone—though whether that someone is you remains unclear. His hands rest at his sides, neither welcoming nor threatening, but poised with the patience of one who has learned to weigh opportunities before they present themselves.
+
+····························································
+  Brother Aldric: "*glances around nervously before leaning closer*
+
+You've proven yourself trustworthy, Penitent Knight... but tell me, where do your true loyalties lie in these troubled times? The old orders are crumbling, and a man must choose his path carefully.
+
+*watches your reaction intently*"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> I serve no order but my own
+
+═══ turn 14 ── screen (prompt, 12870ms)
+  ... thinking
+
+══════════════════════════ Turn 9 ══════════════════════════
+
+Brother Aldric steps closer, his footsteps echoing softly against the stone floor. The shadows shift across his face as he moves, revealing glimpses of weathered features and eyes that hold an unmistakable hunger for something beyond these chapel walls.
+
+"I have served faithfully here for many seasons," he continues, his voice dropping to a more confidential tone, "but faith alone does not always provide the clarity one seeks." His gaze lingers on your armor and bearing, as if assessing your worth as more than just another pilgrim passing through.
+
+Near the back of the nave, you notice another figure—a one-armed veteran whose scarred form leans against a pillar, watching this exchange with the quiet attention of someone who has seen many such conversations unfold in shadowed places.
+
+····························································
+  Brother Aldric: "*nods slowly, a glimmer of understanding in his eyes*
+
+A man without chains... I suspected as much. The Church grows blind to its own corruption, and the knightly orders serve masters who care nothing for the people's suffering.
+
+*leans closer, voice dropping to barely a whisper*
+
+Perhaps we understand each other better than I dared hope, Penitent Knight."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  [a one-armed veteran asks you: "Would you carry this to the district for me? I can't make the trip myself." (help a one-armed veteran to answer, or walk on)]
+  >
+> /reputation
+
+═══ turn 15 ── screen (prompt, 1943ms)
+  ... thinking
+  Unknown command: /reputation. Type /help for available commands.
+  >
+> /help
+
+═══ turn 16 ── screen (prompt, 1712ms)
+  ... thinking
+
+────────────────────────────────────────────────────────────
+  DIRECTOR MODE — inspect the hidden truth
+────────────────────────────────────────────────────────────
+
+  /inspect <entity-id>              Show entity cognition
+                                    state
+  /faction <faction-id>             Show faction beliefs and
+                                    alert
+  /zone <zone-id>                   Show zone properties
+  /trace <entity> <subject> <key>   Trace belief provenance
+  /rumors [faction-id]              Show player rumors
+                                    (optionally filtered)
+  /pressures                        Show active world
+                                    pressures
+  /world                            Show resolved pressures
+                                    and fallout
+  /aftermath                        Alias for /world
+  /factions                         Show faction agency
+                                    (goals, actions,
+                                    profiles)
+  /people [zone]                    Show named NPCs (goals,
+                                    stance, last action)
+  /npc <npc-id>                     Inspect individual NPC
+                                    agency state
+  /leverage                         Show player leverage
+                                    currencies
+  /map                              Show strategic map
+                                    (districts + factions)
+  /party                            Show companion party
+                                    state
+  /item <item-id>                   Inspect item provenance,
+                                    chronicle, relic state
+  /districts                        Show all districts with
+                                    mood + metrics
+  /district <id>                    Deep inspect a specific
+                                    district
+  /market                           Show all district
+                                    economies at a glance
+  /trade <district-id>              Detailed district
+                                    economy + value
+                                    modifiers
+  /craft                            List available recipes
+                                    and material costs
+  /materials                        Show current material
+                                    inventory
+  /salvage <item-id>                Preview salvage yields
+                                    without executing
+  /jobs                             Available + accepted
+                                    opportunities
+  /contracts                        Alias for /jobs
+  /contract <id>                    Detailed opportunity
+                                    view
+  /accepted                         List
+                                    accepted/in-progress
+                                    opportunities
+  /arcs                             Campaign arc signals +
+                                    dominant arc
+  /endgame                          Endgame trigger history
+  /finale                           Campaign finale outline
+                                    (if concluded)
+  /status                           Compact strategic
+                                    snapshot
+  /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
+  /help leverage                    Full leverage verb
+                                    reference
+  /help <pack-id>                   Pack-specific quickstart
+                                    guide
+  /chronicle [mode]                 View campaign chronicle
+                                    (timeline|bardic|director)
+  /history [entity-id]              View event history for
+                                    an entity
+  /snapshot                         Full simulation snapshot
+  /divergences                      Show perception
+                                    divergences
+  /back                             Return to play mode
+
+────────────────────────────────────────────────────────────
+
+  >
+> /pressures
+
+═══ turn 17 ── screen (prompt, 2664ms)
+  ... thinking
+  No active world pressures.
+  >
+> `
+
+═══ turn 18 ── screen (prompt, 4810ms)
+  ... thinking
+
+═════════════════════════ Turn 10 ══════════════════════════
+
+I'm not sure what you mean. Empty input - using look as fallback to show current situation
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> look
+
+═══ turn 19 ── screen (prompt, 7781ms)
+  ... thinking
+
+═════════════════════════ Turn 11 ══════════════════════════
+
+Brother Aldric circles you slowly, his robes rustling against the stone as candlelight catches the sharp angles of his partially visible face. "You carry yourself like one who has sworn oaths," he observes, his tone probing yet respectful. "Perhaps you understand the weight of... shifting allegiances when circumstances demand it."
+
+The one-armed veteran shifts his position against the pillar, the movement deliberate enough to draw attention without appearing threatening. His scarred features remain mostly in shadow, but you sense his continued scrutiny of this unfolding conversation.
+
+A subtle tension fills the nave—the kind that precedes important decisions being made in sacred spaces where such choices carry deeper consequences.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  [autosaved]
+  >
+> go to vestry passage
+
+═══ turn 20 ── screen (prompt, 5074ms)
+  ... thinking
+
+═════════════════════════ Turn 12 ══════════════════════════
+  Crypt Stalker readies an attack against you.
+
+You step through the narrow doorway into a cramped stone passage that connects the chapel to deeper chambers below. The air grows noticeably cooler here, carrying with it the musty scent of old mortar and something else—something that makes your hand drift instinctively toward your weapon.
+
+In the dim light filtering through from behind you, a hunched shape moves near the far end of the passage. Its form shifts between the shadows cast by rough-hewn stone, making it difficult to discern whether you're looking at a person, an animal, or something altogether different. The way it moves suggests awareness of your presence, though it hasn't yet turned to face you directly.
+
+The passage stretches ahead with doorways leading toward what appears to be the main nave and downward into darker depths below.
+
+  · Crypt Stalker shifts their weight from foot to foot.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  >
+> attack Crypt Stalker
+
+═══ turn 21 ── screen (prompt, 5886ms)
+  ... thinking
+
+═════════════════════════ Turn 13 ══════════════════════════
+  Your strike lands — Crypt Stalker: unhurt.
+
+Your blade finds its mark against the hunched figure, eliciting a wet, rasping sound that echoes off the narrow stone walls. Dark fluid spatters against the rough-hewn blocks as the thing recoils, its form becoming clearer for a moment—pale, elongated limbs and eyes that reflect what little light reaches this confined space.
+
+The creature's counterattack comes as a wild swipe through the shadows, claws whistling past your shoulder as you pull back just in time. The miss sends the stalker stumbling slightly against the passage wall, buying you a precious moment in this cramped battleground.
+
+Behind you, muffled voices drift from the chapel nave—Brother Aldric's measured tones mixing with what sounds like heated discussion, though the words remain indistinct through the stone.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  hint: An opportunity is about to expire — accept or decline soon
+
+  · a warning tone sounds
+  · music intensifies
+
+  What do you do?
+
+  >
+> attack Crypt Stalker
+
+═══ turn 22 ── screen (prompt, 4851ms)
+  ... thinking
+
+═════════════════════════ Turn 14 ══════════════════════════
+  Your strike lands — Crypt Stalker: down.
+  The Crypt Stalker falls.
+
+Your follow-up strike drives deep into the creature's torso with a sickening crunch of bone and sinew. The crypt stalker lets out a final, rattling wheeze before collapsing against the passage wall, its pale form sliding down the rough stone to lie still at your feet. Dark ichor pools slowly around the motionless body.
+
+The confined passage falls silent save for your own breathing, but the victory feels hollow in this cramped space. From somewhere deeper in the crypt network, you hear the faint scrape of movement—as if your battle has drawn unwelcome attention from the shadows below. The dim light seems to press closer around you, and you sense that whatever lurks in these depths has taken notice of the disturbance.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Blackmail: 10
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+────────────────────────────────────────────────────────────
+  hint: Black market activity detected — contraband may be available
+  hint: An opportunity is about to expire — accept or decline soon
+
+  · a success chime sounds
+  · music softens
+  · music shifts
+
+  What do you do?
+
+  >
+> /go to crypt antechamber
+
+═══ turn 23 ── screen (prompt, 2301ms)
+  ... thinking
+  Unknown command: /go. Type /help for available commands.
+  >
+> go to Crypt Antechamber
+
+═══ turn 24 ── screen (prompt, 7411ms)
+  ... thinking
+
+═════════════════════════ Turn 15 ══════════════════════════
+  Ash Ghoul readies an attack against you.
+  Crypt Warden readies an attack against you.
+
+You step through an archway into a wider chamber, the oppressive weight of stone and shadow lifting slightly. Pale light filters down from somewhere above, casting long shadows across cracked flagstones and revealing the skeletal remains of what might once have been an ornate antechamber.
+
+Two shapes move in the dimness ahead—one hunched and wreathed in what looks like drifting ash, the other taller and more upright, though both remain indistinct in the uncertain light. They seem to have noticed your arrival, their movements suggesting a predatory awareness as they shift position among the broken stones and burial alcoves.
+
+The air here tastes of dust and decay, and you catch the faint sound of bone grinding against stone as the figures begin to approach through the gloom.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Blackmail: 10
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+
+  · ambient: a low, tense drone
+
+  What do you do?
+
+  [a one-armed veteran needed help that never came.]
+  >
+> attack Ash Ghoul
+
+═══ turn 25 ── screen (prompt, 5211ms)
+  ... thinking
+
+═════════════════════════ Turn 16 ══════════════════════════
+  Your strike misses.
+  Crypt Warden's attack finds you — 9 damage.
+
+Your blade slices through empty air as the ash-shrouded figure drifts just beyond your reach, its form dissolving momentarily into swirling gray motes before reforming. The taller guardian's counterattack finds its mark—cold steel bites deep into your side, sending a shock of pain through your ribs as warm blood seeps into your armor.
+
+Through the haze of combat, you glimpse movement on the vestry stairs beyond the chamber. A figure in travel-worn clothes watches from the shadows of the passage, though whether friend or foe remains unclear in the dim, dust-laden air. The ashen creature circles you with predatory patience while its companion readies another strike, their coordinated movements suggesting these guardians have claimed many lives in this forgotten antechamber.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 11/20
+  Blackmail: 10
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+
+  · a warning tone sounds
+  · music intensifies
+
+  What do you do?
+
+  [a courier on the vestry stair asks you: "Would you guide me below? I don't know these tunnels and I'm afraid to go alone." (help a courier on the vestry stair to answer, or walk on)]
+
+  [autosaved]
+  >
+> attack Ash Ghoul
+
+═══ turn 26 ── screen (prompt, 5537ms)
+  ... thinking
+
+═════════════════════════ Turn 17 ══════════════════════════
+  Your strike misses.
+  Ash Ghoul readies an attack against you.
+  Crypt Warden readies an attack against you.
+
+Your sword cuts through nothing but shadow and dust as the ash-wreathed creature slips away from your strike like smoke through fingers. The ghostly figure reforms just beyond reach, its hollow sockets fixed on you with ancient malice.
+
+The battle continues around you in the dim chamber, shadows dancing across broken flagstones as your adversaries press their advantage. Through the swirling dust and uncertain light, the figure on the vestry stairs remains motionless, watching the deadly dance unfold with calculating eyes. The taste of your own blood mingles with the acrid dust in the air, while somewhere in the darkness, stone grinds against bone with each movement of your relentless foes.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 11/20
+  Blackmail: 10
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  >
+> attack Ash Ghoul again with more force than the last attempt failed with nothing but force in tone if that matters here and now yes force it is then it is so do it again harder maybe better angle or s
+
+═══ turn 27 ── screen (prompt, 6822ms)
+  ... thinking
+
+═════════════════════════ Turn 18 ══════════════════════════
+  Your strike lands — Ash Ghoul: unhurt.
+  Ash Ghoul's attack finds you — 6 damage.
+
+Your blade finds its mark this time, carving through the ash-wreathed creature's ethereal form—spectral matter parts like smoke before your steel, and the ghoul releases a soundless shriek as dark essence bleeds from the wound. But your triumph is short-lived as the taller guardian's blade punches through your guard, cold iron piercing deep between your ribs and sending fresh agony coursing through your battered frame.
+
+The second strike whistles harmlessly past your ear as you twist away, the guardian's weapon sparking against the ancient stone behind you. Blood pools beneath your feet on the cracked flagstones, each breath now a labored effort that sends sharp pain lancing through your chest.
+
+The courier on the vestry stairs shifts slightly in the shadows, still watching with that same calculating stillness as the battle rages in the dust-choked antechamber below.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 5/20
+  Blackmail: 10
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> use healing herb
+
+═══ turn 28 ── screen (prompt, 8000ms)
+  ... thinking
+
+═════════════════════════ Turn 19 ══════════════════════════
+  Ash Ghoul readies an attack against you.
+  Crypt Warden readies an attack against you.
+
+Your vision wavers as pain and exhaustion take their toll, the dim antechamber seeming to pulse with each labored heartbeat. The ash-wreathed creature drifts just beyond your reach while its towering companion looms closer, both figures wavering like mirages in the dust-laden air. 
+
+Blood seeps steadily from your wounds, each drop echoing against the ancient stones with unnatural resonance. The courier above remains a motionless silhouette against the vestry passage, patient as death itself while you struggle to maintain your footing in this cursed place.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 5/20
+  Blackmail: 10
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> /examine
+
+═══ turn 29 ── screen (prompt, 1768ms)
+  ... thinking
+  Unknown command: /examine. Type /help for available commands.
+  >
+> help
+
+═══ turn 30 ── screen (prompt, 7037ms)
+  ... thinking
+
+════════════════════════════════════════════════════════════
+  Wanderer HAS FALLEN
+════════════════════════════════════════════════════════════
+
+The cold stone rises to meet you as your strength finally fails, your knees buckling beneath the weight of accumulated wounds. Darkness creeps in from the edges of your vision while the ancient flagstones grow slick with your blood, each shallow breath a monumental effort that sends fresh waves of agony through your punctured chest.
+
+The ash ghoul drifts closer through the gloom, its ethereal form wavering like smoke, while the towering warden's blade gleams dully in the dim light above your fallen form. The courier on the vestry stairs remains perfectly still, a silent witness to your defeat in this accursed antechamber.
+
+Your consciousness begins to fade as the shadows of the crypt depths claim another soul.
+
+────────────────────────────────────────────────────────────
+  Type "continue" when you are ready to rise.
+  "quit" auto-saves before exiting.
+
+  · a critical alarm sounds
+
+
+
+════════════════════════════════════════════════════════════
+  >
+> continue
+
+═══ turn 31 ── screen (prompt, 5321ms)
+  ... thinking
+
+═════════════════════════ Turn 21 ══════════════════════════
+
+I'm not sure what you mean. Did you want to attack Ash Ghoul or attack Crypt Warden or speak a courier on the vestry stair?
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  [autosaved]
+  >
+> attack Crypt Warden
+
+═══ turn 32 ── screen (prompt, 4528ms)
+  ... thinking
+
+═════════════════════════ Turn 22 ══════════════════════════
+  Your strike lands — Crypt Warden: hurt.
+
+Your blade finds its mark against the towering warden's ancient armor, biting deep through corroded metal with a sound like grinding bone. Dark ichor weeps from the wound as the creature staggers back a step, its hollow eye sockets flaring with unholy rage.
+
+But your vision blurs and shifts as consciousness slips away like water through your fingers. The stone floor rushes up to embrace you as your legs give way completely, blood pooling beneath your broken form in the cursed antechamber's perpetual gloom.
+
+The ash ghoul's whispered laughter echoes from somewhere far above as darkness finally claims you, while the silent courier watches your final moments from the vestry stairs.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: hurt
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> continue
+
+═══ turn 33 ── screen (prompt, 5351ms)
+  ... thinking
+
+═════════════════════════ Turn 23 ══════════════════════════
+
+I'm not sure what you mean. Did you want to move or speak a courier on the vestry stair or attack Ash Ghoul?
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: hurt
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> speak courier on the vestry stair
+
+═══ turn 34 ── screen (prompt, 6514ms)
+  ... thinking
+
+═════════════════════════ Turn 24 ══════════════════════════
+
+You lie motionless on the cold flagstones, your broken body a stark reminder of mortality in this cursed place. The ancient stones beneath you have drunk deep of your blood, adding another stain to countless others that mark this antechamber's grim history.
+
+Through the dim haze of fading consciousness, shadowy forms move around your fallen form - the ash ghoul's ethereal presence drifting like smoke, the wounded crypt warden looming with its dark ichor still weeping from your final strike. On the vestry stairs, the courier remains as still as carved stone, watching over this scene of defeat with unreadable intent.
+
+The weight of failure settles heavy in your chest as the crypt's eternal darkness begins to claim you completely.
+
+····························································
+  a courier on the vestry stair: "Ah, a knight seeks words with me? I carry dispatches between the abbey and the outer settlements, though the roads grow perilous these days. The brothers above are particular about their correspondence - sealed tight and delivered swift, no questions asked."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: hurt
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> move slowly to Vestry Passage
+
+═══ turn 35 ── screen (prompt, 14429ms)
+  ... thinking
+
+═════════════════════════ Turn 25 ══════════════════════════
+
+You stir from oblivion's embrace, consciousness returning like a distant tide. The cold stone beneath you feels different now - rougher, more worn. Dim candlelight flickers from iron sconces, casting wavering shadows that dance across ancient mortar and cracked limestone walls.
+
+This narrow passage stretches before you, its vaulted ceiling disappearing into gloom above. The air tastes of old incense and decay, thick with the weight of countless prayers whispered in desperation. Something moves in the shadows ahead - a hunched shape that seems to flow rather than walk, its form indistinct in the uncertain light.
+
+The vestry passage feels like a throat waiting to swallow, with doorways leading toward what might be sanctuary... or deeper into the crypt's hungry darkness.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> go to Chapel Nave on left side of passage slowly and quietly, hand on sword hilt, eyes scanning shadows watchfully for any sudden movement or stealthy threats. weapons drawn if necessary. do not draw 
+
+═══ turn 36 ── screen (prompt, 7053ms)
+  ... thinking
+
+═════════════════════════ Turn 26 ══════════════════════════
+
+You emerge into a vast nave, its soaring arches disappearing into shadow above. Rows of splintered pews stretch before you like broken teeth, their wood darkened by age and neglect. Pale light filters through shattered stained glass windows, casting fragmented colors across the stone floor where your blood once pooled.
+
+Near the altar, two figures stand in quiet conversation - a robed monk whose face remains partially obscured by his hood, and a battle-scarred man whose empty sleeve is pinned neatly at the shoulder. Their voices carry softly through the hollow space, words indistinct but weighted with the gravity of difficult choices.
+
+The air here feels different from the suffocating passages below, touched by something that might once have been holy, though darkness has long since claimed this sanctuary for its own.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  [autosaved]
+  >
+> speak to the monk
+
+═══ turn 37 ── screen (prompt, 8578ms)
+  ... thinking
+
+═════════════════════════ Turn 27 ══════════════════════════
+
+The two figures turn as your footsteps echo through the hollow nave. Brother Aldric's partially shadowed face studies you with calculating eyes, his expression unreadable beneath the cowl. The one-armed veteran shifts his stance, his remaining hand resting casually near his belt, though his scarred features remain neutral.
+
+"Still breathing," the monk murmurs, his voice carrying across the broken pews. There's something in his tone - not quite surprise, but a careful assessment, as if your survival has altered some delicate equation he's been working through.
+
+The veteran says nothing, but his weathered gaze follows your movements with the practiced attention of one who has learned to read threats in the smallest gestures.
+
+····························································
+  Brother Aldric: "*straightens slightly, confusion flickering across his weathered features*
+
+Monk? I am Brother Aldric, a servant of the Church... though perhaps not as devout as I once was. These robes may mark me as clergy, but my faith wavers like a candle in the wind.
+
+*glances around cautiously before continuing*
+
+If you seek counsel or... other arrangements... speak plainly. The shadows have ears, but they also offer protection for those willing to step into them."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> speak the veteran
+
+═══ turn 38 ── screen (prompt, 6719ms)
+  ... thinking
+
+═════════════════════════ Turn 28 ══════════════════════════
+
+Brother Aldric's calculating gaze lingers on you as silence stretches through the broken nave. The one-armed veteran remains still, his weathered face unreadable, but you sense the weight of unspoken judgments passing between the two men.
+
+"Your proposal finds no welcome here," Brother Aldric says finally, his voice echoing off the stone walls with quiet finality. The monk's partially hooded features remain impassive, but there's something colder in his stance now, a door closing that will not easily open again.
+
+The veteran's scarred hand shifts slightly at his belt, though he makes no other movement. Above you, shadows gather in the vaulted ceiling like watching spirits, and the fragmented light from the shattered windows seems somehow dimmer than before.
+
+····························································
+  a one-armed veteran: "*shifts position, favoring his remaining arm as he studies you with weathered eyes*
+
+Another knight seeking redemption on these cursed roads? The path of penance claims more than it saves, friend."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 0/20
+  Blackmail: 15
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+  >
+> /threaten
+
+═══ turn 39 ── screen (prompt, 1823ms)
+  ... thinking
+  Unknown command: /threaten. Type /help for available commands.
+  >
+> /help
+
+═══ turn 40 ── screen (prompt, 1953ms)
+  ... thinking
+
+────────────────────────────────────────────────────────────
+  DIRECTOR MODE — inspect the hidden truth
+────────────────────────────────────────────────────────────
+
+  /inspect <entity-id>              Show entity cognition
+                                    state
+  /faction <faction-id>             Show faction beliefs and
+                                    alert
+  /zone <zone-id>                   Show zone properties
+  /trace <entity> <subject> <key>   Trace belief provenance
+  /rumors [faction-id]              Show player rumors
+                                    (optionally filtered)
+  /pressures                        Show active world
+                                    pressures
+  /world                            Show resolved pressures
+                                    and fallout
+  /aftermath                        Alias for /world
+  /factions                         Show faction agency
+                                    (goals, actions,
+                                    profiles)
+  /people [zone]                    Show named NPCs (goals,
+                                    stance, last action)
+  /npc <npc-id>                     Inspect individual NPC
+                                    agency state
+  /leverage                         Show player leverage
+                                    currencies
+  /map                              Show strategic map
+                                    (districts + factions)
+  /party                            Show companion party
+                                    state
+  /item <item-id>                   Inspect item provenance,
+                                    chronicle, relic state
+  /districts                        Show all districts with
+                                    mood + metrics
+  /district <id>                    Deep inspect a specific
+                                    district
+  /market                           Show all district
+                                    economies at a glance
+  /trade <district-id>              Detailed district
+                                    economy + value
+                                    modifiers
+  /craft                            List available recipes
+                                    and material costs
+  /materials                        Show current material
+                                    inventory
+  /salvage <item-id>                Preview salvage yields
+                                    without executing
+  /jobs                             Available + accepted
+                                    opportunities
+  /contracts                        Alias for /jobs
+  /contract <id>                    Detailed opportunity
+                                    view
+  /accepted                         List
+                                    accepted/in-progress
+                                    opportunities
+  /arcs                             Campaign arc signals +
+                                    dominant arc
+  /endgame                          Endgame trigger history
+  /finale                           Campaign finale outline
+                                    (if concluded)
+  /status                           Compact strategic
+                                    snapshot
+  /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
+  /help leverage                    Full leverage verb
+                                    reference
+  /help <pack-id>                   Pack-specific quickstart
+                                    guide
+  /chronicle [mode]                 View campaign chronicle
+                                    (timeline|bardic|director)
+  /history [entity-id]              View event history for
+                                    an entity
+  /snapshot                         Full simulation snapshot
+  /divergences                      Show perception
+                                    divergences
+  /back                             Return to play mode
+
+────────────────────────────────────────────────────────────
+
+  >
+> /help leverage
+
+═══ turn 41 ── screen (prompt, 1305ms)
+  ... thinking
+
+────────────────────────────────────────────────────────────
+  LEVERAGE REFERENCE
+────────────────────────────────────────────────────────────
+
+  CURRENCIES (0-100)
+    Favor        Earned from positive reputation, resolved pressures, speaking
+    Debt         Accumulated from calling in favors, repaid by helping factions
+    Blackmail    From inspecting faction members, discoveries, investigation
+    Influence    Derived from your highest faction reputation (not stored)
+    Heat         From hostile social actions. Cools 3 per round on its own;
+                 sustained Heat draws faction attention
+    Legitimacy   From milestones, title evolution, resolving official pressures
+
+  THE STREET'S LEDGER (see /leverage and /status)
+    Wanted       Every kill adds 5. At 10 the street starts to react
+                 (pressures can spawn); at 25 every active pressure sharpens
+                 each round; after 37 quiet rounds it begins to cool.
+    Alerts       Factions you cross raise an alert level of their own;
+                 alerts above zero appear on /leverage.
+    Income       Favor and Influence accrue each round from reputation and
+                 milestones - no verb required.
+
+  SOCIAL VERBS                     Cost                    CD
+    bribe <target>                 Favor: 15               3
+    intimidate <target>            Heat: 10                3
+    call in favor                  Debt: 20, Favor: 10     5
+    recruit <target>               Favor: 25, Infl: 15     5
+    petition authority             Legit: 20               4
+    disguise                       Infl: 5                 5
+    stake claim                    Infl: 30, Legit: 20     8
+
+  RUMOR VERBS                      Cost                    CD
+    spread rumor / seed            Infl: 10                3
+    deny rumor                     Legit: 10               2
+    frame <target>                 Blkml: 20, Heat: 15     5
+    claim false credit             Infl: 15                4
+    bury scandal                   Favor: 15, Infl: 10     4
+    leak truth                     Blkml: 15               3
+    spread counter-rumor           Infl: 10, Heat: 5       3
+
+  DIPLOMACY VERBS                  Cost                    CD
+    request meeting <faction>      Favor: 5                2
+    improve standing <faction>     Favor: 20               4
+    cash milestone                 (free)                  5
+    negotiate access <faction>     Favor: 15, Legit: 10    5
+    trade secret                   Blkml: 15               4
+    temporary alliance <faction>   Favor: 25, Infl: 20     8
+    broker truce                   Infl: 30, Legit: 15     5
+
+  SABOTAGE VERBS                   Cost                    CD
+    sabotage <target>              Blkml: 10, Heat: 20     5
+    plant evidence <target>        Blkml: 20, Heat: 15     5
+    blackmail <target>             Blkml: 25               5
+
+  SCARCITY RULES
+    Max 1 leverage action per turn
+    Some actions require minimum reputation with target faction
+
+────────────────────────────────────────────────────────────
+
+  >
+> save
+
+═══ turn 42 ── screen (prompt, 1311ms)
+
+  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788325883285.json
+
+════════════════════════════════════════════════════════════
+  SESSION SUMMARY
+════════════════════════════════════════════════════════════
+
+  ────────────────────────────────────────────────────────────
+  CHARACTER CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Turns played: 27 | +95 XP
+
+  ────────────────────────────────────────────────────────────
+  DISTRICT CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Crypt Depths: "subdued, fearful" → "dangerous and despairing"
+    alertPressure rose sharply
+
+  ────────────────────────────────────────────────────────────
+  NOTABLE CHARACTERS
+  ────────────────────────────────────────────────────────────
+
+  Brother Aldric (none) — wavering | greed-driven
+    owes you ×3, you owe ×0 | "Unpredictable; watch for shifts"
+
+  ────────────────────────────────────────────────────────────
+  OPPORTUNITIES & CONTRACTS
+  ────────────────────────────────────────────────────────────
+
+  investigation opportunity (investigation): expired — investigation "Investigate the black market activity" expired before resolution.
+
+  ────────────────────────────────────────────────────────────
+  THE WORLD MOVED
+  ────────────────────────────────────────────────────────────
+
+  Opportunities offered: 1 — "Investigate the black market activity"
+  Opportunities expired: 1 — "investigation "Investigate the black market activity" expired before resolution."
+  Mood transitions: 2 — "crypt-depths: volatile -> grim"
+  Asks made of you: 2 — "Would you guide me below? I don't know these tunnels and I'm afraid to go alone."
+  Help left ungiven: 1 — "a one-armed veteran needed help that never came."
+
+════════════════════════════════════════════════════════════
+
+  >
+> quit
+
+═══ turn 43 ── screen (exit, 0ms)
+  ... thinking
+
+  Saving your progress...
+  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788325884596.json
+
+════════════════════════════════════════════════════════════
+  SESSION SUMMARY
+════════════════════════════════════════════════════════════
+
+  ────────────────────────────────────────────────────────────
+  CHARACTER CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Turns played: 27 | +95 XP
+
+  ────────────────────────────────────────────────────────────
+  DISTRICT CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Crypt Depths: "subdued, fearful" → "dangerous and despairing"
+    alertPressure rose sharply
+
+  ────────────────────────────────────────────────────────────
+  NOTABLE CHARACTERS
+  ────────────────────────────────────────────────────────────
+
+  Brother Aldric (none) — wavering | greed-driven
+    owes you ×3, you owe ×0 | "Unpredictable; watch for shifts"
+
+  ────────────────────────────────────────────────────────────
+  OPPORTUNITIES & CONTRACTS
+  ────────────────────────────────────────────────────────────
+
+  investigation opportunity (investigation): expired — investigation "Investigate the black market activity" expired before resolution.
+
+  ────────────────────────────────────────────────────────────
+  THE WORLD MOVED
+  ────────────────────────────────────────────────────────────
+
+  Opportunities offered: 1 — "Investigate the black market activity"
+  Opportunities expired: 1 — "investigation "Investigate the black market activity" expired before resolution."
+  Mood transitions: 2 — "crypt-depths: volatile -> grim"
+  Asks made of you: 2 — "Would you guide me below? I don't know these tunnels and I'm afraid to go alone."
+  Help left ungiven: 1 — "a one-armed veteran needed help that never came."
+
+════════════════════════════════════════════════════════════
+
+
+  Farewell.
+

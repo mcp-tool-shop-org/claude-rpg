@@ -1,0 +1,61 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "char:sister-maren",
+  "level": "character",
+  "extends": "faction:chapel-folk",
+  "_note": "Sister Maren -- the chapel's novice scholar, recruitable diplomat.",
+  "must_have": [
+    {
+      "id": "sex_age",
+      "claim": "a young woman with a keen oval face, arched brows and a steady scholar's gaze",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "veil",
+      "claim": "a plain white novice's veil over pinned-back auburn hair",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "habit",
+      "claim": "a black-and-white novice's habit",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "torso"
+      }
+    },
+    {
+      "id": "ink",
+      "claim": "ink-stained fingertips",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "satchel",
+      "claim": "a leather satchel of papers at the hip",
+      "check_type": "vqa",
+      "severity": "required"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_man",
+      "claim": "a man",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_weapon",
+      "claim": "a weapon in hand",
+      "check_type": "vqa",
+      "severity": "optional"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "faction:chapel-folk",
+  "level": "faction",
+  "_note": "starter-fantasy (claude-rpg): the living people of the ruined chapel -- Brother Aldric, Sister Maren, the Suspicious Pilgrim. Canon: the Director; the pack carries no description fields.",
+  "must_have": [
+    {
+      "id": "painted_look",
+      "claim": "a painted character concept on a plain pale background",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "worn_cloth",
+      "claim": "worn, travel-stained medieval cloth garments",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "palette",
+      "claim": "a muted palette of ash grey, brown and bone white",
+      "check_type": "palette",
+      "severity": "required",
+      "enum": [
+        "#6e6a63",
+        "#5a3f2b",
+        "#d9d4c8"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_modern",
+      "claim": "a firearm or any modern technology",
+      "check_type": "vqa",
+      "severity": "optional"
+    },
+    {
+      "id": "no_armor_plate",
+      "claim": "polished plate armor",
+      "check_type": "vqa",
+      "severity": "optional"
+    }
+  ]
+}

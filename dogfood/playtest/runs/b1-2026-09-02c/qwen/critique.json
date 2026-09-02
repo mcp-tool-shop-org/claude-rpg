@@ -1,0 +1,110 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through autonomous actions: an ambush triggered upon entering the chapel nave, pressures rising after combat, and the district mood shifting to 'volatile' without player input. NPCs acted unprompted—Brother Aldric and the veterans made decisions, the one-armed veteran offered help, and Sister Maren reacted to the player's inquiries. The game also revealed hidden truths through session recap and evolving rumors.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "The game announced 'Ambush: Chapel Patrol in Chapel Nave' on turn 33, triggered upon entering the chapel nave without player request.",
+      "turn": 33
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "After defeating enemies, the session recap shows 'Pressures spawned: 1 — black-market-boom: black market activity is spreading across multiple districts' on turn 42.",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The pressure 'black-market-boom' was listed as active in the recap, and two investigation opportunities expired without player action.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant price or market view referenced faction standing or leverage in pricing.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "The session recap shows 'Rumors mutated: 1 — a one-armed veteran says a stranger carried the load for them. (x1)' and 'Deeds recognized: 1 — a one-armed veteran will remember who carried the load.'",
+      "turn": 42
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The recap states 'Chapel Grounds: \"lively despite everything\" → \"on edge, jumpy\"' and 'Mood transitions: 1 — chapel-grounds: tense -> volatile'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "On turn 8, the one-armed veteran approached and asked for help. On turn 11, he offered information unprompted. On turn 21, Brother Aldric introduced Marcus and Thane without player request.",
+      "turn": 8
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session recap explicitly listed world actions: pressures spawned, opportunities expired, ambushes, mood transitions, rumors, and unfulfilled asks.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in locations, characters, or facts. All NPC behaviors and world events remained consistent across turns.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The game provided clear prompts, hints, and action suggestions. The /help and /leverage commands were functional and informative.",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "On turn 40, the game printed 'The Ash Ghoul falls.' and 'Your strike lands — Ash Ghoul: down.' in a reserved block above narration.",
+      "turn": 40
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "On turn 35, the game printed 'Ash Ghoul's attack finds you — 4 damage.' and 'Crypt Stalker's attack finds you — 3 damage.' with HP dropping from 20 to 13.",
+      "turn": 35
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "The one-armed veteran's request for help was followed by a later reveal that he remembered the player, and the game provided cues (his scarred hand, his mention of trust) that made the reveal feel earned.",
+      "turn": 8
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "The session recap confirmed 'Deeds recognized: 1 — a one-armed veteran will remember who carried the load.' and 'Gratitude repaid: 1 — a one-armed veteran sends word just in time — trouble is waiting for you ahead.'",
+      "turn": 42
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "On turn 32, the game responded to 'go to the old well near the eastern chapel to investigate the sounds and lights mentioned by Sister Maren' with 'I'm not sure what you mean. Did you want to move or move or speak Sister Maren?' — a clear correction without costing a turn.",
+      "turn": 32
+    }
+  ],
+  "highlights": [
+    "Turn 33: The ambush on entry felt organic and tense, escalating the stakes immediately.",
+    "Turn 40: The kill line 'The Ash Ghoul falls' was clear and impactful, marking a turning point.",
+    "Turn 42: The session recap summarized world actions perfectly, showing the game’s autonomy."
+  ],
+  "deadSpots": [
+    "Turn 32: The game failed to recognize the player’s repeated command, requiring rephrasing.",
+    "Turn 38: The game did not acknowledge the player’s decision to ignore the woman’s plea, creating a disconnect."
+  ],
+  "confusions": [
+    "Turn 32: The game’s response 'Did you want to move or move or speak Sister Maren?' was unclear and grammatically broken.",
+    "Turn 38: The game did not register the player’s intent to ignore the woman, leading to confusion about available actions."
+  ],
+  "wouldPlayAgain": true
+}

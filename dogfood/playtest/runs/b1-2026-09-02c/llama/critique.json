@@ -1,0 +1,109 @@
+{
+  "alive": true,
+  "summary": "The world felt alive as it reacted to my actions and presented me with various challenges and opportunities. I encountered several NPCs, including Brother Aldric and Sister Maren, who had their own agendas and motivations. The game also introduced a counter-brotherhood and a mysterious gathering at an old crypt, which added to the sense of intrigue and danger. However, some commands were not recognized, and I experienced a few moments of confusion.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 26: Ambush: Chapel Patrol in Chapel Nave",
+      "turn": 26
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "SESSION SUMMARY: Chapel Grounds: alertPressure rose sharply",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No evidence of pressure escalation or resolution without player action",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No evidence of merchant prices reacting to player actions",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No evidence of rumors about the player with NPC stances",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "SESSION SUMMARY: Chapel Grounds: lively despite everything -> on edge, jumpy",
+      "turn": null
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No evidence of NPCs acting without player prompting",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "SESSION SUMMARY: The world moved section",
+      "turn": null
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Player was able to navigate the game world and interact with NPCs",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 30: The Crypt Stalker falls",
+      "turn": 30
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "No evidence of player taking damage",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No evidence of a con being revealed with a named cost",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No evidence of the game acknowledging player help",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Turns 16-19: Unknown commands were answered with corrections",
+      "turn": 16
+    }
+  ],
+  "highlights": [
+    "Turn 26: Ambush in the Chapel Nave",
+    "Turn 30: The Crypt Stalker falls",
+    "SESSION SUMMARY: The world moved section"
+  ],
+  "deadSpots": [
+    "Turns 16-19: Unknown commands and confusion",
+    "No evidence of pressure escalation or resolution without player action"
+  ],
+  "confusions": [
+    "Turns 16-19: Unknown commands and confusion"
+  ],
+  "wouldPlayAgain": true
+}

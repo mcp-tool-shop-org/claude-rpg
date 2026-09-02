@@ -1,0 +1,72 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "char:ash-ghoul",
+  "level": "character",
+  "extends": "faction:crypt-undead",
+  "_note": "Ash Ghoul -- undead brute, aggressive, guards the crypt.",
+  "must_have": [
+    {
+      "id": "body",
+      "claim": "a hulking, broad-shouldered, hunched undead ghoul",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "ash_face",
+      "claim": "an ash-caked snarling face with cracked black lips and ember-dim eyes",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "hairless",
+      "claim": "a hairless scalp cracked like cooled lava",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "tunic",
+      "claim": "the charred, burnt remnants of a plain sexton's work tunic",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "torso"
+      }
+    },
+    {
+      "id": "claws",
+      "claim": "bare clawed hands",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "ember_accent",
+      "claim": "a dying-ember orange glow in the cracks of the skin",
+      "check_type": "vqa",
+      "severity": "required",
+      "depends_on": "hairless"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_cassock",
+      "claim": "a priest's cassock, stole or a cross",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_weapon",
+      "claim": "a weapon in hand",
+      "check_type": "vqa",
+      "severity": "required"
+    }
+  ]
+}

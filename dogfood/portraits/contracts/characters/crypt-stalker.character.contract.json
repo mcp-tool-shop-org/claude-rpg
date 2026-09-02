@@ -1,0 +1,57 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "char:crypt-stalker",
+  "level": "character",
+  "extends": "faction:crypt-undead",
+  "_note": "Crypt Stalker -- undead skirmisher, cautious, ambushes intruders.",
+  "must_have": [
+    {
+      "id": "body",
+      "claim": "a gaunt, long-limbed undead humanoid crouched low",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "skull_face",
+      "claim": "sunken eyeless sockets and leathered skin drawn over a skull",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "wrappings",
+      "claim": "rotted burial wrappings hanging from the limbs",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "hook",
+      "claim": "a rusted grave-robber's hook held in one hand",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "hair",
+      "claim": "a few lank strands of grave-hair",
+      "check_type": "vqa",
+      "severity": "required"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_armor",
+      "claim": "plate or mail armor",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_bulk",
+      "claim": "a hulking, broad-shouldered build",
+      "check_type": "vqa",
+      "severity": "required"
+    }
+  ]
+}

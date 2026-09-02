@@ -1,0 +1,74 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "char:pilgrim",
+  "level": "character",
+  "extends": "faction:chapel-folk",
+  "_note": "Suspicious Pilgrim -- Director ruling 2026-09-02: MALE (the first sheet rendered a nun).",
+  "must_have": [
+    {
+      "id": "sex_age",
+      "claim": "a middle-aged man with a lean, sun-lined face and several days of stubble",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "hood",
+      "claim": "a grey travel hood pushed half back over dark, unkempt hair",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "cloak",
+      "claim": "a grey pilgrim's cloak with a scallop-shell badge sewn on the breast",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "torso"
+      }
+    },
+    {
+      "id": "staff",
+      "claim": "a rough wooden walking staff held in one hand",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "gaze",
+      "claim": "a wary, sidelong, weighing gaze",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "red_badge",
+      "claim": "one small dull-red cloth patch on the cloak",
+      "check_type": "vqa",
+      "severity": "required",
+      "depends_on": "cloak"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_wimple",
+      "claim": "a nun's wimple, veil or habit",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_woman",
+      "claim": "a woman",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_weapon",
+      "claim": "a sword or an axe",
+      "check_type": "vqa",
+      "severity": "optional"
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "alive": true,
+  "summary": "The world felt alive with reactive NPCs, shifting moods, and emergent encounters. The chapel’s atmosphere evolved dynamically, and enemies appeared without prompting. However, some commands were misinterpreted, and combat lacked clear kill lines. The session recap highlighted world moves like mood shifts and expired opportunities.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "No ambush or patrol encounter was announced by the game itself upon entering a location.",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure, bounty, or alert was raised by a faction after the player killed enemies.",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressure or alert escalated, resolved, or expired without the player acting on it directly.",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant price or market view showed a quote whose markup or discount referred to faction standing.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No named NPC’s dialogue reflected a rumor about the player, nor did /rumors show street beliefs with witness or mutation counts.",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The Crypt Depths mood shifted from 'subdued, fearful' to 'dangerous and despairing' (Turn 42).",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Crypt Stalker and Ash Ghoul readied attacks without player prompting (Turns 20, 24). Brother Aldric and Sister Maren showed evolving reactions (Turns 7-11).",
+      "turn": 20
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session recap listed mood transitions, expired opportunities, and asks made of the player (Turn 42).",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors were observed; locations, characters, and facts remained consistent.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "Player struggled with unclear commands (e.g., '/reputation', '/examine', '/threaten') and misinterpreted inputs (Turns 15, 29, 39).",
+      "turn": 15
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "Combat lines did not consistently name kills deterministically (e.g., 'Your strike lands — Crypt Stalker: down.' was only seen once).",
+      "turn": 22
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Player took damage from Crypt Warden (9 damage, Turn 25) and Ash Ghoul (6 damage, Turn 27), with telegraph lines ('readies') appearing before hits.",
+      "turn": 25
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was attempted or revealed; the one-armed veteran’s ask was straightforward.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No recognition of player actions was shown in the same round or later views.",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Unknown commands like '/rumors', '/reputation', '/examine', and '/threaten' were corrected immediately without turn cost (Turns 2, 15, 29, 39).",
+      "turn": 2
+    }
+  ],
+  "highlights": [
+    "Crypt Stalker and Ash Ghoul readied attacks without prompting (Turn 20, 24).",
+    "Brother Aldric and Sister Maren showed evolving reactions to player dialogue (Turns 7-11).",
+    "Session recap summarized world moves like mood shifts and expired opportunities (Turn 42).",
+    "Player took damage with clear telegraph lines and HP reduction (Turns 25, 27)."
+  ],
+  "deadSpots": [
+    "Combat lacked consistent kill lines; only one deterministic kill line was seen (Turn 22).",
+    "Player struggled with unclear commands and misinterpreted inputs (Turns 15, 29, 39).",
+    "No con was attempted or revealed, leaving this criterion untested."
+  ],
+  "confusions": [
+    "Unclear how to interact with NPCs (e.g., 'talk to the pilgrim' vs. 'I am bound for the crypt beneath this chapel' was not understood) (Turn 9).",
+    "Commands like '/reputation', '/examine', and '/threaten' were not recognized, causing confusion (Turns 15, 29, 39).",
+    "Player HP and leverage updates were not always clear during combat (Turns 21-28)."
+  ],
+  "wouldPlayAgain": true
+}

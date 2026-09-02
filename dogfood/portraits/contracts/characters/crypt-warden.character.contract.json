@@ -1,0 +1,69 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "char:crypt-warden",
+  "level": "character",
+  "extends": "faction:crypt-undead",
+  "_note": "Crypt Warden -- the undead knight boss; enraged phase at half health.",
+  "must_have": [
+    {
+      "id": "body",
+      "claim": "a towering, rigid undead knight in full armor",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "helm",
+      "claim": "a corroded steel great-helm with the visor raised",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "face",
+      "claim": "a desiccated noble face with empty, burning eye sockets beneath the visor",
+      "check_type": "vqa",
+      "severity": "required",
+      "depends_on": "helm"
+    },
+    {
+      "id": "armor",
+      "claim": "black-iron plate armor over a moth-eaten tabard",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "torso"
+      }
+    },
+    {
+      "id": "sword",
+      "claim": "a grave-cold greatsword held upright",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "witchlight",
+      "claim": "a cold green witch-light glow along the blade and the eyes",
+      "check_type": "vqa",
+      "severity": "required",
+      "depends_on": "sword"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_living_face",
+      "claim": "a healthy living human face",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_horse",
+      "claim": "a horse or mount",
+      "check_type": "vqa",
+      "severity": "optional"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "faction:crypt-undead",
+  "level": "faction",
+  "_note": "starter-fantasy (claude-rpg): the chapel-undead faction below the vestry -- Crypt Stalker, Ash Ghoul, Crypt Warden.",
+  "must_have": [
+    {
+      "id": "painted_look",
+      "claim": "a painted character concept on a plain pale background",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "undead_flesh",
+      "claim": "dead, desiccated or decayed flesh",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "palette",
+      "claim": "a palette of grave grey, bone white and bruise violet with a cold accent",
+      "check_type": "palette",
+      "severity": "required",
+      "enum": [
+        "#4a4a52",
+        "#d9d4c8",
+        "#5b3a63"
+      ]
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_living_skin",
+      "claim": "healthy living human skin tone",
+      "check_type": "vqa",
+      "severity": "optional"
+    },
+    {
+      "id": "no_modern",
+      "claim": "a firearm or any modern technology",
+      "check_type": "vqa",
+      "severity": "optional"
+    }
+  ]
+}

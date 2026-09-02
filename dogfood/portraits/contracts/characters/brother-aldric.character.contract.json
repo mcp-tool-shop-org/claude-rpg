@@ -1,0 +1,62 @@
+{
+  "$schema": "prompt-craft/contract.v1",
+  "id": "char:brother-aldric",
+  "level": "character",
+  "extends": "faction:chapel-folk",
+  "_note": "Brother Aldric -- the chapel's old monk, wavering loyalties.",
+  "must_have": [
+    {
+      "id": "sex_age",
+      "claim": "an old man with a long gentle face, hollow cheeks and tired kind eyes",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "tonsure",
+      "claim": "a monk's tonsure with white hair and a close grey beard",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "head"
+      }
+    },
+    {
+      "id": "habit",
+      "claim": "a brown wool monk's habit with a rope belt",
+      "check_type": "vqa",
+      "severity": "required",
+      "spatial": {
+        "kind": "region",
+        "ref": "torso"
+      }
+    },
+    {
+      "id": "pendant",
+      "claim": "a small wooden holy pendant on a cord",
+      "check_type": "vqa",
+      "severity": "required",
+      "depends_on": "habit"
+    },
+    {
+      "id": "candle",
+      "claim": "warm candle-gold light on one side of the face",
+      "check_type": "vqa",
+      "severity": "required"
+    }
+  ],
+  "must_not": [
+    {
+      "id": "no_helmet",
+      "claim": "a helmet or hood covering the head",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_woman",
+      "claim": "a woman",
+      "check_type": "vqa",
+      "severity": "required"
+    }
+  ]
+}

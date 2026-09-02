@@ -1,0 +1,110 @@
+{
+  "alive": true,
+  "summary": "The world demonstrated autonomous behavior through ambushes, mood shifts, and opportunity tracking, reacting to player actions while maintaining coherence. However, some criteria like faction pressures and merchant reactions were not observed, and combat feedback had inconsistencies. The session recap effectively summarized world movements including ambushes, mood transitions, and expired opportunities.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Ambush announced as 'Chapel Patrol in Chapel Nave' when entering location",
+      "turn": 34
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure, bounty, or alert raised by factions shown in narration or status views",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressures were established to escalate or resolve",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant interactions or market views occurred",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No rumor mechanics shown in dialogue or /rumors view",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session recap shows Crypt Depths mood changed from 'subdued, fearful' to 'dangerous and despairing'",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "NPCs shifted positions and reacted between turns without direct player prompting",
+      "turn": 2
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary lists ambushes, mood transitions, opportunities offered/expired",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "World remained consistent throughout with no contradictions or errors",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts, hints, and help commands provided guidance throughout",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "No enemies were defeated in combat",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Crypt Stalker and Ash Ghoul hit player with damage reported in combat lines",
+      "turn": 23
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con interactions were completed",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine help was provided to petitioners",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "/relationships and /heal commands were corrected immediately",
+      "turn": 27
+    }
+  ],
+  "highlights": [
+    "Turn 34: Ambush triggered autonomously when entering Chapel Nave",
+    "Turn 42: Session recap showing world movements including mood transitions and expired opportunities",
+    "Turn 2: NPCs reacting and shifting positions without player prompting"
+  ],
+  "deadSpots": [
+    "Turn 23: Combat feedback showed 'unhurt' status after successful hits",
+    "No faction pressure mechanics demonstrated despite combat encounters"
+  ],
+  "confusions": [
+    "Turn 11: Woman's dialogue about 'Brother Aldric's proposition' seemed disconnected from current context",
+    "Turn 12: Command parsing confusion with 'absolution' response"
+  ],
+  "wouldPlayAgain": true
+}

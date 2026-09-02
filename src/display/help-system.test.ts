@@ -213,6 +213,42 @@ describe('renderPlayHelp CRAFTING section (F-92c348e1)', () => {
 });
 
 /**
+ * WO-B1F-10 (slice B1 follow-ups §2, design lock 2): three family playtest
+ * runs typed `/go`, `/move`, `/zone` expecting them to work in play mode,
+ * and `/rumors` expecting it readable from play mode -- none were
+ * documented anywhere (help-system.md observed item 2). game-core's own
+ * WO-B1F-2 wires the actual resolution (out of this domain's globs); this
+ * domain's half is the play help screen listing the aliases, named
+ * together as one entry per the work order's own wording. Red until the
+ * lines were added to renderPlayHelp's template above.
+ */
+describe('renderPlayHelp play-mode aliases (WO-B1F-10)', () => {
+  it('documents /go, /move, /zone as one entry, aliases named together', () => {
+    const help = renderPlayHelp();
+    expect(help).toContain('/go');
+    expect(help).toContain('/move');
+    expect(help).toContain('/zone');
+    // "Named together": all three appear on the same line, not scattered
+    // across three separate rows.
+    const aliasLine = help.split('\n').find((l) => l.includes('/go') && l.includes('/move') && l.includes('/zone'));
+    expect(aliasLine).toBeDefined();
+  });
+
+  it('documents /rumors as readable from play mode', () => {
+    const help = renderPlayHelp();
+    expect(help).toContain('/rumors');
+  });
+
+  it('does not change the unknown-command reply shape (renderUnknownCommand unaffected)', () => {
+    const output = renderUnknownCommand({ input: '/pressures', nearest: '/status', family: 'director', validNow: ['/help', '/status'] });
+    expect(output).toContain('Unknown command /pressures.');
+    expect(output).toContain('Did you mean /status?');
+    expect(output).toContain('/pressures lives in director mode — type /director.');
+    expect(output).toContain('Right now you can: /help · /status');
+  });
+});
+
+/**
  * F-d66603e9: renderArcHelp()/renderConcludeHelp() built their two-column
  * tables with a fixed name.padEnd(N) plus an unbounded description on the
  * same line. The surrounding dividers already adapt to getTerminalWidth()

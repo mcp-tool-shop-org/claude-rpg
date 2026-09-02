@@ -55,16 +55,22 @@ max and median), narration fallbacks. Deterministic: the sheet is
 byte-identical across two runs (the living-world-driver proof's guarantee,
 extended to 13 worlds).
 
-### 2. The human half: the played scene
+### 2. The played half: the family playtest (amended 2026-09-01)
 
-The studio discriminator is a playable scene a human has played. The
-coordinator authors `docs/living-world-play-session.md`: a 20-minute session
-script on starter-fantasy (which inputs to type, what the world should do at
-each beat, which `/` commands reveal the ledger), plus a harness-captured
-transcript of that exact script (`dogfood/phase9/transcript-starter-fantasy.txt`)
-as the reproducible evidence. **The gate is the Director playing it.** Phase
-10 does not start until that session has been played and the Director has
-ruled the scene alive or named what is not.
+The studio discriminator is a playable scene that has been played. The
+coordinator authors `docs/living-world-play-session.md` (the twelve-beat
+script, the "alive" criteria) and its harness transcript
+(`dogfood/phase9/transcript-starter-fantasy.txt`). **The gate, as ruled by
+the Director on 2026-09-01, is the family playtest, not a single human
+playthrough:** five model players from five families outside ours (the
+`ai-playtest` runner, private repo `mcp-tool-shop-org/ai-playtest`; config
+`dogfood/playtest/claude-rpg.playtest.json`) each play forty turns of
+starter-fantasy against the shipped Claude narrator, starting from one
+scripted character, then each critiques its own transcript against the
+play-session doc's criteria. The aggregate (`dogfood/playtest/runs/<label>/
+REPORT.md`) is what the Director rules on: the scene is alive, or the report
+names what is not. The Director's own playthrough stays optional. Phase 10
+does not start until that ruling.
 
 ## Slice A6 — the tuning program
 

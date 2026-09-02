@@ -881,6 +881,21 @@ export class GameSession {
     this.fastMode = config.fastMode ?? false;
     this.autosaveConfig = { ...DEFAULT_AUTOSAVE, ...config.autosave };
     this.debugLog = config.debugLogger ?? createDebugLogger();
+    // Debug-only start lever for playtests (coordinator, 2026-09-02): seed one
+    // faction's standing and alert so a pressure exists from the first rounds
+    // -- the same two globals the matrix runner's seedFactionPressure sets.
+    // Honored only under CLAUDE_RPG_DEBUG; format `factionId:reputation:alert`.
+    const seedPressure = process.env.CLAUDE_RPG_DEBUG ? process.env.CLAUDE_RPG_DEBUG_SEED_PRESSURE : undefined;
+    if (seedPressure) {
+      const [factionId, reputationRaw, alertRaw] = seedPressure.split(':');
+      const reputation = Number(reputationRaw);
+      const alertLevel = Number(alertRaw);
+      if (factionId && Number.isFinite(reputation) && Number.isFinite(alertLevel)) {
+        this.engine.world.globals[`reputation_${factionId}`] = reputation;
+        this.engine.world.globals[`faction_alert_${factionId}`] = alertLevel;
+        this.debugLog.debug('session', 'seed-pressure', { factionId, reputation, alertLevel });
+      }
+    }
     // Contract B (debug mode): thread GameConfig's existing debug flag —
     // realized here as debugLog.enabled, resolved above from either an
     // explicit config.debugLogger or createDebugLogger()'s auto-detection of

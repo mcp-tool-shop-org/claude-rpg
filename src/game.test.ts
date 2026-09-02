@@ -3921,3 +3921,29 @@ describe('WO-B1F-8 (design lock 8): valid-now derived from the world, one functi
     expect(lastCallOpts.commandStrip!.length).toBeGreaterThan(0);
   });
 });
+
+describe('CLAUDE_RPG_DEBUG_SEED_PRESSURE (debug-only playtest start lever)', () => {
+  const saved = { debug: process.env.CLAUDE_RPG_DEBUG, seed: process.env.CLAUDE_RPG_DEBUG_SEED_PRESSURE };
+  afterEach(() => {
+    if (saved.debug === undefined) delete process.env.CLAUDE_RPG_DEBUG; else process.env.CLAUDE_RPG_DEBUG = saved.debug;
+    if (saved.seed === undefined) delete process.env.CLAUDE_RPG_DEBUG_SEED_PRESSURE; else process.env.CLAUDE_RPG_DEBUG_SEED_PRESSURE = saved.seed;
+  });
+
+  it('seeds the faction reputation and alert globals when both env vars are set', async () => {
+    process.env.CLAUDE_RPG_DEBUG = '1';
+    process.env.CLAUDE_RPG_DEBUG_SEED_PRESSURE = 'chapel-undead:-60:70';
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    expect(h.session.engine.world.globals['reputation_chapel-undead']).toBe(-60);
+    expect(h.session.engine.world.globals['faction_alert_chapel-undead']).toBe(70);
+  });
+
+  it('is inert without CLAUDE_RPG_DEBUG', async () => {
+    delete process.env.CLAUDE_RPG_DEBUG;
+    process.env.CLAUDE_RPG_DEBUG_SEED_PRESSURE = 'chapel-undead:-60:70';
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    expect(h.session.engine.world.globals['reputation_chapel-undead']).toBeUndefined();
+    expect(h.session.engine.world.globals['faction_alert_chapel-undead']).toBeUndefined();
+  });
+});

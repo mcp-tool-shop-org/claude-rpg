@@ -589,11 +589,11 @@ describe('WO-B1-21 proof 6 -- determinism (ADDENDUM-COMMON design lock 10)', () 
 
   it(
     "the new B1 tuning levers default to the design doc's own measured values " +
-      '(enemyAggression: telegraphed, enemyDamageScale: 1) -- RED today: undefined, undefined.',
+      '(enemyAggression: telegraphed, enemyDamageScale: 0.5 -- A6 lever T3, dogfood/tuning/WAVE_3_OUTCOMES.md) -- RED today: undefined, undefined.',
     () => {
       const defaults = DEFAULT_LIVING_WORLD_TUNING as LivingWorldTuningMirror;
       expect(defaults.enemyAggression).toBe('telegraphed');
-      expect(defaults.enemyDamageScale).toBe(1);
+      expect(defaults.enemyDamageScale).toBe(0.5);
     },
   );
 

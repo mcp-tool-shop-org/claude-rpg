@@ -163,7 +163,11 @@ export const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
   narrationRumorLines: Infinity,
   ambushHeadline: 'always',
   enemyAggression: 'telegraphed',
-  enemyDamageScale: 1,
+  // A6 lever T3 (2026-09-02, dogfood/tuning/WAVE_3_OUTCOMES.md): at 1 the
+  // scripted walker is downed on 12 of 13 matrix worlds by median round 12
+  // (3 hits) and every family-playtest seat died by turn 33; at 0.5 no world
+  // downs it in 30 rounds and kills rise 14 -> 23. 0.25 adds nothing.
+  enemyDamageScale: 0.5,
   askPredatorRatio: 0.33,
   askRevealRounds: 6,
   honorificAt: 25,

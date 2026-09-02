@@ -1,0 +1,133 @@
+{
+  "alive": true,
+  "summary": "The world felt very alive, reacting to my actions and presenting dynamic challenges. The combat encounter was a significant unprompted event, and the NPCs had distinct personalities and motivations that drove the narrative forward. The session recap provided a clear summary of the world's independent actions.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 18: '── Ambush: Chapel Patrol in Vestry Passage ──'",
+      "turn": 18
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No direct evidence of pressure being raised after killing enemies, as I did not defeat all enemies.",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressures were explicitly raised or shown to escalate/resolve on their own during gameplay.",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "Market prices were shown, but no explicit markup/discount linked to faction standing was observed.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Turn 13: Brother Aldric says, 'Word travels that you walked darkness for another's sake... though I wonder if such tales grow in the telling.' This shows he's heard a rumor and expresses doubt.",
+      "turn": 13
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Turn 42 (Session Summary): 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"'",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Turn 8: 'a shivering pilgrim asks you: \"Would you guide me below? I don't know these tunnels and I'm afraid to go alone.\"' This was an unprompted request.",
+      "turn": 8
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Turn 42 (Session Summary): The 'THE WORLD MOVED' section lists opportunities, ambushes, mood transitions, asks, deeds recognized, and gratitude repaid.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The world remained consistent throughout the session. No contradictions in locations, characters, or facts, and no error messages or broken screens.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Prompts and menus were clear, and available actions were always listed. The game provided hints and clear command references.",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 20: 'Your strike lands — Crypt Stalker: down. The Crypt Stalker falls.'",
+      "turn": 20
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Turn 19: 'Crypt Stalker's attack finds you — 3 damage.' and 'Ash Ghoul readies an attack against you.' (telegraph).",
+      "turn": 19
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was revealed during this session.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "Turn 9: 'a shivering pilgrim will remember who walked the dark path.' and Turn 18: 'a shivering pilgrim sends word just in time — trouble is waiting for you ahead.'",
+      "turn": 9
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Turn 28: 'Unknown command /stats. Did you mean /stats? /stats lives in director mode — type /director.'",
+      "turn": 28
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Turn 2: My input 'I seek the truth of this place. What troubles you both?' was treated as dialogue, and the Suspicious Pilgrim replied.",
+      "turn": 2
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Turn 11: '> go Chapel Nave' successfully moved the player to the Chapel Nave.",
+      "turn": 11
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "Turn 2: 'Market: Healing Draught 13 (+30% vs base)' was visible on the play screen.",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "No pressure lines were seen on the play screen when they spawned, escalated, resolved, or expired. The mood shift was only noted in the recap.",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 8: The shivering pilgrim's unprompted request for guidance felt very natural and added to the world's interactivity.",
+    "Turn 18: The ambush on entering the Vestry Passage was a great surprise and immediately raised the stakes.",
+    "Turn 19: The telegraphing of enemy attacks ('readies an attack') before damage was taken made combat feel fair and strategic.",
+    "Turn 42: The session summary provided a comprehensive overview of how the world had acted independently, which was very satisfying."
+  ],
+  "deadSpots": [
+    "Turns 31-41: The repeated 'Wanderer HAS FALLEN' and 'continue' loop after dying felt a bit clunky and broke immersion. It would be better if the game either fully reset or offered a clearer path forward after falling, rather than letting me try to act while at 0 HP."
+  ],
+  "confusions": [
+    "Turns 31-41: I was confused about why I could still attempt actions (like 'talk to a shivering pilgrim' or 'go Chapel Nave') while at 0 HP and repeatedly falling. It felt like I was stuck in a loop of trying to act while already defeated."
+  ],
+  "wouldPlayAgain": true
+}

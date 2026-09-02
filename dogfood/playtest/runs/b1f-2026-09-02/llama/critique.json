@@ -1,0 +1,132 @@
+{
+  "alive": false,
+  "summary": "The world showed some signs of life, with NPCs reacting to the player's actions and the environment changing in response to the player's decisions. However, the game ultimately felt scripted and empty, with too much repetition and not enough meaningful choices or consequences. The player's death was handled poorly, with too much repetition and not enough opportunity for meaningful progression or change.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 15: Ambush in Crypt Antechamber",
+      "turn": 15
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No evidence of pressure or bounty being raised by a faction",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No evidence of pressure or alert escalating, resolving, or expiring without player action",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No evidence of merchant prices or market views reacting to player's standing with a faction",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No evidence of named NPCs discussing rumors about the player or showing belief or doubt in those rumors",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Turn 42: District mood shifts in Chapel Grounds and Crypt Depths",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No evidence of named NPCs taking actions without player prompting",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Turn 42: Session summary shows opportunities, contracts, and world changes",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No evidence of location, character, or fact contradictions",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "Player experienced confusion and uncertainty about available actions and game expectations",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 12: Combat line shows player's strike landing on Crypt Stalker",
+      "turn": 12
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Turn 12: Player takes damage from Crypt Stalker's attack",
+      "turn": 12
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No evidence of con or deception being revealed with a named cost or fair consequences",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "Turn 9: A shivering pilgrim will remember who carried the load",
+      "turn": 9
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Turn 41: Unknown command /say is answered with a correction",
+      "turn": 41
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": false,
+      "evidence": "No evidence of player's plain sentence being treated as speech to an NPC",
+      "turn": null
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Player is able to move using slash commands like /go and /move",
+      "turn": null
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "Turn 2: Market line shows Healing Draught price with markup",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "No evidence of pressure or alert lines being shown on the play screen",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 15: Ambush in Crypt Antechamber",
+    "Turn 42: Session summary shows opportunities, contracts, and world changes"
+  ],
+  "deadSpots": [
+    "Repetition and lack of meaningful choices or consequences",
+    "Poor handling of player death"
+  ],
+  "confusions": [
+    "Uncertainty about available actions and game expectations"
+  ],
+  "wouldPlayAgain": false
+}

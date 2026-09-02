@@ -1,0 +1,16 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "label": "b1f-2026-09-02",
+  "seat": {
+    "id": "mistral",
+    "family": "mistral",
+    "model": "mistralai/mistral-small-2603"
+  },
+  "turns": 40,
+  "turnsPlayed": 42,
+  "endedBy": "turns",
+  "error": null,
+  "critiqueError": "Error: critique JSON does not parse: Expected ',' or ']' after array element in JSON at position 1763 (line 10 column 182)",
+  "durationMs": 259864,
+  "finishedAt": "2026-09-02T06:53:09.666Z"
+}

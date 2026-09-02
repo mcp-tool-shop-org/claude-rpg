@@ -3394,7 +3394,7 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
       // per the design doc's own instruction -- the driver-proof fixtures
       // below are re-derived for this reason, not measured pre-wave values.
       enemyAggression: 'telegraphed',
-      enemyDamageScale: 1,
+      enemyDamageScale: 0.5, // A6 lever T3 (WAVE_3_OUTCOMES.md)
       askPredatorRatio: 0.33,
       askRevealRounds: 6,
       honorificAt: 25,

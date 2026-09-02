@@ -1,0 +1,135 @@
+{
+  "alive": true,
+  "summary": "The world demonstrated autonomous behavior through ambushes, pressure escalation, and NPC actions, creating a reactive environment. It maintained coherence throughout the session with consistent characters and locations, though some combat mechanics felt punishing. The world actively responded to player choices with faction pressures, rumors, and narrative consequences.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Ambush: Chapel Patrol in Vestry Passage announced when entering location",
+      "turn": 17
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Session summary shows alertPressure rose sharply in Crypt Depths",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Crypt Depths mood transitioned from 'subdued, fearful' to 'dangerous and despairing'",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": true,
+      "evidence": "Healing Draught price showed +30% vs base markup in market line",
+      "turn": 2
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "/rumors showed witness count (4 witnesses) for veteran's rumor",
+      "turn": 26
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session summary shows Crypt Depths mood transition occurred",
+      "turn": null
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "One-armed veteran sent warning about trouble ahead without player request",
+      "turn": 17
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary listed ambushes, mood transitions, opportunities spawned/expired",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in locations, characters, or facts across entire session",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts and menu options provided throughout all turns",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "No enemy kills achieved in combat, only player taking damage",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Ash Ghoul and Crypt Stalker attacks landed with damage amounts shown",
+      "turn": 19
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "Shivering pilgrim's story revealed as untrue with fair warning cues",
+      "turn": 20
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "One-armed veteran remembered who carried the load and sent warning",
+      "turn": 9
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": false,
+      "evidence": "No unknown commands attempted in transcript",
+      "turn": null
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Plain sentences treated as speech with NPC replies throughout dialogue",
+      "turn": 8
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "/go commands successfully moved between locations",
+      "turn": 6
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "Market prices shown on play screen without opening /market",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "No pressure change lines seen on play screen during turns",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 17: Ambush triggered naturally on location entry with proper announcement",
+    "Turn 9: NPC recognition system working with veteran remembering carried load",
+    "Turn 26: Rumor system showing witness counts and street knowledge",
+    "Turn 42: Comprehensive session recap showing world autonomy"
+  ],
+  "deadSpots": [
+    "Turns 17-41: Combat death loop felt scripted and punishing without escape options",
+    "Turn 20: Pressure changes only visible in recap, not during gameplay"
+  ],
+  "confusions": [
+    "Turn 17: Why combat became unwinnable death loop without escape options",
+    "Turn 19: How Brother Aldric appeared in combat context without explanation"
+  ],
+  "wouldPlayAgain": true
+}

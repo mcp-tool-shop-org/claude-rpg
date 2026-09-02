@@ -1,0 +1,134 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through autonomous NPC actions, escalating threats, and dynamic shifts in district mood. The crypt depths transitioned from subdued to dangerous and despairing, pressures rose without player input, and NPCs like the courier and pilgrim acted independently. Combat was reactive and deadly, with enemies attacking on their own terms. The game maintained coherence despite repeated failures.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Entering the Vestry Passage triggered a 'Crypt Stalker readies an attack' line, an ambush announced by the game itself.",
+      "turn": 10
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "After killing enemies (in combat), the session recap showed 'alertPressure rose sharply' in the Crypt Depths district.",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The investigation opportunity 'Investigate the black market activity' expired automatically after 12 turns without player action, as noted in the session recap.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": true,
+      "evidence": "The Healing Draught price jumped to 26 (+160% vs base) in Turn 10, coinciding with the Chapel Undead faction's 'wavering' status, indicating a market reaction to faction standing.",
+      "turn": 10
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "The session recap revealed 'a courier on the vestry stair's story wasn't true,' showing the street believed a falsehood, and the NPC doubted it.",
+      "turn": 42
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session recap noted the district mood changed from 'subdued, fearful' to 'dangerous and despairing' after the player's actions.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "In Turn 10, the shivering pilgrim asked for help before the player could act; in Turn 15, the courier on the vestry stair spoke without being prompted.",
+      "turn": 10
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session recap explicitly listed world actions: opportunities offered/expired, mood transitions, marks left on the player, and unfulfilled asks.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions were observed—locations, NPCs, and facts remained consistent across turns, and no errors or broken screens occurred.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "All possible actions were clearly listed each turn, and prompts were consistent and understandable.",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Combat lines such as 'Your strike lands — Crypt Stalker: unhurt' and 'Your strike misses' appeared in reserved blocks above narration.",
+      "turn": 11
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Multiple times, enemies hit the player: 'Crypt Stalker's attack finds you — 3 damage' (Turn 13), 'Ash Ghoul's attack finds you — 6 damage' (Turn 19), and 'Crypt Warden's attack finds you — 7 damage' (Turn 19). HP dropped accordingly.",
+      "turn": 13
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "The courier’s false story was revealed in the recap ('a courier on the vestry stair's story wasn't true'), and earlier cues included nervous glances and suspicious behavior.",
+      "turn": 42
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "Helping the courier was acknowledged in the recap as 'asks made of you' and 'help left ungiven', showing the deed was remembered.",
+      "turn": 42
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "When typing /health, the game responded immediately with 'Unknown command /health. Did you mean /help? /health lives in play mode — type /play?' without costing a turn.",
+      "turn": 20
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "When the player answered 'talk to a courier on the vestry stair' with plain speech, the game treated it as dialogue and the NPC replied directly.",
+      "turn": 14
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Using '/jobs' moved the player to the jobs view, and '/play' was recognized as a valid command even though it didn’t move location.",
+      "turn": 21
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "The market line 'Healing Draught 26 (+160% vs base · Chapel Undead: wavering)' appeared on the play screen in Turn 10 without opening /market.",
+      "turn": 10
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": true,
+      "evidence": "The pressure increase was visible in the session recap, but not on the play screen during the turn it happened. However, the alertPressure rise was reported in the recap, which counts as a line stating the event.",
+      "turn": 42
+    }
+  ],
+  "highlights": [
+    "Turn 10: Ambush on entry with clear enemy readiness announcement.",
+    "Turn 10: Market price reacted dynamically to faction standing.",
+    "Turn 42: Session recap summarized all world moves cohesively."
+  ],
+  "deadSpots": [
+    "Turn 30: Game failed to recognize 'go Vestry Passage' and asked 'Did you want to move or move?' — confusing and broken.",
+    "Turn 37: Game rejected 'attack Crypt Stalker' and asked 'Did you want to attack Ash Ghoul or attack Crypt Warden or look?' — inconsistent command parsing."
+  ],
+  "confusions": [
+    "Turn 30: Unclear why 'go Vestry Passage' was rejected when the exit was listed.",
+    "Turn 37: Confusing prompt that forced re-specification of target despite clear options."
+  ],
+  "wouldPlayAgain": true
+}

@@ -105,13 +105,15 @@ describe('WO-B1F-6 -- downed metric + telegraphed profile (design doc lock 6)', 
   );
 
   it(
-    "LIVING_WORLD_TUNING_JSON='{\"enemyAggression\":\"telegraphed\"}' populates both new columns across the " +
+    "LIVING_WORLD_TUNING_JSON='{\"enemyAggression\":\"telegraphed\",\"enemyDamageScale\":1}' populates both new columns across the " +
       'matrix (measured live 2026-09-02: 12 of the 13 worlds down the scripted walker within the 30-round window, ' +
       "and every world lands at least one hit -- the exact evidence buildHarnessForWorld's own doc comment cites " +
       '("19 reds at defaults, 4 with aggression off") for why the composed proof pins aggression off by default).',
     async () => {
       const previous = process.env.LIVING_WORLD_TUNING_JSON;
-      process.env.LIVING_WORLD_TUNING_JSON = '{"enemyAggression":"telegraphed"}';
+      // enemyDamageScale pinned to 1 here: the 12-of-13 figure was measured
+      // at the pre-T3 default; the default itself is now 0.5 (WAVE_3_OUTCOMES.md).
+      process.env.LIVING_WORLD_TUNING_JSON = '{"enemyAggression":"telegraphed","enemyDamageScale":1}';
       try {
         const { sheet } = await runLivingWorldMatrix(WORLDS);
         const downedCount = sheet.rows.filter((r) => r.playerDowned !== null).length;

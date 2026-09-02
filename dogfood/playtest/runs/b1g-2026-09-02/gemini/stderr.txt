@@ -20,7 +20,7 @@
 [INFO][tick:5][turn] turn-start {"input":"Where can I find Father Aldric?","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Sister Maren"}
 [INFO][tick:6][turn] turn-start {"input":"Thank you, Sister. I will proceed with caution.","tick":6}
 [DEBUG][tick:6][profile] hints-applied {"xp":2,"milestone":null}
@@ -42,7 +42,7 @@
 [INFO][tick:10][turn] turn-start {"input":"help a shivering pilgrim","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:10][turn] turn-end {"tick":10}
-[INFO][tick:10][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:10][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:10][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a shivering pilgrim"}
 [INFO][tick:11][turn] turn-start {"input":"y","tick":11}
 [DEBUG][tick:11][profile] hints-applied {"xp":2,"milestone":null}
@@ -65,7 +65,7 @@
 [INFO][tick:15][turn] turn-start {"input":"talk to Brother Aldric","tick":15}
 [DEBUG][tick:15][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:15][turn] turn-end {"tick":15}
-[INFO][tick:15][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:15][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:15][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Brother Aldric"}
 [INFO][tick:16][turn] turn-start {"input":"What choices are those, Brother?","tick":16}
 [DEBUG][tick:16][profile] hints-applied {"xp":2,"milestone":null}
@@ -86,7 +86,7 @@
 [INFO][tick:20][turn] turn-start {"input":"talk to a courier on the vestry stair","tick":20}
 [DEBUG][tick:20][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:20][turn] turn-end {"tick":20}
-[INFO][tick:20][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:20][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:20][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a courier on the vestry stair"}
 [INFO][tick:21][turn] turn-start {"input":"What news do you carry?","tick":21}
 [DEBUG][tick:21][profile] hints-applied {"xp":2,"milestone":null}
@@ -107,7 +107,7 @@
 [INFO][tick:25][turn] turn-start {"input":"Can you tell me where to start looking?","tick":25}
 [DEBUG][tick:25][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:25][turn] turn-end {"tick":25}
-[INFO][tick:25][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:25][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:25][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a courier on the vestry stair"}
 [INFO][tick:26][turn] turn-start {"input":"Thank you. I will.","tick":26}
 [DEBUG][tick:26][profile] hints-applied {"xp":2,"milestone":null}
@@ -131,7 +131,7 @@
 [INFO][tick:31][turn] turn-start {"input":"attack Crypt Stalker","tick":31}
 [DEBUG][tick:31][profile] hints-applied {"xp":17,"milestone":null}
 [INFO][tick:31][turn] turn-end {"tick":31}
-[INFO][tick:31][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:31][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:31][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to a shivering pilgrim"}
 [immersion] state: aftermath -> dialogue (speak)
 [INFO][tick:32][turn] turn-start {"input":"talk to a shivering pilgrim","tick":32}
@@ -153,7 +153,7 @@
 [INFO][tick:36][turn] turn-start {"input":"Do you seek sanctuary here?","tick":36}
 [DEBUG][tick:36][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:36][turn] turn-end {"tick":36}
-[INFO][tick:36][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:36][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:36][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
 [immersion] state: dialogue -> aftermath (move)
 [INFO][tick:37][turn] turn-start {"input":"go Chapel Nave","tick":37}

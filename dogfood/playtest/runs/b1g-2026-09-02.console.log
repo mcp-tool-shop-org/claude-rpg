@@ -253,3 +253,6 @@ claude-rpg living world (starter-fantasy): mistral, qwen, llama, deepseek, gemin
   [llama] done: 42 turns, ended by turns, critique ALIVE
   [deepseek] t40 (prompt, 9367ms) > go Ruined Chapel Entrance
   [gemini] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] done: 42 turns, ended by turns, critique ALIVE
+report: E:\AI\claude-rpg\dogfood\playtest\runs\b1g-2026-09-02\REPORT.md
+exit=0

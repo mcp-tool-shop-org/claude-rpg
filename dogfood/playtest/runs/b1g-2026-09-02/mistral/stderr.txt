@@ -23,7 +23,7 @@
 [INFO][tick:4][turn] turn-start {"input":"go Vestry Passage","tick":4}
 [DEBUG][tick:4][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:4][turn] turn-end {"tick":4}
-[INFO][tick:4][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:4][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:4][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
 [INFO][tick:6][turn] turn-start {"input":"attack Ash Ghoul","tick":6}
 [DEBUG][tick:6][profile] hints-applied {"xp":2,"milestone":null}
@@ -45,7 +45,7 @@
 [INFO][tick:15][turn] turn-start {"input":"go Crypt Antechamber","tick":15}
 [DEBUG][tick:15][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:15][turn] turn-end {"tick":15}
-[INFO][tick:15][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:15][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:15][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
 [immersion] state: exploration -> combat (attack)
 [INFO][tick:18][turn] turn-start {"input":"attack Crypt Warden","tick":18}
@@ -68,7 +68,7 @@
 [INFO][tick:22][turn] turn-start {"input":"go Chapel Nave","tick":22}
 [DEBUG][tick:22][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:22][turn] turn-end {"tick":22}
-[INFO][tick:22][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:22][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:22][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Brother Aldric"}
 [immersion] state: exploration -> dialogue (speak)
 [INFO][tick:23][turn] turn-start {"input":"talk to Brother Aldric","tick":23}
@@ -92,7 +92,7 @@
 [INFO][tick:30][turn] turn-start {"input":"attack Ash Ghoul! fire! charge! slash! fight! attack! hit! kill! destroy! strike! swing! kill Ash Ghoul! kill the ghoul! fight the ghoul! attack the ghoul! smash the ghoul! destroy the ghoul! Ash Ghou","tick":30}
 [DEBUG][tick:30][profile] hints-applied {"xp":17,"milestone":null}
 [INFO][tick:30][turn] turn-end {"tick":30}
-[INFO][tick:30][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:30][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:30][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Stalker"}
 [immersion] state: aftermath -> menu (attack)
 [INFO][tick:33][turn] turn-start {"input":"attack Crypt Stalker","tick":33}
@@ -117,7 +117,7 @@
 [INFO][tick:40][turn] turn-start {"input":"go Crypt Antechamber","tick":40}
 [DEBUG][tick:40][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:40][turn] turn-end {"tick":40}
-[INFO][tick:40][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:40][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:40][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
 [INFO][tick:41][turn] turn-start {"input":"attack Crypt Warden","tick":41}
 [DEBUG][tick:41][profile] hints-applied {"xp":2,"milestone":null}

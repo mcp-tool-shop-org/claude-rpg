@@ -23,7 +23,7 @@
 [INFO][tick:5][turn] turn-start {"input":"talk to Brother Aldric","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Brother Aldric"}
 [immersion] state: dialogue -> combat (speak)
 [INFO][tick:8][turn] turn-start {"input":"I feel the Chapel’s grace, but it feels like a memory. What do you know of the dead here?","tick":8}
@@ -46,7 +46,7 @@
 [INFO][tick:17][turn] turn-start {"input":"I’m going down. Stay here and keep watch—don’t let anyone follow.","tick":17}
 [DEBUG][tick:17][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:17][turn] turn-end {"tick":17}
-[INFO][tick:17][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:17][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:17][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
 [immersion] state: dialogue -> combat (move)
 [INFO][tick:19][turn] turn-start {"input":"go Vestry Passage","tick":19}
@@ -70,7 +70,7 @@
 [INFO][tick:28][turn] turn-start {"input":"flee","tick":28}
 [DEBUG][tick:28][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:28][turn] turn-end {"tick":28}
-[INFO][tick:28][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:28][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:28][interpret] action-reasoning {"verb":"disengage","confidence":"high","reasoning":"Flee the fight"}
 [INFO][tick:30][turn] turn-start {"input":"flee","tick":30}
 [DEBUG][tick:30][profile] hints-applied {"xp":2,"milestone":null}
@@ -95,7 +95,7 @@
 [INFO][tick:38][turn] turn-start {"input":"look around","tick":38}
 [DEBUG][tick:38][profile] hints-applied {"xp":15,"milestone":null}
 [INFO][tick:38][turn] turn-end {"tick":38}
-[INFO][tick:38][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:38][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:38][interpret] action-reasoning {"verb":"attack","confidence":"medium","reasoning":"Player wants to attack 'Crypt Warden' but this entity is not visible in the current zone"}
 [immersion] state: exploration -> menu (attack)
 [INFO][tick:42][turn] turn-start {"input":"attack Crypt Warden","tick":42}
@@ -121,7 +121,7 @@
 [INFO][tick:49][turn] turn-start {"input":"talk to a woman at the chapel door","tick":49}
 [DEBUG][tick:49][profile] hints-applied {"xp":17,"milestone":null}
 [INFO][tick:49][turn] turn-end {"tick":49}
-[INFO][tick:49][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:49][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:49][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
 [immersion] state: exploration -> combat (move)
 [INFO][tick:52][turn] turn-start {"input":"go Vestry Passage","tick":52}
@@ -146,4 +146,4 @@
 [INFO][tick:62][turn] turn-start {"input":"go Chapel Nave","tick":62}
 [DEBUG][tick:62][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:62][turn] turn-end {"tick":62}
-[INFO][tick:62][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:62][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}

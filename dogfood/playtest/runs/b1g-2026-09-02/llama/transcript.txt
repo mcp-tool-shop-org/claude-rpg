@@ -1177,7 +1177,7 @@ The creatures spread out in a coordinated pattern, cutting off retreat as they a
 
 ═══ turn 42 ── screen (prompt, 1295ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788332935476.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788332935476.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1252,7 +1252,7 @@ The creatures spread out in a coordinated pattern, cutting off retreat as they a
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788332936770.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788332936770.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

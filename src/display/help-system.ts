@@ -4,7 +4,7 @@
 import type { ResolutionClass, ArcKind, ArcMomentum } from '@ai-rpg-engine/modules';
 import { getTerminalWidth } from './play-renderer.js';
 import { PLAY_COMMANDS } from '../cli/slash-completer.js';
-import { bold, danger, dim } from '../cli/colors.js';
+import { bold, danger, dim, hint } from '../cli/colors.js';
 
 // F-38eb3dec: both were a fixed 60-char divider regardless of terminal
 // size, unlike play-renderer.ts's own dividers (PFE-005). Computed per
@@ -356,6 +356,39 @@ export function renderFirstTurnOrientation(data: PackOnboarding): string {
   lines.push(`  Type /help for commands, /help leverage for social verbs.`);
   lines.push('');
   return lines.join('\n');
+}
+
+// --- Unknown Command Reply ---
+
+/**
+ * WO-B1-17 (slice B1 §3, lock 4): the parser-layer reply to an unknown
+ * play-mode `/word` -- costs no turn (game.ts's caller never reaches the
+ * interpreter for this; that dispatch is game-core's, out of this domain's
+ * globs). game-core computes `{ nearest, family, validNow }` (Levenshtein
+ * over play + director command names for `nearest`; the command strip's
+ * inputs for `validNow`) and hands them here for rendering only. DRAFT
+ * shape verbatim from ADDENDUM-cli-display.md WO-B1-17: "Unknown command
+ * /pressures. Did you mean /status? /pressures lives in director mode --
+ * type /director. Right now you can: talk to the pilgrim · go chapel nave
+ * · /status" -- coordinator ratifies the exact wording.
+ */
+export function renderUnknownCommand(opts: {
+  input: string;
+  nearest?: string;
+  family?: string;
+  validNow: string[];
+}): string {
+  const sentences: string[] = [`Unknown command ${opts.input}.`];
+  if (opts.nearest) {
+    sentences.push(`Did you mean ${opts.nearest}?`);
+  }
+  if (opts.family) {
+    sentences.push(`${opts.input} lives in ${opts.family} mode — type /${opts.family}.`);
+  }
+  if (opts.validNow.length > 0) {
+    sentences.push(`Right now you can: ${opts.validNow.join(' · ')}`);
+  }
+  return hint(`  ${sentences.join(' ')}`);
 }
 
 // --- Play Mode Help ---

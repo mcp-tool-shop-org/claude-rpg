@@ -1022,3 +1022,178 @@ describe('/tuning director view (WO-A6-5)', () => {
     expect(result).not.toContain('1 rounds recorded');
   });
 });
+
+/**
+ * WO-B1-17 (slice B1 §3, lock 4): director commands join multi-word
+ * arguments and resolve by id OR by display name. Before this wave `/npc`
+ * and `/trade` only ever read `parts[1]` (a single token) -- these cases
+ * were red (a multi-word arg like "Merchant Alara" split at the space,
+ * leaving only "Merchant" to match against, which no npcId/district name
+ * equals) until the `parts.slice(1).join(' ')` + name-match fallback were
+ * added above.
+ */
+describe('director commands join multi-word arguments (WO-B1-17)', () => {
+  it('/npc resolves a multi-word display name to the matching profile', () => {
+    const profile: NpcProfile = {
+      npcId: 'npc_merchant',
+      name: 'Merchant Alara',
+      factionId: null,
+      goals: [],
+      relationship: { trust: 0, fear: 0, greed: 0, loyalty: 0 },
+      breakpoint: 'wavering',
+      dominantAxis: 'trust',
+      leverageAngle: 'none',
+      knownRumors: [],
+      underPressure: false,
+    };
+    const result = executeDirectorCommand({
+      command: '/npc Merchant Alara',
+      world: makeWorld(),
+      npcProfiles: [profile],
+    });
+    expect(result).not.toContain('not found');
+  });
+
+  it('/npc still resolves a single-word npcId (existing usage unaffected)', () => {
+    const profile: NpcProfile = {
+      npcId: 'npc_merchant',
+      name: 'Merchant Alara',
+      factionId: null,
+      goals: [],
+      relationship: { trust: 0, fear: 0, greed: 0, loyalty: 0 },
+      breakpoint: 'wavering',
+      dominantAxis: 'trust',
+      leverageAngle: 'none',
+      knownRumors: [],
+      underPressure: false,
+    };
+    const result = executeDirectorCommand({
+      command: '/npc npc_merchant',
+      world: makeWorld(),
+      npcProfiles: [profile],
+    });
+    expect(result).not.toContain('not found');
+  });
+
+  it('/npc reports not-found by the full multi-word arg, not just the first word', () => {
+    const result = executeDirectorCommand({
+      command: '/npc Suspicious Pilgrim',
+      world: makeWorld(),
+      npcProfiles: [],
+    });
+    expect(result).toContain('NPC "Suspicious Pilgrim" not found');
+  });
+
+  it('/trade resolves a multi-word district display name to the matching economy', () => {
+    const economy = {
+      supplies: {
+        medicine: { category: 'medicine', level: 50, trend: 'stable' },
+        weapons: { category: 'weapons', level: 50, trend: 'stable' },
+        ammunition: { category: 'ammunition', level: 50, trend: 'stable' },
+        food: { category: 'food', level: 50, trend: 'stable' },
+        fuel: { category: 'fuel', level: 50, trend: 'stable' },
+        luxuries: { category: 'luxuries', level: 50, trend: 'stable' },
+        components: { category: 'components', level: 50, trend: 'stable' },
+        contraband: { category: 'contraband', level: 50, trend: 'stable' },
+      },
+      tradeVolume: 50, blackMarketActive: false, lastUpdateTick: 0,
+    } as any;
+    const world = {
+      ...makeWorld(),
+      modules: {
+        'district-core': {
+          districts: {}, zoneToDistrict: {},
+          definitions: { district_crypt: { id: 'district_crypt', name: 'Crypt Depths', zoneIds: [], tags: [] } },
+        },
+      },
+    };
+    const result = executeDirectorCommand({
+      command: '/trade Crypt Depths',
+      world,
+      districtEconomies: new Map([['district_crypt', economy]]),
+    });
+    expect(result).not.toContain('No economy data for district');
+  });
+
+  it('/trade still resolves a single-word district id (existing usage unaffected)', () => {
+    const economy = {
+      supplies: {
+        medicine: { category: 'medicine', level: 50, trend: 'stable' },
+        weapons: { category: 'weapons', level: 50, trend: 'stable' },
+        ammunition: { category: 'ammunition', level: 50, trend: 'stable' },
+        food: { category: 'food', level: 50, trend: 'stable' },
+        fuel: { category: 'fuel', level: 50, trend: 'stable' },
+        luxuries: { category: 'luxuries', level: 50, trend: 'stable' },
+        components: { category: 'components', level: 50, trend: 'stable' },
+        contraband: { category: 'contraband', level: 50, trend: 'stable' },
+      },
+      tradeVolume: 50, blackMarketActive: false, lastUpdateTick: 0,
+    } as any;
+    const result = executeDirectorCommand({
+      command: '/trade district_crypt',
+      world: makeWorld(),
+      districtEconomies: new Map([['district_crypt', economy]]),
+    });
+    expect(result).not.toContain('No economy data for district');
+  });
+});
+
+/**
+ * WO-B1-20 (slice B1 §5, lock 8): `/leverage` honorific + `/status`'s
+ * "Deeds: N" ledger segment. Before this wave `WorldLedgerSummary` had no
+ * `honorific`/`deedsCount` fields -- these cases were red (no such line
+ * could ever render, and the ledger line was omitted entirely for a
+ * deeds-only ledger) until the fields + render branches were added above.
+ */
+describe('/leverage honorific + /status deeds ledger line (WO-B1-20)', () => {
+  const statusData = {
+    name: 'Aldric', level: 3, archetypeName: 'Warrior',
+    hp: 20, injuryTags: [], statuses: [],
+  } as any;
+  const leverageState = {
+    favor: 0, debt: 0, blackmail: 0, influence: 0, heat: 0, legitimacy: 0,
+  } as any;
+
+  it('/leverage renders "Known as: <honorific>" under the ledger block when present', () => {
+    const result = executeDirectorCommand({
+      command: '/leverage',
+      world: makeWorld(),
+      leverageState,
+      worldLedger: { heat: 0, quietRounds: 0, factionAlerts: {}, honorific: 'the Water-Bearer' },
+    });
+    expect(result).toContain('Known as: the Water-Bearer');
+  });
+
+  it('/leverage renders no honorific line when absent (existing callers unaffected)', () => {
+    const result = executeDirectorCommand({
+      command: '/leverage',
+      world: makeWorld(),
+      leverageState,
+      worldLedger: { heat: 0, quietRounds: 0, factionAlerts: {} },
+    });
+    expect(result).not.toContain('Known as:');
+  });
+
+  it('/status ledger line gains "Deeds: N" when deedsCount is > 0', () => {
+    const result = executeDirectorCommand({
+      command: '/status',
+      world: makeWorld(),
+      statusData,
+      leverageState,
+      worldLedger: { heat: 0, quietRounds: 0, factionAlerts: {}, deedsCount: 3 },
+    });
+    expect(result).toContain('Deeds: 3');
+  });
+
+  it('/status ledger line is still omitted when deedsCount is 0 or absent, alongside empty heat/alerts/tone', () => {
+    const result = executeDirectorCommand({
+      command: '/status',
+      world: makeWorld(),
+      statusData,
+      leverageState,
+      worldLedger: { heat: 0, quietRounds: 0, factionAlerts: {}, deedsCount: 0 },
+    });
+    expect(result).not.toContain('Deeds:');
+    expect(result).not.toContain('Heat 0');
+  });
+});

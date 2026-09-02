@@ -26,11 +26,13 @@ Coordinator reading, before the gate:
   over a white coif where the atom says "plain white veil" — the gate's veil
   question will decide, and the contract may need the word "wimple-less" made
   explicit as a must_not.
-- **Ash Ghoul:** "the charred remnants of a plain sexton's work tunic" was read
-  by the model as a modern work shirt and overalls. That is a contract-authoring
-  lesson, not a model failure: "work tunic" is one paraphrase from "work
-  clothes". The atom will be rewritten as a period garment ("a burnt,
-  threadbare medieval tunic and hose") and `no_modern` raised to required.
+- **Ash Ghoul:** the first contract render read "the charred remnants of a
+  plain sexton's work tunic" as a modern work shirt and overalls — a
+  contract-authoring lesson, not a model failure ("work tunic" is one paraphrase
+  from "work clothes"). The atom was rewritten as a period garment ("a burnt,
+  threadbare medieval tunic and hose, charred at the hems"), a required
+  must_not for modern clothes added, and the ghoul re-rendered: the row above
+  is that second render, on contract.
 
 ## First sheet — hand-written slot descriptions (superseded)
 

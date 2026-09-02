@@ -18,6 +18,7 @@ import {
 import type {
   FactionMembership,
   DistrictDefinition,
+  DistrictDecayConfig,
   EncounterSpawnContent,
   EncounterParticipant,
 } from '@ai-rpg-engine/modules';
@@ -766,6 +767,28 @@ export async function proposeWorld(
 }
 
 /**
+ * WO-A6-6 (Phase 9 / Slice A6, ADDENDUM-COMMON.md lock 3): the generated-
+ * world stack's tunable levers, read from the installed 3.11 dist --
+ * `EncounterSpawnConfig.baseChance` / `.safetyStep`
+ * (node_modules/@ai-rpg-engine/modules/dist/encounter-spawn.d.ts:44,46,
+ * overriding `BASE_SPAWN_CHANCE`/`SAFETY_CHANCE_STEP`) and
+ * `WorldStackConfig.districtDecay: Partial<DistrictDecayConfig>`
+ * (node_modules/@ai-rpg-engine/modules/dist/world-stack.d.ts:29, itself
+ * district-core.d.ts:30-35's `{ decayRate, floor }`). Every field optional
+ * and presence-gated at each spread site below (never defaulted to `{}`) so
+ * passing `undefined` OR `{}` produces byte-identical `Engine.serialize()`
+ * output to omitting the parameter entirely -- the tuning-default proof this
+ * WO commits to. `encounterSpawn` levers apply only when the proposal
+ * already authored an encounter table (`mapEncountersFromProposal` returned
+ * content) -- the presence-optional contract for the encounter-spawn module
+ * itself is untouched; a lever cannot conjure the module into existence.
+ */
+export type WorldStackTuning = {
+  encounterSpawn?: { baseChance?: number; safetyStep?: number };
+  districtDecay?: Partial<DistrictDecayConfig>;
+};
+
+/**
  * WO-A4-6 (slice A4, §4): the engine-construction half of `generateWorld` --
  * everything from ruleset assembly through the faction-cognition membership
  * reconciliation, moved intact (byte-identical) out of `generateWorld`'s
@@ -786,8 +809,16 @@ export async function proposeWorld(
  *               unconditionally, mirroring immersion-runtime.ts's debugMode gating
  *               in this same domain. Omitted entirely, a normal (non-debug) run
  *               stays silent on these expected, already-handled cases.
+ * @param stackTuning - WO-A6-6: optional generated-world stack levers (see
+ *               `WorldStackTuning`). Omitted, or `{}`, or every nested field
+ *               omitted -> byte-identical engine construction to today.
  */
-export function instantiateWorld(proposal: WorldGenProposal, seed: number, logger?: DebugLogger): Engine {
+export function instantiateWorld(
+  proposal: WorldGenProposal,
+  seed: number,
+  logger?: DebugLogger,
+  stackTuning?: WorldStackTuning,
+): Engine {
   // Build ruleset
   const ruleset: RulesetDefinition = {
     id: proposal.ruleset.id,
@@ -891,8 +922,33 @@ export function instantiateWorld(proposal: WorldGenProposal, seed: number, logge
     economyGenre: genre,
     tradeGenre: genre,
     craftingGenre: genre,
-    ...(encounterSpawnContent ? { encounterSpawn: { gameId, ...encounterSpawnContent } } : {}),
+    ...(encounterSpawnContent
+      ? {
+          encounterSpawn: {
+            gameId,
+            ...encounterSpawnContent,
+            // WO-A6-6: levers apply only when an encounter table already exists
+            // (this `if` arm) -- presence-gated per field so an omitted or
+            // empty stackTuning.encounterSpawn leaves BASE_SPAWN_CHANCE /
+            // SAFETY_CHANCE_STEP as the module's own defaults, untouched.
+            ...(stackTuning?.encounterSpawn?.baseChance !== undefined
+              ? { baseChance: stackTuning.encounterSpawn.baseChance }
+              : {}),
+            ...(stackTuning?.encounterSpawn?.safetyStep !== undefined
+              ? { safetyStep: stackTuning.encounterSpawn.safetyStep }
+              : {}),
+          },
+        }
+      : {}),
     ...(questDefinitions.length > 0 ? { quests: { gameId, quests: questDefinitions } } : {}),
+    // WO-A6-6: district metric decay override -- omitted entirely unless the
+    // caller actually supplied one, so `{}`/`undefined` stackTuning never
+    // sends an empty `districtDecay: {}` down to buildWorldStack (that would
+    // still be harmless -- Partial<DistrictDecayConfig> merges over the
+    // module's own defaults -- but omitting it keeps the call shape, and the
+    // byte-identical assertion, honest about "nothing was passed" vs "an
+    // empty override object was passed").
+    ...(stackTuning?.districtDecay ? { districtDecay: stackTuning.districtDecay } : {}),
   });
   // §1: warnings are surfaced through the existing logger channel, never
   // thrown, never printed raw to the player (today: unspawnable
@@ -1155,6 +1211,8 @@ export function instantiateWorld(proposal: WorldGenProposal, seed: number, logge
  *               When omitted, a random seed is used.
  * @param opts.onAttempt - see `proposeWorld`.
  * @param opts.logger - see `instantiateWorld`.
+ * @param opts.stackTuning - WO-A6-6: see `instantiateWorld`; passed through
+ *               unchanged to the engine-construction half.
  */
 export async function generateWorld(
   client: ClaudeClient,
@@ -1163,9 +1221,10 @@ export async function generateWorld(
   opts?: {
     onAttempt?: (info: WorldGenAttemptInfo) => void;
     logger?: DebugLogger;
+    stackTuning?: WorldStackTuning;
   },
 ): Promise<WorldGenResult> {
-  const { onAttempt, logger } = opts ?? {};
+  const { onAttempt, logger, stackTuning } = opts ?? {};
   const resolvedSeed = seed ?? Math.floor(Math.random() * 100000);
 
   const proposed = await proposeWorld(client, worldPrompt, { onAttempt });
@@ -1184,7 +1243,7 @@ export async function generateWorld(
   }
 
   const proposal = proposed.proposal;
-  const engine = instantiateWorld(proposal, resolvedSeed, logger);
+  const engine = instantiateWorld(proposal, resolvedSeed, logger, stackTuning);
 
   return {
     ok: true,

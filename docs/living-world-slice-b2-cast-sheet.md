@@ -1,5 +1,10 @@
 # Slice B2 — the starter-fantasy cast sheet (cloud run, 2026-09-02)
 
+> **ON HOLD — Director ruling 2026-09-02:** the cast-sheet approach was set
+> aside — portraits must be made as needed so every character is unique, not
+> drawn from a fixed roster. These sheets stay as the record of two rulings
+> (the pilgrim's sex; descriptions via prompt-craft contracts).
+
 **Proof 6 of `docs/living-world-slice-b2.md`:** the starter-fantasy cast rendered
 through the pinned workflow for the Director's ruling. Cloud backend (Comfy
 Cloud via the hosted MCP plugin); the local-backend parity sheet follows when

@@ -1,5 +1,15 @@
 # Slice B2 — faces
 
+> **ON HOLD — Director ruling 2026-09-02.** After the second cast sheet the
+> Director put portraits on hold "until we can do it right": the intent is
+> portraits **made as needed**, so that **every character is unique**; a
+> pre-rendered cast implies a set cast and would shrink the game. This
+> design's pipeline (one workflow, two backends, contract-driven prompts, the
+> question gate, the registry) stands; its *trigger* must become the entity
+> the player meets, with its contract derived at runtime from the entity's
+> own description. Redesign brief: memory `feedback_portraits_on_demand_not_a_cast`.
+> Nothing below resumes until the Director asks.
+
 **Cycle:** the living-world cycle (Path A → v2.0.0), run `swarm-1788288802-f5a0`.
 **Why this slice exists:** the Director ordered a visual component: every NPC
 and monster gets a portrait generated from its engine description, saved to

@@ -265,6 +265,32 @@ import { buildAmbushHeadline } from './game/ambush-headline.js';
 // tuning surface + round-metrics shape this wave introduces.
 import { resolveTuning, type LivingWorldTuning } from './game/tuning.js';
 import { MAX_ROUND_METRICS, type RoundMetrics } from './game/round-metrics.js';
+// WO-B1-1/2/4/5 (slice B1, design locks 1/3/7/8): condition rungs, the
+// hostile turn's awareness marking for encounter spawns, asks, and
+// recognition.
+import { describeHostiles } from './game/condition.js';
+import { markEntitiesAware } from './game/hostile-turn.js';
+import {
+  maybeOfferAsk,
+  getAllAsks,
+  getAsk,
+  askSubjectId,
+  askSubjectName,
+  resolveAskConsequence,
+  markAskHelped,
+  markAskIgnored,
+  markAskRevealed,
+  dueReveals,
+} from './game/asks.js';
+import {
+  grantGratitude,
+  recognitionLineFor,
+  recognitionReputationDelta,
+  recognitionRumorClaim,
+  checkAmbushGratitudeWarning,
+} from './game/recognition.js';
+import { filterHints, readHintLedger, writeHintLedger } from './game/hint-ledger.js';
+import { computeUnknownCommandInfo } from './game/unknown-command.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { hasLivingHostiles } from './runtime/hooks.js';
 // F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
@@ -1668,6 +1694,24 @@ export class GameSession {
     }
     for (const enc of tickResult.encounters) {
       this.pushWorldMoved('ambush', `${enc.encounterName} in ${enc.zoneId}`);
+      // WO-B1-2 (design lock 3, awareness trigger 3 of 3): an ambush reveals
+      // itself to the player on arrival -- its own hostiles are aware from
+      // the round they spawn, so next round's hostile turn can act on them.
+      markEntitiesAware(this.engine.world, enc.entityIds, this.engine.tick);
+      // WO-B1-5 (design lock 8, repay trigger 1 of 3): a gratitude debt owed
+      // to the player pays back with a warning the round an ambush lands in
+      // the PLAYER'S OWN zone (see checkAmbushGratitudeWarning's own doc
+      // comment for why this is same-round, not one-round-ahead).
+      if (enc.zoneId === this.engine.world.locationId) {
+        const warning = checkAmbushGratitudeWarning(
+          this.engine.world,
+          (npcId) => this.engine.world.entities[npcId]?.name ?? npcId,
+        );
+        if (warning) {
+          this.pushWorldMoved('gratitude-repaid', warning);
+          this.pendingAnnouncements.push(warning);
+        }
+      }
     }
 
     // resolvedOpportunities: append this round's expiry fallout (design
@@ -1677,6 +1721,17 @@ export class GameSession {
       this.resolvedOpportunities.push(fallout);
     }
     this.capOldestFirst(this.resolvedOpportunities, MAX_RESOLVED_FALLOUT_ENTRIES); // F-51e110b9
+
+    // 4.6 (WO-B1-4/5, slice B1 §§4-5): the asks ledger -- offer a fresh ask
+    // for the player's district (at most one open at a time), age out any
+    // open ask nobody answered, and apply the consequence of every
+    // predatory ask whose reveal window just elapsed. Runs after the world
+    // tick (asks are an app-truth ledger, not an engine one) and before the
+    // RumorEngine tick just below, so a reveal's own rumor (pushed via
+    // addRumor, which mirrors into the RumorEngine) is eligible to spread
+    // this SAME round (mirrors the ordering note on WO-A3-2's mirror sweep,
+    // a few steps below).
+    this.processAsks();
 
     // 4.5 (WO-A3-2, slice A3 §3): tick the RumorEngine's own lifecycle —
     // AFTER the world tick, BEFORE the profile-view refresh (design doc
@@ -1886,6 +1941,153 @@ export class GameSession {
     return this.engine.world.eventLog.slice(before);
   }
 
+  /**
+   * WO-B1-4/5 (slice B1 §§4-5, design locks 7-8): the asks ledger's own
+   * per-round step -- age out unanswered asks, apply a due predatory
+   * reveal's consequence, then offer a fresh ask for the player's district
+   * if none is open. Called once per round from runWorldRound(), after the
+   * world tick.
+   */
+  private processAsks(): void {
+    const world = this.engine.world;
+    const tick = this.engine.tick;
+
+    // Age out an open ask nobody answered within a fixed window. Design
+    // doc §4 names no expiry lever (only askPredatorRatio/askRevealRounds),
+    // so this app declares its own measured-free default: 3x the reveal
+    // window, long enough that a player mid-errand doesn't lose an ask
+    // they were about to act on, short enough that the ledger doesn't grow
+    // unbounded. A genuine ask ignored "resolves badly for the petitioner
+    // ... and the world says so later" (design doc §4); a predatory ask
+    // ignored is simply dropped -- the player dodged it, nothing to report.
+    const expiryWindow = this.tuning.askRevealRounds * 3;
+    for (const ask of getAllAsks(world)) {
+      if (ask.status !== 'open') continue;
+      if (tick - ask.offeredTick < expiryWindow) continue;
+      markAskIgnored(world, ask.id);
+      if (ask.truth === 'genuine') {
+        this.pushWorldMoved('ask-ignored', `${askSubjectName(ask, world)} needed help that never came.`);
+      }
+    }
+
+    // A predatory ask's reveal, once its window has elapsed.
+    for (const ask of dueReveals(world, tick, this.tuning.askRevealRounds)) {
+      const consequence = resolveAskConsequence(ask);
+      const subjectName = askSubjectName(ask, world);
+      switch (consequence.kind) {
+        case 'coin-lost': {
+          const player = world.entities[world.playerId];
+          if (player) {
+            const before = (player.resources.coin as number | undefined) ?? 0;
+            player.resources.coin = Math.max(0, before - consequence.amount);
+          }
+          break;
+        }
+        case 'ambush': {
+          // Design lock 7: "via the encounter-spawn registry's spawn for
+          // the destination zone" -- honesty floor: the installed engine's
+          // encounter-spawn step (encounter-spawn.ts) resolves spawns
+          // internally against its own registered content and zone
+          // tables; it exposes no app-callable "spawn this specific
+          // encounter in this zone now" entry point (only
+          // runEncounterSpawnStep, the whole-tick sweep already run this
+          // round via runWorldTick). Reproducing that registry's own
+          // content-matching logic here would duplicate engine internals
+          // this domain doesn't own. Applied instead as a direct, named
+          // consequence: a hostile encounter the player will meet on
+          // arrival at that zone, via the SAME awareness/hostile-turn
+          // machinery WO-B1-2 already ships (markEntitiesAware once they
+          // arrive) -- deferred to the next visit rather than synthesized
+          // here with no real entities to seat.
+          this.pushWorldMoved('ask-revealed', `${subjectName}'s "guide" was a trap -- the path to ${consequence.zoneId} was watched.`);
+          break;
+        }
+        case 'faction-pin':
+        case 'standing-burn':
+          this.adjustFactionReputation(consequence.factionId, consequence.delta);
+          break;
+      }
+      markAskRevealed(world, ask.id, tick);
+      this.pushWorldMoved('ask-revealed', `${subjectName}'s story wasn't true.`);
+    }
+
+    // Offer a fresh ask for the player's district, at most one open at a
+    // time (maybeOfferAsk's own gate).
+    const offer = maybeOfferAsk({ world, tick, worldSeed: world.meta.seed, tuning: this.tuning });
+    if (offer) {
+      // maybeOfferAsk is pure (asks.ts's own doc comment) -- this call site
+      // is the one place that actually seats the petitioner and persists
+      // the ledger.
+      world.entities[offer.petitionerEntity.id] = offer.petitionerEntity;
+      // Plant the 'rumor' cue for real (design lock 7: RumorEngine.create,
+      // subject = the petitioner, never the player) -- planAskCues already
+      // described the cue text; this attaches a live rumor id to it so
+      // /rumors and /npc can surface something concrete when the player
+      // cross-checks. Genuine asks plant no rumor cue (planAskCues' own
+      // contract: one cue total, the faction tie), so there's nothing to
+      // create here for them.
+      const rumorCue = offer.ask.cues.find((c) => c.kind === 'rumor');
+      if (rumorCue) {
+        const rumor = this.rumorEngine.create({
+          claim: rumorCue.detail,
+          subject: askSubjectId(offer.ask),
+          key: 'suspicious-story',
+          value: true,
+          sourceId: askSubjectId(offer.ask),
+          originTick: tick,
+          confidence: 0.6,
+        });
+        rumorCue.rumorId = rumor.id;
+      }
+      world.globals['claude_rpg.asks'] = JSON.stringify([...getAllAsks(world), offer.ask]);
+      this.pushWorldMoved('ask-offered', offer.ask.surface);
+    }
+  }
+
+  /**
+   * WO-B1-5 (slice B1 §5, design lock 8): recognition for a genuine ask
+   * just helped this turn -- the acknowledgment line, the per-faction
+   * reputation delta, the witnessed rumor, and the gratitude grant. Called
+   * from processInput() right after executeTurn() returns, once
+   * `interpreted.parameters?.helpAskId` (set by action-interpreter.ts's
+   * `help <name>` fast-path alias, WO-B1-3) names the ask being answered.
+   * Returns the acknowledgment line, or `undefined` when there was nothing
+   * to recognize this turn (no helpAskId, an ask already resolved, or a
+   * predatory ask -- which gets no immediate recognition; its own
+   * consequence arrives later via processAsks' reveal step).
+   */
+  private applyRecognitionForHelpedAsk(askId: string | undefined): string | undefined {
+    if (!askId) return undefined;
+    const world = this.engine.world;
+    const ask = getAsk(world, askId);
+    if (!ask || ask.status !== 'open') return undefined;
+
+    markAskHelped(world, askId);
+    if (ask.truth !== 'genuine') return undefined; // predatory: no recognition, reveal comes later
+
+    const subjectName = askSubjectName(ask, world);
+    const line = recognitionLineFor(subjectName, ask.kind);
+
+    if (ask.petitioner?.factionId) {
+      this.adjustFactionReputation(ask.petitioner.factionId, recognitionReputationDelta(ask.stake));
+    }
+
+    this.rumorEngine.create({
+      claim: recognitionRumorClaim(subjectName, ask.kind),
+      subject: 'player',
+      key: 'good-deed',
+      value: true,
+      sourceId: askSubjectId(ask),
+      originTick: this.engine.tick,
+      confidence: 0.9,
+      emotionalCharge: 0.5,
+    });
+
+    grantGratitude(world, askSubjectId(ask), askId, ask.petitioner?.factionId);
+    this.pushWorldMoved('deed-recognized', line);
+    return line;
+  }
+
   /** Process one player input and return the rendered output. */
   async processInput(input: string): Promise<string> {
     const trimmed = input.trim();
@@ -2059,6 +2261,25 @@ export class GameSession {
       if (playCmd === '/export') {
         return await this.handleExport(cmdParts.slice(1));
       }
+      // WO-B1-7 (slice B1 §3, design lock 4): every known play-mode `/word`
+      // above has already returned by this point -- anything left is
+      // genuinely unknown. Costs no turn and never reaches the interpreter
+      // (matches the Phase-9 playtest finding this whole WO exists to fix:
+      // an unknown slash command used to fall through to the LLM as free
+      // prose). Honesty floor: cli-display's own `renderUnknownCommand`
+      // (this WO's contract, ADDENDUM-game-core) is not present in this
+      // isolated worktree yet -- rendered here as a plain inline string
+      // instead of importing a function that does not exist yet; swap in
+      // the real renderer once cli-display's own WO lands (their render
+      // call site, not this domain's -- src/display/** is out of scope).
+      const info = computeUnknownCommandInfo(trimmed, this.mode);
+      if (info.nearest) {
+        const familyNote = info.family === 'director'
+          ? ` (${info.nearest} lives in director mode — type /director first)`
+          : '';
+        return `Unknown command "${playCmd}". Did you mean ${info.nearest}?${familyNote}\nValid now: ${info.validNow.join(', ')}`;
+      }
+      return `Unknown command "${playCmd}".\nValid now: ${info.validNow.join(', ')}`;
     }
 
     // F-6bc0721e (SLATE-6, death-as-setback per Director ruling R1): gate
@@ -2115,6 +2336,10 @@ export class GameSession {
         // own action resolves and before narration (turn-loop.ts's
         // ExecuteTurnOpts.onResolved contract).
         onResolved: (actionEvents) => this.runWorldRound(actionEvents),
+        // WO-B1-2 (slice B1 §2, design lock 3): the resolved living-world
+        // tuning surface -- runHostileTurn reads `enemyAggression`/
+        // `enemyDamageScale` from it (turn-loop.ts's ExecuteTurnOpts.tuning).
+        tuning: this.tuning,
         // WO-A5-2 (slice A5 §2, design lock 2): resolved by turn-loop.ts
         // AFTER onResolved's round has run — see
         // ExecuteTurnOpts.getMoodTransition's own doc comment.
@@ -2225,6 +2450,11 @@ export class GameSession {
             // inference ran on this path.
             isFallback: true,
             justDied: false,
+            // WO-B1-3: the fatal-bookkeeping path never reached the combat-
+            // channel computation (narrateScene threw before it) -- nothing
+            // to report, same discipline as the low-confidence/engine-throw
+            // early returns in turn-loop.ts itself.
+            combatLines: [],
           });
           await this.checkAutosave();
           // F-79a25863 (seam contract): narrateScene() threw before
@@ -2276,6 +2506,19 @@ export class GameSession {
       // F-462792bb (SLATE-2, persisted per Director ruling R2): capture this
       // turn's player<->NPC exchange, if any.
       this.recordConversationExchange(turnResult);
+
+      // WO-B1-3/5 (slice B1 §§4-5, design locks 7-8): a deliberate "help"
+      // action (action-interpreter.ts's `help <name>` fast-path alias
+      // stamps `interpreted.parameters.helpAskId`) resolves the ask it
+      // answers -- recognition fires immediately for a genuine ask; a
+      // predatory one is silently marked helped and pays off later via
+      // processAsks' reveal step (the whole point: identical surface,
+      // divergent truth). Mutates the SAME TurnResult object executeTurn
+      // returned so every downstream consumer below (the render call,
+      // history) reads one consistent shape, per TurnResult.recognitionLine's
+      // own doc comment (turn-loop.ts).
+      const helpAskId = turnResult.interpreted.parameters?.helpAskId as string | undefined;
+      turnResult.recognitionLine = this.applyRecognitionForHelpedAsk(helpAskId);
 
       // Apply profile hints from this turn (may spawn rumors)
       this.applyProfileHints(turnResult.profileHints);
@@ -2457,6 +2700,23 @@ export class GameSession {
         hasEndgameDetected: this.endgameTriggers.some((t) => !t.acknowledged),
         endgameTriggerCount: this.endgameTriggers.filter((t) => !t.acknowledged).length,
       });
+      // WO-B1-6 (slice B1 §3, design lock 6): the hint ledger -- caps each
+      // suggestion's own `trigger` (cause) at 2 firings per session with a
+      // 20-round cooldown, re-arming on a state change. The state token is
+      // coarse (district + open-opportunity count + "has the player ever
+      // fought") rather than a per-cause token, a deliberate simplification
+      // (one ledger read/write per turn instead of a per-cause state
+      // model) that still satisfies the doc's three named re-arm triggers
+      // (new district, new opportunity, first combat) as one combined
+      // signature.
+      const stateToken = [
+        this.getPlayerDistrictId() ?? 'no-district',
+        this.activeOpportunities.filter((o) => o.status === 'available').length,
+        this.getRoundMetrics().some((m) => m.kills > 0) ? 'combat-yes' : 'combat-no',
+      ].join('|');
+      const { kept, ledger } = filterHints(suggestions, readHintLedger(this.engine.world), this.engine.tick, stateToken);
+      suggestions = kept;
+      writeHintLedger(this.engine.world, ledger);
     }
 
     // Autosave check after turn processing
@@ -2506,6 +2766,15 @@ export class GameSession {
           // F-6e75fa93 (SLATE-1, brief ruled 2026-08-26): zero-LLM-cost
           // ambient NPC chatter generated this turn, if any.
           ambientLines: turnResult.ambientLines,
+          // WO-B1-1/3/5 (slice B1, design locks 1/2/8): the zone's live
+          // hostiles (status-hostile-line data), this turn's reserved
+          // combat-channel lines, and this turn's recognition line (if a
+          // genuine ask was just helped -- computed below, after
+          // executeTurn returns, since it needs the ask ledger/RumorEngine/
+          // reputation that only GameSession carries).
+          hostiles: describeHostiles(this.engine.world, this.engine.world.locationId),
+          combatLines: turnResult.combatLines,
+          recognitionLine: turnResult.recognitionLine,
         });
     let finalOutput = output;
     // F-cfc5ff37: collect the post-turn "trailer notices" (structured

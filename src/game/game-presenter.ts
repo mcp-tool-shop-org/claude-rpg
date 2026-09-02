@@ -14,6 +14,7 @@ import { formatPartyStatusLine } from '@ai-rpg-engine/modules';
 import type { PartyState } from '@ai-rpg-engine/modules';
 import type { StatusData } from '../character/presence.js';
 import type { ContextualSuggestion } from '../display/contextual-suggestions.js';
+import type { HostileDescriptor } from './condition.js';
 
 // ─── Simple Delegates ────────────────────────────────────────
 
@@ -58,6 +59,32 @@ export function renderPlayOutput(input: {
    * doesn't pass one keeps rendering without an ambient-lines block.
    */
   ambientLines?: string[];
+  /**
+   * WO-B1-1 (slice B1 §1, design lock 1): the zone's live hostiles, one
+   * token-vocabulary reading (game/condition.ts's `describeHostiles`) for
+   * cli-display's own status-hostile-line WO this same wave to render.
+   * Passed through to renderPlayScreen as a plain (non-literal) reference,
+   * so an extra field renderPlayScreen's OWN param type doesn't declare yet
+   * is not an excess-property error here -- cli-display's own WO-B1-*
+   * (ADDENDUM-COMMON design lock 1/5) adds the matching field to
+   * src/display/play-renderer.ts this same wave; green expected at merge,
+   * same cross-domain-threading pattern turnNumber/ambientLines already
+   * established above.
+   */
+  hostiles?: HostileDescriptor[];
+  /**
+   * WO-B1-3 (design lock 2): the reserved combat channel's lines for this
+   * turn (turn-loop.ts's TurnResult.combatLines) -- cli-display renders
+   * this in a reserved block above the narration (their own WO this same
+   * wave). Green expected at merge, same as `hostiles` above.
+   */
+  combatLines?: string[];
+  /**
+   * WO-B1-5 (design lock 8): the acknowledgment line for a genuine ask
+   * helped this turn (game.ts's own post-executeTurn computation, game/
+   * recognition.ts). Green expected at merge, same as `hostiles` above.
+   */
+  recognitionLine?: string;
 }): string {
   return renderPlayScreen(input);
 }

@@ -64,6 +64,7 @@ import { generateDialogue } from './dialogue/dialogue-mind.js';
 import { generateAmbientLine, generateZoneAmbience } from './npc/ambient-dialogue.js';
 import { NarrationError } from './llm/claude-errors.js';
 import { createTestLogger } from './game/debug-logger.js';
+import { resolveTuning } from './game/tuning.js';
 
 const mockedNarrateScene = vi.mocked(narrateScene);
 const mockedGenerateDialogue = vi.mocked(generateDialogue);
@@ -1276,5 +1277,63 @@ describe('executeTurn onResolved hook (WO-A2-1)', () => {
     expect(mockedNarrateScene).toHaveBeenCalled();
     const narrateOpts = mockedNarrateScene.mock.calls[mockedNarrateScene.mock.calls.length - 1][0];
     expect(narrateOpts.recentEvents).toContainEqual(fakeRoundEvent);
+  });
+});
+
+// WO-B1-3 (slice B1 §§1-2, design lock 2): the reserved combat channel.
+// RED before this WO: TurnResult had no `combatLines` field at all.
+describe('combat channel (WO-B1-3)', () => {
+  it('reports the player\'s own outcome line (a hit or a miss) for a real attack, from the engine\'s own combat events', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'attack pilgrim', tone: 'dark fantasy',
+    });
+
+    expect(result.combatLines.length).toBeGreaterThan(0);
+    expect(result.combatLines[0]).toMatch(/^Your strike (lands — .+: (unhurt|hurt|bloodied|reeling|down)\.|misses\.)$/);
+  });
+
+  it('is empty for a non-combat turn', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    const result = await executeTurn({ engine, client, history, playerInput: 'look', tone: 'dark fantasy' });
+
+    expect(result.combatLines).toEqual([]);
+  });
+
+  it('telegraphs an aware hostile\'s attack the round the player walks in on it, at default tuning ("telegraphed")', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    // chapel-entrance -> chapel-nave -> vestry-door (crypt-stalker's zone).
+    await executeTurn({ engine, client, history, playerInput: 'go chapel-nave', tone: 'dark fantasy' });
+    const result = await executeTurn({ engine, client, history, playerInput: 'go vestry-door', tone: 'dark fantasy' });
+
+    expect(result.combatLines).toContainEqual('Crypt Stalker readies an attack against you.');
+    // A telegraph round never deals damage.
+    expect(result.events.some((e) => e.type === 'combat.damage.applied' && e.payload.targetId === engine.world.playerId)).toBe(false);
+  });
+
+  it('reproduces byte-identical old behavior with enemyAggression "off" -- no telegraph, no hostile action, at the same zone-entry', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    await executeTurn({
+      engine, client, history, playerInput: 'go chapel-nave', tone: 'dark fantasy',
+      tuning: resolveTuning({ enemyAggression: 'off' }),
+    });
+    const result = await executeTurn({
+      engine, client, history, playerInput: 'go vestry-door', tone: 'dark fantasy',
+      tuning: resolveTuning({ enemyAggression: 'off' }),
+    });
+
+    expect(result.combatLines).toEqual([]);
   });
 });

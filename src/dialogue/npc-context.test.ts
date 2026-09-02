@@ -621,3 +621,117 @@ describe('buildNPCDialogueContext WO-A4-5: obligations reach buildNpcProfile', (
     expect(ctx!.npcGoal).toBe('Strike a deal');
   });
 });
+
+// WO-A5-6 (slice A5 §3, design lock 3): the "Standing with you" mechanical
+// line, collapsed from the raw obligation ledger by deriveObligationStanding
+// (npc-context.ts). Unlike the WO-A4-5 tests above, this does NOT require
+// `npc.ai` to be set -- npcObligationStanding was deliberately hoisted
+// outside the `if (npc.ai)` block so it reflects the ledger unconditionally.
+// RED before this wave: DialogueInput had no npcObligationStanding field at
+// all, so every assertion below would fail to compile, let alone pass.
+describe('buildNPCDialogueContext WO-A5-6: obligation standing line', () => {
+  function makeWorldWithPlayer(): WorldState {
+    return {
+      entities: {
+        'npc-1': { id: 'npc-1', name: 'Town Guard', type: 'npc', tags: [] },
+      },
+      modules: {},
+      playerId: 'player-1',
+    } as unknown as WorldState;
+  }
+
+  beforeEach(() => {
+    mockedGetCognition.mockReturnValue(makeCognition());
+    mockedGetRumorsFrom.mockReturnValue([]);
+  });
+
+  it('renders "owes you a favor" when the NPC owes the player a favor', () => {
+    const ledger = {
+      obligations: [createObligation('favor', 'npc-owes-player', 'npc-1', 'player-1', 5, 'test', 0)],
+    };
+    const ctx = buildNPCDialogueContext(
+      makeWorldWithPlayer(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      ledger,
+    );
+    expect(ctx!.npcObligationStanding).toBe('owes you a favor');
+  });
+
+  it('renders "you owe them a debt" when the player owes the NPC a debt', () => {
+    const ledger = {
+      obligations: [createObligation('debt', 'player-owes-npc', 'npc-1', 'player-1', 5, 'test', 0)],
+    };
+    const ctx = buildNPCDialogueContext(
+      makeWorldWithPlayer(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      ledger,
+    );
+    expect(ctx!.npcObligationStanding).toBe('you owe them a debt');
+  });
+
+  it('renders "was betrayed by you" when a betrayed obligation exists, overriding a favorable net weight', () => {
+    const ledger = {
+      obligations: [
+        createObligation('betrayed', 'player-owes-npc', 'npc-1', 'player-1', 3, 'betrayal', 0),
+        createObligation('favor', 'npc-owes-player', 'npc-1', 'player-1', 10, 'unrelated-favor', 1),
+      ],
+    };
+    const ctx = buildNPCDialogueContext(
+      makeWorldWithPlayer(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      ledger,
+    );
+    expect(ctx!.npcObligationStanding).toBe('was betrayed by you');
+  });
+
+  it('is undefined when the ledger has nothing involving the player', () => {
+    const ctx = buildNPCDialogueContext(makeWorldWithPlayer(), 'npc-1', 'hello', 'dark fantasy');
+    expect(ctx!.npcObligationStanding).toBeUndefined();
+  });
+
+  it('is undefined when obligations toward the player net to exactly zero', () => {
+    const ledger = {
+      obligations: [
+        createObligation('favor', 'npc-owes-player', 'npc-1', 'player-1', 5, 'a', 0),
+        createObligation('debt', 'player-owes-npc', 'npc-1', 'player-1', 5, 'b', 1),
+      ],
+    };
+    const ctx = buildNPCDialogueContext(
+      makeWorldWithPlayer(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      ledger,
+    );
+    expect(ctx!.npcObligationStanding).toBeUndefined();
+  });
+});
+
+// WO-A5-8 (slice A5 §6, design lock 6): hearerRumors is a straight pass-
+// through parameter (npc-context.ts has no RumorEngine access of its own --
+// see the param's own doc comment), so this only proves the plumbing, not
+// stance-derivation logic (that lives in game-core's getHearerRumors, outside
+// this domain). RED before this wave: buildNPCDialogueContext had no 13th
+// parameter at all and DialogueInput had no hearerRumors field.
+describe('buildNPCDialogueContext WO-A5-8: hearerRumors pass-through', () => {
+  beforeEach(() => {
+    mockedGetCognition.mockReturnValue(makeCognition());
+    mockedGetRumorsFrom.mockReturnValue([]);
+  });
+
+  it('forwards hearerRumors verbatim onto the returned DialogueInput', () => {
+    const hearerRumors = [
+      { claim: 'defeated the Bone Collector', stance: 'believe' as const, confidence: 0.9, mutationCount: 0 },
+      { claim: 'burned the Chapel archive', stance: 'doubt' as const, confidence: 0.4, mutationCount: 2 },
+    ];
+    const ctx = buildNPCDialogueContext(
+      makeWorld(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      hearerRumors,
+    );
+    expect(ctx!.hearerRumors).toEqual(hearerRumors);
+  });
+
+  it('is undefined when omitted', () => {
+    const ctx = buildNPCDialogueContext(makeWorld(), 'npc-1', 'hello', 'dark fantasy');
+    expect(ctx!.hearerRumors).toBeUndefined();
+  });
+});

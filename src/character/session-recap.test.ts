@@ -6,6 +6,7 @@ import {
   renderFullRecap,
   type CompanionRecapEntry,
   type ItemRecapEntry,
+  type WorldMovedLedger,
 } from './session-recap.js';
 import type { SessionDelta } from './recap-delta.js';
 import type { WorldDelta } from './world-delta.js';
@@ -383,6 +384,98 @@ describe('renderFullRecap', () => {
 
     expect(result).toContain('Iron Covenant');
     expect(result).not.toContain('iron-covenant');
+  });
+});
+
+// WO-A5-9 (slice A5 §7): "THE WORLD MOVED" section, rendered from game-core's
+// worldMovedLedger — counts + the most recent headline per kind, in a fixed
+// kind order (not the ledger's own chronological order, for determinism).
+// RED before this wave: renderFullRecap had no 14th parameter at all and
+// there was no WorldMovedLedger type to construct one from.
+describe('renderFullRecap worldMovedLedger (WO-A5-9)', () => {
+  const zeroCharacterDelta: SessionDelta = {
+    xpGained: 0,
+    levelBefore: 1,
+    levelAfter: 1,
+    reputationChanges: [],
+    newMilestones: 0,
+    newInjuries: 0,
+    turnsPlayed: 0,
+  };
+  const zeroWorldDelta: WorldDelta = {
+    pressuresSpawned: 0,
+    pressuresResolved: 0,
+    resolutionSummaries: [],
+    chainReactions: 0,
+    rumorsDelta: 0,
+  };
+  const zeroRumorDelta = { spawned: 0, mutated: 0, totalSpread: 0 };
+
+  function renderWithLedger(ledger?: WorldMovedLedger): string {
+    return renderFullRecap(
+      zeroCharacterDelta,
+      zeroWorldDelta,
+      [],
+      zeroRumorDelta,
+      [],
+      undefined, // npcRecapEntries
+      undefined, // districtDeltas
+      undefined, // companionRecapEntries
+      undefined, // itemRecapEntries
+      undefined, // economyRecapEntries
+      undefined, // craftingData
+      undefined, // opportunityRecapEntries
+      undefined, // arcRecapData
+      ledger,
+    );
+  }
+
+  it('renders nothing when worldMovedLedger is absent', () => {
+    expect(renderWithLedger(undefined)).toBe('');
+  });
+
+  it('renders nothing when worldMovedLedger has an empty events array', () => {
+    expect(renderWithLedger({ events: [] })).toBe('');
+  });
+
+  it('renders a "THE WORLD MOVED" section with count + most recent headline per kind', () => {
+    const ledger: WorldMovedLedger = {
+      events: [
+        { kind: 'pressure-spawned', headline: 'bounty-issued: The Chapel Guard puts a price on your head' },
+        { kind: 'pressure-spawned', headline: 'investigation-opened: The Watch starts asking questions' },
+        { kind: 'ambush', headline: 'Ambush: Bone Collector in the Sunken Docks' },
+      ],
+    };
+    const result = renderWithLedger(ledger);
+
+    expect(result).toContain('THE WORLD MOVED');
+    // Count is 2, and the MOST RECENT (last) headline of the two is shown.
+    expect(result).toContain('Pressures spawned: 2 — "investigation-opened: The Watch starts asking questions"');
+    expect(result).not.toContain('bounty-issued: The Chapel Guard');
+    expect(result).toContain('Ambushes: 1 — "Ambush: Bone Collector in the Sunken Docks"');
+  });
+
+  it('renders kinds in a fixed order regardless of the ledger\'s own event order', () => {
+    const ledger: WorldMovedLedger = {
+      events: [
+        { kind: 'rumor-mutated', headline: 'a claim mutates' },
+        { kind: 'pressure-spawned', headline: 'a pressure spawns' },
+      ],
+    };
+    const result = renderWithLedger(ledger);
+
+    const pressureIdx = result.indexOf('Pressures spawned');
+    const rumorIdx = result.indexOf('Rumors mutated');
+    expect(pressureIdx).toBeGreaterThan(-1);
+    expect(rumorIdx).toBeGreaterThan(-1);
+    expect(pressureIdx).toBeLessThan(rumorIdx);
+  });
+
+  it('an otherwise-empty session becomes non-empty when only worldMovedLedger has content', () => {
+    const ledger: WorldMovedLedger = {
+      events: [{ kind: 'mood-transition', headline: 'Chapel Undead: calm -> grim' }],
+    };
+    expect(renderWithLedger(ledger)).not.toBe('');
   });
 });
 

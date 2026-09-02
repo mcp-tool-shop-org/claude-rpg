@@ -4,7 +4,7 @@ import type { WorldState } from '@ai-rpg-engine/core';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { PlayerRumor, WorldPressure, NpcActionResult, OpportunityState, NpcObligationLedger } from '@ai-rpg-engine/modules';
 import type { ClaudeClient } from '../claude-client.js';
-import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange } from '../prompts/dialogue-npc.js';
+import { DIALOGUE_SYSTEM, buildDialoguePrompt, buildDialogueSystemPrompt, type ConversationExchange, type DialogueInput } from '../prompts/dialogue-npc.js';
 import { buildNPCDialogueContext } from './npc-context.js';
 import { NarrationError, userMessage } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
@@ -163,6 +163,17 @@ function pickRepeatedStallLine(consecutiveFallbacks: number): string {
  *   default. Additive; omitted, buildNPCDialogueContext reads
  *   getPersistedNpcObligations(world).get(npcId) itself, so no existing
  *   caller has to change for obligations to reach goal derivation.
+ * @param hearerRumors WO-A5-8 (slice A5 §6, design lock 6): this NPC's
+ *   per-hearer rumor read (RumorEngine's heardBy(npcId) + stanceOf), forwarded
+ *   straight through to buildNPCDialogueContext, which sets it verbatim on
+ *   DialogueInput.hearerRumors (see npc-context.ts's own doc comment on its
+ *   matching parameter for why this has no "read it from the world" default
+ *   the way `obligations` does). The caller that owns the RumorEngine
+ *   instance (GameSession, game-core, outside this domain's scope) must call
+ *   its own getHearerRumors(npcId) and pass the result here; omitted, no
+ *   rumor section renders in the prompt (formatHearerRumors' absent-is-silent
+ *   contract, prompts/dialogue-npc.ts) -- unchanged from before this wave for
+ *   every caller that hasn't been updated to pass one yet.
  */
 export async function generateDialogue(
   client: ClaudeClient,
@@ -184,8 +195,9 @@ export async function generateDialogue(
   activeOpportunities?: OpportunityState[],
   partyPresence?: string,
   obligations?: NpcObligationLedger,
+  hearerRumors?: DialogueInput['hearerRumors'],
 ): Promise<DialogueResult | null> {
-  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence, obligations);
+  const context = buildNPCDialogueContext(world, npcId, playerUtterance, tone, playerPresence, playerProfile ?? undefined, playerRumors, activePressures, lastNpcActions, activeOpportunities, partyPresence, obligations, hearerRumors);
   if (context && economyContext) context.economyContext = economyContext;
   if (context && craftingContext) context.craftingContext = craftingContext;
   if (context && opportunityContext) context.opportunityContext = opportunityContext;

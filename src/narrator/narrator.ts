@@ -115,6 +115,17 @@ export type NarrateSceneOpts = {
    * as its own section when present.
    */
   chronicleContext?: string;
+  /**
+   * WO-A5-7 (slice A5 §2, design lock 2): forwarded straight through to
+   * buildSceneContext, which sets it verbatim on narrationInput.moodTransition
+   * (SceneNarrationInput, prompts/narrate-scene.ts) — see that field's own
+   * doc comment for the full contract. The caller that owns the tick's
+   * before/after districtTones comparison (game-core's runWorldRound,
+   * outside this domain's scope) computes this and passes it here; omitted,
+   * no mood-transition line renders (buildNarratePrompt's own absent-is-
+   * silent contract) — unchanged from before this wave.
+   */
+  moodTransition?: { from: string; to: string };
   onChunk?: StreamCallback;
   /**
    * F-9213c697: forwarded straight into client.generateStream's own
@@ -175,7 +186,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, situationHint, chronicleContext, onChunk, logger,
-    consecutiveFallbacks, onStreamReset,
+    consecutiveFallbacks, onStreamReset, moodTransition,
   } = opts;
 
   // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
@@ -207,6 +218,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     arcContext,
     endgameContext,
     situationHint,
+    moodTransition,
   );
 
   // Add presentation state and long-term chronicle context to the narration input

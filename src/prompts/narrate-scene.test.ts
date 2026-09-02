@@ -65,6 +65,22 @@ describe('buildNarratePrompt', () => {
   });
 });
 
+// WO-A5-7 (slice A5 §2, design lock 2): ONE mechanical line naming the
+// district's new tone, rendered only when a transition happened this round.
+// RED before this wave: SceneNarrationInput had no moodTransition field at
+// all.
+describe('buildNarratePrompt moodTransition (WO-A5-7)', () => {
+  it('renders "The district\'s mood turns {to}" when a transition is present', () => {
+    const prompt = buildNarratePrompt(makeInput({ moodTransition: { from: 'calm', to: 'grim' } }));
+    expect(prompt).toContain("The district's mood turns grim");
+  });
+
+  it('is byte-identical to before this wave when moodTransition is absent', () => {
+    const withoutTransition = buildNarratePrompt(makeInput());
+    expect(withoutTransition).not.toContain('mood turns');
+  });
+});
+
 // F-9ee9b5a7: buildNarratePrompt previously included chronicleContext and the
 // activePressures/recentEvents/visibleEntities arrays in full, with no cap of
 // its own -- correctness today depended entirely on every upstream caller

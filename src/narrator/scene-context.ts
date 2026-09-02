@@ -32,6 +32,15 @@ export function buildSceneContext(
   arcContext?: string,
   endgameContext?: string,
   situationHint?: string,
+  /**
+   * WO-A5-7 (slice A5 §2, design lock 2): threaded straight onto
+   * narrationInput.moodTransition (SceneNarrationInput, prompts/narrate-
+   * scene.ts) — see that field's own doc comment for the full contract
+   * (who computes it, why there's no engine event to describeEvent
+   * instead). Additive trailing param; omitted, behavior is unchanged from
+   * before this wave.
+   */
+  moodTransition?: { from: string; to: string },
 ): SceneContext {
   const zone = world.zones[world.locationId];
   const player = world.entities[world.playerId];
@@ -127,6 +136,7 @@ export function buildSceneContext(
     arcContext,
     endgameContext,
     situationHint,
+    moodTransition,
   };
 
   return { narrationInput, perceivedEvents };

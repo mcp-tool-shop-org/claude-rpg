@@ -1,0 +1,137 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through autonomous events: ambushes triggered on entry, pressures rising after combat, NPC actions without prompting, and mood shifts in districts. The game maintained coherence, with consistent lore and escalating stakes. Player actions had meaningful consequences, and the world responded dynamically to violence and choices.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "On entering the Chapel Nave (turn 7), the game announced 'Ambush: Chapel Patrol in Chapel Nave' with a headline line.",
+      "turn": 7
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "After killing enemies in the chapel and crypt, the session recap showed 'alertPressure rose sharply' in Chapel Grounds and Crypt Depths.",
+      "turn": 9
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The session recap noted 'alertPressure rose sharply' in Chapel Grounds and Crypt Depths, indicating pressure escalated without player input.",
+      "turn": 41
+    },
+    {
+      "id": "price-reacts",
+      "met": true,
+      "evidence": "The market line 'Healing Draught 13 (+30% vs base)' appeared with 'Chapel Undead: hostile' in the status, showing price markup tied to faction standing.",
+      "turn": 4
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "The session recap noted 'a shivering pilgrim's story wasn't true. You never bit,' indicating a rumor about the player with a witness count.",
+      "turn": 41
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session recap showed Chapel Grounds shifted from 'lively despite everything' to 'on edge, jumpy,' and Crypt Depths from 'subdued, fearful' to 'dangerous and despairing'.",
+      "turn": 41
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Brother Aldric moved to the altar and observed the player's fight without being prompted, and later shifted position during combat.",
+      "turn": 8
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session recap listed ambushes, mood transitions, expired opportunities, and rumors—clearly showing world actions independent of player input.",
+      "turn": 41
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in locations, NPC identities, or facts across turns. No errors or broken screens occurred.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The game consistently listed valid actions and hints, and commands like /go, /talk, and /accept were clearly functional.",
+      "turn": 2
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Combat lines like 'Ash Ghoul's attack finds you — 2 damage' and 'Your strike lands — Crypt Warden: hurt' were printed in a reserved block above narration.",
+      "turn": 9
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Multiple times, the game printed 'Ash Ghoul's attack finds you — 2 damage' and 'Crypt Stalker's attack finds you — 3 damage' with HP dropping, and telegraph lines like 'readies' appeared before hits.",
+      "turn": 9
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "The shivering pilgrim's request was suspicious (asked for help but never bit), and the recap revealed 'a shivering pilgrim's story wasn't true. You never bit,' which felt fair given the NPC's behavior.",
+      "turn": 20
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "After helping the pilgrim, the game acknowledged it in the recap as 'a shivering pilgrim's story wasn't true. You never bit,' and the player's reputation was affected.",
+      "turn": 20
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "When typing /look, the game responded with 'Unknown command /look. Right now you can:...' immediately, without costing a turn.",
+      "turn": 4
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "When answering Brother Aldric with a plain sentence, the game treated it as dialogue and he replied directly, not asking for clarification.",
+      "turn": 9
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Using /go Chapel Nave moved the player, and the game confirmed the location change with a new turn and description.",
+      "turn": 7
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "The market line 'Healing Draught 13 (+30% vs base)' appeared directly on the play screen without opening /market.",
+      "turn": 4
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": true,
+      "evidence": "The session recap showed 'alertPressure rose sharply' in Chapel Grounds and Crypt Depths, and the pressure was visible in the status view.",
+      "turn": 41
+    }
+  ],
+  "highlights": [
+    "Turn 7: Ambush announced on entry to Chapel Nave with dramatic narration.",
+    "Turn 9: Combat line 'Ash Ghoul's attack finds you — 2 damage' with HP drop and telegraph.",
+    "Turn 11: Brother Aldric gives a meaningful clue about the crypt with a personal tone.",
+    "Turn 41: Session recap clearly summarizes world moves, pressures, and mood shifts."
+  ],
+  "deadSpots": [
+    "Turn 19: The game failed to recognize 'flee' as a valid action after multiple attempts, requiring repeated input.",
+    "Turn 25: The game repeated 'Wanderer HAS FALLEN' with no new information, creating a loop.",
+    "Turn 39: The game failed to resolve the 'Investigate the black market activity' opportunity despite accepting it."
+  ],
+  "confusions": [
+    "Turn 4: The game did not respond to /look, and the error message was unclear about valid commands.",
+    "Turn 37: The game showed 'accept Investigate the black market activity' as available, but the option disappeared after selection.",
+    "Turn 41: The game listed 'investigation opportunity expired' but did not explain why or how to prevent it."
+  ],
+  "wouldPlayAgain": true
+}

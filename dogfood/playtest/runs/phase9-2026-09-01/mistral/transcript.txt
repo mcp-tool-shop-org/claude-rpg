@@ -953,7 +953,7 @@ Stay back, defiler - I'll not speak of hallowed places to one who brings violenc
 
 ═══ turn 42 ── screen (prompt, 1235ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788316659431.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788316659431.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1002,7 +1002,7 @@ Stay back, defiler - I'll not speak of hallowed places to one who brings violenc
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788316660666.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788316660666.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

@@ -1,0 +1,136 @@
+{
+  "alive": true,
+  "summary": "The world felt very alive, with NPCs reacting to my dialogue and actions, and the environment shifting moods. The combat encounter was dynamic, and the game remembered past interactions, even when I didn't follow through on requests. The session recap provided a good overview of the world's independent actions.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Entering Vestry Passage (turn 31) immediately triggered 'Crypt Stalker readies an attack against you.'",
+      "turn": 31
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "The session summary (turn 42) shows 'alertPressure rose sharply' for Crypt Depths and 'chapel-undead: -100 (now -100)' after killing the Crypt Stalker.",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "While pressure was raised, there's no evidence in this transcript of it escalating, resolving, or expiring without player action.",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "The market price for Healing Draught remained constant at 13 (+30% vs base) throughout the session, without any reported changes based on faction standing.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "In turn 37, a shivering pilgrim says, 'Blessed be... though I confess, knight, there's something about you that troubles my spirit. The very air grows cold in your presence, and I've heard whispers on the road of a warrior touched by... darker things.' This reflects a rumor about the player and the NPC believes it.",
+      "turn": 37
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session summary (turn 42) explicitly states 'Mood transitions: 1 — \"crypt-depths: volatile -> grim\"'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No named NPC took an action between turns that was not directly caused by player input.",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The 'SESSION SUMMARY' at turn 42 includes a 'THE WORLD MOVED' section detailing 'Opportunities offered', 'Opportunities expired', 'Mood transitions', 'Marks the street left on you', 'Asks made of you', and 'Help left ungiven'.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The narrative, character interactions, and game mechanics remained consistent and coherent throughout the session. No contradictions or errors were observed.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The prompts, 'You can:' lists, and hints were consistently clear, indicating available actions and commands. The game also provided specific instructions for social verbs and opportunities.",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "In turn 35, after defeating the Crypt Stalker, the line 'Your strike lands — Crypt Stalker: down. The Crypt Stalker falls.' appeared.",
+      "turn": 35
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "The player's HP remained at 20/20 throughout the combat encounter. While the Crypt Stalker 'readies an attack' (turn 31) and 'passes harmlessly through the space you occupied' (turn 32), no damage was taken.",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "In turn 15, after the player offered to help 'a shivering pilgrim', the game reported '[a shivering pilgrim's story wasn't true. 3 coin gone.]'. This felt fair as the pilgrim had contradicted themselves multiple times (turns 9, 10, 11, 12, 13, 14) about their destination and needs.",
+      "turn": 15
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "After killing the Crypt Stalker, a shivering pilgrim in the Vestry Passage recognized the player's actions and presence, saying 'You... you're the one who was turned away,' and 'Brother Aldric spoke of a knight seeking passage below, but the chapel-undead... they forbade it.' (turn 37). The session summary also noted 'chapel-undead: -100 (now -100)' (turn 42).",
+      "turn": 37
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": false,
+      "evidence": "No unknown commands were entered during this transcript.",
+      "turn": null
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Throughout the conversation with Sister Maren (turns 2-7), and the pilgrims (turns 9-14, 36-40), plain sentences were treated as dialogue and the NPCs replied in kind.",
+      "turn": 2
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "The command 'go Chapel Nave' (turn 15) successfully moved the player to the Chapel Nave. The command '/jobs' (turn 25) correctly displayed available opportunities.",
+      "turn": 15
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "From turn 2 onwards, the status bar consistently displayed 'Market: Healing Draught 13 (+30% vs base)'.",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "While pressure was raised and reported in the session summary, no explicit line on the play screen indicated its spawning, escalation, resolution, or expiration during the turns it happened.",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "The immediate ambush upon entering Vestry Passage (turn 31) was a great surprise and made the world feel dangerous.",
+    "The pilgrim's con being revealed (turn 15) after multiple contradictory statements was well-executed and felt earned.",
+    "The NPCs' reactions to my dialogue, especially Sister Maren's growing wariness (turns 3-6) and the pilgrim's shifting story (turns 9-14), made conversations feel meaningful.",
+    "The session summary (turn 42) provided a comprehensive and clear recap of world events and my impact, which is excellent for understanding the game's internal state."
+  ],
+  "deadSpots": [
+    "The lack of damage taken during the combat encounter (turns 31-35) made it feel less threatening, despite the 'readies an attack' telegraph.",
+    "The market price remaining static (turns 2-41) made the 'Market' line feel less dynamic and reactive.",
+    "The 'a shivering pilgrim' asking for help again in the Vestry Passage (turn 34) after already having conned me in the Entrance (turn 15) was a bit repetitive, though the game did acknowledge I 'never bit' in the end (turn 40)."
+  ],
+  "confusions": [
+    "The prompt '[a shivering pilgrim asks you: \"Would you carry this to the district for me? I can't make the trip myself.\" (help a shivering pilgrim to answer, or walk on)]' (turn 9) appeared, but when I asked 'What do you carry?' (turn 10), the pilgrim denied asking me to carry anything. This was confusing initially, though it later became clear it was part of the con.",
+    "The 'accept Investigate the black market activity' option remained available in the 'You can:' list even after I had accepted the job via /jobs (turn 27). This was a minor UI confusion."
+  ],
+  "wouldPlayAgain": true
+}

@@ -19,7 +19,7 @@
 [INFO][tick:5][turn] turn-start {"input":"My name is Wanderer. And I cling to nothing but the path before me.","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Suspicious Pilgrim"}
 [INFO][tick:6][turn] turn-start {"input":"What darkness stirs, and what do you know of it?","tick":6}
 [DEBUG][tick:6][profile] hints-applied {"xp":2,"milestone":null}
@@ -41,7 +41,7 @@
 [INFO][tick:10][turn] turn-start {"input":"I will guide you, but first I must explore this chapel. Will you wait?","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:10][turn] turn-end {"tick":10}
-[INFO][tick:10][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:10][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:10][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
 [immersion] state: dialogue -> exploration (move)
 [INFO][tick:11][turn] turn-start {"input":"go Chapel Nave","tick":11}
@@ -64,7 +64,7 @@
 [INFO][tick:15][turn] turn-start {"input":"I hunger for justice. Where do I begin?","tick":15}
 [DEBUG][tick:15][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:15][turn] turn-end {"tick":15}
-[INFO][tick:15][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:15][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:15][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Brother Aldric"}
 [INFO][tick:16][turn] turn-start {"input":"I will see what needs seeing.","tick":16}
 [DEBUG][tick:16][profile] hints-applied {"xp":2,"milestone":null}
@@ -88,7 +88,7 @@
 [INFO][tick:23][turn] turn-start {"input":"attack Ash Ghoul","tick":23}
 [DEBUG][tick:23][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:23][turn] turn-end {"tick":23}
-[INFO][tick:23][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:23][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:23][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
 [INFO][tick:26][turn] turn-start {"input":"attack Ash Ghoul","tick":26}
 [DEBUG][tick:26][profile] hints-applied {"xp":2,"milestone":null}
@@ -110,7 +110,7 @@
 [INFO][tick:32][turn] turn-start {"input":"flee","tick":32}
 [DEBUG][tick:32][profile] hints-applied {"xp":17,"milestone":null}
 [INFO][tick:32][turn] turn-end {"tick":32}
-[INFO][tick:32][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:32][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [immersion] state: exploration -> menu (look)
 [DEBUG][tick:32][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
 [immersion] state: exploration -> menu (move)

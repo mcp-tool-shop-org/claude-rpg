@@ -447,7 +447,7 @@ The ash ghoul drifts closer, its smoky form coalescing into something almost sol
 
 ═══ turn 15 ── screen (prompt, 1904ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788324546368.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788324546368.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -496,7 +496,7 @@ The ash ghoul drifts closer, its smoky form coalescing into something almost sol
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788324548272.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788324548272.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

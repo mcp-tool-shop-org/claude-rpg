@@ -1,0 +1,124 @@
+[DEBUG][tick:0][session] seed-pressure {"factionId":"chapel-undead","reputation":-60,"alertLevel":70}
+[DEBUG][tick:0][interpret] action-reasoning {"verb":"look","confidence":"low","reasoning":"Input contains only a backtick character, which doesn't map to any clear game action"}
+[INFO][tick:0][turn] turn-start {"input":"`","tick":0}
+[DEBUG][tick:0][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:0][turn] turn-end {"tick":0}
+[DEBUG][tick:0][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Suspicious Pilgrim"}
+[immersion] state: director -> dialogue (speak)
+[INFO][tick:1][turn] turn-start {"input":"talk to Suspicious Pilgrim","tick":1}
+[DEBUG][tick:1][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:1][turn] turn-end {"tick":1}
+[DEBUG][tick:1][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
+[immersion] state: dialogue -> exploration (move)
+[INFO][tick:2][turn] turn-start {"input":"go Chapel Nave","tick":2}
+[DEBUG][tick:2][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:2][turn] turn-end {"tick":2}
+[DEBUG][tick:2][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Brother Aldric"}
+[immersion] state: exploration -> dialogue (speak)
+[INFO][tick:3][turn] turn-start {"input":"talk to Brother Aldric","tick":3}
+[DEBUG][tick:3][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:3][turn] turn-end {"tick":3}
+[DEBUG][tick:3][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
+[immersion] state: dialogue -> combat (move)
+[INFO][tick:4][turn] turn-start {"input":"go Vestry Passage","tick":4}
+[DEBUG][tick:4][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:4][turn] turn-end {"tick":4}
+[INFO][tick:4][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:4][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
+[INFO][tick:6][turn] turn-start {"input":"attack Ash Ghoul","tick":6}
+[DEBUG][tick:6][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:6][turn] turn-end {"tick":6}
+[DEBUG][tick:6][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
+[INFO][tick:9][turn] turn-start {"input":"attack Ash Ghoul","tick":9}
+[DEBUG][tick:9][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:9][turn] turn-end {"tick":9}
+[DEBUG][tick:9][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
+[INFO][tick:11][turn] turn-start {"input":"attack Ash Ghoul","tick":11}
+[DEBUG][tick:11][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:11][turn] turn-end {"tick":11}
+[DEBUG][tick:11][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Player wants to attack the Ash Ghoul. The engine will handle one attack action at a time, so interpreting as a single attack on the specified target."}
+[INFO][tick:14][turn] turn-start {"input":"attack Ash Ghoul twice more in one line if possible by attacking one then the other immediately","tick":14}
+[DEBUG][tick:14][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:14][turn] turn-end {"tick":14}
+[DEBUG][tick:14][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to crypt-chamber"}
+[immersion] state: combat -> exploration (move)
+[INFO][tick:15][turn] turn-start {"input":"go Crypt Antechamber","tick":15}
+[DEBUG][tick:15][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:15][turn] turn-end {"tick":15}
+[INFO][tick:15][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:15][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[immersion] state: exploration -> combat (attack)
+[INFO][tick:18][turn] turn-start {"input":"attack Crypt Warden","tick":18}
+[DEBUG][tick:18][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:18][turn] turn-end {"tick":18}
+[DEBUG][tick:18][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[INFO][tick:19][turn] turn-start {"input":"attack Crypt Warden","tick":19}
+[DEBUG][tick:19][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:19][turn] turn-end {"tick":19}
+[DEBUG][tick:19][interpret] action-reasoning {"verb":"look","confidence":"low","reasoning":"Empty or unrecognizable input - using look as fallback to show current situation"}
+[INFO][tick:19][turn] turn-start {"input":"`","tick":19}
+[DEBUG][tick:19][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:19][turn] turn-end {"tick":19}
+[DEBUG][tick:19][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
+[INFO][tick:21][turn] turn-start {"input":"go Vestry Passage","tick":21}
+[DEBUG][tick:21][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:21][turn] turn-end {"tick":21}
+[DEBUG][tick:21][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to chapel-nave"}
+[immersion] state: combat -> exploration (move)
+[INFO][tick:22][turn] turn-start {"input":"go Chapel Nave","tick":22}
+[DEBUG][tick:22][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:22][turn] turn-end {"tick":22}
+[INFO][tick:22][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:22][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Brother Aldric"}
+[immersion] state: exploration -> dialogue (speak)
+[INFO][tick:23][turn] turn-start {"input":"talk to Brother Aldric","tick":23}
+[DEBUG][tick:23][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:23][turn] turn-end {"tick":23}
+[DEBUG][tick:23][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Brother Aldric"}
+[INFO][tick:24][turn] turn-start {"input":"accept Investigate the black market activity","tick":24}
+[DEBUG][tick:24][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:24][turn] turn-end {"tick":24}
+[DEBUG][tick:24][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to Brother Aldric"}
+[INFO][tick:25][turn] turn-start {"input":"`","tick":25}
+[DEBUG][tick:25][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:25][turn] turn-end {"tick":25}
+[DEBUG][tick:25][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
+[immersion] state: dialogue -> combat (move)
+[INFO][tick:28][turn] turn-start {"input":"go Vestry Passage","tick":28}
+[DEBUG][tick:28][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:28][turn] turn-end {"tick":28}
+[DEBUG][tick:28][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Player's input is clearly and repeatedly indicating they want to attack the Ash Ghoul entity"}
+[immersion] state: combat -> aftermath (attack)
+[INFO][tick:30][turn] turn-start {"input":"attack Ash Ghoul! fire! charge! slash! fight! attack! hit! kill! destroy! strike! swing! kill Ash Ghoul! kill the ghoul! fight the ghoul! attack the ghoul! smash the ghoul! destroy the ghoul! Ash Ghou","tick":30}
+[DEBUG][tick:30][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:30][turn] turn-end {"tick":30}
+[INFO][tick:30][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:30][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Stalker"}
+[immersion] state: aftermath -> menu (attack)
+[INFO][tick:33][turn] turn-start {"input":"attack Crypt Stalker","tick":33}
+[DEBUG][tick:33][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:33][turn] turn-end {"tick":33}
+[DEBUG][tick:33][interpret] action-reasoning {"verb":"look","confidence":"medium","reasoning":"The input 'continue' is ambiguous - it could mean continue combat, continue exploring, or continue a conversation. Using 'look' as fallback to provide current situation info."}
+[immersion] state: menu -> combat (look)
+[INFO][tick:35][turn] turn-start {"input":"continue","tick":35}
+[DEBUG][tick:35][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:35][turn] turn-end {"tick":35}
+[DEBUG][tick:35][interpret] action-reasoning {"verb":"look","confidence":"low","reasoning":"Input '1' is ambiguous - could be selecting first entity, menu option, or command shortcut, but no clear mapping to available verbs"}
+[INFO][tick:35][turn] turn-start {"input":"1","tick":35}
+[DEBUG][tick:35][profile] hints-applied {"xp":0,"milestone":null}
+[INFO][tick:35][turn] turn-end {"tick":35}
+[DEBUG][tick:35][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Player clearly wants to attack the Crypt Stalker with multiple aggressive commands like 'fight', 'attack', 'kill', 'strike'"}
+[immersion] state: combat -> aftermath (attack)
+[INFO][tick:37][turn] turn-start {"input":"go Crypt Antechamber fight! attack! strike! kill! swing! fight the stalkers! attack Crypt Stalker! kill them! fight! destroy! smash! kill the stalkers! attack the stalkers! kill Crypt Stalkers! attack","tick":37}
+[DEBUG][tick:37][profile] hints-applied {"xp":17,"milestone":null}
+[INFO][tick:37][turn] turn-end {"tick":37}
+[DEBUG][tick:37][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to crypt-chamber"}
+[immersion] state: aftermath -> combat (move)
+[INFO][tick:40][turn] turn-start {"input":"go Crypt Antechamber","tick":40}
+[DEBUG][tick:40][profile] hints-applied {"xp":7,"milestone":null}
+[INFO][tick:40][turn] turn-end {"tick":40}
+[INFO][tick:40][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[DEBUG][tick:40][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
+[INFO][tick:41][turn] turn-start {"input":"attack Crypt Warden","tick":41}
+[DEBUG][tick:41][profile] hints-applied {"xp":2,"milestone":null}
+[INFO][tick:41][turn] turn-end {"tick":41}

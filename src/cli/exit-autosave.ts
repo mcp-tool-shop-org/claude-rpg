@@ -15,6 +15,7 @@
 // pulled out of it) — the decision-and-message logic below couldn't be
 // unit-tested in place.
 
+import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { isPathInside } from './path-guard.js';
 
@@ -54,8 +55,19 @@ export async function attemptExitAutosave(
   }
   try {
     await save(savePath);
-    return { status: 'saved', message: `  Auto-saved to ${savePath}` };
+    return { status: 'saved', message: `  Auto-saved to ${displayPath(savePath)}` };
   } catch (error) {
     return { status: 'failed', error };
   }
+}
+
+/**
+ * A path as the player should see it: the home directory shown as `~`
+ * (identity scan, Phase 0 of the 2.0.0 treatment: the absolute path carried
+ * the operator's account name into every playtest transcript).
+ */
+export function displayPath(p: string): string {
+  const home = homedir();
+  if (home && (p.startsWith(home + '\\') || p.startsWith(home + '/'))) return '~' + p.slice(home.length).replace(/\\/g, '/');
+  return p;
 }

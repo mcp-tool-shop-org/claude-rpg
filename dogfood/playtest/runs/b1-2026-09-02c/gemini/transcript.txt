@@ -1108,7 +1108,7 @@ I owe you a debt, Knight, and that weighs heavier than doctrine right now. Perha
 
 ═══ turn 42 ── screen (prompt, 1209ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788326004320.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788326004320.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1154,7 +1154,7 @@ I owe you a debt, Knight, and that weighs heavier than doctrine right now. Perha
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788326005529.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788326005529.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

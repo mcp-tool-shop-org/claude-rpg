@@ -1102,7 +1102,7 @@ In the stillness, you exist only as echo and impression—a whisper added to the
 
 ═══ turn 42 ── screen (prompt, 1313ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788332011025.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788332011025.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1157,7 +1157,7 @@ In the stillness, you exist only as echo and impression—a whisper added to the
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788332012338.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788332012338.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

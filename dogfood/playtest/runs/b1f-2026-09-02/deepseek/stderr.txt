@@ -20,7 +20,7 @@
 [INFO][tick:5][turn] turn-start {"input":"go Chapel Nave","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to Brother Aldric"}
 [immersion] state: exploration -> dialogue (speak)
 [INFO][tick:6][turn] turn-start {"input":"talk to Brother Aldric","tick":6}
@@ -43,7 +43,7 @@
 [INFO][tick:10][turn] turn-start {"input":"The compromises Brother Aldric mentioned","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:10][turn] turn-end {"tick":10}
-[INFO][tick:10][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:10][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:10][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Reply to a one-armed veteran"}
 [INFO][tick:11][turn] turn-start {"input":"He said the cloth grows heavier each day","tick":11}
 [DEBUG][tick:11][profile] hints-applied {"xp":2,"milestone":null}
@@ -65,7 +65,7 @@
 [INFO][tick:16][turn] turn-start {"input":"attack Crypt Stalker","tick":16}
 [DEBUG][tick:16][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:16][turn] turn-end {"tick":16}
-[INFO][tick:16][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:16][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:16][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Ash Ghoul"}
 [INFO][tick:19][turn] turn-start {"input":"attack Ash Ghoul","tick":19}
 [DEBUG][tick:19][profile] hints-applied {"xp":2,"milestone":null}
@@ -88,7 +88,7 @@
 [INFO][tick:27][turn] turn-start {"input":"flee","tick":27}
 [DEBUG][tick:27][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:27][turn] turn-end {"tick":27}
-[INFO][tick:27][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:27][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:27][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
 [immersion] state: combat -> menu (move)
 [INFO][tick:29][turn] turn-start {"input":"go Vestry Passage","tick":29}
@@ -114,7 +114,7 @@
 [INFO][tick:33][turn] turn-start {"input":"attack ash ghoul","tick":33}
 [DEBUG][tick:33][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:33][turn] turn-end {"tick":33}
-[INFO][tick:33][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:33][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:33][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Move to vestry-door"}
 [immersion] state: exploration -> menu (move)
 [INFO][tick:34][turn] turn-start {"input":"go Vestry Passage","tick":34}

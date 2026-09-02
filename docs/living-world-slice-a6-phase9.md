@@ -5,7 +5,7 @@
 and Phase 10; nothing ships untuned). Ruling record:
 `E:/AI/testing-os/swarms/swarm-1788288802-f5a0/RULINGS-A-cycle.md`.
 **Discipline:** the studio's post-proof-balance-tuning playbook
-(`C:/Users/mikey/.claude/projects/F--AI/memory/post-proof-balance-tuning.md`):
+(the studio's canonical memory store, `post-proof-balance-tuning.md`):
 ONE lever per wave; null + failure hypothesis; a fixed scenario matrix with
 the same seeds; P0 / P1 / P2 classification; a `WAVE_<N>_OUTCOMES.md` every
 wave; exit on zero P0 in the last three waves, no repeating P1, convergence.

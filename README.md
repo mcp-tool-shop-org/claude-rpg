@@ -83,19 +83,21 @@ Set your Anthropic API key (only needed for Claude narration):
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## What's New in v1.7.0
+## What's New in v2.0.0
 
-v1.7 moves the whole game onto engine 3.9 — ten minor versions in one migration, with every old save still loading — and spends the new surface on the things you feel at the table.
+v2.0 is the living-world release: the world runs on the engine's own tick, the street reacts to what you do, and every save you ever wrote still loads.
 
 | Feature | What it means |
 |---------|--------------|
-| **Twelve playable worlds** | Salt Road Ledger (a merchant campaign where every debt is a knife) and Hue and Cry (a thief-taker in a city with no police force) join the roster — twelve worlds, grouped by difficulty in the chooser. |
-| **Engine 3.9 under the hood** | Ten minor engine versions adopted in one behavior-preserving migration. Saves written before the upgrade load with every new subsystem defaulted, never dropped. |
-| **`quit` auto-saves** | Typing `quit` now saves before exiting, the same way Ctrl+C always has — and the death screen finally tells the truth about it. |
-| **NPCs notice who's with you** | Dialogue is fed live party presence, open opportunities, world pressures, and zone texture — the innkeeper can greet your companion by name and lean on the deal you left on the table. |
-| **Companions count in combat** | Recruited allies now carry their engine-native role tags and shared faction: fighters intercept for you, and nobody on your side is ever targeted as an enemy again. |
-| **The strategic read** | When the world turns against you, narration carries the engine's own situation read — pressure you can feel in the prose before you open the map. |
-| **1,870 tests** | Grown from 1,542 across 98 files, with the whole four-stage health pass (149 findings filed, 136 fixed) behind them. |
+| **The world ticks on its own** | Generated worlds carry the full module family at parity with the starter packs, the engine's own tick drives pressures, opportunities, encounters, and faction moves, and every session store is a view of world truth. |
+| **Enemies act** | An aware hostile telegraphs its attack the round before it lands; a reserved combat channel above the narration states your outcome, kills, landed hits, and what comes next. |
+| **Asks and recognition** | Petitioners who need help, and cons who look exactly like them — cues are planted, the reveal comes later at a named cost. Help a real one and the same round says so; standing, a rumor, gratitude that repays later, and an honorific follow. |
+| **The street answers you** | Unknown slash commands are answered at once without spending a turn; a sentence typed at the NPC who just spoke is speech; a bare name talks and a bare exit moves; `/go <exit>` and `/rumors` work in play mode; one quoted market price sits in the location block. |
+| **Rumors with a stance** | NPCs hear rumors as hearers who believe or doubt, and rumors spread to adjacent districts — both tuned on a measured sheet. |
+| **A tuning surface** | Every living-world lever at a measured default, `/tuning` to read it, and a deterministic 30-round matrix over all thirteen worlds. Enemy damage was tuned to 0.5 on that sheet. |
+| **Save schema v3** | The rumor engine rides the save, every 1.x save migrates with full-fidelity proofs, and a generated world resumes where it stopped. |
+| **Played by five model families** | Four AI family playtests (Mistral, Qwen, Llama, DeepSeek, Gemini seats, forty turns each) replaced the human gate and shaped the last two waves. |
+| **2,495 tests** | Grown from 1,870 across 121 files, every wave landed through a family-diverse jury and a deterministic floor. |
 
 ## Why It's Different
 

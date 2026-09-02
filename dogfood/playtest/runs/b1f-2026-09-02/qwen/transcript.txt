@@ -1010,7 +1010,7 @@ The ash ghoul still lurks between the pillars, its wound weeping dark fluid, whi
 
 ═══ turn 42 ── screen (prompt, 1308ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788331985299.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788331985299.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1063,7 +1063,7 @@ The ash ghoul still lurks between the pillars, its wound weeping dark fluid, whi
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788331986607.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788331986607.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

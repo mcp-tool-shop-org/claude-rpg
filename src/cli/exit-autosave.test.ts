@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { resolve } from 'node:path';
-import { attemptExitAutosave } from './exit-autosave.js';
+import { attemptExitAutosave, displayPath } from './exit-autosave.js';
 
 // F-66ec19e3: the SIGINT and stdin-closed exit paths in bin.ts used to
 // silently skip the autosave when the guard rejected the resolved path,
@@ -17,7 +17,7 @@ describe('attemptExitAutosave (F-66ec19e3)', () => {
 
     const outcome = await attemptExitAutosave(savePath, saveDir, save);
 
-    expect(outcome).toEqual({ status: 'saved', message: `  Auto-saved to ${savePath}` });
+    expect(outcome).toEqual({ status: 'saved', message: `  Auto-saved to ${displayPath(savePath)}` });
     expect(save).toHaveBeenCalledWith(savePath);
   });
 
@@ -66,5 +66,15 @@ describe('attemptExitAutosave (F-66ec19e3)', () => {
     if (outcome.status === 'failed') {
       expect(outcome.error).toBe(thrown);
     }
+  });
+});
+
+describe('displayPath', () => {
+  it('shows the home directory as ~ with forward slashes and leaves other paths alone', async () => {
+    const { homedir } = await import('node:os');
+    const { join } = await import('node:path');
+    const inside = join(homedir(), '.claude-rpg', 'saves', 'x.json');
+    expect(displayPath(inside)).toBe('~/.claude-rpg/saves/x.json');
+    expect(displayPath('E:/elsewhere/x.json')).toBe('E:/elsewhere/x.json');
   });
 });

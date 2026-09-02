@@ -1209,7 +1209,7 @@ The scent of ancient incense mingles with the copper taste of blood on your lips
 
 ═══ turn 42 ── screen (prompt, 1310ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788331997141.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788331997141.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1263,7 +1263,7 @@ The scent of ancient incense mingles with the copper taste of blood on your lips
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788331998451.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788331998451.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

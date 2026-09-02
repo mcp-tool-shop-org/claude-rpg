@@ -1081,7 +1081,7 @@ The unholy sanctuary grows dim around you, the flickering candlelight fading to 
 
 ═══ turn 42 ── screen (prompt, 1300ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788326008377.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788326008377.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1137,7 +1137,7 @@ The unholy sanctuary grows dim around you, the flickering candlelight fading to 
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788326009677.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788326009677.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

@@ -83,19 +83,21 @@ Imposta la tua chiave API Anthropic (necessaria solo per la narrazione di Claude
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Novità nella versione 1.7.0
+## Cosa c'è di nuovo nella versione 2.0.0
 
-La versione 1.7 trasferisce l’intero gioco sull’engine 3.9, con dieci versioni minori integrate in un’unica migrazione, e garantisce che tutti i salvataggi precedenti siano ancora caricabili. Inoltre, sfrutta le nuove funzionalità per migliorare l’esperienza di gioco.
+La versione 2.0 è la versione che introduce il mondo dinamico: il mondo si sviluppa autonomamente, le strade reagiscono alle tue azioni e tutti i salvataggi che hai creato in precedenza possono ancora essere caricati.
 
 | Funzionalità | Cosa significa |
 |---------|--------------|
-| **Twelve playable worlds** | Salt Road Ledger (una campagna mercantile in cui ogni debito è una minaccia) e Hue and Cry (un cacciatore di ladri in una città senza forze dell’ordine) si aggiungono alla lista dei contenuti, portando il numero totale dei mondi a dodici, raggruppati per livello di difficoltà nel menu di selezione. |
-| **Engine 3.9 under the hood** | Dieci versioni minori dell’engine sono state integrate in un’unica migrazione, preservando il comportamento del gioco. I salvataggi creati prima dell’aggiornamento vengono caricati correttamente, con tutte le impostazioni predefinite dei nuovi sottosistemi. |
-| **`quit` Salvataggio automatico** | Ora, digitando `quit`, il gioco salva automaticamente prima di uscire, proprio come faceva prima con Ctrl+C, e la schermata di sconfitta rivela finalmente la verità. |
-| **I PNG notano chi ti accompagna** | I dialoghi tengono conto della presenza del gruppo, delle opportunità, delle pressioni del mondo e delle caratteristiche della zona: l’oste può salutare i tuoi compagni per nome e fare riferimento agli accordi che avete lasciato in sospeso. |
-| **I compagni contano in combattimento** | Gli alleati reclutati ora hanno le etichette di ruolo native dell’engine e condividono la stessa fazione: i combattenti intercettano gli attacchi per te e nessuno dalla tua parte sarà più preso di mira come nemico. |
-| **The strategic read** | Quando il mondo si rivolta contro di te, la narrazione utilizza le informazioni sullo stato del gioco fornite dall’engine, creando una pressione che puoi percepire nella descrizione prima di aprire la mappa. |
-| **1.870 test** | Il numero di test è aumentato da 1.542, distribuiti su 98 file, e sono stati completati i quattro passaggi del processo di verifica (149 problemi rilevati, 136 risolti). |
+| **Il mondo si evolve autonomamente** | I mondi generati includono l'intera famiglia di moduli, in linea con i pacchetti iniziali; il motore stesso gestisce le dinamiche, le opportunità, gli incontri e le azioni delle fazioni, e ogni salvataggio rappresenta una fotografia della realtà del mondo. |
+| **Enemies act** | Un nemico consapevole segnala il suo attacco nel turno precedente; un canale di comunicazione dedicato, sopra la narrazione, indica l'esito, le uccisioni, i colpi andati a segno e cosa succederà dopo. |
+| **Asks and recognition** | I personaggi che hanno bisogno di aiuto e quelli che assomigliano esattamente a loro: vengono forniti degli indizi, la rivelazione avverrà in seguito, a un costo specifico. Aiuta un personaggio reale e, nello stesso turno, lo saprai; se resti in disparte, si diffonderà una voce, riceverai un ringraziamento che verrà ripagato in seguito e otterrai un riconoscimento. |
+| **The street answers you** | I comandi sconosciuti vengono eseguiti immediatamente, senza consumare un turno; una frase digitata al PNG che ha appena parlato viene interpretata come un discorso; un semplice nome fa parlare il personaggio e un semplice comando di uscita lo sposta; `/go <exit>` e `/rumors` funzionano in modalità di gioco; un prezzo di mercato indicato viene memorizzato nel blocco della posizione. |
+| **Rumors with a stance** | I PNG ascoltano le voci e le interpretano, credendoci o dubitandone, e le voci si diffondono nei distretti adiacenti, seguendo un modello predefinito. |
+| **A tuning surface** | Ogni elemento del mondo dinamico ha un valore predefinito, `/tuning` per visualizzarlo e una matrice deterministica di 30 turni per tutti e tredici i mondi. Il danno inflitto dai nemici è stato impostato a 0,5 in quella matrice. |
+| **Save schema v3** | Il motore delle voci si basa sul salvataggio; ogni salvataggio della versione 1.x viene migrato con prove di piena fedeltà e un mondo generato riprende da dove si era interrotto. |
+| **Testato da cinque famiglie di modelli** | Quattro test con famiglie di intelligenza artificiale (Mistral, Qwen, Llama, DeepSeek, Gemini, quaranta turni ciascuno) hanno sostituito il giudizio umano e hanno plasmato le ultime due fasi. |
+| **2.495 test** | Partendo da 1.870 test su 121 file, ogni fase è stata completata con una giuria diversificata e un criterio deterministico. |
 
 ## Perché è diverso?
 
@@ -175,7 +177,7 @@ Claude RPG è solo una parte di una più ampia catena di strumenti per creare gi
 
 | Progetto | Cosa fa |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Simulazione deterministica: l’intero modulo del mondo di gioco è attivo, senza dipendenze da LLM. |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Tempo di esecuzione della simulazione deterministico: l'intero set di moduli del mondo dinamico, senza dipendenze da LLM. |
 | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | Studio di creazione di mondi 2D: editor di mappe, creatore di NPC, renderer, esportazione. |
 | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | Validazione dello schema, test della storyboard, pipeline di esportazione per RPG basati sull'IA. |
 | **Claude RPG** (this repo) | Runtime di riferimento: narrazione di Claude, audio immersivo, strumenti del regista. |

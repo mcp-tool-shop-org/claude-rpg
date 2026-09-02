@@ -22,7 +22,7 @@
 [INFO][tick:5][turn] turn-start {"input":"intimidate Brother Aldric","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"social","confidence":"high","reasoning":"social: bribe"}
 [INFO][tick:6][turn] turn-start {"input":"bribe Brother Aldric","tick":6}
 [DEBUG][tick:6][profile] hints-applied {"xp":2,"milestone":null}
@@ -45,7 +45,7 @@
 [INFO][tick:10][turn] turn-start {"input":"go Vestry Passage","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:10][turn] turn-end {"tick":10}
-[INFO][tick:10][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:10][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:10][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Player clearly wants to attack the Crypt Stalker with an elaborate combat description"}
 [immersion] state: exploration -> combat (attack)
 [INFO][tick:12][turn] turn-start {"input":"attack Crypt Stalker with sword and shield combo: strike smite shield bash counter combo 3-hit finisher Fenrir's Last Awakening! Sword and shield flash silver-white as the combo crashes into the Crypt","tick":12}
@@ -70,7 +70,7 @@
 [INFO][tick:18][turn] turn-start {"input":"drink Healing Draught","tick":18}
 [DEBUG][tick:18][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:18][turn] turn-end {"tick":18}
-[INFO][tick:18][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:18][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:18][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
 [immersion] state: exploration -> combat (attack)
 [INFO][tick:21][turn] turn-start {"input":"attack Crypt Warden","tick":21}
@@ -95,7 +95,7 @@
 [INFO][tick:27][turn] turn-start {"input":"attack Ash Ghoul","tick":27}
 [DEBUG][tick:27][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:27][turn] turn-end {"tick":27}
-[INFO][tick:27][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:27][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:27][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Player clearly wants to flee/escape to Vestry Passage, which matches the available zone exit"}
 [immersion] state: exploration -> menu (move)
 [INFO][tick:28][turn] turn-start {"input":"flee Vestry Passage toward the crypt stairs behind the altar I saw earlier from the chapel door. I’m not waiting for another ambush. I’ll circle back when I’m ready. I’m not here to lose everything to","tick":28}
@@ -119,7 +119,7 @@
 [INFO][tick:30][turn] turn-start {"input":"attack shrouded figure","tick":30}
 [DEBUG][tick:30][profile] hints-applied {"xp":0,"milestone":null}
 [INFO][tick:30][turn] turn-end {"tick":30}
-[INFO][tick:30][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:30][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:30][interpret] action-reasoning {"verb":"attack","confidence":"low","reasoning":"Player wants to attack 'shrouded figure' but no entity with that exact name exists. Both Ash Ghoul and Crypt Warden could potentially be described as shrouded figures."}
 [INFO][tick:30][turn] turn-start {"input":"attack shrouded figure","tick":30}
 [DEBUG][tick:30][profile] hints-applied {"xp":0,"milestone":null}

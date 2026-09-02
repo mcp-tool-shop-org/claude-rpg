@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-02
+
+The living-world release: the world runs on the engine's own tick, the
+street reacts to what you do, and every save you ever wrote still loads.
+Eleven feature waves and three tuning waves on engine 3.11, each landed
+through the swarm's family-diverse jury and a deterministic floor; four
+AI family playtests (five model families playing forty turns each)
+replaced the human Phase-9 gate and shaped the last two waves.
+
+### Added
+- **The world ticks on its own** (slices A1–A2): generated worlds get the
+  full module family at parity with the starter packs (districts,
+  encounter spawns, quests with real offer triggers, faction agency); the
+  engine's `runWorldTick` replaces the app's hand-rolled tickers, and every
+  session store (pressures, opportunities, rumors, leverage) is a view of
+  world truth rather than a copy of it.
+- **Save schema v3** (slice A3): the rumor engine is an instance that rides
+  the save, every 1.x save migrates with full-fidelity proofs, and a
+  generated world resumes exactly where it stopped (slice A4).
+- **The world reaches the player** (slice A5): pressures, opportunities,
+  district moods, faction moves, and rumors surface in narration, dialogue,
+  the status line, and the session recap; NPCs hear rumors as hearers with
+  a stance (believe or doubt) instead of one shared board; leverage income
+  and the `/leverage` help rewrite.
+- **The reactive street** (slice B1): condition rungs (`unhurt · hurt ·
+  bloodied · reeling · down`) on every surface; a deterministic combat
+  channel above the narration (your outcome, kills, landed hits, next
+  round's telegraph); enemies act — an aware hostile telegraphs, then
+  lands; unknown slash commands answered at the parser layer without
+  spending a turn; a state-derived command strip; hints capped at two
+  firings with a cooldown; **asks** — petitioners who need help and cons
+  who look exactly like them, with planted cues and a delayed reveal at a
+  named cost; **recognition** — helping a genuine ask earns a same-round
+  acknowledgment, faction standing, a rumor about the deed, gratitude that
+  repays later, and an honorific.
+- **Follow-ups from the playtests**: a sentence typed at the NPC who just
+  spoke is speech, not a clarification; `/go`, `/move`, `/zone <exit>` and
+  `/rumors` in play mode; a bare NPC name talks, a bare exit moves; one
+  quoted market price in the location block; a line the round a pressure
+  moves; ask offers, reveals, and ignored asks announced when they happen.
+- **A tuning surface** (slice A6): one resolved `tuning` object with every
+  living-world lever at a measured default, `/tuning` to read it, per-round
+  metrics, and a deterministic 30-round matrix over all thirteen worlds
+  that writes a tuning sheet. Three levers moved on measurement: rumors are
+  believed only below suspicion 0 (T1), rumors spread to adjacent districts
+  (T2), enemy damage scales to 0.5 (T3 — at 1.0 the walker was downed on
+  twelve of thirteen worlds by round twelve).
+
+### Changed
+- Engine family `^3.11.0`: retreat is not victory (`combat.encounter.cleared`
+  carries `outcome`), companions carry their origin faction, the bounty
+  on-ramp is engine-tuned.
+- Save paths print home-relative (`~/.claude-rpg/saves/…`).
+- The test floor: 1,870 → 2,495 tests across 121 files.
+
+### Fixed
+- Enemies never acted in play (the hostile turn did not exist).
+- Unknown slash commands fell through to the narrator as prose.
+- `help <petitioner>` missed a petitioner named with an article.
+- A readline listener leaked per prompt (Node's MaxListeners warning on long sessions).
+
 ## [1.7.0] - 2026-08-31
 
 The engine-alignment release: @ai-rpg-engine 2.9 → 3.9 in one

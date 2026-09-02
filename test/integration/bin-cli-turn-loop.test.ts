@@ -300,7 +300,9 @@ describe('bin.ts exit-autosave — saved path reaches real SIGINT/EOF exits', ()
 
     const match = cli.stdout().match(/Auto-saved to (.+)/);
     expect(match).not.toBeNull();
-    const savedPath = match![1].trim();
+    // v2.0.0 prints the path home-relative (`~/...`, identity scan); expand it back for the disk check.
+    const shown = match![1].trim();
+    const savedPath = shown.startsWith('~/') ? join(homedir(), shown.slice(2)) : shown;
 
     // Strongest check: the save file on disk was actually rewritten by the
     // real SIGINT/EOF call site, not just a message printed with no write

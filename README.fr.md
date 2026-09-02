@@ -83,19 +83,21 @@ Définissez votre clé API Anthropic (uniquement nécessaire pour la narration d
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Nouveautés de la version 1.7.0
+## Nouveautés de la version 2.0.0
 
-La version 1.7 fait passer l’ensemble du jeu sur le moteur 3.9, soit dix versions mineures en une seule migration, tout en conservant la compatibilité avec les anciennes sauvegardes, et se concentre sur les éléments qui comptent pour vous pendant le jeu.
+La version 2.0 est la version « monde vivant » : le monde fonctionne selon le cycle propre du moteur, la rue réagit à vos actions, et toutes les sauvegardes que vous avez créées sont toujours accessibles.
 
 | Fonctionnalité | Ce que cela signifie |
 |---------|--------------|
-| **Twelve playable worlds** | Salt Road Ledger (une campagne de marchand où chaque dette est une arme) et Hue and Cry (un chasseur de voleurs dans une ville sans police) rejoignent la liste des options, pour un total de douze mondes, regroupés par niveau de difficulté dans le menu de sélection. |
-| **Engine 3.9 under the hood** | Dix versions mineures du moteur ont été intégrées dans une seule migration, tout en préservant le comportement du jeu. Les sauvegardes créées avant la mise à jour sont compatibles et utilisent les paramètres par défaut de chaque nouveau sous-système, sans être supprimées. |
-| **`quit` : sauvegardes automatiques** | En tapant `quit`, le jeu enregistre automatiquement avant de se fermer, comme c’était déjà le cas avec Ctrl+C, et l’écran de fin de partie affiche enfin la vérité à ce sujet. |
-| **Les PNJ remarquent qui vous accompagne** | Les dialogues prennent en compte en temps réel la présence de votre groupe, les opportunités, les pressions du monde et l’atmosphère de la zone. L’aubergiste peut ainsi saluer votre compagnon par son nom et insister sur l’accord que vous avez laissé sur la table. |
-| **Les compagnons comptent au combat** | Les alliés recrutés affichent désormais leurs étiquettes de rôle natives du moteur et partagent une faction commune : les combattants vous protègent et personne de votre groupe n’est plus ciblé comme un ennemi. |
-| **The strategic read** | Lorsque le monde se retourne contre vous, la narration utilise les informations de situation propres au moteur, ce qui crée une pression que vous pouvez ressentir dans le texte avant même d’ouvrir la carte. |
-| **1 870 tests** | Le nombre de tests est passé de 1 542 à 1 870, répartis sur 98 fichiers, avec l’ensemble du processus de validation en quatre étapes (149 problèmes identifiés, 136 corrigés) en arrière-plan. |
+| **Le monde évolue de manière autonome** | Les mondes générés contiennent l’ensemble complet des modules, au même niveau que les packs de démarrage. Le cycle propre du moteur détermine les événements, les opportunités, les rencontres et les actions des factions, et chaque sauvegarde représente un instantané de la réalité du monde. |
+| **Enemies act** | Un ennemi conscient signale son attaque au tour précédent ; un canal de communication réservé, affiché au-dessus du récit, indique le résultat, les éliminations, les coups portés et ce qui va se passer ensuite. |
+| **Asks and recognition** | Les personnes qui ont besoin d’aide et les escrocs qui leur ressemblent beaucoup : des indices sont placés, et la révélation se produit plus tard, moyennant un certain coût. Aidez une personne réelle et, au même tour, cela sera indiqué ; en restant, une rumeur se répand, de la gratitude est exprimée, ce qui se traduit par une récompense plus tard, et un titre honorifique est attribué. |
+| **The street answers you** | Les commandes inconnues sont exécutées immédiatement, sans consommer de tour ; une phrase tapée à l’intention du PNJ qui vient de parler est interprétée comme un discours ; un simple nom parle et une simple commande de sortie déplace le personnage ; `/go <exit>` et `/rumors` fonctionnent en mode jeu ; un prix de marché unique est affiché dans le bloc de localisation. |
+| **Rumors with a stance** | Les PNJ entendent des rumeurs et les croient ou les mettent en doute, et les rumeurs se propagent aux districts adjacents, le tout étant géré de manière mesurée. |
+| **A tuning surface** | Chaque élément du monde vivant est réglé sur une valeur par défaut mesurée, `/tuning` pour l’afficher, et une matrice déterministe de 30 tours est appliquée à chacun des treize mondes. Les dégâts infligés par les ennemis ont été réglés à 0,5 dans cette matrice. |
+| **Save schema v3** | Le moteur de rumeurs utilise la sauvegarde, chaque sauvegarde 1.x est migrée avec des preuves de fidélité, et un monde généré reprend là où il s’était arrêté. |
+| **Testé par cinq familles de modèles** | Quatre séries de tests avec différentes familles d’IA (Mistral, Qwen, Llama, DeepSeek, Gemini, quarante tours chacune) ont remplacé le test humain et ont façonné les deux dernières vagues. |
+| **2 495 tests** | Développé à partir de 1 870 fichiers, chaque vague a été testée par un jury diversifié et selon des critères déterministes. |
 
 ## Pourquoi c’est différent
 

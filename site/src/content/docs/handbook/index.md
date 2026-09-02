@@ -23,6 +23,7 @@ NPCs don't recite scripts. They speak from beliefs, memories, faction loyalty, a
 | [Getting Started](getting-started/) | Install, configure your API key, and play your first game |
 | [Play Guide](play-guide/) | Freeform input, in-game commands, save/load, and play-mode tips |
 | [Director Mode](director-mode/) | Inspect hidden simulation truth — beliefs, factions, consequence chains |
+| [The Living World](living-world/) | What moves without you — the tick, pressures, rumors with a stance, enemies that act, asks and recognition, the tuning surface |
 | [World Generation](world-generation/) | Generate custom worlds from text prompts |
 | [Campaign Arcs](campaign-arcs/) | Arc detection, endgame triggers, and campaign conclusions |
 | [Architecture](architecture/) | The 8-step pipeline from player input to narrated output |

@@ -1,0 +1,16 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "label": "b1g-2026-09-02",
+  "seat": {
+    "id": "gemini",
+    "family": "google",
+    "model": "google/gemini-2.5-flash"
+  },
+  "turns": 40,
+  "turnsPlayed": 42,
+  "endedBy": "turns",
+  "error": null,
+  "critiqueError": null,
+  "durationMs": 348005,
+  "finishedAt": "2026-09-02T07:09:26.081Z"
+}

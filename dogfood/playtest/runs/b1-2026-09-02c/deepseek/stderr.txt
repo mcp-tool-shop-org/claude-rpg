@@ -20,7 +20,7 @@
 [INFO][tick:5][turn] turn-start {"input":"intimidate the pilgrim","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"social","confidence":"high","reasoning":"social: bribe"}
 [INFO][tick:6][turn] turn-start {"input":"bribe the pilgrim","tick":6}
 [DEBUG][tick:6][profile] hints-applied {"xp":2,"milestone":null}
@@ -42,7 +42,7 @@
 [INFO][tick:9][turn] turn-start {"input":"absolution","tick":9}
 [DEBUG][tick:9][profile] hints-applied {"xp":0,"milestone":null}
 [INFO][tick:9][turn] turn-end {"tick":9}
-[INFO][tick:9][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:9][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:9][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Speak to a woman at the chapel door"}
 [INFO][tick:10][turn] turn-start {"input":"speak a woman at the chapel door","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
@@ -66,7 +66,7 @@
 [INFO][tick:14][turn] turn-start {"input":"go to chapel nave","tick":14}
 [DEBUG][tick:14][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:14][turn] turn-end {"tick":14}
-[INFO][tick:14][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:14][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:14][interpret] action-reasoning {"verb":"look","confidence":"high","reasoning":"Look around"}
 [INFO][tick:15][turn] turn-start {"input":"look at brother aldric","tick":15}
 [DEBUG][tick:15][profile] hints-applied {"xp":0,"milestone":null}
@@ -90,7 +90,7 @@
 [INFO][tick:20][turn] turn-start {"input":"attack crypt stalker","tick":20}
 [DEBUG][tick:20][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:20][turn] turn-end {"tick":20}
-[INFO][tick:20][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:20][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:20][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Stalker"}
 [INFO][tick:21][turn] turn-start {"input":"attack crypt stalker","tick":21}
 [DEBUG][tick:21][profile] hints-applied {"xp":2,"milestone":null}
@@ -113,7 +113,7 @@
 [INFO][tick:28][turn] turn-start {"input":"attack ash ghoul","tick":28}
 [DEBUG][tick:28][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:28][turn] turn-end {"tick":28}
-[INFO][tick:28][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:28][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:28][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Warden"}
 [INFO][tick:29][turn] turn-start {"input":"attack crypt warden","tick":29}
 [DEBUG][tick:29][profile] hints-applied {"xp":2,"milestone":null}
@@ -135,7 +135,7 @@
 [INFO][tick:36][turn] turn-start {"input":"talk to Brother Aldric","tick":36}
 [DEBUG][tick:36][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:36][turn] turn-end {"tick":36}
-[INFO][tick:36][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:36][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:36][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"The input appears to be dialogue from Brother Aldric speaking to the player, indicating a conversation is taking place"}
 [immersion] state: dialogue -> menu (speak)
 [INFO][tick:38][turn] turn-start {"input":"Brother Aldric rises slowly, his mace still at his belt but his hand resting on its worn handle. \"You shouldn't be here,\" he says, his voice low and strained. \"The dead walk because the living have fo","tick":38}

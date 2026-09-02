@@ -1027,7 +1027,7 @@ The Sepulcher... it's said to be where the city's first dead were laid to rest, 
 
 ═══ turn 42 ── screen (prompt, 1302ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788324713519.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788324713519.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1080,7 +1080,7 @@ The Sepulcher... it's said to be where the city's first dead were laid to rest, 
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788324714821.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788324714821.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

@@ -971,7 +971,7 @@ The curse-laden air presses down on you like a burial shroud as darkness claims 
 
 ═══ turn 42 ── screen (prompt, 1311ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788331972082.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788331972082.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1023,7 +1023,7 @@ The curse-laden air presses down on you like a burial shroud as darkness claims 
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788331973393.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788331973393.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

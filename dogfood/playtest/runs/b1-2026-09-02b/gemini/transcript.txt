@@ -1064,7 +1064,7 @@ The one-armed veteran pushes himself from the wall with sudden purpose, his scar
 
 ═══ turn 42 ── screen (prompt, 1309ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788325261848.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788325261848.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1119,7 +1119,7 @@ The one-armed veteran pushes himself from the wall with sudden purpose, his scar
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788325263157.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788325263157.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

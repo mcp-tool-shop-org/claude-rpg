@@ -19,7 +19,7 @@
 [INFO][tick:5][turn] turn-start {"input":"ask the hooded pilgrim about their staff","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Player wants to move to the Chapel Nave, which is available as a zone exit"}
 [immersion] state: dialogue -> exploration (move)
 [INFO][tick:6][turn] turn-start {"input":"enter the chapel nave","tick":6}
@@ -42,7 +42,7 @@
 [INFO][tick:10][turn] turn-start {"input":"tell Brother Aldric about your experiences with the Order","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:10][turn] turn-end {"tick":10}
-[INFO][tick:10][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:10][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:10][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Player wants to ask Brother Aldric about a specific topic - the Grand Inquisitor. This maps clearly to the speak verb with the NPC as target."}
 [INFO][tick:11][turn] turn-start {"input":"ask Brother Aldric about the Grand Inquisitor","tick":11}
 [DEBUG][tick:11][profile] hints-applied {"xp":2,"milestone":null}
@@ -65,7 +65,7 @@
 [INFO][tick:15][turn] turn-start {"input":"talk to Sister Maren","tick":15}
 [DEBUG][tick:15][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:15][turn] turn-end {"tick":15}
-[INFO][tick:15][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:15][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:15][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Clear request to ask/speak to Sister Maren about a specific topic"}
 [INFO][tick:16][turn] turn-start {"input":"ask Sister Maren about the black market activity","tick":16}
 [DEBUG][tick:16][profile] hints-applied {"xp":2,"milestone":null}
@@ -88,7 +88,7 @@
 [INFO][tick:22][turn] turn-start {"input":"attack the ash ghoul again","tick":22}
 [DEBUG][tick:22][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:22][turn] turn-end {"tick":22}
-[INFO][tick:22][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:22][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:22][interpret] action-reasoning {"verb":"attack","confidence":"high","reasoning":"Attack Crypt Stalker"}
 [INFO][tick:24][turn] turn-start {"input":"attack the crypt stalker","tick":24}
 [DEBUG][tick:24][profile] hints-applied {"xp":2,"milestone":null}
@@ -111,7 +111,7 @@
 [INFO][tick:28][turn] turn-start {"input":"tell Brother Aldric I'm questioning their methods","tick":28}
 [DEBUG][tick:28][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:28][turn] turn-end {"tick":28}
-[INFO][tick:28][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:28][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:28][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Player wants to ask Brother Aldric a question about the Order of the Crimson Veil, which is clearly a speak action with Brother Aldric as the target"}
 [INFO][tick:29][turn] turn-start {"input":"ask Brother Aldric what he proposes to do about the Order of the Crimson Veil","tick":29}
 [DEBUG][tick:29][profile] hints-applied {"xp":2,"milestone":null}
@@ -135,7 +135,7 @@
 [INFO][tick:33][turn] turn-start {"input":"nod in understanding and head towards the Ruined Chapel Entrance","tick":33}
 [DEBUG][tick:33][profile] hints-applied {"xp":7,"milestone":null}
 [INFO][tick:33][turn] turn-end {"tick":33}
-[INFO][tick:33][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:33][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:33][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Player wants to approach Sister Maren, which in RPG context typically means initiating conversation or interaction"}
 [immersion] state: exploration -> dialogue (speak)
 [INFO][tick:34][turn] turn-start {"input":"approach Sister Maren","tick":34}

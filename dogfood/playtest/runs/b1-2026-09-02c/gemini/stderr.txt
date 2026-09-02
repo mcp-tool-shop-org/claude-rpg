@@ -20,7 +20,7 @@
 [INFO][tick:5][turn] turn-start {"input":"I seek to understand the darkness that clings to this place.","tick":5}
 [DEBUG][tick:5][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:5][turn] turn-end {"tick":5}
-[INFO][tick:5][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:5][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:5][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Player is directly addressing Sister Maren with a question about darkness, which is clearly a speaking action"}
 [immersion] state: exploration -> dialogue (speak)
 [INFO][tick:6][turn] turn-start {"input":"What darkness do you speak of, Sister?","tick":6}
@@ -44,7 +44,7 @@
 [INFO][tick:10][turn] turn-start {"input":"Who are you?","tick":10}
 [DEBUG][tick:10][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:10][turn] turn-end {"tick":10}
-[INFO][tick:10][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:10][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:10][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Clear request to talk/speak with the pilgrim entity"}
 [INFO][tick:11][turn] turn-start {"input":"Talk to the pilgrim.","tick":11}
 [DEBUG][tick:11][profile] hints-applied {"xp":2,"milestone":null}
@@ -66,7 +66,7 @@
 [INFO][tick:15][turn] turn-start {"input":"The darkness says nothing to me.","tick":15}
 [DEBUG][tick:15][profile] hints-applied {"xp":0,"milestone":null}
 [INFO][tick:15][turn] turn-end {"tick":15}
-[INFO][tick:15][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:15][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:15][interpret] action-reasoning {"verb":"move","confidence":"high","reasoning":"Clear movement command to Chapel Nave, which is a valid exit from current zone"}
 [INFO][tick:16][turn] turn-start {"input":"Go to the Chapel Nave.","tick":16}
 [DEBUG][tick:16][profile] hints-applied {"xp":7,"milestone":null}
@@ -88,7 +88,7 @@
 [INFO][tick:19][turn] turn-start {"input":"What debt do you owe me, Brother Aldric?","tick":19}
 [DEBUG][tick:19][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:19][turn] turn-end {"tick":19}
-[INFO][tick:19][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:19][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:19][interpret] action-reasoning {"verb":"look","confidence":"medium","reasoning":"Player's input appears to be asking for guidance or instructions rather than performing a specific game action. Using 'look' as fallback to provide current situation context."}
 [immersion] state: dialogue -> exploration (look)
 [INFO][tick:20][turn] turn-start {"input":"What is it you wish me to do?","tick":20}
@@ -112,7 +112,7 @@
 [INFO][tick:24][turn] turn-start {"input":"Who is this woman?","tick":24}
 [DEBUG][tick:24][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:24][turn] turn-end {"tick":24}
-[INFO][tick:24][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:24][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:24][interpret] action-reasoning {"verb":"speak","confidence":"high","reasoning":"Player is directly addressing Brother Aldric with dialogue, which maps to the speak verb"}
 [immersion] state: exploration -> dialogue (speak)
 [INFO][tick:25][turn] turn-start {"input":"Tell me what you want, Aldric.","tick":25}
@@ -136,7 +136,7 @@
 [INFO][tick:29][turn] turn-start {"input":"Thank you, Brother Aldric.","tick":29}
 [DEBUG][tick:29][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:29][turn] turn-end {"tick":29}
-[INFO][tick:29][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:29][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:29][interpret] action-reasoning {"verb":"speak","confidence":"medium","reasoning":"Player is asking about Sister Morwyn's location. Speaking to Brother Aldric seems most likely to provide information about another religious figure."}
 [INFO][tick:30][turn] turn-start {"input":"Where is Sister Morwyn?","tick":30}
 [DEBUG][tick:30][profile] hints-applied {"xp":2,"milestone":null}
@@ -159,7 +159,7 @@
 [INFO][tick:34][turn] turn-start {"input":"Who are you?","tick":34}
 [DEBUG][tick:34][profile] hints-applied {"xp":2,"milestone":null}
 [INFO][tick:34][turn] turn-end {"tick":34}
-[INFO][tick:34][autosave] autosave-complete {"path":"C:\\Users\\mikey\\.claude-rpg\\saves\\wanderer-autosave.json"}
+[INFO][tick:34][autosave] autosave-complete {"path":"~\\.claude-rpg\\saves\\wanderer-autosave.json"}
 [DEBUG][tick:34][interpret] action-reasoning {"verb":"speak","confidence":"medium","reasoning":"Player indicates readiness to listen, which suggests wanting to engage in conversation. Using speak verb to initiate dialogue."}
 [INFO][tick:35][turn] turn-start {"input":"I am here to listen.","tick":35}
 [DEBUG][tick:35][profile] hints-applied {"xp":2,"milestone":null}

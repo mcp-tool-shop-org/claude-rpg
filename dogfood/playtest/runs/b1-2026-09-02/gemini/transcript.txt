@@ -1140,7 +1140,7 @@ Tell me, Knight - do you believe the guilty should face judgment, regardless of 
 
 ═══ turn 42 ── screen (prompt, 1303ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788324743585.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788324743585.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1185,7 +1185,7 @@ Tell me, Knight - do you believe the guilty should face judgment, regardless of 
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788324744888.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788324744888.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

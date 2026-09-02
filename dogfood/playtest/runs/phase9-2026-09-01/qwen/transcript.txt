@@ -1014,7 +1014,7 @@ I'm not sure what you mean. Did you want to opportunity or inspect?
 
 ═══ turn 42 ── screen (prompt, 1234ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788316704634.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788316704634.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1056,7 +1056,7 @@ I'm not sure what you mean. Did you want to opportunity or inspect?
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788316705868.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788316705868.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

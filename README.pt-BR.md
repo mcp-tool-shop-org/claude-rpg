@@ -83,19 +83,21 @@ Defina sua chave de API Anthropic (necessária apenas para a narração de Claud
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## O que há de novo na versão 1.7.0
+## O que há de novo na versão 2.0.0
 
-Na versão 1.7, todo o jogo é transferido para o motor 3.9 — dez versões menores em uma única atualização, com todos os arquivos de salvamento antigos ainda funcionando — e a nova versão concentra-se nos elementos que você sente durante o jogo.
+A versão 2.0 é o lançamento do mundo dinâmico: o mundo funciona com o próprio ciclo do motor, a rua reage ao que você faz e todos os arquivos salvos que você criou ainda podem ser carregados.
 
 | Recurso | O que significa |
 |---------|--------------|
-| **Twelve playable worlds** | Salt Road Ledger (uma campanha de mercador onde cada dívida é uma arma) e Hue and Cry (um caçador de ladrões em uma cidade sem força policial) juntam-se à lista — doze mundos, agrupados por dificuldade no menu de seleção. |
-| **Engine 3.9 under the hood** | Dez versões menores do motor foram adotadas em uma única atualização que preserva o comportamento do jogo. Os arquivos de salvamento criados antes da atualização são carregados com todos os novos subsistemas definidos como padrão, e nunca são perdidos. |
-| **`quit` salvamentos automáticos** | Ao digitar `quit`, o jogo agora salva antes de sair, da mesma forma que sempre funcionou com Ctrl+C — e a tela de morte finalmente revela a verdade sobre isso. |
-| **Os NPCs notam quem está com você** | O diálogo é atualizado em tempo real com a presença do grupo, oportunidades abertas, pressões do mundo e características da zona — o dono da estalagem pode cumprimentar seu companheiro pelo nome e fazer referência ao acordo que você deixou em aberto. |
-| **Os companheiros contam no combate** | Os aliados recrutados agora possuem as etiquetas de função nativas do motor e compartilham a mesma facção: os lutadores interceptam os inimigos por você, e ninguém do seu lado será mais alvo como inimigo. |
-| **The strategic read** | Quando o mundo se volta contra você, a narrativa apresenta a situação atual do jogo — uma pressão que você pode sentir na descrição antes de abrir o mapa. |
-| **1.870 testes** | Aumentou de 1.542 em 98 arquivos, com todo o processo de quatro etapas para verificar a integridade (149 problemas identificados, 136 corrigidos) concluído. |
+| **O mundo evolui por conta própria** | Os mundos gerados contêm toda a família de módulos, em pé de igualdade com os pacotes iniciais, o próprio ciclo do motor impulsiona as pressões, oportunidades, encontros e movimentos das facções, e cada arquivo de sessão é uma visão da realidade do mundo. |
+| **Enemies act** | Um inimigo consciente sinaliza seu ataque na rodada anterior; um canal de combate reservado, acima da narração, indica o resultado, as mortes, os golpes bem-sucedidos e o que acontecerá a seguir. |
+| **Asks and recognition** | Os que precisam de ajuda e os que se parecem exatamente com eles — são plantadas pistas, e a revelação ocorre mais tarde, com um custo definido. Ajude um verdadeiro e, na mesma rodada, isso será reconhecido; ao permanecer, uma fofoca, gratidão que será recompensada mais tarde e um título honorífico. |
+| **The street answers you** | Comandos desconhecidos são respondidos imediatamente, sem consumir uma rodada; uma frase digitada no NPC que acabou de falar é considerada fala; um nome simples fala e uma saída simples move; `/go <exit>` e `/rumors` funcionam no modo de jogo; um preço de mercado citado aparece no bloco de localização. |
+| **Rumors with a stance** | Os NPCs ouvem rumores como ouvintes que acreditam ou duvidam, e os rumores se espalham para os distritos adjacentes — ambos ajustados em uma folha de cálculo. |
+| **A tuning surface** | Cada alavanca do mundo dinâmico tem um valor padrão medido, `/tuning` para lê-lo e uma matriz determinística de 30 rodadas em todos os treze mundos. O dano do inimigo foi ajustado para 0,5 nessa folha. |
+| **Save schema v3** | O motor de rumores acompanha o arquivo salvo, cada arquivo salvo da versão 1.x é migrado com provas de fidelidade total, e um mundo gerado retoma de onde parou. |
+| **Testado por cinco famílias de modelos** | Quatro testes de famílias de IA (Mistral, Qwen, Llama, DeepSeek, Gemini, quarenta rodadas cada) substituíram o teste humano e moldaram as duas últimas fases. |
+| **2.495 testes** | A partir de 1.870 em 121 arquivos, cada fase foi concluída por um júri diversificado e um limite determinístico. |
 
 ## Por que é diferente
 

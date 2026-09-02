@@ -1059,7 +1059,7 @@ Your grip tightens on your weapon as the shadows shift around you, the isolation
 
 ═══ turn 42 ── screen (prompt, 1306ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788324782959.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788324782959.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1112,7 +1112,7 @@ Your grip tightens on your weapon as the shadows shift around you, the isolation
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788324784266.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788324784266.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

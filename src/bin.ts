@@ -70,7 +70,7 @@ import {
   SAVE_LISTING_CAP, formatOlderSavesFooter,
 } from './cli/save-listing.js';
 import { isPathInside } from './cli/path-guard.js';
-import { attemptExitAutosave } from './cli/exit-autosave.js';
+import { attemptExitAutosave, displayPath } from './cli/exit-autosave.js';
 import { renderUsage } from './cli/usage.js';
 import { parseWorldFlag, formatValidWorlds } from './cli/world-flag.js';
 import { getTerminalWidth } from './display/play-renderer.js';
@@ -1234,7 +1234,7 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
           continue;
         }
         await saveSession(buildSaveInput(session, savePath, packId));
-        console.log(`\n  Saved to ${savePath}`);
+        console.log(`\n  Saved to ${displayPath(savePath)}`);
 
         // Show unified session recap
         const recapText = buildUnifiedRecap(

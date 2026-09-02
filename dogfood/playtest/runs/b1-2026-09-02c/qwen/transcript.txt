@@ -1223,7 +1223,7 @@ Brother Aldric steps forward slightly, his calculating gaze never leaving your b
 
 ═══ turn 42 ── screen (prompt, 1288ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788326084300.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788326084300.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1292,7 +1292,7 @@ Brother Aldric steps forward slightly, his calculating gaze never leaving your b
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788326085588.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788326085588.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

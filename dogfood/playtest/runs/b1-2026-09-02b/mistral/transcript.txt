@@ -1062,7 +1062,7 @@ Death hovers so close you can taste its metallic kiss, yet your fingers still tw
 
 ═══ turn 42 ── screen (prompt, 1211ms)
 
-  Saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-1788325176250.json
+  Saved to ~\.claude-rpg\saves\Wanderer-1788325176250.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY
@@ -1115,7 +1115,7 @@ Death hovers so close you can taste its metallic kiss, yet your fingers still tw
   ... thinking
 
   Saving your progress...
-  Auto-saved to C:\Users\mikey\.claude-rpg\saves\Wanderer-autosave-1788325177461.json
+  Auto-saved to ~\.claude-rpg\saves\Wanderer-autosave-1788325177461.json
 
 ════════════════════════════════════════════════════════════
   SESSION SUMMARY

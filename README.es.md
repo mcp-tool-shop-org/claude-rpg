@@ -83,19 +83,21 @@ Establece tu clave API de Anthropic (solo es necesaria para la narración de Cla
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Novedades en la versión 1.7.0
+## Novedades en la versión 2.0.0
 
-La versión 1.7 traslada todo el juego al motor 3.9, lo que supone diez versiones menores en una sola actualización, y todas las partidas guardadas antiguas siguen funcionando. Además, se aprovecha la nueva estructura para mejorar los aspectos que más importan durante el juego.
+La versión 2.0 es la versión del mundo dinámico: el mundo funciona con el propio ciclo del motor, la calle reacciona a lo que haces y cada partida que hayas guardado sigue cargándose.
 
 | Función | Qué significa |
 |---------|--------------|
-| **Twelve playable worlds** | Salt Road Ledger (una campaña de mercader en la que cada deuda es un arma) y Hue and Cry (un cazador de ladrones en una ciudad sin policía) se unen a la lista de opciones, que ahora cuenta con doce mundos, agrupados por dificultad en el menú de selección. |
-| **Engine 3.9 under the hood** | Se han implementado diez versiones menores del motor en una sola actualización, preservando el comportamiento del juego. Las partidas guardadas antes de la actualización se cargan con todos los nuevos subsistemas configurados por defecto, y nunca se perderán. |
-| **`quit` guarda automáticamente** | Ahora, al escribir `quit`, el juego guarda automáticamente antes de salir, de la misma manera que siempre lo hacía con Ctrl+C, y la pantalla de muerte finalmente muestra la verdad al respecto. |
-| **Los NPC se fijan en quién te acompaña** | El diálogo ahora tiene en cuenta la presencia actual de los miembros del grupo, las oportunidades disponibles, las presiones del mundo y la ambientación de la zona. El posadero puede saludar a tu compañero por su nombre y hacer referencia al trato que dejaste sobre la mesa. |
-| **Los compañeros influyen en el combate** | Los aliados reclutados ahora tienen sus propias etiquetas de rol nativas del motor y comparten facción: los luchadores te protegen y nadie de tu bando volverá a ser considerado un enemigo. |
-| **The strategic read** | Cuando el mundo se vuelve en tu contra, la narración utiliza la información del motor para describir la situación, lo que te permite sentir la presión en el texto antes de abrir el mapa. |
-| **1.870 pruebas** | Se ha ampliado de 1.542 a 98 archivos, y se han realizado las cuatro fases de pruebas de estabilidad (se han registrado 149 problemas y se han solucionado 136). |
+| **El mundo avanza por sí solo** | Los mundos generados incluyen toda la familia de módulos, al mismo nivel que los paquetes iniciales; el propio ciclo del motor impulsa las presiones, las oportunidades, los encuentros y las acciones de las facciones, y cada partida guardada es una visión de la realidad del mundo. |
+| **Enemies act** | Un enemigo consciente anuncia su ataque en la ronda anterior a que lo realice; un canal de combate reservado, situado por encima de la narración, indica tu resultado, las muertes, los golpes acertados y lo que sucederá a continuación. |
+| **Asks and recognition** | Los solicitantes que necesitan ayuda y los estafadores que se parecen exactamente a ellos: se plantan pistas, y la revelación se produce más adelante, a cambio de un precio. Ayuda a uno real y, en la misma ronda, se dice; si te quedas quieto, se propaga un rumor, se expresa gratitud que se recompensa más adelante y se recibe un reconocimiento. |
+| **The street answers you** | Las órdenes desconocidas se responden de inmediato sin consumir un turno; una frase escrita en el NPC que acaba de hablar es un diálogo; un simple nombre habla y una simple salida mueve; `/go <exit>` y `/rumors` funcionan en modo de juego; un precio de mercado citado se muestra en el bloque de ubicación. |
+| **Rumors with a stance** | Los NPC escuchan rumores como oyentes que creen o dudan, y los rumores se propagan a los distritos adyacentes, ambos ajustados en una hoja medida. |
+| **A tuning surface** | Cada elemento del mundo dinámico tiene un valor predeterminado medido, `/tuning` para leerlo y una matriz determinista de 30 rondas en los trece mundos. El daño de los enemigos se ajustó a 0,5 en esa hoja. |
+| **Save schema v3** | El motor de rumores se basa en la partida guardada, cada partida de la versión 1.x se migra con pruebas de fidelidad completa y un mundo generado reanuda donde se detuvo. |
+| **Jugado por cinco familias de modelos** | Cuatro pruebas de juego de familias de IA (Mistral, Qwen, Llama, DeepSeek, Gemini, cuarenta turnos cada una) reemplazaron la evaluación humana y dieron forma a las dos últimas oleadas. |
+| **2.495 pruebas** | A partir de 1.870 pruebas en 121 archivos, cada oleada se realizó a través de un jurado diverso y un umbral determinista. |
 
 ## Por qué es diferente
 
@@ -175,7 +177,7 @@ Claude RPG es una pieza de una cadena de herramientas más grande para construir
 
 | Proyecto | Qué hace |
 |---------|-------------|
-| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Tiempo de ejecución de simulación determinista: conjunto completo de módulos de mundo dinámico, sin dependencias de LLM. |
+| [AI RPG Engine](https://github.com/mcp-tool-shop-org/ai-rpg-engine) | Tiempo de ejecución de simulación determinista: pila completa de módulos del mundo dinámico, cero dependencias de LLM. |
 | [World Forge](https://github.com/mcp-tool-shop-org/world-forge) | Estudio de creación de mundos 2D: editor de mapas, constructor de PNJ, renderizador, exportación. |
 | [Cannon Archive](https://github.com/mcp-tool-shop-org/cannon-archive) | Validación de esquemas, pruebas de guiones gráficos y flujos de trabajo de exportación de RPG con IA. |
 | **Claude RPG** (this repo) | Entorno de ejecución de referencia: narración de Claude, audio inmersivo, herramientas del director. |

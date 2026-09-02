@@ -673,6 +673,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // identity from a merged, order-ambiguous list.
   const playerEvents = events;
   markAwarenessFromEvents(engine.world, playerEvents, engine.tick);
+  const playerHpBeforeHostileTurn = engine.world.entities[engine.world.playerId]?.resources.hp ?? 0;
   const hostileTurn = runHostileTurn(engine, tuning);
   events = [...events, ...hostileTurn.events];
 
@@ -971,7 +972,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // WO-B1-3 (design lock 2): the reserved combat channel, in the doc's fixed
   // order -- player outcome line(s), kill lines, landed enemy hits,
   // telegraphs for next round.
-  const combatLines = buildCombatLines(engine.world, engine.world.playerId, playerEvents, hostileTurn.events, hostileTurn.telegraphs);
+  const combatLines = buildCombatLines(engine.world, engine.world.playerId, playerEvents, hostileTurn.events, hostileTurn.telegraphs, playerHpBeforeHostileTurn);
 
   // Record turn in history
   history.record({
@@ -1024,6 +1025,7 @@ function buildCombatLines(
   playerEvents: ResolvedEvent[],
   hostileEvents: ResolvedEvent[],
   telegraphs: HostileTelegraph[],
+  playerHpBefore?: number,
 ): string[] {
   const lines: string[] = [];
 
@@ -1057,6 +1059,23 @@ function buildCombatLines(
 
   for (const t of telegraphs) {
     lines.push(`${t.hostileName} readies an attack against you.`);
+  }
+
+  // Fifth family playtest (b1g-2026-09-02): four of five seats fell at 4 of
+  // 20 HP still typing `attack`, with `flee` on the same screen -- nothing
+  // said they were about to die. The round the player's condition drops
+  // into `reeling`, one line names the state and the way out.
+  const player = world.entities[playerId];
+  if (player && playerHpBefore !== undefined) {
+    const maxHp = player.resources.maxHp ?? 1;
+    const before = conditionRung(playerHpBefore, maxHp);
+    const after = conditionRung(player.resources.hp ?? 0, maxHp);
+    if (after === 'reeling' && before !== 'reeling' && before !== 'down') {
+      const zoneId = player.zoneId ?? world.locationId;
+      const exits = (world.zones[zoneId]?.neighbors ?? []).map((id) => world.zones[id]?.name ?? id);
+      const where = exits.length > 0 ? ` (${exits.join(' · ')})` : '';
+      lines.push(`You are reeling — flee${where} before you fall.`);
+    }
   }
 
   return lines;

@@ -1398,3 +1398,24 @@ describe('combat channel (WO-B1-3)', () => {
     expect(result.combatLines).toEqual([]);
   });
 });
+
+describe('reeling warning (fifth family playtest, b1g-2026-09-02)', () => {
+  it('the round the player drops into reeling, the combat channel names the state and the exits, once', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const world = h.session.engine.world;
+    const player = world.entities[world.playerId]!;
+    player.resources.maxHp = 20;
+    player.resources.hp = 8; // hurt -> one 2-damage hit lands in reeling (< 34%)
+    world.entities['ash-ghoul']!.zoneId = player.zoneId ?? world.locationId;
+    world.globals['hostile_aware_ash-ghoul'] = 0;
+    world.globals['hostile_telegraph_ash-ghoul'] = 0; // telegraphed last round: this round it lands
+    const out1 = await h.play('look around');
+    const hpAfter = world.entities[world.playerId]!.resources.hp ?? 0;
+    expect(hpAfter).toBeLessThan(8);
+    expect(out1).toContain('You are reeling');
+    expect(out1).toContain('flee');
+    const out2 = await h.play('look around');
+    expect(out2).not.toContain('You are reeling');
+  });
+});

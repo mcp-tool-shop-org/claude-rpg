@@ -28,8 +28,10 @@ against you` — and lands the next round: `Crypt Stalker's attack finds you
 — 3 damage.` Those lines live in a reserved block above the narration,
 together with your own outcome (`Your strike lands — Crypt Stalker:
 bloodied.`) and any kill (`The Crypt Stalker falls.`). Everyone's condition
-is one of five rungs: unhurt, hurt, bloodied, reeling, down. `flee` leaves
-by the zone's own exits.
+is one of five rungs: unhurt, hurt, bloodied, reeling, down. The round you
+drop into reeling, the channel says so and names the way out — `You are
+reeling — flee (Chapel Nave · Vestry Passage) before you fall.` `flee`
+leaves by the zone's own exits.
 
 Enemy damage is a tuning lever (`enemyDamageScale`, default 0.5, set on the
 measured sheet); `enemyAggression` can be `off`, `telegraphed`, or

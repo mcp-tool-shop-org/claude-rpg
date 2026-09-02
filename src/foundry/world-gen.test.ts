@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateWorldGenProposal, generateWorld, proposeWorld, instantiateWorld, KNOWN_WORLDGEN_GENRES } from './world-gen.js';
-import type { WorldGenProposal, WorldGenAttemptInfo } from './world-gen.js';
+import type { WorldGenProposal, WorldGenAttemptInfo, WorldStackTuning } from './world-gen.js';
 import type { ClaudeClient } from '../claude-client.js';
 import { Engine } from '@ai-rpg-engine/core';
 import type { RulesetDefinition } from '@ai-rpg-engine/core';
@@ -11,13 +11,16 @@ import {
   getFactionMembers,
   getAllDistrictIds,
   getDistrictDefinition,
+  getDistrictMetric,
+  modifyDistrictMetric,
   traversalCore,
   statusCore,
   combatCore,
   createCognitionCore,
   createPerceptionFilter,
   createSimulationInspector,
-  buildWorldStack, getQuestDefinitions } from '@ai-rpg-engine/modules';
+  buildWorldStack, getQuestDefinitions,
+  runEncounterSpawnStep } from '@ai-rpg-engine/modules';
 import { createTestLogger } from '../game/debug-logger.js';
 
 // WO-A1-1 (§1): a minimal, valid RulesetDefinition for the double-registration
@@ -1271,5 +1274,125 @@ describe('proposeWorld / instantiateWorld split (WO-A4-6)', () => {
     expect(result.ok).toBe(false);
     expect(result.engine).toBeNull();
     expect(result.seed).toBe(13);
+  });
+});
+
+// WO-A6-6 (Phase 9 / Slice A6, ADDENDUM-COMMON.md lock 3): instantiateWorld/
+// generateWorld gain an optional trailing WorldStackTuning lever
+// (encounterSpawn.baseChance/safetyStep, districtDecay), spread into
+// buildWorldStack's config. RED FIRST (observed before this WO's fix):
+// instantiateWorld/generateWorld took no 4th/stackTuning parameter at all --
+// `TS2554: Expected 2-3 arguments, but got 4` on the byte-identical-defaults
+// call below, and `Object literal may only specify known properties` on
+// `{ stackTuning }` in generateWorld's opts -- until the WO-A6-6 fix above
+// added the parameter and the presence-gated spreads.
+describe('generateWorld/instantiateWorld WO-A6-6: stackTuning -- generated-world stack levers (§3)', () => {
+  function makeEncounterProposal(): WorldGenProposal {
+    const proposal = makeValidProposal();
+    proposal.title = 'Tuning Encounter World';
+    proposal.npcs.push({
+      id: 'bandit-1',
+      name: 'Bandit',
+      type: 'enemy',
+      tags: ['bandit'],
+      zoneId: 'market',
+      personality: 'aggressive',
+      goals: ['rob travelers'],
+      stats: { str: 10 },
+      resources: { hp: 30 },
+      beliefs: [],
+    });
+    proposal.encounters = [
+      { id: 'market-ambush', name: 'Market Ambush', zoneIds: ['market'], hostiles: [{ npcId: 'bandit-1' }] },
+    ];
+    return proposal;
+  }
+
+  it('omitted stackTuning and an explicit {} produce a byte-identical engine to a call with no stackTuning at all (undefined/{} parity)', () => {
+    const withoutParam = instantiateWorld(makeValidProposal(), 42);
+    const withUndefined = instantiateWorld(makeValidProposal(), 42, undefined, undefined);
+    const withEmpty = instantiateWorld(makeValidProposal(), 42, undefined, {});
+
+    expect(withUndefined.serialize()).toBe(withoutParam.serialize());
+    expect(withEmpty.serialize()).toBe(withoutParam.serialize());
+  });
+
+  it('generateWorld threads opts.stackTuning through to instantiateWorld unchanged -- omitted opts.stackTuning is byte-identical to a direct instantiateWorld(proposal, seed) call', async () => {
+    const proposal = makeValidProposal();
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 9, { stackTuning: {} });
+    expect(result.ok).toBe(true);
+
+    const direct = instantiateWorld(makeValidProposal(), 9);
+    expect(result.engine!.serialize()).toBe(direct.serialize());
+  });
+
+  it('encounterSpawn.baseChance: 1 spawns on the first zone entry into a tabled zone; baseChance: 0 leaves the same zone entry unspawned (same seed, same deterministic gate roll)', async () => {
+    const seed = 42;
+
+    const highClient = makeMockClient(makeEncounterProposal());
+    const highResult = await generateWorld(highClient, 'test', seed, {
+      stackTuning: { encounterSpawn: { baseChance: 1 } } satisfies WorldStackTuning,
+    });
+    expect(highResult.ok).toBe(true);
+    const highEngine = highResult.engine!;
+    highEngine.submitAction('move', { targetIds: ['market'] });
+    const highSpawns = runEncounterSpawnStep(highEngine);
+    expect(highSpawns.length).toBe(1);
+    expect(highSpawns[0]?.encounterId).toBe('market-ambush');
+
+    const lowClient = makeMockClient(makeEncounterProposal());
+    const lowResult = await generateWorld(lowClient, 'test', seed, {
+      stackTuning: { encounterSpawn: { baseChance: 0 } } satisfies WorldStackTuning,
+    });
+    expect(lowResult.ok).toBe(true);
+    const lowEngine = lowResult.engine!;
+    lowEngine.submitAction('move', { targetIds: ['market'] });
+    const lowSpawns = runEncounterSpawnStep(lowEngine);
+    expect(lowSpawns.length).toBe(0);
+  });
+
+  it('an omitted encounter table is untouched by encounterSpawn levers -- the presence-optional contract for the module itself stays intact', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'No Encounters World';
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1, {
+      stackTuning: { encounterSpawn: { baseChance: 1, safetyStep: 0.5 } },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.modules['encounter-spawn']).toBeFalsy();
+  });
+
+  it('districtDecay overrides the module default decay config: a raised decayRate drains an elevated alertPressure further per district-tick than the default config does', () => {
+    // district-core.js's decay is verb-driven ('district-tick', submitted by
+    // world-tick internally each round) rather than construction-time state,
+    // so a bare Engine.serialize() right after instantiateWorld cannot
+    // distinguish the two configs (confirmed: identical output before this
+    // test's fix) -- the lever must be observed by actually running a
+    // district-tick, not by diffing a fresh snapshot.
+    const proposal = makeValidProposal();
+    // No proposal.districts authored -> mapDistrictsFromProposal derives one
+    // district per zone (world-gen.ts), id === zone id.
+    const districtId = 'market';
+
+    const defaultEngine = instantiateWorld(proposal, 42);
+    const tunedEngine = instantiateWorld(proposal, 42, undefined, {
+      districtDecay: { decayRate: 5 },
+    });
+
+    modifyDistrictMetric(defaultEngine.store.state, districtId, 'alertPressure', 20);
+    modifyDistrictMetric(tunedEngine.store.state, districtId, 'alertPressure', 20);
+    expect(getDistrictMetric(defaultEngine.world, districtId, 'alertPressure')).toBe(20);
+    expect(getDistrictMetric(tunedEngine.world, districtId, 'alertPressure')).toBe(20);
+
+    defaultEngine.submitAction('district-tick');
+    tunedEngine.submitAction('district-tick');
+
+    // Default decayRate (1): 20 -> 19. Tuned decayRate (5): 20 -> 15.
+    expect(getDistrictMetric(defaultEngine.world, districtId, 'alertPressure')).toBe(19);
+    expect(getDistrictMetric(tunedEngine.world, districtId, 'alertPressure')).toBe(15);
   });
 });

@@ -165,6 +165,22 @@
     {
       "id": "unknown-command-answered",
       "check": "A slash command the game does not know was answered at once with a correction or the commands valid now, without costing a turn or being narrated as an in-world action."
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "check": "When the player answered an NPC's question with a plain sentence (no command verb), the game treated it as speech to that NPC and the NPC replied, rather than asking the player to clarify."
+    },
+    {
+      "id": "alias-moved",
+      "check": "A slash movement command (/go, /move, or /zone with an exit name) moved the player, or the reply named the exact input to use; /rumors answered in play mode."
+    },
+    {
+      "id": "price-seen",
+      "check": "The play screen or a district view showed a market line with an item, a number, and a note about standing or markup, without the player opening /market or /trade."
+    },
+    {
+      "id": "pressure-line-seen",
+      "check": "When a faction pressure spawned, escalated, resolved, or expired, a line said so on the play screen the round it happened, not only in the session recap."
     }
   ],
   "screenChars": 7000,

@@ -10,8 +10,13 @@ fixed ComfyUI workflow, and the studio's painterly LoRAs as the house look.
 (39 findings from four Opus research agents, every source retrieved; arXiv/DOI
 items pass the different-family citation gate before they bear weight;
 load-bearing choices cite findings by number). **Status: DRAFT for the
-Director's review before any code (dogfood-swarm law 8).** Verification
-status is annotated at the head of the dispatch once the gates close.
+Director's review before any code (dogfood-swarm law 8).**
+**Verification:** every DOI and arXiv id resolved; 25 of 39 findings supported
+outright by the different-family gate, 8 supported in gist and trimmed to
+their abstracts, 2 dropped as unsupported by their abstracts (the
+masked-embedding and story-consistency claims), 2 advisory (DreamBooth's
+subject set; the seductive-details meta-analysis), none fabricated. Receipts
+in the study-swarm folder.
 
 ## What is on the rig (measured 2026-09-01)
 
@@ -69,18 +74,24 @@ status is annotated at the head of the dispatch once the gates close.
   the canonical reference; every variant (wounded, older, hooded, bloodied)
   is produced by Qwen-Image-Edit from the canonical image with the variant
   named in the edit prompt, never by editing the previous variant (9, 3).
-- **Identity and style ride separate channels** (4): the style LoRA carries
-  the look; identity comes from the canonical reference through the edit
-  model (and an image-prompt adapter only if the Qwen runtime exposes one
-  at execute time — verified then, not assumed).
-- **Consistency check for illustrated faces and creatures:** foreground-
-  masked embedding similarity (DINO-family) between variant and canonical (6,
-  8), never ArcFace (7); paired with a VLM judge asked pairwise "is this the
-  same character" (11). Thresholds are A6-style levers set from a measured
-  baseline on the starter cast, not guessed.
+- **Identity and style ride separate channels** (4, trimmed at the gate to
+  "a dedicated identity method beats baselines"; the split itself is the
+  agent's reading, kept as design judgment): the style LoRA carries the
+  look; identity comes from the canonical reference through the edit model
+  (and an image-prompt adapter only if the Qwen runtime exposes one at
+  execute time — verified then, not assumed).
+- **Consistency check for illustrated faces and creatures:** a VLM judge
+  asked pairwise "is this the same character" (11, supported) is the
+  primary check, because face-identity encoders degrade under stylization
+  (7); a foreground-masked embedding similarity is added as a LOCAL
+  MEASUREMENT (the cited support for it, 8, was dropped at the gate; 6 is
+  advisory) — thresholds are A6-style levers set from a measured baseline on
+  the starter cast, and the embedding check only gates once that baseline
+  shows it separates identities.
 - **Seed is derived, not random:** `seed = hash(packId, entityId,
   descriptionHash)`; a fixed seed is a reproducibility aid, not the
-  consistency mechanism (10).
+  consistency mechanism (9, 3; the story-consistency citation was dropped
+  at the gate).
 
 ### 3. The acceptance gate (findings 22–31)
 
@@ -90,7 +101,8 @@ status is annotated at the head of the dispatch once the gates close.
   structural (31): species, sex-if-stated, age band, hair, one signature
   garment, one signature prop, mood register. The verifier (ai-eyes) answers
   each; an accepted portrait passes every required question.
-- **Best-of-N ranked, no aesthetics** (24, 27, 28, 29): generate N = 3
+- **Best-of-N ranked, no aesthetics** (24, 28, 29; 27 supports search
+  improving output, the verifier-exploitation detail was trimmed): generate N = 3
   candidates (seed, seed+1, seed+2), rank by the count of passed questions
   and a pairwise VLM comparison for ties, accept the top; never use an
   aesthetic or preference score as the gate. On zero acceptable candidates,
@@ -105,11 +117,13 @@ status is annotated at the head of the dispatch once the gates close.
 
 ### 4. Where the face appears (findings 32–39)
 
-- **After the first description, never before** (32): a portrait shows the
+- **After the first description, never before** (32, trimmed to "imagery
+  and illustration interact rather than one suppressing the other"): a portrait shows the
   round after the player first reads the character's description; a portrait
   never carries a fact the prose omits (33).
-- **Only for characters who matter** (34): named NPCs, petitioners, named
-  monsters and bosses; not filler encounters.
+- **Only for characters who matter** (33, 36; 34 is advisory after the
+  gate): named NPCs, petitioners, named monsters and bosses; not filler
+  encounters.
 - **One look for the whole cast** (35, 36): one style, one eye and mouth
   treatment, one lighting model; fidelity matched to the writing's density
   (37) by the shot slot (bust for minor named, three-quarter for major).

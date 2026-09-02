@@ -1,4 +1,13 @@
+import type { WorldState } from '@ai-rpg-engine/core';
+import { isNamedNpc, type OpportunityState } from '@ai-rpg-engine/modules';
 import { DIRECTOR_COMMANDS } from '../display/director-renderer.js';
+// WO-B1F-8 (design lock 8, ADDENDUM-COMMON): the SAME formatter the command
+// strip itself uses (generateCommandStrip's own doc comment names this exact
+// pair of consumers: "the command strip's own state-derived inputs"). This
+// is a cross-domain IMPORT (reading a cli-display export), not an edit to
+// src/display/**.
+import { generateCommandStrip } from '../display/contextual-suggestions.js';
+import { describeHostiles } from './condition.js';
 // WO-B1-7 (slice B1 §3, design lock 4, ADDENDUM-COMMON): the parser-layer
 // reply for an unknown play-mode `/word` -- costs no turn and never reaches
 // the interpreter. Computes `{ nearest, family, validNow }`
@@ -24,6 +33,11 @@ export const PLAY_COMMAND_NAMES: readonly string[] = [
   'conclude', 'recruit', 'dismiss', 'archive', 'export',
   // Mode switches, checked before the play-mode dispatch but valid from play mode.
   'director', 'd',
+  // WO-B1F-2 (design lock 2): the move-verb slash aliases and the play-mode
+  // `/rumors` reader -- so the near-miss logic (below) recognizes these as
+  // KNOWN names (never suggests "Did you mean /go?" for literal /go) and so
+  // a genuine typo near one of them (e.g. "/gp") still gets corrected here.
+  'go', 'move', 'zone', 'rumors',
 ];
 
 /**
@@ -69,7 +83,13 @@ export type UnknownCommandInfo = {
   nearest: string | undefined;
   /** Which family the nearest match belongs to; `null` when nothing matched closely enough to attribute one. */
   family: 'play' | 'director' | null;
-  /** The 2-3 commands valid right now, WITH leading slash. */
+  /**
+   * The 2-5 things valid right now. Curated fallback entries carry a
+   * leading slash (`/help`); WO-B1F-8's state-derived entries (design lock
+   * 8) are plain typeable actions with no slash (`talk to Aldric`, `go
+   * Chapel Nave`) -- the reply's own render call site (cli-display's
+   * renderUnknownCommand) prints these verbatim either way.
+   */
   validNow: string[];
 };
 
@@ -80,13 +100,73 @@ function isNearMiss(distance: number, wordLength: number): boolean {
 }
 
 /**
+ * WO-B1F-8 (design lock 8, ADDENDUM-COMMON): the ONE state-derived function
+ * that feeds both the command strip (game.ts's own renderPlayOutput call
+ * site threads this SAME array through as `commandStrip`) and this file's
+ * `computeUnknownCommandInfo` -- three family playtests observed "the
+ * unknown-command reply's valid-now list is fixed; the command strip
+ * already knows the state," so both surfaces now read from one derivation
+ * instead of the reply staying frozen at the curated PLAY_VALID_NOW list.
+ *
+ * Derives generateCommandStrip's own raw inputs (named NPCs co-located with
+ * the player, the zone's exits, live hostiles via describeHostiles -- the
+ * SAME shared hostile-list function design lock 1 already requires every
+ * hostile-listing surface to use, condition.ts's own doc comment) directly
+ * from `world`, since none of that is GameSession-only state; `activeOpportunities`
+ * is passed in separately because this app tracks opportunities as a
+ * GameSession field, never written into `world.modules` (see
+ * buildNPCDialogueContext's own doc comment on the identical gap for the
+ * opportunity context string). "Most relevant first" for co-located named
+ * NPCs is this domain's own deterministic choice (sorted by entity id, same
+ * tie-break describeHostiles already uses) -- generateCommandStrip only
+ * ever reads its own `namedNpcsHere[0]`, so this is provisional until a real
+ * relevance ranking (e.g. "has an open ask") is asked for.
+ */
+export function deriveValidNowFromWorld(
+  world: WorldState,
+  activeOpportunities: OpportunityState[],
+): string[] {
+  const zoneId = world.locationId;
+  const namedNpcsHere = Object.values(world.entities)
+    .filter((e) => e.zoneId === zoneId && isNamedNpc(e, world.playerId))
+    .map((e) => e.id)
+    .sort()
+    .map((id) => world.entities[id]?.name)
+    .filter((n): n is string => !!n);
+  const exits = (world.zones[zoneId]?.neighbors ?? [])
+    .map((id) => world.zones[id]?.name)
+    .filter((n): n is string => !!n);
+  const hostiles = describeHostiles(world, zoneId);
+  const openOpportunityTitle = activeOpportunities.find((o) => o.status === 'available')?.title;
+
+  return generateCommandStrip({
+    namedNpcsHere,
+    exits,
+    hostiles,
+    openOpportunityTitle,
+  });
+}
+
+/**
  * Resolve an unknown play-mode `/word` into the reply data cli-display's
  * `renderUnknownCommand` renders. `mode` is the session's CURRENT mode
  * (always 'play' per this WO's own call site -- director-mode unknown
  * commands are a design lock 4 case this wave doesn't cover, since
  * design doc §3 scopes the parser-layer reply to play mode specifically).
+ *
+ * `stateStrip` (WO-B1F-8, design lock 8): deriveValidNowFromWorld()'s own
+ * output, when the caller has one -- used for `validNow` in place of the
+ * curated PLAY_VALID_NOW/DIRECTOR_VALID_NOW list whenever it is non-empty
+ * (falls back to the curated list otherwise, e.g. a zone with no NPCs, no
+ * exits, no hostiles, and no opportunity, which the curated list still
+ * covers). Omitted entirely, this function behaves exactly as before this
+ * WO -- every existing caller/test that doesn't pass one is unaffected.
  */
-export function computeUnknownCommandInfo(input: string, mode: 'play' | 'director'): UnknownCommandInfo {
+export function computeUnknownCommandInfo(
+  input: string,
+  mode: 'play' | 'director',
+  stateStrip?: string[],
+): UnknownCommandInfo {
   const word = input.trim().replace(/^\//, '').split(/\s+/)[0]?.toLowerCase() ?? '';
 
   let nearest: string | undefined;
@@ -120,8 +200,14 @@ export function computeUnknownCommandInfo(input: string, mode: 'play' | 'directo
   // followed it into /conclude and ended its own game at turn 15. The
   // "two or three commands valid right now" are the ones a lost player
   // needs, in a fixed order, not the first three by letter.
-  const priority = mode === 'play' ? PLAY_VALID_NOW : DIRECTOR_VALID_NOW;
-  const validNow = priority.map((n) => `/${n}`);
+  // WO-B1F-8 (design lock 8): in play mode, the state-derived strip (when
+  // non-empty) replaces the curated list -- these are real, currently-typeable
+  // action inputs ("talk to X", "go Y"), not `/word` meta-commands, so this
+  // only ever applies in play mode (DIRECTOR_VALID_NOW's `/world`/`/people`/
+  // `/back` have no state-derived equivalent and are unaffected).
+  const validNow = mode === 'play' && stateStrip && stateStrip.length > 0
+    ? stateStrip
+    : (mode === 'play' ? PLAY_VALID_NOW : DIRECTOR_VALID_NOW).map((n) => `/${n}`);
 
   return {
     input,

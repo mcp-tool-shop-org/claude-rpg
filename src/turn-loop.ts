@@ -294,6 +294,21 @@ export type ExecuteTurnOpts = {
    */
   conversationHistory?: Map<string, ConversationExchange[]>;
   /**
+   * WO-B1F-1 (design lock 1, ADDENDUM-COMMON): the npcId whose dialogue was
+   * addressed to the player on the turn immediately before this one --
+   * `undefined` when the previous turn carried no real (non-fallback)
+   * dialogue, or none has happened yet this session. game.ts's own
+   * recordConversationExchange sets/clears this every turn (the same guard
+   * that already decides whether to grow npcConversations: real dialogue
+   * sets it to that NPC's id, anything else -- a non-speak turn, a
+   * fallback stall -- clears it to undefined). Threaded straight through to
+   * action-interpreter.ts's interpretAction()/tryFastInterpret(), which
+   * resolves an otherwise-unmatched free-prose input as `speak` to this
+   * NPC rather than falling through to the LLM slow path (see that
+   * function's own doc comment for the full contract).
+   */
+  lastSpeakerNpcId?: string;
+  /**
    * F-940cd4d0: count of consecutive non-fatal narrateScene fallbacks
    * immediately preceding this turn, forwarded straight into narrateScene's
    * own opts (narrator.ts's NarrateSceneOpts.consecutiveFallbacks) so a
@@ -489,7 +504,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, chronicleContext, onNarrationChunk,
     tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
-    onResolved, getMoodTransition, budget,
+    onResolved, getMoodTransition, budget, lastSpeakerNpcId,
   } = opts;
   const tuning = opts.tuning ?? resolveTuning();
   const previousLocationId = engine.world.locationId;
@@ -519,6 +534,13 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     playerInput,
     availableVerbs,
     recentContext,
+    // WO-B1F-1 (design lock 1): reply-to-speaker -- see
+    // ExecuteTurnOpts.lastSpeakerNpcId's own doc comment above.
+    lastSpeakerNpcId,
+    // WO-B1F-7 (design lock 7): threaded so the help fast-path's own
+    // branch tracing (action-interpreter.ts) can log through the same
+    // logger this turn's action-reasoning entry (just below) already uses.
+    debugLog,
   );
 
   // F-9976a6d6 (SLATE-5e, option (a) only per Director ruling R3): surface

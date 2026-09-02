@@ -19,6 +19,13 @@ vi.mock('./display/play-renderer.js', async (importOriginal) => {
     ...actual,
     renderDeathScreen: vi.fn((opts: { narration: string; characterName?: string }) =>
       `[DEATH SCREEN] ${opts.characterName ?? 'Unknown'}\n${opts.narration}`),
+    // WO-B1F-4/WO-B1F-8 (ADDENDUM-COMMON): delegates to the REAL
+    // implementation by default (every existing test's rendered output is
+    // unaffected) -- wrapped in vi.fn so a test can inspect the opts
+    // game.ts's renderPlayOutput call site actually threads through
+    // (marketQuote, commandStrip), the same spy-on-the-real-impl pattern
+    // turn-loop.test.ts already uses for narrateScene/generateDialogue.
+    renderPlayScreen: vi.fn(actual.renderPlayScreen),
   };
 });
 
@@ -67,6 +74,8 @@ import { MAX_PLAYER_RUMORS } from './game/game-state.js';
 import { generateWorld, type WorldGenProposal } from './foundry/world-gen.js';
 import { createFakeClient } from '../test/helpers/fake-claude-client.js';
 import { filterSupportedVerbs, SUPPORTED_VERBS, KNOWN_EXCLUDED_VERBS } from './turn-loop.js';
+// WO-B1F-4/WO-B1F-8: the mocked-but-delegating spy set up above.
+import { renderPlayScreen } from './display/play-renderer.js';
 
 /**
  * F-4ec3609b (ORDERING contract, cross-domain): turn-loop.ts's executeTurn()
@@ -3684,5 +3693,231 @@ describe('Slice B1 §3 (WO-B1-7): unknown play-mode slash command', () => {
 
     expect(h.session.history.getAll().length).toBe(before);
     expect(reply).toContain('Right now you can:');
+  });
+});
+
+// WO-B1F-1 (design lock 1, ADDENDUM-COMMON): three family playtests found
+// "The dead do not stay buried." typed in answer to an NPC's question met
+// with "I'm not sure what you mean" four times in a row (gemini, run a).
+describe('WO-B1F-1 (design lock 1): reply-to-speaker', () => {
+  it('a free-prose reply with no recognized verb, typed right after an NPC spoke, resolves as speak to that NPC instead of a clarification', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.play('speak to pilgrim');
+    expect(h.lastVerb()).toBe('speak');
+    expect(h.session.npcConversations.get('pilgrim')).toHaveLength(2);
+
+    const reply = await h.play('The dead do not stay buried.');
+
+    expect(h.lastVerb()).toBe('speak');
+    expect(reply).not.toContain('not sure what you mean');
+    const entries = h.session.npcConversations.get('pilgrim');
+    expect(entries).toHaveLength(4);
+    expect(entries![2]).toEqual({ speaker: 'Player', text: 'The dead do not stay buried.' });
+  });
+
+  it('does not resolve as speak when nobody spoke on the immediately preceding turn', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.play('look around');
+    await h.play('The dead do not stay buried.');
+
+    expect(h.lastVerb()).not.toBe('speak');
+    expect(h.session.npcConversations.size).toBe(0);
+  });
+
+  it('clears the reply-to-speaker slot after an intervening non-speak turn -- only the immediately preceding turn counts', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.play('speak to pilgrim');
+    await h.play('look around'); // intervening non-speak turn
+    const reply = await h.play('The dead do not stay buried.');
+
+    expect(h.lastVerb()).not.toBe('speak');
+    // Falls through to the (unconfigured, failing) LLM path -- the same
+    // clarification shape every other genuinely unmatched input gets.
+    expect(reply).toContain('not sure what you mean');
+  });
+});
+
+// WO-B1F-2 (design lock 2, ADDENDUM-COMMON): three family playtests found
+// `/go`, `/move`, `/zone` "unresponsive," and `/rumors` sent the player to
+// director mode instead of reading in place.
+describe('WO-B1F-2 (design lock 2): play-mode move aliases and /rumors', () => {
+  it('/go <exit> resolves through the ordinary move fast path and consumes a turn (article-stripped exit match)', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const before = h.turnCount();
+
+    await h.play('/go nave');
+
+    expect(h.turnCount()).toBe(before + 1);
+    expect(h.lastVerb()).toBe('move');
+    expect(h.session.engine.world.locationId).toBe('chapel-nave');
+  });
+
+  it('/move and /zone are the same move alias as /go', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const hMove = createHarness();
+    await hMove.play('/move nave');
+    expect(hMove.session.engine.world.locationId).toBe('chapel-nave');
+
+    const hZone = createHarness();
+    await hZone.play('/zone nave');
+    expect(hZone.session.engine.world.locationId).toBe('chapel-nave');
+  });
+
+  it('a bare /go with no argument costs no turn and shows a usage message, not a self-referential "did you mean /go?"', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const before = h.turnCount();
+
+    const reply = await h.play('/go');
+
+    expect(h.turnCount()).toBe(before);
+    expect(reply).toContain('Usage: /go <exit>');
+    expect(reply).not.toContain('Did you mean');
+  });
+
+  it('/rumors in play mode reads through the same director-renderer view, without switching modes or consuming a turn', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const before = h.turnCount();
+
+    const reply = await h.play('/rumors');
+
+    expect(h.turnCount()).toBe(before);
+    expect(h.session.mode).toBe('play');
+    expect(reply).toContain('No player rumors yet.');
+  });
+});
+
+// WO-B1F-4 (design lock 4, ADDENDUM-COMMON): three family playtests found
+// price-reacts 0 of 5 -- no seat ever found /market or /trade unprompted.
+describe('WO-B1F-4 (design lock 4): market-quote presenter field', () => {
+  it("buildPresenterMarketQuote() fills item/price/note from the district's existing engine-priced quote, with a markup-only note when the district has no controlling faction", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    const presented = (h.session as unknown as {
+      buildPresenterMarketQuote: () => { item: string; price: number; note: string } | undefined;
+    }).buildPresenterMarketQuote();
+
+    expect(presented).toBeDefined();
+    expect(presented!.price).toBeGreaterThan(0);
+    expect(typeof presented!.item).toBe('string');
+    // chapel-grounds (the player's starting district, Slice A5 WO-A5-1's
+    // own fixture note) has no controlling faction authored -- markup-only
+    // note, no faction/standing clause.
+    expect(presented!.note).toMatch(/^[+-]\d+% vs base$/);
+  });
+
+  it("is undefined when the session has no itemCatalog at all (mirrors buildMarketQuote()'s own contract)", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness({ gameOpts: { itemCatalog: undefined } });
+
+    const presented = (h.session as unknown as {
+      buildPresenterMarketQuote: () => unknown;
+    }).buildPresenterMarketQuote();
+
+    expect(presented).toBeUndefined();
+  });
+
+  it("game.ts's renderPlayOutput call site threads marketQuote through to renderPlayScreen's own input", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.play('look around');
+
+    const mocked = vi.mocked(renderPlayScreen);
+    const lastCallOpts = mocked.mock.calls[mocked.mock.calls.length - 1][0] as { marketQuote?: unknown };
+    expect(lastCallOpts.marketQuote).toBeDefined();
+  });
+});
+
+// WO-B1F-5 (design lock 5, ADDENDUM-COMMON): three family playtests found
+// the pressure lifecycle visible only in the recap.
+describe('WO-B1F-5 (design lock 5): a line when a pressure moves', () => {
+  it('a tick-spawned pressure headline also appears through the announcement channel this round, once', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    // Mirrors Slice A2-core's seedBountyConditions (this file, WO-A2-5
+    // describe block above): guarantees a real 'bounty-issued' pressure
+    // spawns on the NEXT tick, not merely probably.
+    h.session.engine.world.globals['player_heat'] = 10;
+    h.session.engine.world.globals['reputation_chapel-undead'] = -50;
+    h.session.engine.world.globals['faction_alert_chapel-undead'] = 60;
+
+    const output = await h.play('look around');
+
+    expect(h.session.activePressures.length).toBe(1);
+    const pressure = h.session.activePressures[0];
+    expect(pressure.kind).toBe('bounty-issued');
+    const headline = `${pressure.kind}: ${pressure.description}`;
+    expect(output).toContain(headline);
+    // Once per event, not once per pushWorldMoved entry that happens to
+    // share a kind -- exactly one occurrence this round.
+    expect(output.split(headline).length - 1).toBe(1);
+  });
+
+  it("a resolved pressure's headline also appears in pendingAnnouncements (the same channel ask/gratitude lines use)", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    const pressure = makePressure({
+      kind: 'bounty-issued',
+      sourceFactionId: 'chapel-undead',
+      triggeredBy: 'test',
+      description: 'a bounty on your head',
+      urgency: 0.5,
+      visibility: 'known',
+      turnsRemaining: 10,
+      potentialOutcomes: [],
+      tags: [],
+      currentTick: h.session.engine.tick,
+    });
+
+    expect(h.session.pendingAnnouncements.length).toBe(0);
+    (h.session as unknown as {
+      resolvePressure: (p: unknown, resolutionType: string, resolvedBy: string) => void;
+    }).resolvePressure(pressure, 'resolved-by-player', 'player');
+
+    expect(
+      h.session.pendingAnnouncements.some((a) => a.startsWith('bounty-issued:')),
+    ).toBe(true);
+  });
+});
+
+// WO-B1F-8 (design lock 8, ADDENDUM-COMMON): three family playtests found
+// the unknown-command reply's valid-now list frozen at the curated default
+// while the command strip already knows the state.
+describe('WO-B1F-8 (design lock 8): valid-now derived from the world, one function feeds both surfaces', () => {
+  it("the unknown-command reply's validNow uses the state-derived strip (co-located NPC/exit) instead of the curated /help list, when the strip is non-empty", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    const reply = await h.session.processInput('/xyzzyplugh');
+
+    expect(reply).toContain('Right now you can:');
+    // The starting zone always has a co-located named NPC and an exit --
+    // the state-derived strip, not the curated "/help · /status ·
+    // /leverage" default.
+    expect(reply).toMatch(/talk to |go /);
+    expect(reply).not.toContain('/help');
+  });
+
+  it("game.ts's renderPlayOutput call site threads the SAME function's output through as commandStrip", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+
+    await h.play('look around');
+
+    const mocked = vi.mocked(renderPlayScreen);
+    const lastCallOpts = mocked.mock.calls[mocked.mock.calls.length - 1][0] as { commandStrip?: string[] };
+    expect(lastCallOpts.commandStrip).toBeDefined();
+    expect(lastCallOpts.commandStrip!.length).toBeGreaterThan(0);
   });
 });

@@ -85,6 +85,29 @@ export function renderPlayOutput(input: {
    * recognition.ts). Green expected at merge, same as `hostiles` above.
    */
   recognitionLine?: string;
+  /**
+   * WO-B1F-4 (design lock 4, ADDENDUM-COMMON): "Market: <item> <price>
+   * (<note>)" in the play screen's location block -- game.ts's own
+   * buildPresenterMarketQuote() fills this from the district's engine-priced
+   * quote (game.ts's existing buildMarketQuote(), wave 8). Passed through to
+   * renderPlayScreen as a plain (non-literal) reference, same
+   * excess-property discipline `hostiles`/`combatLines` above already
+   * established -- cli-display's own WO this same wave adds the matching
+   * field to src/display/play-renderer.ts; green expected at merge.
+   * Undefined renders no market line (byte-identical for every existing
+   * fixture without a market).
+   */
+  marketQuote?: { item: string; price: number; note: string };
+  /**
+   * WO-B1F-8 (design lock 8, ADDENDUM-COMMON): the state-derived command
+   * strip (game.ts's own deriveValidNowFromWorld(), game/unknown-command.ts)
+   * -- already rendered end-to-end by renderPlayScreen (src/display/
+   * play-renderer.ts's own `commandStrip?: string[]` field, WO-B1-18), this
+   * wave's gap was only ever that nothing computed and passed one. Optional
+   * so every existing caller that doesn't pass one keeps rendering without
+   * a "You can: ..." line.
+   */
+  commandStrip?: string[];
 }): string {
   return renderPlayScreen(input);
 }

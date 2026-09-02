@@ -291,7 +291,7 @@ import {
   checkAmbushGratitudeWarning,
 } from './game/recognition.js';
 import { filterHints, readHintLedger, writeHintLedger } from './game/hint-ledger.js';
-import { computeUnknownCommandInfo } from './game/unknown-command.js';
+import { computeUnknownCommandInfo, deriveValidNowFromWorld } from './game/unknown-command.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { hasLivingHostiles } from './runtime/hooks.js';
 // F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
@@ -654,6 +654,23 @@ export class GameSession {
    * below and tickObligations-style Map.set() calls.
    */
   readonly npcConversations: Map<string, ConversationExchange[]>;
+  /**
+   * WO-B1F-1 (design lock 1, ADDENDUM-COMMON): the npcId whose (real,
+   * non-fallback) dialogue was addressed to the player on the MOST
+   * RECENTLY COMPLETED turn -- `null` when that turn had no such dialogue
+   * (a non-speak turn, or a fallback stall). Set/cleared every turn inside
+   * recordConversationExchange() below, using the exact same guard that
+   * already decides whether npcConversations grows, and threaded into the
+   * NEXT turn's executeTurn() call (turn-loop.ts's ExecuteTurnOpts.
+   * lastSpeakerNpcId) so a free-prose reply the fast path can't otherwise
+   * match resolves as `speak` to this NPC instead of a clarification.
+   * Deliberately session-local, not persisted to a save -- this is a
+   * one-turn UX affordance (mirrors consecutiveFallbacks' own non-persisted
+   * discipline just below in ExecuteTurnOpts), not campaign state; a
+   * resumed save simply starts with no pending reply-to-speaker context,
+   * same as a save resuming with consecutiveFallbacks reset to 0.
+   */
+  private lastSpeakerNpcId: string | null = null;
   /**
    * WO-A3-2 (slice A3 §3): the admitted `@ai-rpg-engine/rumor-system`
    * instance — host-owned, constructed on a new game with
@@ -1056,6 +1073,50 @@ export class GameSession {
       quotedPrice,
       basePrice: SELL_BASE_VALUE,
     };
+  }
+
+  /**
+   * WO-B1F-4 (design lock 4, ADDENDUM-COMMON): "Market: <item> <price>
+   * (<note>)" for the play screen's own location block -- three family
+   * playtests found price-reacts 0 of 5 (no seat ever found /market or
+   * /trade unprompted). Reuses buildMarketQuote()'s existing engine-priced
+   * quote (same item selection, same `quoteBuyPrice` call the wave-8
+   * /market and /trade paths already use) rather than recomputing
+   * anything; undefined whenever buildMarketQuote() is (no market in this
+   * district), so every existing fixture without a market renders
+   * byte-identical (the field is simply absent).
+   *
+   * `note` mirrors the markup/standing math src/display/director-renderer.ts's
+   * own (module-private, out of this domain's edit scope) formatMarketQuoteLine
+   * already carries for `/market` -- duplicated here at the same handful of
+   * arithmetic lines rather than exported, since the wording itself
+   * ("Market: ..." vs "Merchants here quote ...") is a deliberately
+   * different, NEW string per this WO, not a reuse of that render (listed
+   * under strings_for_coordinator_review). Unlike that renderer, a district
+   * with no controlling faction still gets a markup-only note (omitting
+   * the faction/standing clause) rather than no note at all -- this WO's
+   * own contract says the field is absent only when the district has no
+   * market, not when it merely lacks a controlling faction.
+   */
+  private buildPresenterMarketQuote(): { item: string; price: number; note: string } | undefined {
+    const quote = this.buildMarketQuote();
+    if (!quote) return undefined;
+
+    const itemName = this.itemCatalog?.items.find((i) => i.id === quote.sampleItemId)?.name ?? quote.sampleItemId;
+    const pctDelta = quote.basePrice > 0
+      ? Math.round(((quote.quotedPrice - quote.basePrice) / quote.basePrice) * 100)
+      : 0;
+    const sign = pctDelta >= 0 ? '+' : '';
+    let note = `${sign}${pctDelta}% vs base`;
+    if (quote.controllingFactionId) {
+      const factionName = this.engine.world.factions[quote.controllingFactionId]?.name ?? quote.controllingFactionId;
+      const reputation = (this.engine.world.factions[quote.controllingFactionId]?.reputation ?? 0)
+        + Number(this.engine.world.globals?.[`reputation_${quote.controllingFactionId}`] ?? 0);
+      const standing = reputation <= -30 ? 'hostile' : reputation <= 10 ? 'wavering' : reputation <= 60 ? 'favorable' : 'allied';
+      note += ` · ${factionName}: ${standing}`;
+    }
+
+    return { item: itemName, price: quote.quotedPrice, note };
   }
 
   /**
@@ -1693,10 +1754,20 @@ export class GameSession {
     // straight from this round's own WorldTickResult (pressure-resolved is
     // pushed from resolvePressure() instead — see its own doc comment).
     for (const p of tickResult.spawned) {
-      this.pushWorldMoved('pressure-spawned', `${p.kind}: ${p.description}`);
+      const headline = `${p.kind}: ${p.description}`;
+      this.pushWorldMoved('pressure-spawned', headline);
+      // WO-B1F-5 (design lock 5, ADDENDUM-COMMON): pressure lifecycle
+      // headlines were only ever visible in the recap (all three family
+      // playtests) -- also surfaced through the SAME announcement channel
+      // the ask lines use, once, the round it happens. String unchanged
+      // (B1-COORDINATOR-STRINGS ruling: "the existing headlines,
+      // unchanged").
+      this.pendingAnnouncements.push(headline);
     }
     for (const fallout of tickResult.expired) {
-      this.pushWorldMoved('pressure-expired', `${fallout.resolution.pressureKind}: ${fallout.summary}`);
+      const headline = `${fallout.resolution.pressureKind}: ${fallout.summary}`;
+      this.pushWorldMoved('pressure-expired', headline);
+      this.pendingAnnouncements.push(headline);
     }
     for (const opp of tickResult.opportunitiesSpawned) {
       this.pushWorldMoved('opportunity-offered', opp.title);
@@ -2113,9 +2184,64 @@ export class GameSession {
     return line;
   }
 
+  /**
+   * WO-B1F-2 (design lock 2, ADDENDUM-COMMON): every field executeDirectorCommand()
+   * needs EXCEPT `command` -- extracted so play-mode's `/rumors` alias
+   * (design lock 2: "the director renderer's rumor view, same output") can
+   * call the SAME renderer director mode already dispatches to, without
+   * duplicating this ~60-line options assembly or forking any of its
+   * strings. The director-mode dispatch just below and the play-mode
+   * `/rumors` branch (processInput) both do
+   * `executeDirectorCommand({ command: <the raw command string>, ...this.buildDirectorCommandOptions() })`.
+   */
+  private buildDirectorCommandOptions(): Omit<Parameters<typeof executeDirectorCommand>[0], 'command'> {
+    const dirRecommendation = this.profile ? this.buildMoveRecommendation() : null;
+    return {
+      world: this.engine.world,
+      playerRumors: this.playerRumors,
+      activePressures: this.activePressures,
+      resolvedPressures: this.resolvedPressures,
+      journal: this.journal,
+      currentTick: this.engine.tick,
+      characterName: this.profile?.build.name,
+      characterTitle: this.profile?.custom.title as string | undefined,
+      factionProfiles: this.lastFactionProfiles,
+      lastFactionActions: this.lastFactionActions,
+      leverageState: this.profile ? getLeverageState(this.profile.custom) : undefined,
+      strategicMap: this.profile ? this.buildCurrentStrategicMap() : undefined,
+      statusData: this.getStatusData() ?? undefined,
+      suggestedMove: dirRecommendation?.top3[0] ?? null,
+      situationTag: dirRecommendation?.situationTag ?? 'safe',
+      profileCustom: this.profile?.custom as Record<string, string | number | boolean> | undefined,
+      npcProfiles: this.lastNpcProfiles,
+      lastNpcActions: this.lastNpcActions,
+      npcObligations: this.npcObligations,
+      partyState: this.partyState,
+      profile: this.profile,
+      itemCatalog: this.itemCatalog,
+      districtEconomies: this.districtEconomies,
+      genre: this.genre,
+      activeOpportunities: this.activeOpportunities,
+      arcSnapshot: this.arcSnapshot,
+      endgameTriggers: this.endgameTriggers,
+      finaleOutline: this.finaleOutline,
+      worldLedger: this.buildWorldLedger(),
+      // Stitch (wave 8): cli-display keys quotes by districtId over a list;
+      // game-core can only price the player's own district (its
+      // buildMarketQuote doc comment), so the list holds that one quote.
+      marketQuotes: (() => { const quote = this.buildMarketQuote(); return quote ? [quote] : []; })(),
+      rumorBoard: this.getRumorBoard(),
+      tuningView: this.getTuningView(),
+    };
+  }
+
   /** Process one player input and return the rendered output. */
   async processInput(input: string): Promise<string> {
-    const trimmed = input.trim();
+    // WO-B1F-2 (design lock 2): mutable so the `/go|/move|/zone <exit>`
+    // play-mode alias branch below can rewrite it to the equivalent
+    // free-prose move input before falling through to ordinary turn
+    // execution -- every other branch in this method still only ever reads it.
+    let trimmed = input.trim();
 
     // Meta commands
     if (trimmed.toLowerCase() === 'quit' || trimmed.toLowerCase() === 'exit') {
@@ -2137,72 +2263,39 @@ export class GameSession {
 
     // Director mode commands
     if (this.mode === 'director' && trimmed.startsWith('/')) {
-      const dirRecommendation = this.profile ? this.buildMoveRecommendation() : null;
-      return executeDirectorCommand({
-        command: trimmed,
-        world: this.engine.world,
-        playerRumors: this.playerRumors,
-        activePressures: this.activePressures,
-        resolvedPressures: this.resolvedPressures,
-        journal: this.journal,
-        currentTick: this.engine.tick,
-        characterName: this.profile?.build.name,
-        characterTitle: this.profile?.custom.title as string | undefined,
-        factionProfiles: this.lastFactionProfiles,
-        lastFactionActions: this.lastFactionActions,
-        leverageState: this.profile ? getLeverageState(this.profile.custom) : undefined,
-        strategicMap: this.profile ? this.buildCurrentStrategicMap() : undefined,
-        statusData: this.getStatusData() ?? undefined,
-        suggestedMove: dirRecommendation?.top3[0] ?? null,
-        situationTag: dirRecommendation?.situationTag ?? 'safe',
-        profileCustom: this.profile?.custom as Record<string, string | number | boolean> | undefined,
-        npcProfiles: this.lastNpcProfiles,
-        lastNpcActions: this.lastNpcActions,
-        npcObligations: this.npcObligations,
-        partyState: this.partyState,
-        profile: this.profile,
-        itemCatalog: this.itemCatalog,
-        districtEconomies: this.districtEconomies,
-        genre: this.genre,
-        activeOpportunities: this.activeOpportunities,
-        arcSnapshot: this.arcSnapshot,
-        endgameTriggers: this.endgameTriggers,
-        finaleOutline: this.finaleOutline,
-        // WO-A4-4 (slice A4 §3, design lock 6): the tick's own strategic
-        // ledger — cli-display's ExecuteDirectorCommandOptions/
-        // renderCompactStatus gain this field in their own worktree this
-        // same wave (director-renderer.ts / status-compact.ts, out of
-        // this domain's globs); this call site supplies the data ahead of
-        // that landing, per the addendum's "code against the doc's
-        // contract" instruction — green expected at merge.
-        worldLedger: this.buildWorldLedger(),
-        // WO-A5-1 (slice A5 §1, design lock 1): see buildMarketQuote()'s
-        // own doc comment — cli-display's /market and /trade renderers
-        // (their own worktree this wave) gain the matching
-        // ExecuteDirectorCommandOptions field; green expected at merge,
-        // same pattern as worldLedger above.
-        // Stitch (wave 8): cli-display keys quotes by districtId over a list;
-        // game-core can only price the player's own district (its
-        // buildMarketQuote doc comment), so the list holds that one quote.
-        marketQuotes: (() => { const quote = this.buildMarketQuote(); return quote ? [quote] : []; })(),
-        // WO-A5-4 (slice A5 §6, design lock 6): see getRumorBoard()'s own
-        // doc comment — cli-display's /rumors renderer (its own worktree)
-        // gains the matching field; green expected at merge.
-        rumorBoard: this.getRumorBoard(),
-        // WO-A6-3 (slice A6 §5): see getTuningView()'s own doc comment —
-        // cli-display's /tuning director command (WO-A6-5, their own
-        // worktree this wave) gains the matching
-        // ExecuteDirectorCommandOptions field; green expected at merge,
-        // same pattern as worldLedger/marketQuotes/rumorBoard above.
-        tuningView: this.getTuningView(),
-      });
+      return executeDirectorCommand({ command: trimmed, ...this.buildDirectorCommandOptions() });
     }
 
     // Play mode slash commands (no turn consumed)
     if (this.mode === 'play' && trimmed.startsWith('/')) {
       const cmdParts = trimmed.split(/\s+/);
       const playCmd = cmdParts[0]?.toLowerCase();
-      if (playCmd === '/help') {
+      // WO-B1F-2 (design lock 2, ADDENDUM-COMMON): `/go`, `/move`, `/zone
+      // <exit>` are play-mode ALIASES for the move verb, not rendered
+      // slash commands -- three family playtests found them "unresponsive"
+      // because this whole block returns before a turn ever executes.
+      // Unlike every other play-mode /word below, a real argument rewrites
+      // `trimmed` to the equivalent free-prose move input and falls THROUGH
+      // past every branch here into the ordinary turn-execution path below
+      // (article-stripped exit match is action-interpreter.ts's own
+      // existing `go <exit>` fast path -- no new engine verb, no new
+      // matching logic). A bare alias with no argument has nothing to move
+      // to and is handled just below like any other malformed slash usage.
+      const moveAliasArg = (playCmd === '/go' || playCmd === '/move' || playCmd === '/zone') && cmdParts.length > 1
+        ? cmdParts.slice(1).join(' ')
+        : undefined;
+      if (moveAliasArg !== undefined) {
+        trimmed = `go ${moveAliasArg}`;
+      } else if (playCmd === '/go' || playCmd === '/move' || playCmd === '/zone') {
+        return `  Usage: ${playCmd} <exit>`;
+      } else if (playCmd === '/rumors') {
+        // WO-B1F-2 (design lock 2): "/rumors is readable from play mode
+        // (the director renderer's rumor view, same output)" -- reuses the
+        // SAME executeDirectorCommand()/`/rumors` case director mode
+        // already dispatches to (director-renderer.ts, out of this
+        // domain's edit scope), never a forked copy of its strings.
+        return executeDirectorCommand({ command: trimmed, ...this.buildDirectorCommandOptions() });
+      } else if (playCmd === '/help') {
         const sub = cmdParts[1];
         if (!sub) return renderPlayHelp();
         if (sub === 'leverage') return renderLeverageHelp();
@@ -2210,6 +2303,13 @@ export class GameSession {
         if (sub === 'conclude' || sub === 'conclusion' || sub === 'finale') return renderConcludeHelp();
         return renderPackQuickstart(sub);
       }
+      // WO-B1F-2: every branch below is a genuine rendered slash command
+      // (no turn consumed) -- skipped entirely when `trimmed` was just
+      // rewritten to a move-alias's equivalent free-prose input above, so
+      // that rewritten input falls through to the ordinary turn-execution
+      // path below instead of being misread as "still unknown" by the
+      // fallback at the end of this chain.
+      if (moveAliasArg === undefined) {
       if (playCmd === '/status') {
         if (!this.profile) return '  No profile loaded.';
         const leverageState = getLeverageState(this.profile.custom);
@@ -2292,13 +2392,21 @@ export class GameSession {
       // (the Phase-9 playtest finding this WO exists to fix: an unknown
       // slash command used to fall through to the LLM as free prose).
       // Stitched at wave 10: rendered by cli-display's own renderUnknownCommand.
-      const info = computeUnknownCommandInfo(trimmed, this.mode);
+      // WO-B1F-8 (design lock 8): the state-derived strip, when non-empty,
+      // replaces the curated valid-now list -- see
+      // deriveValidNowFromWorld's own doc comment (game/unknown-command.ts).
+      const info = computeUnknownCommandInfo(
+        trimmed,
+        this.mode,
+        deriveValidNowFromWorld(this.engine.world, this.activeOpportunities),
+      );
       return renderUnknownCommand({
         input: playCmd,
         nearest: info.nearest,
         family: info.family ?? undefined,
         validNow: info.validNow,
       });
+      }
     }
 
     // F-6bc0721e (SLATE-6, death-as-setback per Director ruling R1): gate
@@ -2417,6 +2525,9 @@ export class GameSession {
         // once it knows which NPC is being spoken to (see
         // ExecuteTurnOpts.conversationHistory's doc comment).
         conversationHistory: this.npcConversations,
+        // WO-B1F-1 (design lock 1): see field's own doc comment above --
+        // set by the PREVIOUS turn's recordConversationExchange() call.
+        lastSpeakerNpcId: this.lastSpeakerNpcId ?? undefined,
         // F-940cd4d0: session-local counter, reset/incremented below once
         // this turn's own narrationResult.isFallback is known.
         consecutiveFallbacks: this.consecutiveFallbacks,
@@ -2794,6 +2905,14 @@ export class GameSession {
           hostiles: describeHostiles(this.engine.world, this.engine.world.locationId),
           combatLines: turnResult.combatLines,
           recognitionLine: turnResult.recognitionLine,
+          // WO-B1F-4 (design lock 4): undefined when the player's district
+          // has no market (buildPresenterMarketQuote()'s own contract).
+          marketQuote: this.buildPresenterMarketQuote(),
+          // WO-B1F-8 (design lock 8): the SAME state-derived function the
+          // unknown-command reply's validNow now uses (game/unknown-command.ts) --
+          // one source of truth for "what can the player do right now,"
+          // per this WO's own "one function feeds both surfaces" contract.
+          commandStrip: deriveValidNowFromWorld(this.engine.world, this.activeOpportunities),
         });
     let finalOutput = output;
     // F-cfc5ff37: collect the post-turn "trailer notices" (structured
@@ -3254,7 +3373,14 @@ export class GameSession {
     // resolved half of "pressures spawned/resolved/expired"; the other two
     // (spawned/expired) are pushed in runWorldRound from the tick's own
     // WorldTickResult, below.
-    this.pushWorldMoved('pressure-resolved', `${pressure.kind}: ${fallout.summary}`);
+    {
+      const headline = `${pressure.kind}: ${fallout.summary}`;
+      this.pushWorldMoved('pressure-resolved', headline);
+      // WO-B1F-5 (design lock 5): see the runWorldRound spawned/expired
+      // call sites' identical comment above -- same channel, same
+      // once-per-event discipline, unchanged string.
+      this.pendingAnnouncements.push(headline);
+    }
 
     // Companion reactions to pressure resolution
     if (this.partyState.companions.length > 0) {
@@ -4916,9 +5042,19 @@ export class GameSession {
    */
   private recordConversationExchange(turnResult: TurnResult): void {
     const dialogue = turnResult.dialogue;
-    if (!dialogue || dialogue.isFallback) return;
+    if (!dialogue || dialogue.isFallback) {
+      // WO-B1F-1 (design lock 1): only the turn IMMEDIATELY PRECEDING a
+      // free-prose reply counts as "an NPC just spoke" -- any other turn
+      // (no dialogue at all, or a fallback stall that was never a real
+      // exchange) clears the reply-to-speaker slot, so a sentence typed
+      // several turns after a conversation ended doesn't quietly latch onto
+      // a stale NPC.
+      this.lastSpeakerNpcId = null;
+      return;
+    }
 
     const npcId = dialogue.speakerId;
+    this.lastSpeakerNpcId = npcId;
     const exchanges = this.npcConversations.get(npcId) ?? [];
     exchanges.push({ speaker: 'Player', text: turnResult.playerInput });
     exchanges.push({ speaker: dialogue.speakerName, text: dialogue.text });

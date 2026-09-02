@@ -705,6 +705,67 @@ describe('conversation history seam (F-462792bb)', () => {
   });
 });
 
+// WO-B1F-1 (design lock 1, ADDENDUM-COMMON): the game-core half of
+// reply-to-speaker is purely "thread lastSpeakerNpcId through to
+// interpretAction" -- game.ts owns deciding WHEN to set it (the previous
+// turn's own recordConversationExchange).
+describe('reply-to-speaker seam (WO-B1F-1)', () => {
+  beforeEach(() => {
+    mockedGenerateDialogue.mockClear();
+  });
+
+  it('resolves an otherwise-unmatched free-prose input as speak to ExecuteTurnOpts.lastSpeakerNpcId, and forwards the raw input as the dialogue line', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    const result = await executeTurn({
+      engine, client, history,
+      playerInput: 'The dead do not stay buried.',
+      tone: 'dark fantasy',
+      lastSpeakerNpcId: 'pilgrim',
+    });
+
+    expect(result.interpreted.verb).toBe('speak');
+    expect(result.interpreted.targetIds).toContain('pilgrim');
+    expect(mockedGenerateDialogue).toHaveBeenCalledTimes(1);
+    const call = mockedGenerateDialogue.mock.calls[0];
+    expect(call[2]).toBe('pilgrim'); // npcId
+    expect(call[3]).toBe('The dead do not stay buried.'); // playerUtterance
+  });
+
+  it('does not resolve as speak when lastSpeakerNpcId is omitted (back-compat)', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    const result = await executeTurn({
+      engine, client, history,
+      playerInput: 'The dead do not stay buried.',
+      tone: 'dark fantasy',
+    });
+
+    expect(result.interpreted.verb).not.toBe('speak');
+    expect(mockedGenerateDialogue).not.toHaveBeenCalled();
+  });
+
+  it('an ordinary recognized verb is unaffected by lastSpeakerNpcId being set to a DIFFERENT npc', async () => {
+    const engine = createGame();
+    const client = createMockClient();
+    const history = new TurnHistory();
+
+    const result = await executeTurn({
+      engine, client, history,
+      playerInput: 'look around',
+      tone: 'dark fantasy',
+      lastSpeakerNpcId: 'sister-maren',
+    });
+
+    expect(result.interpreted.verb).toBe('look');
+    expect(mockedGenerateDialogue).not.toHaveBeenCalled();
+  });
+});
+
 // F-940cd4d0: wire narrator.ts's already-built repeat-aware outage messaging
 // -- the game-core half is purely "thread consecutiveFallbacks through to
 // narrateScene, and expose narrationResult.isFallback on TurnResult so

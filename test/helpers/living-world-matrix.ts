@@ -144,6 +144,35 @@ export type MatrixSheetRow = {
   ambushes: number;
   /** Largest absolute round-over-round swing in the player-district sample quote, or null if never priced. */
   maxPriceDelta: number | null;
+  /**
+   * WO-B1F-6 (design doc lock 6): the 1-based round index the scripted
+   * walker's own hp first reached 0 this run, or null if it never did.
+   * Read from the player entity's live `resources.hp` at the END of each
+   * round's processing (same "1-based round the thing was first observed"
+   * convention `heatDecayOnsetRound` above already uses), not from any
+   * event -- a downed player produces no dedicated event of its own on this
+   * engine (verified: `combat.entity.defeated` fires only for the DEFEATED
+   * side's own entity id, and the installed hostile-turn round-stop
+   * discipline (src/game/hostile-turn.ts's own `break` on `hp <= 0`) leaves
+   * the player entity's hp at exactly 0, not negative or removed).
+   */
+  playerDowned: number | null;
+  /**
+   * WO-B1F-6: count of `combat.damage.applied` events across the whole run
+   * whose `targetId` is the player -- i.e. every hostile hit the walker
+   * actually took, regardless of source (the hostile turn today; any future
+   * source of player damage tomorrow, without this column needing a
+   * rewrite). Always 0 at `enemyAggression: 'off'` (the tuning matrix's own
+   * default, `buildHarnessForWorld`'s "off" pin): `runHostileTurn`
+   * returns `NO_ACTION` before any hostile ever acts, so no such event can
+   * exist against the player. Populated once a caller overrides the
+   * default (`LIVING_WORLD_TUNING_JSON='{"enemyAggression":"telegraphed"}'`
+   * or `opts.tuning`), which is the entire point of this column existing on
+   * the tuning-sheet: the coordinator's A6 lever T3 (`enemyDamageScale`)
+   * needs a measured "how many hits actually land" baseline to scale
+   * against.
+   */
+  enemyHitsTaken: number;
   moodTransitions: number;
   rumorsCreated: number;
   rumorsMutated: number;
@@ -460,6 +489,9 @@ async function playWorld(input: MatrixWorldInput, rounds: number, seed: number, 
   let rumorsCreated = 0;
   // Link-3 (named NPC acts) tracking.
   let sawNamedNpcAction = false;
+  // WO-B1F-6 tracking: the downed-metric and the damage lever's own hits count.
+  let playerDowned: number | null = null;
+  let enemyHitsTaken = 0;
 
   // worldMovedLedger is cumulative across the session; poll its length each
   // round and slice the delta, mirroring how this same ledger already
@@ -511,6 +543,24 @@ async function playWorld(input: MatrixWorldInput, rounds: number, seed: number, 
       if (ev.type === 'combat.entity.defeated' && (ev.payload as { entityId?: string }).entityId !== session.engine.world.playerId) {
         killCount++;
       }
+      // WO-B1F-6: every combat.damage.applied event landed against the
+      // player this round, regardless of source (today: only the hostile
+      // turn, src/game/hostile-turn.ts -- always 0 at enemyAggression:
+      // 'off', the matrix's own default; see MatrixSheetRow.enemyHitsTaken's
+      // own doc comment).
+      if (ev.type === 'combat.damage.applied' && (ev.payload as { targetId?: string }).targetId === session.engine.world.playerId) {
+        enemyHitsTaken++;
+      }
+    }
+
+    // WO-B1F-6: the round the scripted walker's own hp first reached 0
+    // (1-based, same convention heatDecayOnsetRound below already uses).
+    // Checked once per round, after this round's turn has fully processed,
+    // so a hit that lands and downs the player mid-round is captured on
+    // the SAME round it happened, not the next one.
+    if (playerDowned === null) {
+      const playerHpNow = session.engine.world.entities[session.engine.world.playerId]?.resources.hp ?? 0;
+      if (playerHpNow <= 0) playerDowned = round + 1;
     }
 
     const heat = Number(session.engine.world.globals[HEAT_KEY] ?? 0);
@@ -646,6 +696,8 @@ async function playWorld(input: MatrixWorldInput, rounds: number, seed: number, 
     opportunitiesExpired,
     ambushes,
     maxPriceDelta,
+    playerDowned,
+    enemyHitsTaken,
     moodTransitions,
     rumorsCreated,
     rumorsMutated,

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { NarrationError } from './llm/claude-errors.js';
+import { createTestLogger } from './game/debug-logger.js';
 
 // Test the fast keyword-based interpreter by importing the module
 // and testing via the public interpretAction with a mock client
@@ -1019,5 +1020,308 @@ describe('WO-B1-3: leading-article stripping, downed-entity exclusion, flee, hel
 
     expect(result.verb).toBe('look');
     expect(result.confidence).toBe('low');
+  });
+});
+
+// WO-B1F-3 (slice B1F §3, design lock 3, ADDENDUM-COMMON): "Brother Aldric"
+// typed alone was met with "Did you want to inspect or move?" (mistral, run
+// a) -- a bare zone-entity name or exit name, with no verb prefix at all,
+// previously fell straight through every fast-path pattern (all of which
+// require a verb prefix) to the LLM.
+describe('WO-B1F-3: bare name means talk; bare exit means move', () => {
+  function mockClient() {
+    return {
+      model: 'mock',
+      generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+      generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+    };
+  }
+
+  it('a bare zone-entity name resolves to speak, with no verb typed at all', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('pilgrim');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('a bare zone-entity name with a leading article ("the pilgrim") still resolves to speak', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'the pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('pilgrim');
+  });
+
+  it('a bare exit name resolves to move', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'nave', engine.getAvailableActions());
+
+    expect(result.verb).toBe('move');
+    expect(result.targetIds).toContain('chapel-nave');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('a bare word matching neither an entity nor an exit still falls through to the LLM (unaffected)', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'xyzzyplugh', engine.getAvailableActions());
+
+    expect(result.verb).toBe('look');
+    expect(result.confidence).toBe('low');
+  });
+});
+
+// WO-B1F-1 (slice B1F §1, design lock 1, ADDENDUM-COMMON): "The dead do not
+// stay buried." typed in answer to an NPC's question was met with "I'm not
+// sure what you mean" four times (gemini, run a).
+describe('WO-B1F-1: reply-to-speaker', () => {
+  function mockClient() {
+    return {
+      model: 'mock',
+      generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+      generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+    };
+  }
+
+  it('resolves an otherwise-unmatched free-prose input as speak to the last speaker, before the LLM ever runs', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(
+      mockClient(),
+      engine.world,
+      'The dead do not stay buried.',
+      engine.getAvailableActions(),
+      undefined,
+      'pilgrim',
+    );
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('pilgrim');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('is not consulted when the input matches an ordinary fast-path pattern (an explicit verb always wins)', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(
+      mockClient(),
+      engine.world,
+      'attack pilgrim',
+      engine.getAvailableActions(),
+      undefined,
+      'sister-maren',
+    );
+
+    expect(result.verb).toBe('attack');
+    expect(result.targetIds).toContain('pilgrim');
+  });
+
+  it('falls through to the LLM when lastSpeakerNpcId is omitted (back-compat, unaffected)', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(
+      mockClient(),
+      engine.world,
+      'The dead do not stay buried.',
+      engine.getAvailableActions(),
+    );
+
+    expect(result.verb).toBe('look');
+    expect(result.confidence).toBe('low');
+  });
+
+  it('falls through to the LLM when the named last speaker no longer exists in the world', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(
+      mockClient(),
+      engine.world,
+      'The dead do not stay buried.',
+      engine.getAvailableActions(),
+      undefined,
+      'no-such-npc',
+    );
+
+    expect(result.verb).toBe('look');
+    expect(result.confidence).toBe('low');
+  });
+});
+
+// WO-B1F-7 (slice B1F §7, design lock 7, ADDENDUM-COMMON): two `help
+// <petitioner>` inputs did not resolve the ask (deepseek, llama, run b) --
+// reproduced against dogfood/playtest/runs/b1-2026-09-02b/llama/transcript.txt's
+// "help the shivering pilgrim" input.
+describe('WO-B1F-7: help path tracing + the article-stripping fix', () => {
+  function mockClient() {
+    return {
+      model: 'mock',
+      generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+      generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+    };
+  }
+
+  it("RED before this WO: a differently-articled name (\"help the shivering pilgrim\") failed to match a petitioner literally named \"a shivering pilgrim\"", async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    engine.world.entities['petitioner-1'] = {
+      id: 'petitioner-1',
+      blueprintId: 'petitioner',
+      type: 'npc',
+      name: 'a shivering pilgrim',
+      tags: ['npc', 'named', 'petitioner'],
+      stats: {},
+      resources: { hp: 1, maxHp: 1 },
+      statuses: [],
+      zoneId: engine.world.locationId,
+    };
+    engine.world.globals['claude_rpg.asks'] = JSON.stringify([{
+      id: 'ask_shiver',
+      petitioner: { id: 'petitioner-1', name: 'a shivering pilgrim', zoneId: engine.world.locationId },
+      kind: 'hold',
+      surface: 'Would you hold this for me a while?',
+      truth: 'genuine',
+      stake: 5,
+      offeredTick: 0,
+      status: 'open',
+      cues: [],
+    }]);
+
+    const result = await interpretAction(mockClient(), engine.world, 'help the shivering pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('petitioner-1');
+    expect(result.parameters?.helpAskId).toBe('ask_shiver');
+  });
+
+  it('resolves a transient petitioner whose entity lives in a DIFFERENT zone than the player (ask-by-name branch)', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    const otherZoneId = engine.world.zones[engine.world.locationId].neighbors[0];
+    engine.world.entities['far-petitioner'] = {
+      id: 'far-petitioner',
+      blueprintId: 'petitioner',
+      type: 'npc',
+      name: 'a distant courier',
+      tags: ['npc', 'named', 'petitioner'],
+      stats: {},
+      resources: { hp: 1, maxHp: 1 },
+      statuses: [],
+      zoneId: otherZoneId,
+    };
+    engine.world.globals['claude_rpg.asks'] = JSON.stringify([{
+      id: 'ask_far',
+      petitioner: { id: 'far-petitioner', name: 'a distant courier', zoneId: otherZoneId },
+      kind: 'carry',
+      surface: 'Would you carry this to the district for me?',
+      truth: 'genuine',
+      stake: 5,
+      offeredTick: 0,
+      status: 'open',
+      cues: [],
+    }]);
+
+    const result = await interpretAction(mockClient(), engine.world, 'help the distant courier', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('far-petitioner');
+    expect(result.parameters?.helpAskId).toBe('ask_far');
+  });
+
+  it("resolves a petitioner whose name collides with the co-located pack NPC's name, without accidentally matching the wrong (ask-less) entity", async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    // 'pilgrim' ("Suspicious Pilgrim") is already co-located and has no ask.
+    engine.world.entities['petitioner-2'] = {
+      id: 'petitioner-2',
+      blueprintId: 'petitioner',
+      type: 'npc',
+      name: 'a pilgrim boy',
+      tags: ['npc', 'named', 'petitioner'],
+      stats: {},
+      resources: { hp: 1, maxHp: 1 },
+      statuses: [],
+      zoneId: engine.world.locationId,
+    };
+    engine.world.globals['claude_rpg.asks'] = JSON.stringify([{
+      id: 'ask_boy',
+      petitioner: { id: 'petitioner-2', name: 'a pilgrim boy', zoneId: engine.world.locationId },
+      kind: 'hold',
+      surface: 'Would you hold this for me a while?',
+      truth: 'genuine',
+      stake: 5,
+      offeredTick: 0,
+      status: 'open',
+      cues: [],
+    }]);
+
+    const result = await interpretAction(mockClient(), engine.world, 'help pilgrim boy', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('petitioner-2');
+    expect(result.parameters?.helpAskId).toBe('ask_boy');
+  });
+
+  it('traces which branch resolved a "help <name>" input to the debug logger (entity-with-ask)', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    engine.world.globals['claude_rpg.asks'] = JSON.stringify([{
+      id: 'ask_1',
+      npcId: 'pilgrim',
+      kind: 'lend',
+      surface: 'Could you lend me a little coin?',
+      truth: 'genuine',
+      stake: 5,
+      offeredTick: 0,
+      status: 'open',
+      cues: [],
+    }]);
+    const debugLog = createTestLogger();
+
+    await interpretAction(
+      mockClient(),
+      engine.world,
+      'help pilgrim',
+      engine.getAvailableActions(),
+      undefined,
+      undefined,
+      debugLog,
+    );
+
+    const entry = debugLog.getEntries().find((e) => e.subsystem === 'interpret' && e.message === 'help-path');
+    expect(entry).toBeDefined();
+    expect(entry!.data?.branch).toBe('entity-with-ask');
+  });
+
+  it('traces the "none" branch when no entity and no ask ledger entry match', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    const debugLog = createTestLogger();
+
+    await interpretAction(
+      mockClient(),
+      engine.world,
+      'help a nobody in particular',
+      engine.getAvailableActions(),
+      undefined,
+      undefined,
+      debugLog,
+    );
+
+    const entry = debugLog.getEntries().find((e) => e.subsystem === 'interpret' && e.message === 'help-path');
+    expect(entry).toBeDefined();
+    expect(entry!.data?.branch).toBe('none');
   });
 });

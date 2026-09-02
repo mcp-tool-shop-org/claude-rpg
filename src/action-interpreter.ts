@@ -4,6 +4,7 @@ import type { WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { ClaudeClient, StructuredResult } from './claude-client.js';
 import { INTERPRET_SYSTEM, buildInterpretPrompt } from './prompts/interpret-action.js';
 import { findOpenAskForEntity, getOpenAsks } from './game/asks.js';
+import type { DebugLogger } from './game/debug-logger.js';
 
 export type InterpretedAction = {
   verb: string;
@@ -30,9 +31,26 @@ export async function interpretAction(
    * no memory the clarification ever happened.
    */
   recentContext?: string,
+  /**
+   * WO-B1F-1 (design lock 1, ADDENDUM-COMMON): the npcId whose dialogue was
+   * addressed to the player on the immediately preceding turn (game.ts's
+   * own recordConversationExchange sets/clears this every turn -- see
+   * ExecuteTurnOpts.lastSpeakerNpcId's doc comment, turn-loop.ts). Threaded
+   * through to tryFastInterpret's own reply-to-speaker fallback below.
+   */
+  lastSpeakerNpcId?: string,
+  /**
+   * WO-B1F-7 (design lock 7, ADDENDUM-COMMON): optional structured logger,
+   * same no-op-by-default contract as every other DebugLogger thread in
+   * this codebase (game.ts's `this.debugLog`, turn-loop.ts's own
+   * `debugLog?.debug('interpret', 'action-reasoning', ...)` a few lines
+   * after this function returns). Used only by the `help <name>` fast-path
+   * below to trace which branch resolved it.
+   */
+  debugLog?: DebugLogger,
 ): Promise<InterpretedAction> {
   // Fast path: direct keyword matching
-  const fast = tryFastInterpret(playerInput, world, availableVerbs);
+  const fast = tryFastInterpret(playerInput, world, availableVerbs, lastSpeakerNpcId, debugLog);
   if (fast) return fast;
 
   // Slow path: Claude interpretation
@@ -103,6 +121,8 @@ function tryFastInterpret(
   input: string,
   world: WorldState,
   verbs: string[],
+  lastSpeakerNpcId?: string,
+  debugLog?: DebugLogger,
 ): InterpretedAction | null {
   const lower = input.toLowerCase().trim();
   const zone = world.zones[world.locationId];
@@ -171,6 +191,14 @@ function tryFastInterpret(
     if (target) {
       const ask = findOpenAskForEntity(world, target.id);
       if (ask) {
+        // WO-B1F-7 (design lock 7): trace which branch resolved this
+        // `help <name>` input -- debug-level, true no-op via NoopLogger.
+        debugLog?.debug('interpret', 'help-path', {
+          branch: 'entity-with-ask',
+          targetName,
+          resolvedEntityId: target.id,
+          candidateNames: entities.map((e) => e.name),
+        });
         return {
           verb: 'speak',
           targetIds: [target.id],
@@ -188,13 +216,42 @@ function tryFastInterpret(
     // petitioner name; when the petitioner has no entity, the commitment
     // resolves as a plain look (no engine target to speak to) and the ask
     // itself still carries `helpAskId` to game.ts's recognition step.
+    //
+    // WO-B1F-7 (design lock 7): both sides of this
+    // comparison now strip a leading article before matching, mirroring
+    // findEntityByName's own discipline above -- previously only the
+    // PETITIONER'S side implicitly matched literally (no stripping applied
+    // to either string), so "help the shivering pilgrim" against a
+    // petitioner literally named "a shivering pilgrim" failed both
+    // directions of the substring check (`name.includes(targetName)` and
+    // `targetName.includes(name)` both false: "a shivering pilgrim" and
+    // "the shivering pilgrim" share no common prefix once the differing
+    // article is counted). Reproduced against
+    // dogfood/playtest/runs/b1-2026-09-02b/llama/transcript.txt's "help the
+    // shivering pilgrim" input (around its turn 8->9 exchange): the ask
+    // never resolved (no helpAskId), and the pilgrim's LLM-generated reply
+    // that followed was a generic first-meeting line, not an
+    // acknowledgment -- exactly what falling through to the slow path
+    // instead of this fast path produces.
+    const strippedTargetName = targetName.replace(/^(the|a|an)\s+/, '');
     const byName = getOpenAsks(world).find((a) => {
-      const name = a.petitioner?.name.toLowerCase() ?? '';
-      return name.length > 0 && (name.includes(targetName) || targetName.includes(name));
+      const rawName = a.petitioner?.name.toLowerCase() ?? '';
+      if (!rawName) return false;
+      const strippedName = rawName.replace(/^(the|a|an)\s+/, '');
+      return (
+        strippedName.length > 0 &&
+        (strippedName.includes(strippedTargetName) || strippedTargetName.includes(strippedName))
+      );
     });
     if (byName) {
       const petitionerId = byName.petitioner?.id;
       const hasEntity = petitionerId !== undefined && world.entities[petitionerId] !== undefined;
+      debugLog?.debug('interpret', 'help-path', {
+        branch: 'ask-by-name',
+        targetName,
+        resolvedPetitionerId: petitionerId ?? null,
+        candidateNames: getOpenAsks(world).map((a) => a.petitioner?.name ?? a.npcId ?? '(unnamed)'),
+      });
       return {
         verb: hasEntity ? 'speak' : 'look',
         targetIds: hasEntity ? [petitionerId] : null,
@@ -205,6 +262,14 @@ function tryFastInterpret(
         alternatives: null,
       };
     }
+    debugLog?.debug('interpret', 'help-path', {
+      branch: 'none',
+      targetName,
+      candidateNames: [
+        ...entities.map((e) => e.name),
+        ...getOpenAsks(world).map((a) => a.petitioner?.name ?? a.npcId ?? '(unnamed)'),
+      ],
+    });
   }
 
   // Attack
@@ -435,6 +500,78 @@ function tryFastInterpret(
         alternatives: null,
       };
     }
+  }
+
+  // WO-B1F-3 (design lock 3, ADDENDUM-COMMON): "bare name means talk" --
+  // when nothing above matched a verb-prefixed pattern, an input that is
+  // EXACTLY a zone entity's name (article-stripped, case-insensitive,
+  // reusing findEntityByName's own tiered exact/substring discipline so
+  // "Brother Aldric" and "aldric" both resolve the same way every other
+  // verb's target text already does) resolves as `speak` to it; exactly an
+  // exit's name (reusing findZoneByName the same way `go <exit>` already
+  // does) resolves as `move`. Checked only here, after every other
+  // fast-path pattern has already had its chance, so "attack pilgrim" etc.
+  // are never shadowed by this more general fallback.
+  const bareStripped = lower.replace(/^(the|a|an)\s+/, '');
+  if (bareStripped) {
+    if (verbs.includes('speak')) {
+      const bareEntity = findEntityByName(bareStripped, entities);
+      if (bareEntity) {
+        return {
+          verb: 'speak',
+          targetIds: [bareEntity.id],
+          toolId: null,
+          parameters: null,
+          confidence: 'high',
+          reasoning: `Speak to ${bareEntity.name}`,
+          alternatives: null,
+        };
+      }
+    }
+    const bareExit = findZoneByName(bareStripped, zone?.neighbors ?? [], world);
+    if (bareExit) {
+      return {
+        verb: 'move',
+        targetIds: [bareExit],
+        toolId: null,
+        parameters: null,
+        confidence: 'high',
+        reasoning: `Move to ${bareExit}`,
+        alternatives: null,
+      };
+    }
+  }
+
+  // WO-B1F-1 (design lock 1, ADDENDUM-COMMON): "reply-to-speaker" -- a
+  // free-prose input that matched no fast-path verb above (including the
+  // bare-name/bare-exit checks just above) and that was typed the turn
+  // right after an NPC's dialogue was addressed to the player resolves as
+  // `speak` to that same NPC, with this turn's raw input carried through as
+  // the dialogue line (turn-loop.ts's Step 5 already passes `playerInput`
+  // straight to generateDialogue as the player's utterance, unaffected by
+  // which fast-path branch resolved the verb). A clarification request
+  // ("I'm not sure what you mean") is never the right answer to a sentence
+  // typed at someone who just spoke -- this must run BEFORE the LLM slow
+  // path, not as a repair afterward.
+  //
+  // Only requires the NPC to still exist in the world (mirrors the help
+  // fast-path's own cross-zone allowance above and generateDialogue's own
+  // `if (!npc) return null` contract, dialogue-mind.ts) -- not that it
+  // still share the player's zone. game.ts's own lastSpeakerNpcId tracking
+  // (see ExecuteTurnOpts.lastSpeakerNpcId's doc comment, turn-loop.ts) only
+  // ever sets this from the IMMEDIATELY PRECEDING turn's own non-fallback
+  // dialogue, so in practice the NPC is still exactly where this
+  // conversation just happened.
+  if (lastSpeakerNpcId && verbs.includes('speak') && world.entities[lastSpeakerNpcId]) {
+    return {
+      verb: 'speak',
+      targetIds: [lastSpeakerNpcId],
+      toolId: null,
+      parameters: null,
+      confidence: 'high',
+      reasoning: `Reply to ${world.entities[lastSpeakerNpcId]?.name ?? lastSpeakerNpcId}`,
+      alternatives: null,
+    };
   }
 
   return null;

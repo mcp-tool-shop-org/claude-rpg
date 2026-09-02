@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import {
   bundleBinCli,
   startMockAnthropicServer,
@@ -302,7 +302,8 @@ describe('bin.ts exit-autosave — saved path reaches real SIGINT/EOF exits', ()
     expect(match).not.toBeNull();
     // v2.0.0 prints the path home-relative (`~/...`, identity scan); expand it back for the disk check.
     const shown = match![1].trim();
-    const savedPath = shown.startsWith('~/') ? join(homedir(), shown.slice(2)) : shown;
+    // the CLI's HOME/USERPROFILE point at this test's temp homeDir, so `~` means that directory
+    const savedPath = shown.startsWith('~/') ? join(homeDir, shown.slice(2)) : shown;
 
     // Strongest check: the save file on disk was actually rewritten by the
     // real SIGINT/EOF call site, not just a message printed with no write

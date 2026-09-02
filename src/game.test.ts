@@ -3380,6 +3380,15 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
       narrationOpportunityLines: Infinity,
       narrationRumorLines: Infinity,
       ambushHeadline: 'always',
+      // WO-B1-2/4/5 (slice B1, ADDENDUM-COMMON design lock 10): new levers
+      // this wave. `enemyAggression` defaults to 'telegraphed' (NOT 'off')
+      // per the design doc's own instruction -- the driver-proof fixtures
+      // below are re-derived for this reason, not measured pre-wave values.
+      enemyAggression: 'telegraphed',
+      enemyDamageScale: 1,
+      askPredatorRatio: 0.33,
+      askRevealRounds: 6,
+      honorificAt: 25,
     });
 
     const session = new GameSession({
@@ -3636,5 +3645,44 @@ describe('Slice A6 (WO-A6-3): the /tuning data (design doc §5)', () => {
     const view = h.session.getTuningView();
     expect(view.rounds).toBe(2);
     expect(view.lastRound).toEqual(h.session.getRoundMetrics()[1]);
+  });
+});
+
+// WO-B1-7 (slice B1 §3, design lock 4). RED before this WO: an unknown
+// play-mode slash command fell through to processInput's ordinary turn
+// path (the interpreter, then the LLM), costing a turn on a typo.
+describe('Slice B1 §3 (WO-B1-7): unknown play-mode slash command', () => {
+  it('costs no turn and names the near-miss for a play-mode typo', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    const before = h.session.history.getAll().length;
+    const reply = await h.session.processInput('/staus');
+
+    expect(h.session.history.getAll().length).toBe(before); // no turn consumed
+    expect(reply).toContain('/status');
+  });
+
+  it('names the family for a director-only command typed in play mode', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    const reply = await h.session.processInput('/pressure'); // singular typo for director's /pressures
+    expect(reply).toContain('/pressures');
+    expect(reply).toContain('/director');
+  });
+
+  it('still lists the commands valid now when nothing is close enough to be a near-miss', async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const h = createHarness();
+    ensureImmersionInferAndTransitionStub(h.session);
+
+    const before = h.session.history.getAll().length;
+    const reply = await h.session.processInput('/xyzzyplugh');
+
+    expect(h.session.history.getAll().length).toBe(before);
+    expect(reply).toContain('Valid now:');
   });
 });

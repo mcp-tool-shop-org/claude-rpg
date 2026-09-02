@@ -20,7 +20,22 @@ export type WorldMovedKind =
   | 'opportunity-expired'
   | 'ambush'
   | 'mood-transition'
-  | 'rumor-mutated';
+  | 'rumor-mutated'
+  // WO-B1-4 (slice B1 §4, design lock 7): asks. `ask-ignored` covers BOTH a
+  // genuine ask ignored (resolves badly for the petitioner) and a
+  // predatory ask ignored (the player dodged it, nothing to report) --
+  // callers only push it for the genuine case, since a dodged con is not
+  // "the world moved" from the player's point of view.
+  | 'ask-offered'
+  | 'ask-helped'
+  | 'ask-revealed'
+  | 'ask-ignored'
+  // WO-B1-5 (slice B1 §5, design lock 8): recognition -- feeds the recap's
+  // new "Deeds remembered" (deed-recognized) and "Marks the street left on
+  // you" (ask-revealed doubles as this one; gratitude-repaid is the other
+  // half) sections.
+  | 'deed-recognized'
+  | 'gratitude-repaid';
 
 export type WorldMovedEntry = {
   tick: number;
@@ -44,6 +59,12 @@ export const VALID_WORLD_MOVED_KINDS: readonly WorldMovedKind[] = [
   'ambush',
   'mood-transition',
   'rumor-mutated',
+  'ask-offered',
+  'ask-helped',
+  'ask-revealed',
+  'ask-ignored',
+  'deed-recognized',
+  'gratitude-repaid',
 ];
 
 /**

@@ -933,3 +933,91 @@ describe('action-interpreter', () => {
     });
   });
 });
+
+// WO-B1-3 (slice B1 §§2-4, design lock 4). RED before this WO: "attack the
+// pilgrim" fell through to the LLM (no article stripping), a downed entity
+// stayed attackable, and `flee`/`help <name>` did not exist as fast paths.
+describe('WO-B1-3: leading-article stripping, downed-entity exclusion, flee, help', () => {
+  function mockClient() {
+    return {
+      model: 'mock',
+      generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+      generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+    };
+  }
+
+  it('strips a leading "the" before matching an attack target', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'attack the pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('attack');
+    expect(result.targetIds).toContain('pilgrim');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('strips a leading "a"/"an" before matching a speak target', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'speak to a pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('pilgrim');
+  });
+
+  it('never resolves an attack fast-path to a downed (hp<=0) entity', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    engine.world.entities['pilgrim'].resources.hp = 0;
+
+    const result = await interpretAction(mockClient(), engine.world, 'attack pilgrim', engine.getAvailableActions());
+
+    // Falls through to the (mocked, failing) LLM path instead of fast-matching a corpse.
+    expect(result.verb).toBe('look');
+    expect(result.confidence).toBe('low');
+  });
+
+  it('"flee" resolves to disengage', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'flee', engine.getAvailableActions());
+
+    expect(result.verb).toBe('disengage');
+    expect(result.confidence).toBe('high');
+  });
+
+  it('"help <name>" resolves to speak + helpAskId when an open ask names that entity', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    engine.world.globals['claude_rpg.asks'] = JSON.stringify([{
+      id: 'ask_1',
+      npcId: 'pilgrim',
+      kind: 'lend',
+      surface: 'Could you lend me a little coin?',
+      truth: 'genuine',
+      stake: 5,
+      offeredTick: 0,
+      status: 'open',
+      cues: [],
+    }]);
+
+    const result = await interpretAction(mockClient(), engine.world, 'help pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('speak');
+    expect(result.targetIds).toContain('pilgrim');
+    expect(result.parameters?.helpAskId).toBe('ask_1');
+  });
+
+  it('"help <name>" falls through to the LLM when there is no open ask for that entity', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+
+    const result = await interpretAction(mockClient(), engine.world, 'help pilgrim', engine.getAvailableActions());
+
+    expect(result.verb).toBe('look');
+    expect(result.confidence).toBe('low');
+  });
+});

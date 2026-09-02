@@ -3,6 +3,7 @@
 import type { WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { ClaudeClient, StructuredResult } from './claude-client.js';
 import { INTERPRET_SYSTEM, buildInterpretPrompt } from './prompts/interpret-action.js';
+import { findOpenAskForEntity } from './game/asks.js';
 
 export type InterpretedAction = {
   verb: string;
@@ -140,10 +141,57 @@ function tryFastInterpret(
     }
   }
 
+  // Flee (WO-B1-3, design lock 4, R6 ruling): the engine's existing
+  // `disengage` verb, already registered -- no new engine-side verb, just a
+  // player-facing name change at the interpreter layer. Bare `flee` only
+  // (no target): disengage always leaves via the zone's own neighbor list,
+  // never a chosen direction.
+  if (/^flee$/.test(lower) && verbs.includes('disengage')) {
+    return {
+      verb: 'disengage',
+      targetIds: null,
+      toolId: null,
+      parameters: null,
+      confidence: 'high',
+      reasoning: 'Flee the fight',
+      alternatives: null,
+    };
+  }
+
+  // Help (WO-B1-4, design lock 7): resolves the OPEN ask (if any) the named
+  // entity is asking of the player, and stamps `helpAskId` so game.ts's
+  // ask-help detection (game/asks.ts, applyRecognitionForHelpedAsk) can
+  // tell this deliberate "I'm helping" apart from incidental conversation
+  // with the same NPC. Always resolves through `speak` -- see asks.ts's
+  // `expectedAskHelp` doc comment for why every ask kind routes through a
+  // dialogue commitment rather than a literal item/escort mechanic.
+  if (/^help\s+/.test(lower) && verbs.includes('speak')) {
+    const targetName = lower.replace(/^help\s+/i, '');
+    const target = findEntityByName(targetName, entities);
+    if (target) {
+      const ask = findOpenAskForEntity(world, target.id);
+      if (ask) {
+        return {
+          verb: 'speak',
+          targetIds: [target.id],
+          toolId: null,
+          parameters: { helpAskId: ask.id },
+          confidence: 'high',
+          reasoning: `Help ${target.name} with: ${ask.surface}`,
+          alternatives: null,
+        };
+      }
+    }
+  }
+
   // Attack
+  // WO-B1-3 (design lock 4): "never resolves an attack to a downed entity"
+  // -- candidates are filtered to hp > 0 here, attack-specifically (other
+  // verbs like inspect/take may legitimately target a corpse).
   if (/^(attack|fight|hit|strike)\s+/.test(lower) && verbs.includes('attack')) {
     const targetName = lower.replace(/^(attack|fight|hit|strike)\s+/i, '');
-    const target = findEntityByName(targetName, entities);
+    const liveEntities = entities.filter((e) => (e.resources.hp ?? 0) > 0);
+    const target = findEntityByName(targetName, liveEntities);
     if (target) {
       return {
         verb: 'attack',
@@ -468,7 +516,13 @@ function tryLeverageVerb(
 // (attack/speak/inspect/use, above) already gets, instead of requiring the
 // exact internal entity id verbatim.
 export function findEntityByName(name: string, entities: EntityState[]): EntityState | null {
-  const lower = name.toLowerCase().trim();
+  // WO-B1-3 (slice B1 §3, design lock 4): "the interpreter's fast path
+  // strips a leading article (the|a|an) before entity/zone matching" --
+  // centralized here so every fast-path caller benefits (attack/speak did
+  // not already strip one; equip/unequip/take/drop already stripped it in
+  // their own regex before calling this, so stripping again here is a
+  // harmless no-op for them).
+  const lower = name.toLowerCase().trim().replace(/^(the|a|an)\s+/, '');
   if (!lower) return null;
   return (
     entities.find((e) => e.name.toLowerCase() === lower) ??

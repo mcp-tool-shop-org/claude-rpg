@@ -97,6 +97,47 @@ export type LivingWorldTuning = {
    * it. Measured default: 'always'.
    */
   ambushHeadline: 'always' | 'never';
+  /**
+   * WO-B1-2 (slice B1 §2, design lock 3): the hostile turn's aggression
+   * policy. `'telegraphed'` (default) is the doc's designed behavior — an
+   * aware hostile's first attack decision sets a telegraph and emits the
+   * telegraph line instead of landing that same round; the attack lands the
+   * round after. `'immediate'` skips the telegraph step (attacks land the
+   * round they're chosen). `'off'` disables runHostileTurn entirely — no
+   * awareness is set, no hostile ever acts here — so a session with
+   * `enemyAggression: 'off'` reproduces every pre-slice-B1 log byte-for-byte
+   * (the living-world-driver proof's own fixtures at these defaults).
+   */
+  enemyAggression: 'off' | 'telegraphed' | 'immediate';
+  /**
+   * WO-B1-2 (design lock 3): multiplier applied to a landed hostile attack's
+   * damage, post-event (the installed 3.11 engine's combat formula has no
+   * damage-scale hook the app can thread through submitActionAs — see
+   * hostile-turn.ts's own doc comment for the verified call site) — applied
+   * as a documented post-event HP adjustment on the player entity. Default 1
+   * (no scaling) keeps every existing fixture byte-identical.
+   */
+  enemyDamageScale: number;
+  /**
+   * WO-B1-4 (slice B1 §4, design lock 7): fraction of newly-offered asks
+   * whose truth resolves to `'predatory'` (deterministic per-ask hash roll,
+   * game/asks.ts's `chooseAskTruth`). Design doc §4: "Roughly one predatory
+   * ask in three at the start." Default 0.33.
+   */
+  askPredatorRatio: number;
+  /**
+   * WO-B1-4 (design lock 7): rounds after offer before a predatory ask's
+   * reveal fires (`offeredTick + askRevealRounds`). Design doc §4: "three to
+   * ten rounds later"; default 6 (the design doc's own §6 proof 4 measured
+   * midpoint).
+   */
+  askRevealRounds: number;
+  /**
+   * WO-B1-5 (slice B1 §5, design lock 8): the per-faction reputation
+   * (`reputation_<f>` global) threshold at which the street's honorific
+   * unlocks (game/recognition.ts's `getHonorific`). Default 25.
+   */
+  honorificAt: number;
 };
 
 /**
@@ -121,6 +162,11 @@ export const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
   narrationOpportunityLines: Infinity,
   narrationRumorLines: Infinity,
   ambushHeadline: 'always',
+  enemyAggression: 'telegraphed',
+  enemyDamageScale: 1,
+  askPredatorRatio: 0.33,
+  askRevealRounds: 6,
+  honorificAt: 25,
 };
 
 /** Resolve a partial tuning override onto the measured defaults. */

@@ -36,6 +36,11 @@ import type { McpToolCall } from './runtime/audio-bridge.js';
 import type { OpportunityState } from '@ai-rpg-engine/modules';
 import { withTokenTracking, type SessionTokenTracker } from './game/token-tracker.js';
 import type { DebugLogger } from './game/debug-logger.js';
+// WO-B1-2/3 (slice B1 §§1-2, design locks 1-3): the hostile turn and the
+// condition-rung vocabulary its combat-channel lines derive from.
+import { runHostileTurn, markAwarenessFromEvents, type HostileTelegraph } from './game/hostile-turn.js';
+import { conditionRung } from './game/condition.js';
+import { resolveTuning, type LivingWorldTuning } from './game/tuning.js';
 
 /**
  * F-4ec3609b (ORDERING contract, game-core half): runtime-foundry added a
@@ -145,6 +150,30 @@ export type TurnResult = {
    * no immersion runtime is present at all (nothing to infer from).
    */
   justDied: boolean;
+  /**
+   * WO-B1-3 (slice B1 §§1-2, design lock 2, ADDENDUM-COMMON): deterministic
+   * lines derived from the engine's own events for this turn, in the fixed
+   * order design lock 2 specifies: the player's own outcome line(s), kill
+   * lines, landed enemy hits (from the hostile turn), then telegraphs for
+   * next round. cli-display renders this in a reserved block ABOVE the
+   * narration; narrative-llm threads it into the narration prompt. Never
+   * empty vs. undefined-distinguishing -- always an array, `[]` on a turn
+   * with nothing to report (e.g. `look`).
+   */
+  combatLines: string[];
+  /**
+   * WO-B1-5 (slice B1 §5, design lock 8): the acknowledgment line for a
+   * genuine ask helped THIS turn (e.g. "Sister Maren will remember who
+   * carried the water."). Always `undefined` from executeTurn() itself --
+   * ask-help detection needs the ask ledger, the RumorEngine, and
+   * adjustFactionReputation, all of which live on GameSession (game.ts), one
+   * layer above this function. game.ts's processInput() computes it after
+   * executeTurn() returns and sets it on the SAME TurnResult object before
+   * any downstream consumer (renderPlayOutput, recap) reads it -- this field
+   * exists here so every consumer of a TurnResult has one shape to read,
+   * per design lock 8's own contract, not because executeTurn populates it.
+   */
+  recognitionLine?: string;
 };
 
 // F-c4332895: fallback narration recorded when narrateScene rethrows a fatal
@@ -334,6 +363,16 @@ export type ExecuteTurnOpts = {
    * byte-identical until a tuning wave overrides one.
    */
   budget?: { pressureLines: number; opportunityLines: number; rumorLines: number };
+  /**
+   * WO-B1-2 (slice B1 §2, design lock 3): the resolved living-world tuning
+   * surface (game/tuning.ts) -- specifically `enemyAggression` /
+   * `enemyDamageScale`, read by runHostileTurn below. Defaults to
+   * `resolveTuning()` (measured defaults) when the caller omits it, so an
+   * existing call site that has not threaded tuning through yet still gets
+   * the doc's own default ('telegraphed') rather than silently disabling
+   * the hostile turn.
+   */
+  tuning?: LivingWorldTuning;
 };
 
 /**
@@ -377,6 +416,13 @@ export const SUPPORTED_VERBS: ReadonlySet<string> = new Set([
   // session/history already handle end to end
   'move', 'look', 'inspect', 'attack', 'speak', 'use',
   'equip', 'unequip', 'take', 'drop', 'inventory', 'opportunity',
+  // WO-B1-3 (slice B1 §2-3, design locks 3-4, R6 ruling): `flee` is a
+  // player-facing name for the engine's existing `disengage` verb --
+  // already registered, now with a real fast-path (action-interpreter.ts)
+  // and a command-strip surface (cli-display's own WO this same wave).
+  // Moved OUT of KNOWN_EXCLUDED_VERBS below, which this set's own doc
+  // comment requires whenever a verb actually ships.
+  'disengage',
 ]);
 
 /**
@@ -403,8 +449,18 @@ export const KNOWN_EXCLUDED_VERBS: ReadonlySet<string> = new Set([
   'salvage', 'repair', 'modify',
   // Tactical-combat / commerce / dialogue / system verbs this product has
   // never wired up (no fast-path, no help text, no game.ts/session
-  // reference of any kind).
-  'guard', 'brace', 'disengage', 'reposition',
+  // reference of any kind). `disengage` moved to SUPPORTED_VERBS above
+  // (WO-B1-3: the `flee` alias). `give` stays excluded: design doc §4's own
+  // "the player helps by ... give" is NOT implemented this wave -- verified
+  // against the installed engine (inventory-core.ts's giveHandler) that
+  // `give` transfers an actual carried inventory item (`toolId`/
+  // `parameters.itemId`), not currency (`resources.coin`), so a natural
+  // "give coin to X" fast-path can't model a `lend` ask's coin-lending
+  // premise without a real coin-item this pack doesn't author. The `help
+  // <name>` fast-path (action-interpreter.ts) resolves every ask kind
+  // through `speak` instead (see asks.ts's `expectedAskHelp` doc comment)
+  // specifically so this gap doesn't block the whole feature.
+  'guard', 'brace', 'reposition',
   'buy', 'sell', 'give', 'unlock', 'choose', 'use-ability',
   'resolve-pressure', 'cognition-tick', 'environment-tick',
   'faction-tick', 'district-tick',
@@ -435,6 +491,7 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     tokenTracker, conversationHistory, consecutiveFallbacks, debugLog, packId,
     onResolved, getMoodTransition, budget,
   } = opts;
+  const tuning = opts.tuning ?? resolveTuning();
   const previousLocationId = engine.world.locationId;
 
   // F-b4b16d0a: per-call-type client wraps so GameSession.getCostSummary()
@@ -524,6 +581,8 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       // F-6bc0721e: no engine action resolved, so no presentation-state
       // transition happened this turn either.
       justDied: false,
+      // WO-B1-3: no engine action resolved -- nothing to report.
+      combatLines: [],
     };
   }
 
@@ -574,8 +633,26 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
       isFallback: false,
       // F-6bc0721e: no events resolved, so no transition happened.
       justDied: false,
+      // WO-B1-3: engine.submitAction threw -- nothing resolved to report.
+      combatLines: [],
     };
   }
+
+  // WO-B1-2 (slice B1 §2, design lock 3): awareness first (a hostile the
+  // player just walked in on, or just attacked, becomes aware from THIS
+  // action's own events), then the hostile turn itself -- after the
+  // player's action resolved, BEFORE onResolved's world tick runs below, so
+  // a hostile's landed hit can down the player and correctly gate the tick
+  // via the corpse-gate check onResolved's own hook (game.ts's
+  // runWorldRound) already runs against its `actionEvents` argument.
+  // `playerEvents` is kept separate from the growing `events` accumulator
+  // so buildCombatLines below can tell "the player's own outcome" apart
+  // from "what the hostiles just did" without re-deriving attacker
+  // identity from a merged, order-ambiguous list.
+  const playerEvents = events;
+  markAwarenessFromEvents(engine.world, playerEvents, engine.tick);
+  const hostileTurn = runHostileTurn(engine, tuning);
+  events = [...events, ...hostileTurn.events];
 
   // WO-A2-1 (slice A2 §1, the living-world driver): the round callback runs
   // immediately after the player's action resolved and BEFORE any
@@ -869,6 +946,11 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // Extract profile hints from events (includes pressure resolution detection)
   const profileHints = extractProfileHints(events, interpreted.verb, engine.world, worldPressures);
 
+  // WO-B1-3 (design lock 2): the reserved combat channel, in the doc's fixed
+  // order -- player outcome line(s), kill lines, landed enemy hits,
+  // telegraphs for next round.
+  const combatLines = buildCombatLines(engine.world, engine.world.playerId, playerEvents, hostileTurn.events, hostileTurn.telegraphs);
+
   // Record turn in history
   history.record({
     tick: engine.tick,
@@ -900,7 +982,62 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
     // (game.ts) reads stateMachine.current directly and doesn't depend on
     // this edge flag.
     justDied: transition ? transition.to === 'menu' && transition.from !== 'menu' : false,
+    combatLines,
   };
+}
+
+/**
+ * WO-B1-3 (design lock 2): build the combat channel's lines in the doc's
+ * fixed order. `playerEvents` is Step 2's own submitAction result (so
+ * attacker-identity checks against `playerId` are unambiguous even though
+ * `hostileEvents` may ALSO contain a `combat.entity.defeated` for something
+ * a hostile killed); `hostileEvents` is runHostileTurn's own returned events
+ * (landed hostile attacks only -- never the player's). Rung lookups use
+ * `conditionRung` (game/condition.ts) exclusively, per design lock 1 ("every
+ * surface ... never a second threshold table").
+ */
+function buildCombatLines(
+  world: WorldState,
+  playerId: string,
+  playerEvents: ResolvedEvent[],
+  hostileEvents: ResolvedEvent[],
+  telegraphs: HostileTelegraph[],
+): string[] {
+  const lines: string[] = [];
+
+  for (const event of playerEvents) {
+    if (event.type === 'combat.damage.applied' && event.payload.attackerId === playerId) {
+      const targetId = event.payload.targetId as string;
+      const targetName = world.entities[targetId]?.name ?? targetId;
+      const currentHp = event.payload.currentHp as number;
+      const maxHp = world.entities[targetId]?.resources.maxHp ?? currentHp;
+      lines.push(`Your strike lands — ${targetName}: ${conditionRung(currentHp, maxHp)}.`);
+    } else if (event.type === 'combat.contact.miss' && event.payload.attackerId === playerId) {
+      lines.push('Your strike misses.');
+    }
+  }
+
+  for (const event of [...playerEvents, ...hostileEvents]) {
+    if (event.type === 'combat.entity.defeated' && event.payload.entityId !== playerId) {
+      const name = (event.payload.entityName as string | undefined) ?? (event.payload.entityId as string);
+      lines.push(`The ${name} falls.`);
+    }
+  }
+
+  for (const event of hostileEvents) {
+    if (event.type === 'combat.damage.applied' && event.payload.targetId === playerId) {
+      const attackerId = event.payload.attackerId as string;
+      const attackerName = world.entities[attackerId]?.name ?? attackerId;
+      const damage = event.payload.damage as number;
+      lines.push(`${attackerName}'s attack finds you — ${damage} damage.`);
+    }
+  }
+
+  for (const t of telegraphs) {
+    lines.push(`${t.hostileName} readies an attack against you.`);
+  }
+
+  return lines;
 }
 
 /**

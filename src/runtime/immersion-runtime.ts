@@ -374,12 +374,25 @@ export class ImmersionRuntime {
     return { from, to, trigger: verb };
   }
 
-  /** Process events through the presentation pipeline, returning MCP tool calls. */
+  /**
+   * Process events through the presentation pipeline, returning MCP tool calls.
+   *
+   * @param combatLines - WO-B1-12 (slice B1 §2; design lock 2, ADDENDUM-COMMON.md):
+   *               this round's deterministic combat lines, verbatim from game-core's
+   *               `TurnResult.combatLines` -- CODE AGAINST LOCK 2, "green expected at
+   *               merge": game-core has not landed `combatLines` on this branch yet.
+   *               Additive/optional and threaded straight through to
+   *               `fireEventHooks`'s `combat-cues` hookpoint dispatch (hooks.ts's
+   *               `combatCuesHook`) -- omitted, or an empty array, fires nothing,
+   *               so every caller today (none of which supply it yet) sees
+   *               byte-identical behavior to before this parameter existed.
+   */
   async processPresentation(
     engine: Engine,
     events: ResolvedEvent[],
     verb: string,
     narrationPlan?: NarrationPlan,
+    combatLines?: string[],
   ): Promise<McpToolCall[]> {
     // 1. Infer and transition presentation state -- unless inferAndTransition() already
     // did this for the current turn (F-4ec3609b/F-961f14aa contract), in which case
@@ -457,7 +470,7 @@ export class ImmersionRuntime {
 
     try {
       // 3. Fire specific hooks based on events
-      specificCalls = await this.fireEventHooks(engine, events, justEnteredCombat, justEnteredMenu);
+      specificCalls = await this.fireEventHooks(engine, events, justEnteredCombat, justEnteredMenu, combatLines);
       this.noteStageSuccess('event-hooks');
     } catch (err) {
       if (this.debugMode) {
@@ -599,9 +612,31 @@ export class ImmersionRuntime {
     events: ResolvedEvent[],
     justEnteredCombat: boolean,
     justEnteredMenu: boolean,
+    combatLines?: string[],
   ): Promise<McpToolCall[]> {
     const calls: McpToolCall[] = [];
     const state = this.stateMachine.current;
+
+    // WO-B1-12 (slice B1 §2): per-line combat cues (telegraph/landed-hit/kill)
+    // straight from game-core's combatLines -- independent of justEnteredCombat
+    // (a telegraph or landed hit can land on ANY round of an ongoing fight, not
+    // just the round combat is entered) and of whatever the LLM narrator's own
+    // NarrationPlan.sfx proposes for the same round. Gated on a non-empty array
+    // so an omitted (or empty) combatLines -- every caller today, since
+    // game-core has not landed lock 2 on this branch -- dispatches nothing,
+    // preserving byte-identical behavior.
+    if (combatLines && combatLines.length > 0) {
+      const cuesCtx: HookContext = {
+        hookPoint: 'combat-cues',
+        world: engine.world,
+        events,
+        presentationState: state,
+        combatLines,
+      };
+      const results = this.hookManager.fire(cuesCtx);
+      const merged = HookManager.mergeResults(results);
+      calls.push(...(await this.executeMergedHookResult(merged)));
+    }
 
     // Combat hooks — fire only on the turn combat is entered (F-0acb03fe), not on every
     // turn combat.* events keep appearing (they recur for the whole fight).

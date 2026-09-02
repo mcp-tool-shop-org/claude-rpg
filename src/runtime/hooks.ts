@@ -9,12 +9,14 @@ import type {
   MusicCue,
   UiEffect,
 } from '@ai-rpg-engine/presentation';
+import { resolveSoundCue } from '@ai-rpg-engine/soundpack-core';
 
 export type HookPoint =
   | 'pre-narration'
   | 'post-narration'
   | 'combat-start'
   | 'combat-end'
+  | 'combat-cues'
   | 'enter-room'
   | 'npc-speaking'
   | 'idle'
@@ -38,6 +40,16 @@ export type HookContext = {
    * caller-supplied outcome) still resolves correctly.
    */
   outcome?: 'victory' | 'retreat';
+  /**
+   * WO-B1-12 (slice B1 §2, doc §2; design lock 2, ADDENDUM-COMMON.md): the
+   * current round's deterministic combat lines, verbatim from game-core's
+   * `TurnResult.combatLines` -- CODE AGAINST LOCK 2, "green expected at
+   * merge": game-core has not landed `combatLines` on this branch yet, so
+   * this field is additive/optional and every existing HookContext call site
+   * (and every other HookPoint) is unaffected by its presence. Consumed by
+   * `combatCuesHook` below.
+   */
+  combatLines?: string[];
 };
 
 export type HookResult = {
@@ -312,11 +324,95 @@ export const deathHook: Hook = (ctx) => {
   };
 };
 
+// ─── WO-B1-12 (slice B1 §2, doc §2): combat-cues -- per-line SFX from
+// game-core's TurnResult.combatLines, independent of whatever the LLM
+// narrator's own NarrationPlan.sfx proposes (or omits) for the same round ───
+
+export type CombatCueKind = 'kill' | 'landed-hit' | 'telegraph';
+
+/**
+ * Classifies one line from game-core's `TurnResult.combatLines` by the
+ * STRUCTURAL SHAPE design lock 2 (ADDENDUM-COMMON.md) guarantees, not the
+ * exact wording of the middle clause (which the lock explicitly leaves free
+ * to vary by event payload):
+ *   - a kill line ends "... falls." (`The Crypt Stalker falls.`)
+ *   - a telegraph line reads "... readies ... at you." (`The Ash Ghoul
+ *     readies a lunge at you.`)
+ *   - a landed enemy hit line ends "... NN damage." (`The Ash Ghoul's claw
+ *     finds your flank -- 4 damage.`)
+ * The player's own outcome line(s) (`Your strike lands -- Crypt Stalker:
+ * reeling.` / `Your strike misses.`) match none of the three shapes and
+ * classify as `undefined` -- WO-B1-12 is scoped to the hostile-turn's own
+ * three cue kinds only, not the player's outcome line.
+ */
+export function classifyCombatLine(line: string): CombatCueKind | undefined {
+  if (/\bfalls\.\s*$/.test(line)) return 'kill';
+  if (/\breadies\b[\s\S]*\bat you\.\s*$/i.test(line)) return 'telegraph';
+  if (/\bdamage\.\s*$/i.test(line)) return 'landed-hit';
+  return undefined;
+}
+
+/**
+ * Resolves one combatLines entry to an SfxCue, or `undefined` for a line
+ * that isn't one of the three cue-bearing shapes (e.g. the player's own
+ * outcome line -- classifyCombatLine returns `undefined` for it).
+ *
+ * Reuses the engine's OWN gameplay-cue vocabulary
+ * (@ai-rpg-engine/soundpack-core's `resolveSoundCue` -- combat-core.js's
+ * damage/defeat events already carry these exact ids as
+ * `event.presentation.soundCues`, verified in the installed dist) rather
+ * than hardcoding a second, parallel effectId table: `'combat.hit'` for a
+ * landed enemy hit (the SAME cue id the engine's own damage-applied event
+ * carries), `'combat.defeat'` for a kill ("the existing combat-resolve
+ * sting" WO-B1-12 names), and `'combat.telegraph'` for a telegraph -- an id
+ * no `EXACT_CUE_MAP` entry names, so `resolveSoundCue`'s own namespace tier
+ * resolves it to the generic `combat.*` warning (`alert_warning`, intensity
+ * 0.5 -- distinct from `combat.hit`'s 0.6) rather than this file inventing a
+ * fourth soundpack id.
+ *
+ * Timing is always `'immediate'`: this cue is dispatched through
+ * `HookManager` -> `ImmersionRuntime.executeMergedHookResult` -> the bridge's
+ * `playSfx` directly (never through `AudioDirector.schedule()`, the only
+ * consumer that reads `SfxCue.timing` at all), matching every other
+ * hook-sourced SfxCue in this file (combatStartHook/combatEndHook/deathHook).
+ */
+export function combatCueForLine(line: string): SfxCue | undefined {
+  const kind = classifyCombatLine(line);
+  if (!kind) return undefined;
+  const gameplayCue =
+    kind === 'kill' ? 'combat.defeat' : kind === 'landed-hit' ? 'combat.hit' : 'combat.telegraph';
+  const resolved = resolveSoundCue(gameplayCue);
+  return { effectId: resolved.effectId, timing: 'immediate', intensity: resolved.intensity };
+}
+
+/**
+ * Fires per-line SFX for game-core's `TurnResult.combatLines`.
+ *
+ * WO-B1-12 codes against design lock 2 (ADDENDUM-COMMON.md), "green expected
+ * at merge": `combatLines` does not exist on `HookContext` until game-core
+ * lands it on its own branch. `combatLines` is additive/optional on
+ * `HookContext` and this hook only ever fires when
+ * `ImmersionRuntime.processPresentation` is given a non-empty
+ * `combatLines` array (see immersion-runtime.ts) -- so every caller today,
+ * none of which supply `combatLines` yet, sees byte-identical behavior to
+ * before this hook existed.
+ */
+export const combatCuesHook: Hook = (ctx) => {
+  const lines = ctx.combatLines ?? [];
+  const sfxCues: SfxCue[] = [];
+  for (const line of lines) {
+    const cue = combatCueForLine(line);
+    if (cue) sfxCues.push(cue);
+  }
+  return sfxCues.length > 0 ? { sfxCues } : null;
+};
+
 /** Register all built-in hooks. */
 export function registerBuiltinHooks(manager: HookManager): void {
   manager.register('enter-room', enterRoomHook);
   manager.register('combat-start', combatStartHook);
   manager.register('combat-end', combatEndHook);
+  manager.register('combat-cues', combatCuesHook);
   manager.register('npc-speaking', npcSpeakingHook);
   manager.register('death', deathHook);
 }

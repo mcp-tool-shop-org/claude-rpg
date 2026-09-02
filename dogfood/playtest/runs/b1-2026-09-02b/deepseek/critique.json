@@ -1,0 +1,110 @@
+{
+  "alive": true,
+  "summary": "The world felt alive with NPCs acting on their own agendas, escalating tensions, and reacting to player choices. It raised pressures, spawned ambushes, and shifted district moods without player prompting. The session recap confirmed the world's independent actions, though some interactions felt slightly disjointed when multiple NPCs spoke simultaneously.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Entering Vestry Passage triggered 'Ambush: Chapel Patrol in Vestry Passage' announced by the game",
+      "turn": 39
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Session summary shows Chapel Grounds and Crypt Depths had alertPressure rise sharply",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No evidence of pressures escalating/resolving without player action during session",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No market or trade views shown in transcript",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No /rumors view or NPC dialogue referencing player rumors",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session summary shows Crypt Depths mood changed from 'subdued, fearful' to 'on edge, jumpy'",
+      "turn": null
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Brother Aldric drew dagger and initiated combat without player attack command",
+      "turn": 23
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary lists world actions: opportunities, ambushes, mood transitions, marks, asks",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed; world remained consistent throughout",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts, hints, and menu options provided guidance throughout",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "No enemies were killed during combat encounters",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Crypt Stalker hit player for 3 damage with telegraph 'readies an attack' the previous turn",
+      "turn": 34
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was completed and revealed during session",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine help given to petitioners during session",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "'vestigate black market' was accepted as valid command for investigation opportunity",
+      "turn": 33
+    }
+  ],
+  "highlights": [
+    "Turn 23: Brother Aldric drawing dagger unprompted showed NPC agency",
+    "Turn 39: Ambush on entering Vestry Passage demonstrated reactive world",
+    "Turn 42: Session recap detailed world's independent movements"
+  ],
+  "deadSpots": [
+    "Turn 28-29: Multiple NPCs offering help simultaneously during combat felt disjointed",
+    "Turn 15-16: Shifting between Brother Aldric dialogue and pilgrim interaction felt abrupt"
+  ],
+  "confusions": [
+    "Turn 3: Game asked for clarification when player said 'Where does your path lead you?' to pilgrim",
+    "Turn 20: Confusion about which NPC was speaking when player asked about shrine"
+  ],
+  "wouldPlayAgain": true
+}

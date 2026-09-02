@@ -1,0 +1,111 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through subtle, autonomous actions: NPCs shifted their behavior in response to player pressure, Brother Aldric developed a goal to seek allegiance, and the game introduced a new opportunity after the player's failed bribe. The environment remained coherent, with consistent district and NPC states. However, the player struggled with unclear commands and a lack of direct navigation options.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "No ambush or patrol was announced upon entering the location.",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure, bounty, investigation, or alert was raised by a faction after player actions.",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressure or alert escalated, resolved, or expired without player input.",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No market or trade view showed prices reacting to faction standing.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No named NPC reflected a rumor about the player, and no /rumors view showed street beliefs.",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": false,
+      "evidence": "The mood of Chapel Grounds remained unchanged throughout the session.",
+      "turn": null
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Brother Aldric developed a goal to seek new allegiance (turn 10), which was autonomous and not triggered by player action.",
+      "turn": 10
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session recap (turn 42) listed 'Investigate the black market activity' as a world-driven opportunity, showing the world moved on its own.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "All locations, NPCs, and faction states remained consistent across turns; no contradictions or errors occurred.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "The game did not clearly indicate valid actions; many commands like /enter, /visit, /go, /look were rejected, and navigation was unclear.",
+      "turn": 17
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "No combat occurred, so no kill line was printed.",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "No enemy attacked the player; no damage was taken.",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con or help request occurred, so no reveal was possible.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine petitioner was helped, so no recognition occurred.",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "When the player typed /pressures, the game immediately corrected it to suggest /director, showing the command was recognized and answered without costing a turn.",
+      "turn": 6
+    }
+  ],
+  "highlights": [
+    "Turn 10: Brother Aldric autonomously developed a goal to seek new allegiance, showing NPC agency.",
+    "Turn 42: The session recap clearly listed a world-driven opportunity, confirming autonomous world movement."
+  ],
+  "deadSpots": [
+    "Turns 17–20: Repeated failed attempts to navigate using /enter, /visit, /go, and /look, showing a broken interface.",
+    "Turns 11–15: Repeated failed attempts to inspect zones, indicating poor zone naming or navigation design.",
+    "Turns 31–33: Repeated /help and /look commands with no useful response, showing a lack of guidance."
+  ],
+  "confusions": [
+    "Turn 17: Player did not understand how to move between locations despite having exits listed.",
+    "Turn 19: Player typed /look expecting a description, but the command was rejected.",
+    "Turn 21: Player expected to see zone details after /help, but only saw command list."
+  ],
+  "wouldPlayAgain": false
+}

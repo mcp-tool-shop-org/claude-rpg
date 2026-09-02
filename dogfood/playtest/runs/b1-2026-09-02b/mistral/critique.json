@@ -1,0 +1,114 @@
+{
+  "alive": true,
+  "summary": "The world reacted dynamically to player actions, with ambushes, NPCs acting unprompted, and clear combat feedback. The session recap confirmed multiple world moves (ambushes, mood shifts, rumors). However, some NPC interactions felt scripted, and the player’s death looped unnecessarily. The game’s coherence and player guidance were strong, but combat balance and NPC agency could improve.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Ambush announced in Turn 33: '── Ambush: Chapel Patrol in Vestry Passage ──'",
+      "turn": 33
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure/bounty/investigation was raised by a faction after player actions (e.g., killing enemies).",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Session recap (Turn 42) noted an opportunity expired without player action: 'Opportunities expired: 1 — investigation \"Investigate the black market activity\" expired before resolution.'",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No /market or /trade output showed faction standing affecting prices.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Session recap (Turn 42) noted: 'Marks the street left on you: 1 — a woman at the chapel door's story wasn't true. You never bit.'",
+      "turn": 42
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session recap (Turn 42) noted: 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"'",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "NPCs acted without direct player input: Suspicious Pilgrim and Brother Aldric shifted stances, and the shivering pilgrim asked for help (Turn 21).",
+      "turn": 21
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session recap (Turn 42) listed world moves: ambushes, mood transitions, rumors, and opportunities.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed. Locations, NPCs, and facts remained consistent.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Prompts and menus were clear (e.g., hints in Turns 1, 4, 11). Unknown commands were corrected immediately (Turns 18, 35).",
+      "turn": 18
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Combat lines named kills deterministically: 'Your strike lands — Crypt Stalker: down.' (Turn 17), 'The Crypt Stalker falls.' (Turn 17).",
+      "turn": 17
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Player took damage in Turns 21 (9 damage), 24 (6 damage), and died in Turn 36. Combat lines named attackers and damage, with telegraphs (e.g., 'Ash Ghoul readies an attack' in Turn 21).",
+      "turn": 21
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was revealed during the session. The 'a woman at the chapel door' story was marked as false in the recap, but no clear con was set up or revealed.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine petitioner was helped, so no recognition occurred.",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Unknown commands (/rumor, /inventory) were corrected immediately with no turn cost (Turns 18, 35).",
+      "turn": 18
+    }
+  ],
+  "highlights": [
+    "Turn 1: Atmospheric chapel entrance with dynamic NPCs (Sister Maren, Suspicious Pilgrim) reacting to player presence.",
+    "Turn 15: Combat telegraphs and deterministic kill lines (e.g., 'Your strike lands — Crypt Stalker: down.')",
+    "Turn 33: Ambush announced by the game itself ('── Ambush: Chapel Patrol in Vestry Passage ──').",
+    "Turn 42: Session recap confirmed world moves (ambushes, mood shifts, rumors) and NPC agency."
+  ],
+  "deadSpots": [
+    "Turn 4: Player received a vague hint ('Not enough heat') with no clear path forward.",
+    "Turn 21-24: Player took repeated damage in a loop without clear escape or strategy, leading to death.",
+    "Turn 32-41: Player death looped unnecessarily; no clear way to recover or avoid combat.",
+    "Turn 35-36: Player struggled with unknown commands (/inventory) and died shortly after."
+  ],
+  "confusions": [
+    "Turn 4: 'Not enough heat' hint was unclear—what constitutes 'heat' and how to build it?",
+    "Turn 21: Player was unsure how to escape the combat loop or avoid the ambush.",
+    "Turn 32: Player did not understand how to use 'blackmail' to escape death (Turns 38-41)."
+  ],
+  "wouldPlayAgain": true
+}

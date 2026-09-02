@@ -1,0 +1,113 @@
+{
+  "alive": true,
+  "summary": "The world felt very alive, with NPCs reacting to my choices and the environment changing based on my actions. The combat was engaging, and the narrative hints about the world's state were well-integrated. The session recap was a great feature, summarizing the dynamic changes.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Crypt Stalker readies an attack against you.",
+      "turn": 32
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No explicit pressure/bounty/alert was raised by a faction after killing enemies, though 'Blackmail: 10' appeared after the first kill.",
+      "turn": 35
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressures or alerts escalated, resolved, or expired without player action during the active turns. The session summary shows some expired opportunities, but these were not 'pressures' in the sense of a faction's alert level.",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No market or trade views were shown.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Brother Aldric: \"I heard tell of your faithfulness to another's burden. *eyes search yours carefully* If that speaks true of your character, then perhaps... perhaps we might speak of matters beyond simple directions when you return from the thorned wood.\"",
+      "turn": 23
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No named NPC acted between turns without direct player interaction or as a direct reaction to player input.",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session summary at turn 42 clearly lists 'DISTRICT CHANGES', 'NOTABLE CHARACTERS', 'OPPORTUNITIES & CONTRACTS', and 'THE WORLD MOVED' with specific details like 'Opportunities offered', 'Opportunities expired', 'Mood transitions', 'Rumors mutated', 'Asks made of you', 'Help left ungiven', and 'Deeds recognized'.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The narrative, character interactions, and combat flow remained consistent and logical throughout the session. No errors or broken screens occurred.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The prompts and hints were clear, suggesting possible actions and commands. The game also corrected unknown commands with valid options.",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Your strike lands — Crypt Stalker: down. The Crypt Stalker falls.",
+      "turn": 35
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Crypt Stalker's attack finds you — 3 damage. (HP: 17/20). The 'Crypt Stalker readies an attack against you' line appeared in turn 32.",
+      "turn": 33
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was revealed in this session.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "a shivering pilgrim will remember who kept faith with what was given.",
+      "turn": 10
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Unknown command /look. Right now you can: /help · /status · /leverage",
+      "turn": 29
+    }
+  ],
+  "highlights": [
+    "The initial description of the Chapel Threshold and the introduction of the NPCs (Turn 1) set a great atmosphere.",
+    "The dialogue with Brother Aldric felt dynamic and responsive to my choices, especially his shifting demeanor (Turns 5-9).",
+    "The recognition from the shivering pilgrim after my interaction (Turn 10) was a nice touch.",
+    "The ambush on entering the Vestry Passage (Turn 32) was a good surprise and immediately raised the stakes.",
+    "The combat sequence was engaging, with clear damage feedback and enemy reactions (Turns 33-39).",
+    "The session summary (Turn 42) is an excellent feature, providing a clear recap of world changes and my impact."
+  ],
+  "deadSpots": [
+    "The repeated 'I'm not sure what you mean. Did you want to speak Brother Aldric or speak a shivering pilgrim?' (Turns 12, 17) felt a bit clunky and broke the flow, especially when I was trying to interact with the pilgrim after having just spoken to Aldric.",
+    "The 'Blackmail: 10' appearing after the first kill (Turn 35) without any prior explanation or context felt a bit out of the blue. It wasn't clear what 'Blackmail' represented or why it was gained."
+  ],
+  "confusions": [
+    "The meaning and source of 'Blackmail: 10' after the first kill (Turn 35) was unclear.",
+    "The 'hint: Not enough favor' (Turn 11) when trying to offer a coin to the pilgrim was confusing, as I hadn't seen any 'favor' mechanic introduced or explained yet."
+  ],
+  "wouldPlayAgain": true
+}

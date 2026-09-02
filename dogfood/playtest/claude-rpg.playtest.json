@@ -12,7 +12,8 @@
     "env": {
       "ANTHROPIC_API_KEY": "$OPENROUTER_API_KEY",
       "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
-      "CLAUDE_RPG_MODEL": "anthropic/claude-sonnet-4"
+      "CLAUDE_RPG_MODEL": "anthropic/claude-sonnet-4",
+      "CLAUDE_RPG_DEBUG": "1"
     },
     "promptPatterns": [
       "What do you do\\?\\s*$",

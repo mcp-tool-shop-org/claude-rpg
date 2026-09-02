@@ -1,0 +1,282 @@
+ Test Files  119 passed (119)
+      Tests  2444 passed | 1 skipped (2445)
+warning: in the working copy of 'docs/living-world-slice-b2-cast-sheet.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02.index.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/game.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/game/unknown-command.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02.console.log', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/REPORT.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/deepseek/critique.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/deepseek/meta.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/deepseek/transcript.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/gemini/critique.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/gemini/meta.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/gemini/transcript.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/llama/critique.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/llama/meta.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/llama/transcript.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/mistral/critique.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/mistral/meta.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/mistral/transcript.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/qwen/critique.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/qwen/meta.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'dogfood/playtest/runs/b1-2026-09-02/qwen/transcript.txt', LF will be replaced by CRLF the next time Git touches it
+   076eb0f..56afeb8  main -> main
+claude-rpg living world (starter-fantasy): mistral, qwen, llama, deepseek, gemini × 40 turns → E:\AI\claude-rpg\dogfood\playtest\runs\b1-2026-09-02b
+  [deepseek] t0 (setup, 1534ms) > Wanderer
+  [mistral] t0 (setup, 1527ms) > Wanderer
+  [qwen] t0 (setup, 1536ms) > Wanderer
+  [llama] t0 (setup, 1529ms) > Wanderer
+  [gemini] t0 (setup, 1537ms) > Wanderer
+  [deepseek] t0 (setup, 1204ms) > 1
+  [mistral] t0 (setup, 1204ms) > 1
+  [qwen] t0 (setup, 1203ms) > 1
+  [llama] t0 (setup, 1203ms) > 1
+  [gemini] t0 (setup, 1204ms) > 1
+  [deepseek] t0 (setup, 1200ms) > 1
+  [mistral] t0 (setup, 1200ms) > 1
+  [qwen] t0 (setup, 1307ms) > 1
+  [llama] t0 (setup, 1306ms) > 1
+  [gemini] t0 (setup, 1307ms) > 1
+  [deepseek] t0 (setup, 1293ms) > 3
+  [mistral] t0 (setup, 1294ms) > 3
+  [qwen] t0 (setup, 1296ms) > 3
+  [llama] t0 (setup, 1295ms) > 3
+  [gemini] t0 (setup, 1295ms) > 3
+  [deepseek] t0 (setup, 1284ms) > done
+  [mistral] t0 (setup, 1284ms) > done
+  [qwen] t0 (setup, 1283ms) > done
+  [llama] t0 (setup, 1283ms) > done
+  [gemini] t0 (setup, 1284ms) > done
+  [deepseek] t0 (setup, 1287ms) > n
+  [mistral] t0 (setup, 1288ms) > n
+  [qwen] t0 (setup, 1287ms) > n
+  [llama] t0 (setup, 1286ms) > n
+  [gemini] t0 (setup, 1286ms) > n
+  [deepseek] t0 (setup, 1281ms) > 1
+  [mistral] t0 (setup, 1281ms) > 1
+  [qwen] t0 (setup, 1280ms) > 1
+  [llama] t0 (setup, 1280ms) > 1
+  [gemini] t0 (setup, 1280ms) > 1
+  [deepseek] t0 (setup, 1282ms) > 1
+  [mistral] t0 (setup, 1282ms) > 1
+  [qwen] t0 (setup, 1282ms) > 1
+  [llama] t0 (setup, 1282ms) > 1
+  [gemini] t0 (setup, 1282ms) > 1
+  [deepseek] t0 (setup, 1275ms) > 1
+  [mistral] t0 (setup, 1276ms) > 1
+  [qwen] t0 (setup, 1278ms) > 1
+  [llama] t0 (setup, 1278ms) > 1
+  [gemini] t0 (setup, 1279ms) > 1
+  [deepseek] t0 (setup, 1284ms) > y
+  [mistral] t0 (setup, 1284ms) > y
+  [qwen] t0 (setup, 1282ms) > y
+  [llama] t0 (setup, 1282ms) > y
+  [gemini] t0 (setup, 1276ms) > y
+  [qwen] t1 (prompt, 5369ms) > talk to the pilgrim
+  [llama] t1 (prompt, 7759ms) > talk to the woman tending to candles
+  [gemini] t1 (prompt, 7897ms) > talk to the pilgrim
+  [deepseek] t1 (prompt, 8388ms) > talk to the pilgrim
+  [mistral] t1 (prompt, 8515ms) > talk to the pilgrim
+  [gemini] t2 (prompt, 6395ms) > inspect the chapel nave
+  [qwen] t2 (prompt, 9377ms) > bribe the pilgrim for safe passage
+  [deepseek] t2 (prompt, 7397ms) > Where does your path lead you?
+  [llama] t2 (prompt, 8414ms) > ask Sister Maren about the black market
+  [mistral] t2 (prompt, 11472ms) > inspect the shadowed figure
+  [qwen] t3 (prompt, 5241ms) > intimidate the pilgrim
+  [gemini] t3 (prompt, 5710ms) > enter chapel nave
+  [deepseek] t3 (prompt, 5731ms) > speak Suspicious Pilgrim
+  [qwen] t4 (prompt, 5028ms) > /leverage
+  [mistral] t3 (prompt, 5307ms) > intimidate the pilgrim
+  [llama] t3 (prompt, 10298ms) > tell Sister Maren I seek redemption and truth
+  [gemini] t4 (prompt, 6608ms) > talk to Brother Aldric
+  [qwen] t5 (prompt, 2063ms) > /pressures
+  [deepseek] t4 (prompt, 7428ms) > I seek the dead who do not rest.
+  [qwen] t6 (prompt, 2696ms) > /director
+  [mistral] t4 (prompt, 6090ms) > inspect the chapel nave
+  [qwen] t7 (prompt, 1748ms) > /people
+  [gemini] t5 (prompt, 6975ms) > I seek truth among the restless dead.
+  [qwen] t8 (prompt, 2077ms) > /npc Suspicious Pilgrim
+  [qwen] t9 (prompt, 1821ms) > /npc Brother Aldric
+  [mistral] t5 (prompt, 5872ms) > /director
+  [qwen] t10 (prompt, 1866ms) > /zone Ruined Chapel Entrance
+  [mistral] t6 (prompt, 1820ms) > /leverage
+  [llama] t4 (prompt, 12734ms) > ask Sister Maren about the candles and the souls they represent
+  [qwen] t11 (prompt, 2450ms) > /zone Chapel Entry
+  [deepseek] t5 (prompt, 12001ms) > What do you know about the walking corpses here?
+  [mistral] t7 (prompt, 1976ms) > /pressures
+  [qwen] t12 (prompt, 2875ms) > /zone Ruined Chapel Entrance
+  [mistral] t8 (prompt, 1936ms) > /people
+  [gemini] t6 (prompt, 9927ms) > My faith is my own. I question all that is not just.
+  [mistral] t9 (prompt, 1810ms) > /npc Suspicious Pilgrim
+  [qwen] t13 (prompt, 2120ms) > /zone Ruined Chapel
+  [mistral] t10 (prompt, 1684ms) > back
+  [qwen] t14 (prompt, 1973ms) > /zone chapel
+  [deepseek] t6 (prompt, 7574ms) > /sheet
+  [qwen] t15 (prompt, 2857ms) > /districts
+  [llama] t5 (prompt, 11334ms) > light a candle for my own lost soul
+  [gemini] t7 (prompt, 8374ms) > Who are these others?
+  [qwen] t16 (prompt, 2738ms) > /enter Chapel Grounds
+  [qwen] t17 (prompt, 1471ms) > /visit Chapel Grounds
+  [mistral] t11 (prompt, 7609ms) > talk to brother aldric
+  [qwen] t18 (prompt, 1904ms) > /go Chapel Grounds
+  [llama] t6 (prompt, 6824ms) > enter the chapel nave
+  [qwen] t19 (prompt, 1895ms) > /look
+  [deepseek] t7 (prompt, 10908ms) > /director
+  [qwen] t20 (prompt, 1858ms) > /help
+  [mistral] t12 (prompt, 7189ms) > talk to brother aldric again about the choices he's facing and the dead not staying buried here. mention the pilgrim and sister maren. ask what he knows about the crypt entrance. what he fears. what h
+  [qwen] t21 (prompt, 1812ms) > /districts
+  [gemini] t8 (prompt, 9849ms) > I am no stranger to heresy.
+  [deepseek] t8 (prompt, 3181ms) > /people
+  [qwen] t22 (prompt, 1749ms) > /people Chapel Grounds
+  [qwen] t23 (prompt, 1636ms) > /people Crypt Depths
+  [deepseek] t9 (prompt, 3159ms) > /npc Suspicious Pilgrim
+  [qwen] t24 (prompt, 1786ms) > /factions
+  [llama] t7 (prompt, 9248ms) > approach Brother Aldric
+  [deepseek] t10 (prompt, 2954ms) > back
+  [gemini] t9 (prompt, 6960ms) > help a shivering pilgrim
+  [qwen] t25 (prompt, 2994ms) > /npc chapel-undead
+  [qwen] t26 (prompt, 2924ms) > /zone crypt-depths
+  [mistral] t13 (prompt, 12276ms) > examine collapsed wall
+  [qwen] t27 (prompt, 1579ms) > /zone Crypt Depths
+  [gemini] t10 (prompt, 7406ms) > offer pilgrim a coin
+  [qwen] t28 (prompt, 2894ms) > /zone crypt-depths
+  [llama] t8 (prompt, 10687ms) > help the shivering pilgrim
+  [deepseek] t11 (prompt, 9290ms) > speak Brother Aldric
+  [qwen] t29 (prompt, 1810ms) > /inspect chapel-undead
+  [mistral] t14 (prompt, 6807ms) > go vestry passage
+  [qwen] t30 (prompt, 2214ms) > /zone Chapel Grounds
+  [qwen] t31 (prompt, 2828ms) > /zone Chapel
+  [deepseek] t12 (prompt, 7444ms) > What shadows bind you?
+  [gemini] t11 (prompt, 9628ms) > I have no coin.
+  [llama] t9 (prompt, 9315ms) > give the pilgrim some food and ask about the roads they've been walking
+  [qwen] t32 (prompt, 3113ms) > /look
+  [mistral] t15 (prompt, 7341ms) > fight
+  [qwen] t33 (prompt, 2835ms) > /help
+  [gemini] t12 (prompt, 5062ms) > speak a shivering pilgrim
+  [qwen] t34 (prompt, 1545ms) > /people
+  [qwen] t35 (prompt, 1810ms) > /npc Suspicious Pilgrim
+  [mistral] t16 (prompt, 7336ms) > fight
+  [llama] t10 (prompt, 8325ms) > /say to Brother Aldric I'm willing to help the chapel, what needs doing
+  [qwen] t36 (prompt, 3032ms) > /npc Brother Aldric
+  [llama] t11 (prompt, 2248ms) > /help
+  [gemini] t13 (prompt, 7048ms) > What is your name, pilgrim?
+  [qwen] t37 (prompt, 3057ms) > /zone Chapel Grounds
+  [llama] t12 (prompt, 2019ms) > /status
+  [qwen] t38 (prompt, 1749ms) > /districts
+  [deepseek] t13 (idle, 15495ms) > The kind that promise protection at a price. I serve those who watch from the crypts below... but their demands grow heavier with each passing moon.
+  [llama] t13 (prompt, 2247ms) > talk to Brother Aldric
+  [mistral] t17 (prompt, 7800ms) > /rumor
+  [qwen] t39 (prompt, 2984ms) > /district chapel-grounds
+  [deepseek] t14 (prompt, 3660ms) > help a shivering pilgrim
+  [mistral] t18 (prompt, 2012ms) > /status
+  [mistral] t19 (prompt, 1873ms) > go crypt antechamber
+  [qwen] t40 (prompt, 2906ms) > /zone chapel-entrance
+  [gemini] t14 (prompt, 9732ms) > I seek answers. Do you know of the restless dead?
+  [deepseek] t15 (prompt, 4409ms) > look shivering pilgrim
+  [llama] t14 (prompt, 7764ms) > serve righteously
+  [llama] t15 (prompt, 4754ms) > speak to Brother Aldric
+  [mistral] t20 (prompt, 8370ms) > fight
+  [deepseek] t16 (prompt, 7865ms) > go to shivering pilgrim
+  [gemini] t15 (prompt, 11213ms) > I seek to put them to rest.
+  [deepseek] t17 (prompt, 7267ms) > accept
+  [llama] t16 (prompt, 11007ms) > tell Brother Aldric I seek justice, not power
+  [mistral] t21 (prompt, 10174ms) > fight
+  [gemini] t16 (prompt, 12177ms) > I have faith. I also have steel.
+  [deepseek] t18 (prompt, 8323ms) > talk to shivering pilgrim
+  [gemini] t17 (prompt, 4029ms) > speak Brother Aldric
+  [llama] t17 (prompt, 10286ms) > ask Brother Aldric what debt he owes you
+  [mistral] t22 (prompt, 11154ms) > /status
+  [mistral] t23 (prompt, 1640ms) > help
+  [deepseek] t19 (prompt, 6855ms) > What shrine do you speak of?
+  [gemini] t18 (prompt, 8753ms) > I am prepared. Tell me where to go.
+  [mistral] t24 (prompt, 7163ms) > /help
+  [llama] t18 (prompt, 11980ms) > tell Brother Aldric his debt is paid, his sister's life is enough
+  [mistral] t25 (prompt, 2493ms) > /zone crypt_antechamber_17B_1038_34A_702D_8C21_819B_6B1A_0000_0000_0000_000
+  [mistral] t26 (prompt, 1958ms) > /zone antechamber
+  [mistral] t27 (prompt, 1821ms) > /zone crypt
+  [qwen] done: 42 turns, ended by turns, critique ALIVE
+  [mistral] t28 (prompt, 1664ms) > /people
+  [mistral] t29 (prompt, 1824ms) > /npc a shivering pilgrim
+  [deepseek] t20 (prompt, 15712ms) > I know of no shrine. I seek to understand the shadows you serve.
+  [gemini] t19 (idle, 12825ms) > ═════════════════════════ Turn 19 ══════════════════════════
+  [mistral] t30 (prompt, 1865ms) > /rumors
+  [llama] t19 (prompt, 10835ms) > go to the Vestry Passage
+  [mistral] t31 (prompt, 1901ms) > talk
+  [gemini] t20 (prompt, 4507ms) > Thank you. Where may I find this blessed salt?
+  [llama] t20 (prompt, 8491ms) > attack the Crypt Stalker
+  [mistral] t32 (prompt, 8361ms) > flee Vestry Passage 100 steps west and up stairs now! 100 steps west and up stairs now! flee Vestry Passage now! flee Vestry Passage! flee! go west up stairs flee exit west up stairs flee Vestry Passa
+  [deepseek] t21 (prompt, 15345ms) > I feel only the gnawing doubt. Tell me more of the Crimson Veil.
+  [gemini] t21 (prompt, 11232ms) > Where is this miller's bridge?
+  [llama] t21 (prompt, 7364ms) > attack the Crypt Stalker again
+  [mistral] t33 (prompt, 7504ms) > attack closest Crypt Stalker
+  [llama] t22 (prompt, 7046ms) > go to the Crypt Antechamber
+  [deepseek] t22 (idle, 14492ms) > Brother Aldric, I feel only the gnawing doubt. Tell me more of the Crimson Veil.
+  [gemini] t22 (prompt, 13762ms) > I will seek her out. Thank you, Brother Aldric.
+  [mistral] t34 (prompt, 12245ms) > /inventory
+  [deepseek] t23 (prompt, 2615ms) > Who are these others? Where can I find them?
+  [mistral] t35 (prompt, 1665ms) > inv
+  [llama] t23 (prompt, 8240ms) > attack the Ash Ghoul
+  [gemini] t23 (prompt, 9270ms) > I would. Give it to me.
+  [mistral] t36 (prompt, 7561ms) > continue
+  [deepseek] t24 (prompt, 9810ms) > How do I prove my sincerity to these others?
+  [llama] t24 (prompt, 10978ms) > attack the Crypt Warden
+  [gemini] t24 (prompt, 6997ms) > accept the courier's delivery
+  [mistral] t37 (prompt, 7301ms) > use blackmail
+  [llama] t25 (prompt, 5301ms) > attack the Ash Ghoul
+  [gemini] t25 (prompt, 9903ms) > Yes, I am. Give me the seal.
+  [deepseek] t25 (prompt, 15384ms) > attack
+  [llama] t26 (prompt, 7096ms) > refuse to help the pilgrim, attack the Crypt Warden
+  [mistral] t38 (prompt, 10037ms) > use blackmail
+  [deepseek] t26 (prompt, 5167ms) > attack Brother Aldric
+  [llama] t27 (prompt, 7367ms) > attack the Crypt Warden again
+  [mistral] t39 (prompt, 7449ms) > use blackmail
+  [gemini] t26 (prompt, 9905ms) > I speak of the package the courier carries. I will deliver it.
+  [deepseek] t27 (prompt, 7580ms) > attack Brother Aldric
+  [llama] t28 (prompt, 8110ms) > attack the Ash Ghoul
+  [mistral] t40 (prompt, 7851ms) > use blackmail
+  [deepseek] t28 (prompt, 5013ms) > help a woman at the chapel door
+  [gemini] t27 (prompt, 10195ms) > It was. I have given my word.
+  [llama] t29 (prompt, 5763ms) > use blackmail
+  [deepseek] t29 (prompt, 7763ms) > I will help you. What do you need held?
+  [gemini] t28 (prompt, 6833ms) > /look market
+  [gemini] t29 (prompt, 1838ms) > /leverage
+  [llama] t30 (prompt, 8823ms) > go to the Vestry Passage
+  [gemini] t30 (prompt, 1868ms) > /status
+  [deepseek] t30 (prompt, 6754ms) > look
+  [gemini] t31 (prompt, 2043ms) > Go to the vestry passage.
+  [mistral] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] t31 (prompt, 5950ms) > /jobs
+  [llama] t31 (prompt, 8205ms) > attack the Crypt Stalker
+  [gemini] t32 (prompt, 8149ms) > Attack Crypt Stalker.
+  [deepseek] t32 (prompt, 2817ms) > take opp-investigation-chapel-undead-22
+  [gemini] t33 (prompt, 6335ms) > Attack Crypt Stalker.
+  [deepseek] t33 (prompt, 6466ms) > vestigate black market
+  [llama] t32 (prompt, 13459ms) > /jobs
+  [gemini] t34 (prompt, 6600ms) > Attack Crypt Stalker.
+  [llama] t33 (prompt, 2047ms) > accept opp-investigation-ask_12-39
+  [deepseek] t34 (prompt, 7375ms) > search the nave
+  [gemini] t35 (prompt, 6114ms) > Go to Crypt Antechamber.
+  [llama] t34 (prompt, 8648ms) > continue
+  [deepseek] t35 (prompt, 8702ms) > talk to pilgrim
+  [llama] t35 (prompt, 1830ms) > examine surroundings
+  [gemini] t36 (prompt, 7073ms) > Attack Ash Ghoul.
+  [llama] t36 (prompt, 5869ms) > continue
+  [deepseek] t36 (prompt, 8390ms) > ask pilgrim about the black market
+  [llama] t37 (prompt, 2437ms) > look around
+  [gemini] t37 (prompt, 7668ms) > Attack Crypt Warden.
+  [llama] t38 (prompt, 6389ms) > continue
+  [llama] t39 (prompt, 2333ms) > go to Chapel Nave
+  [deepseek] t37 (prompt, 11019ms) > search near the altar
+  [gemini] t38 (prompt, 10076ms) > Attack Crypt Warden.
+  [llama] t40 (prompt, 8680ms) > talk to Brother Aldric
+  [gemini] t39 (prompt, 7562ms) > Attack Crypt Warden.
+  [deepseek] t38 (prompt, 9444ms) > go to vestry passage
+  [deepseek] t39 (prompt, 9050ms) > attack crypt stalker
+  [gemini] t40 (prompt, 9931ms) > Attack Crypt Warden.
+  [deepseek] t40 (prompt, 6969ms) > help woman
+  [gemini] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] done: 42 turns, ended by turns, critique ALIVE
+  [llama] done: 42 turns, ended by turns, critique ALIVE
+report: E:\AI\claude-rpg\dogfood\playtest\runs\b1-2026-09-02b\REPORT.md
+exit=0

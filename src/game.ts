@@ -277,6 +277,7 @@ import {
   askSubjectId,
   askSubjectName,
   resolveAskConsequence,
+  type AskConsequence,
   markAskHelped,
   markAskIgnored,
   markAskRevealed,
@@ -548,6 +549,17 @@ export type GameConfig = {
    */
   tuning?: Partial<LivingWorldTuning>;
 };
+
+/** One clause naming a revealed con's cost for the play screen (stitch, playtest b1-2026-09-02b). */
+function describeAskCost(consequence: AskConsequence): string {
+  switch (consequence.kind) {
+    case 'coin-lost': return ` ${consequence.amount} coin gone.`;
+    case 'ambush': return ` The way to ${consequence.zoneId} was watched.`;
+    case 'faction-pin':
+    case 'standing-burn': return ` Your standing with ${consequence.factionId} took the blame.`;
+    default: return '';
+  }
+}
 
 export class GameSession {
   readonly engine: Engine;
@@ -1959,6 +1971,7 @@ export class GameSession {
         // The player never bit: the reveal is free, and named.
         markAskRevealed(world, ask.id, tick);
         this.pushWorldMoved('ask-revealed', `${subjectName}'s story wasn't true. You never bit.`);
+        this.pendingAnnouncements.push(`${subjectName}'s story wasn't true. You never bit.`);
         continue;
       }
       const consequence = resolveAskConsequence(ask);
@@ -1997,6 +2010,9 @@ export class GameSession {
       }
       markAskRevealed(world, ask.id, tick);
       this.pushWorldMoved('ask-revealed', `${subjectName}'s story wasn't true.`);
+      // Playtest b1-2026-09-02b: a reveal that only the recap reports is a
+      // con nobody felt. Announce it the round it lands, with its cost.
+      this.pendingAnnouncements.push(`${subjectName}'s story wasn't true.${describeAskCost(consequence)}`);
     }
     // Age out a GENUINE ask nobody answered within the reveal window
     // (stitch ruling, wave 10: one cadence for both truths -- the con shows
@@ -2009,6 +2025,7 @@ export class GameSession {
       if (tick - ask.offeredTick < this.tuning.askRevealRounds) continue;
       markAskIgnored(world, ask.id);
       this.pushWorldMoved('ask-ignored', `${askSubjectName(ask, world)} needed help that never came.`);
+      this.pendingAnnouncements.push(`${askSubjectName(ask, world)} needed help that never came.`);
     }
 
 

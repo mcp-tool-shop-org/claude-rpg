@@ -1,0 +1,109 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through its dynamic NPC interactions and the subtle shifts in atmosphere. Brother Aldric's dialogue evolved based on player input, and the presence of other NPCs added to the sense of a living environment. The game also presented opportunities and tracked their expiration, contributing to a feeling of ongoing events.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The atmosphere in the chapel entrance and nave consistently shifted based on NPC interactions and the player's actions, described with phrases like 'tension between them is palpable' (Turn 2), 'atmosphere has grown heavier still' (Turn 4), 'air grows heavier here, thick with the weight of old prayers and lingering incense' (Turn 9), and 'The chapel's sacred stillness presses down, heavy with choices made and unmade' (Turn 14).",
+      "turn": 2
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Sister Maren's actions are described without direct player input, such as 'Sister Maren continues her quiet ministrations at the candles, but you catch her stealing deliberate looks toward the pilgrim when she thinks no one is watching.' (Turn 2) and 'Sister Maren's hand slowly reaches toward something tucked within her own robes, her eyes never leaving the kneeling figure.' (Turn 8). The pilgrim's actions also evolve: 'The pilgrim's restless movements have grown more pronounced, their eyes darting between you and the exits' (Turn 3).",
+      "turn": 2
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session summary at the end of the transcript includes a 'THE WORLD MOVED' section, listing 'Opportunities offered: 2', 'Opportunities expired: 1', 'Marks the street left on you: 1', and 'Asks made of you: 2'.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The narrative consistently maintained the setting, character descriptions, and ongoing tensions without any contradictions or errors throughout the session.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The game provided clear prompts ('What do you do?'), hints ('hint: Try \"bribe\" or \"intimidate\" a target to spend leverage'), and command suggestions ('TRY: > talk to the pilgrim') throughout the session. When an unknown command was entered, it provided a correction (Turn 32).",
+      "turn": 1
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "When I typed '/talk Brother Aldric' (Turn 32), the game responded with 'Unknown command /talk. Did you mean /back? /talk lives in director mode — type /director. Right now you can: /archive · /arcs · /conclude' without costing a turn or narrating it as an in-world action.",
+      "turn": 32
+    }
+  ],
+  "highlights": [
+    "The evolving tension between the pilgrim and Sister Maren in the entrance hall (Turns 2-4).",
+    "Brother Aldric's dialogue adapting to my responses, particularly his shift in demeanor after I stated 'My oaths are to the truth' (Turn 14) and his subsequent probing questions.",
+    "The session summary clearly detailing world moves like expired opportunities (Turn 42)."
+  ],
+  "deadSpots": [
+    "Repeatedly trying to 'talk to the pilgrim' or 'intimidate the pilgrim' in the early turns felt a bit static, as the game didn't offer new dialogue or actions until I shifted focus (Turns 2-4).",
+    "The game's inability to parse 'The dead do not stay buried.' as a response to Brother Aldric's questions, leading to 'I'm not sure what you mean.' prompts multiple times (Turns 22, 24, 28, 34). This broke the flow of conversation."
+  ],
+  "confusions": [
+    "The game's parsing of my conversational responses. I tried to use a thematic phrase ('The dead do not stay buried.') as a response to Brother Aldric's questions about my past or purpose, but the game repeatedly failed to understand it, asking me to specify which NPC I wanted to speak to (Turns 22, 24, 28, 34). This was frustrating as it seemed like a valid, role-playing response."
+  ],
+  "wouldPlayAgain": true
+}

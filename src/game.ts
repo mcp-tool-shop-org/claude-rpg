@@ -2042,6 +2042,13 @@ export class GameSession {
       }
       world.globals['claude_rpg.asks'] = JSON.stringify([...getAllAsks(world), offer.ask]);
       this.pushWorldMoved('ask-offered', offer.ask.surface);
+      // Second family playtest (b1-2026-09-02): every seat's recap listed
+      // "Asks made of you" but no seat ever saw an ask on the play screen
+      // -- the offer reached only the ledger, so nobody could help a
+      // petitioner or dodge a con (con/recognition 1 of 5). The ask is now
+      // announced the round it is made, with the verb that answers it.
+      const petitionerName = offer.petitionerEntity.name;
+      this.pendingAnnouncements.push(`${petitionerName} asks you: "${offer.ask.surface}" (help ${petitionerName.toLowerCase()} to answer, or walk on)`);
     }
   }
 

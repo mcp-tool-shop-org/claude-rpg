@@ -1,0 +1,110 @@
+{
+  "alive": true,
+  "summary": "The world felt reactive and coherent throughout the session, with NPCs acting independently and the district mood shifting based on player actions. The game maintained consistency in locations and characters while offering clear prompts. However, some opportunities expired without clear player understanding, and combat telegraphing was inconsistent.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Entering Vestry Passage triggered 'Crypt Stalker readies an attack against you' announcement",
+      "turn": 24
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Session summary shows 'alertPressure rose sharply' in Crypt Depths district",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No evidence of pressure escalating/resolving without player action during session",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No /market or /trade commands used, no price reactions shown",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Session summary shows 'a shivering pilgrim's story wasn't true' - street marked player",
+      "turn": 42
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Crypt Depths mood changed from 'subdued, fearful' to 'dangerous and despairing'",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Brother Aldric 'disappears into shadows' after conversation without player command",
+      "turn": 23
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary lists opportunities offered/expired, mood transitions, street marks",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in locations, characters, or facts throughout session",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts, hints, and TRY suggestions provided throughout",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "'Your strike lands — Crypt Stalker: down. The Crypt Stalker falls.' deterministic combat line",
+      "turn": 30
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Crypt Stalker hit player for 3 damage with telegraph 'readies an attack' the round before",
+      "turn": 27
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con artist scenario played out - pilgrim's story marked false but no reveal scene",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine help given to petitioners that was acknowledged and remembered",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "'speak' command corrected to 'speak a courier' with valid options listed",
+      "turn": 35
+    }
+  ],
+  "highlights": [
+    "Turn 24: Ambush on entering Vestry Passage created immediate tension",
+    "Turn 30: Clean kill confirmation with 'The Crypt Stalker falls' line",
+    "Turn 42: Comprehensive session recap showing world reactivity"
+  ],
+  "deadSpots": [
+    "Turn 38-39: 'accept' command didn't trigger immediate response, breaking flow",
+    "Turn 27: Combat telegraph inconsistent - some attacks had 'readies' lines, others didn't"
+  ],
+  "confusions": [
+    "Turn 38: Which specific opportunity was expiring when hint appeared?",
+    "Turn 32-35: Game struggled to parse 'talk to Brother Aldric' vs 'speak' commands"
+  ],
+  "wouldPlayAgain": true
+}

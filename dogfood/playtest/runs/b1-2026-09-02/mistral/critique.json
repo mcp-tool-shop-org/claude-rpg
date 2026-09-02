@@ -1,0 +1,115 @@
+{
+  "alive": true,
+  "summary": "The world felt alive with dynamic NPCs, shifting moods, and emergent encounters. The chapel’s atmosphere evolved naturally, and Brother Aldric’s shifting loyalties added depth. Combat was tense, with clear telegraphing and damage. The session recap highlighted world moves like ambushes, mood shifts, and rumors, reinforcing coherence. Minor UX issues (e.g., /rumors typo) were handled gracefully.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 30: 'Ambush: Chapel Patrol in Vestry Passage' announced by the game upon entering the Vestry Passage.",
+      "turn": 30
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure, bounty, investigation, or alert was raised by a faction on its own during the session.",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressures or alerts escalated, resolved, or expired without direct player action.",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant price or market view showed markup/discount based on faction standing.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Turn 42: Session recap notes 'a shivering pilgrim's story wasn't true. You never bit.' as a rumor the street left on the player, with a clear stance (doubt).",
+      "turn": 42
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Turn 42: Session recap notes 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"' as a mood transition.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Turn 28: Brother Aldric speaks to the player unprompted, revealing his decision to shift loyalties. Turn 32: Brother Aldric watches the combat unfold with conflicting impulses.",
+      "turn": 28
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Turn 42: Session recap lists 'Opportunities offered: 2', 'Ambushes: 1', 'Mood transitions: 2', and 'Marks the street left on you: 1'.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions, errors, or broken screens observed. Locations, characters, and facts remained consistent (e.g., Brother Aldric’s shifting stance, chapel layout).",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "Turns 9, 20, 36, 37: Player struggled with unknown commands (/rumors, /explore) and movement phrasing ('Crypt Antechamber' required multiple attempts). Prompts were not always clear for social verbs.",
+      "turn": 9
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 32: 'Your strike lands — Crypt Stalker: down.' and 'The Crypt Stalker falls.' are deterministic kill lines in reserved blocks.",
+      "turn": 32
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Turns 31, 32, 33, 34, 35: Multiple combat lines show enemies hitting the player (e.g., 'Crypt Stalker's attack finds you — 3 damage') with telegraphing (e.g., 'Crypt Stalker readies an attack').",
+      "turn": 31
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No cons were presented or revealed during the session.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine petitioners were helped, so no recognition occurred.",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Turns 9, 20, 39, 40: Unknown commands (/rumors, /explore, /rumor) were immediately corrected with suggestions or help menus, without costing turns or in-world narration.",
+      "turn": 9
+    }
+  ],
+  "highlights": [
+    "Turn 1: Atmospheric introduction to the Ruined Chapel Entrance with dynamic NPCs (Sister Maren, Suspicious Pilgrim) and hints of corruption.",
+    "Turn 30: Emergent ambush in Vestry Passage with clear telegraphing and combat lines.",
+    "Turn 28: Brother Aldric’s unprompted dialogue revealing his shifting loyalties and offering a potential ally.",
+    "Turn 42: Session recap effectively summarized world moves (ambushes, mood shifts, rumors) and character changes.",
+    "Turns 31-35: Tense combat with clear damage tracking and enemy telegraphing."
+  ],
+  "deadSpots": [
+    "Turns 4-5: Player struggled with social verbs (/leverage hints but no clear guidance on how to use them).",
+    "Turns 13-15: Player confusion around NPC targeting ('Brother Aldric' vs. 'Suspicious Pilgrim') led to repeated prompts.",
+    "Turn 36-37: Movement phrasing ('Crypt Antechamber') required multiple attempts, indicating unclear exit naming."
+  ],
+  "confusions": [
+    "Turn 9: Player tried '/rumors' but the game suggested '/director' mode, causing confusion about where rumors are accessed.",
+    "Turn 13: Player input 'Brother Aldric' without a verb, leading to a prompt asking for clarification ('Did you want to inspect or move?').",
+    "Turn 24: Player’s verbose combat command ('attack Ash Ghoul twice more then Crypt Antechamber...') was not parsed correctly, requiring simplification.",
+    "Turn 36-37: Player struggled to navigate to 'Crypt Antechamber' despite it being listed as an exit, suggesting unclear exit naming or parsing."
+  ],
+  "wouldPlayAgain": true
+}

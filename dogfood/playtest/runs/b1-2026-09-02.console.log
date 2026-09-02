@@ -1,0 +1,233 @@
+claude-rpg living world (starter-fantasy): mistral, qwen, llama, deepseek, gemini × 40 turns → E:\AI\claude-rpg\dogfood\playtest\runs\b1-2026-09-02
+  [mistral] t0 (setup, 1624ms) > Wanderer
+  [deepseek] t0 (setup, 1619ms) > Wanderer
+  [gemini] t0 (setup, 1627ms) > Wanderer
+  [llama] t0 (setup, 1621ms) > Wanderer
+  [qwen] t0 (setup, 1631ms) > Wanderer
+  [mistral] t0 (setup, 1295ms) > 1
+  [deepseek] t0 (setup, 1296ms) > 1
+  [gemini] t0 (setup, 1297ms) > 1
+  [llama] t0 (setup, 1297ms) > 1
+  [qwen] t0 (setup, 1297ms) > 1
+  [mistral] t0 (setup, 1300ms) > 1
+  [deepseek] t0 (setup, 1299ms) > 1
+  [gemini] t0 (setup, 1299ms) > 1
+  [llama] t0 (setup, 1299ms) > 1
+  [qwen] t0 (setup, 1298ms) > 1
+  [mistral] t0 (setup, 1295ms) > 3
+  [deepseek] t0 (setup, 1296ms) > 3
+  [gemini] t0 (setup, 1295ms) > 3
+  [llama] t0 (setup, 1296ms) > 3
+  [qwen] t0 (setup, 1296ms) > 3
+  [mistral] t0 (setup, 1299ms) > done
+  [deepseek] t0 (setup, 1299ms) > done
+  [gemini] t0 (setup, 1300ms) > done
+  [llama] t0 (setup, 1299ms) > done
+  [qwen] t0 (setup, 1300ms) > done
+  [mistral] t0 (setup, 1301ms) > n
+  [deepseek] t0 (setup, 1301ms) > n
+  [gemini] t0 (setup, 1301ms) > n
+  [llama] t0 (setup, 1301ms) > n
+  [qwen] t0 (setup, 1300ms) > n
+  [mistral] t0 (setup, 1303ms) > 1
+  [deepseek] t0 (setup, 1303ms) > 1
+  [gemini] t0 (setup, 1304ms) > 1
+  [llama] t0 (setup, 1304ms) > 1
+  [qwen] t0 (setup, 1305ms) > 1
+  [mistral] t0 (setup, 1305ms) > 1
+  [deepseek] t0 (setup, 1305ms) > 1
+  [gemini] t0 (setup, 1304ms) > 1
+  [llama] t0 (setup, 1304ms) > 1
+  [qwen] t0 (setup, 1304ms) > 1
+  [mistral] t0 (setup, 1301ms) > 1
+  [deepseek] t0 (setup, 1301ms) > 1
+  [gemini] t0 (setup, 1303ms) > 1
+  [llama] t0 (setup, 1302ms) > 1
+  [qwen] t0 (setup, 1303ms) > 1
+  [mistral] t0 (setup, 1304ms) > y
+  [deepseek] t0 (setup, 1304ms) > y
+  [gemini] t0 (setup, 1300ms) > y
+  [llama] t0 (setup, 1300ms) > y
+  [qwen] t0 (setup, 1294ms) > y
+  [gemini] t1 (prompt, 4628ms) > talk to the pilgrim
+  [mistral] t1 (prompt, 4972ms) > inspect the chapel nave
+  [qwen] t1 (prompt, 5007ms) > talk to the pilgrim
+  [llama] t1 (prompt, 5708ms) > talk to the pilgrim
+  [deepseek] t1 (prompt, 8101ms) > look around
+  [mistral] t2 (prompt, 4908ms) > talk to the pilgrim
+  [gemini] t2 (prompt, 5841ms) > talk to the pilgrim again
+  [qwen] t2 (prompt, 6531ms) > intimidate the pilgrim
+  [deepseek] t2 (prompt, 4020ms) > talk to the pilgrim
+  [qwen] t3 (prompt, 5924ms) > bribe the pilgrim
+  [llama] t2 (prompt, 13223ms) > talk to Sister Maren
+  [mistral] t3 (prompt, 9393ms) > bribe suspicious pilgrim
+  [gemini] t3 (prompt, 9341ms) > intimidate the pilgrim
+  [deepseek] t3 (prompt, 8359ms) > ask about the crypt
+  [qwen] t4 (prompt, 5558ms) > talk to Sister Maren
+  [mistral] t4 (prompt, 4398ms) > intimidate suspicious pilgrim
+  [gemini] t4 (prompt, 4801ms) > /director
+  [llama] t3 (prompt, 7139ms) > ask Sister Maren about the troubles in the area
+  [gemini] t5 (prompt, 1912ms) > /leverage
+  [mistral] t5 (prompt, 4387ms) > /leverage
+  [gemini] t6 (prompt, 2029ms) > /back
+  [mistral] t6 (prompt, 1802ms) > go to shadowed alcove
+  [qwen] t5 (prompt, 7143ms) > ask Sister Maren about the black market activity
+  [deepseek] t4 (prompt, 11563ms) > /sheet
+  [mistral] t7 (prompt, 4732ms) > search the alcove thoroughly for hidden items or secrets. check the walls and floor carefully. look inside any loose stones or cracks. examine anything that looks out of place. smell the air for unusu
+  [llama] t4 (prompt, 8519ms) > enter the Chapel Nave
+  [deepseek] t5 (prompt, 2984ms) > go to shadowed alcove
+  [gemini] t7 (prompt, 6726ms) > talk to the woman in simple robes
+  [qwen] t6 (prompt, 9309ms) > inspect the chapel nave
+  [mistral] t8 (prompt, 6334ms) > /rumors
+  [deepseek] t6 (prompt, 6049ms) > search the alcove
+  [mistral] t9 (prompt, 2359ms) > /director
+  [gemini] t8 (prompt, 8986ms) > seek refuge from the darkness
+  [mistral] t10 (prompt, 1831ms) > /people
+  [qwen] t7 (prompt, 5653ms) > go to the chapel nave
+  [llama] t5 (prompt, 11379ms) > attack the Ash Ghoul
+  [mistral] t11 (prompt, 1818ms) > /npc Brother Aldric
+  [mistral] t12 (prompt, 2060ms) > Brother Aldric
+  [deepseek] t7 (prompt, 9463ms) > look up
+  [gemini] t9 (prompt, 6270ms) > talk to Brother Aldric
+  [llama] t6 (prompt, 5337ms) > defend against the Ash Ghoul's attack
+  [mistral] t13 (prompt, 3719ms) > talk to Brother Aldric
+  [qwen] t8 (prompt, 9046ms) > talk to Brother Aldric
+  [deepseek] t8 (prompt, 3953ms) > inspect the walls
+  [llama] t7 (prompt, 6914ms) > exit to the Ruined Chapel Entrance
+  [mistral] t14 (prompt, 6761ms) > ...
+  [gemini] t10 (prompt, 9060ms) > I seek to understand this place.
+  [deepseek] t9 (prompt, 6074ms) > /sheet
+  [qwen] t9 (prompt, 9315ms) > ask Brother Aldric about the black market activity
+  [deepseek] t10 (prompt, 3452ms) > examine the floor
+  [llama] t8 (prompt, 6866ms) > attack Brother Aldric
+  [mistral] t15 (prompt, 5955ms) > go to Ruined Chapel Entrance
+  [gemini] t11 (prompt, 6465ms) > I seek to understand this place.
+  [deepseek] t11 (prompt, 5837ms) > emerge from alcove
+  [mistral] t16 (prompt, 4635ms) > look
+  [qwen] t10 (prompt, 8729ms) > ask Brother Aldric about the pilgrim in the entrance
+  [gemini] t12 (prompt, 6722ms) > What is this place, Brother Aldric?
+  [mistral] t17 (prompt, 3849ms) > speak to Suspicious Pilgrim
+  [llama] t9 (prompt, 9300ms) > talk to Brother Aldric
+  [deepseek] t12 (prompt, 10463ms) > talk to pilgrim
+  [mistral] t18 (prompt, 7442ms) > I'm here about the restless dead
+  [gemini] t13 (prompt, 10450ms) > My oaths are to the truth.
+  [llama] t10 (prompt, 9617ms) > follow Brother Aldric to a private place
+  [qwen] t11 (prompt, 12913ms) > check the Vestry Passage
+  [deepseek] t13 (prompt, 7098ms) > Who says I travel alone?
+  [mistral] t19 (prompt, 7703ms) > /world
+  [gemini] t14 (prompt, 7140ms) > What truth do you seek, Brother Aldric?
+  [mistral] t20 (prompt, 1820ms) > /explore
+  [llama] t11 (prompt, 7546ms) > /say I will not be intimidated by these creatures, Brother Aldric, tell me what you propose
+  [qwen] t12 (prompt, 7417ms) > attack Crypt Stalker
+  [mistral] t21 (prompt, 1762ms) > /help
+  [llama] t12 (prompt, 2044ms) > /play
+  [deepseek] t14 (prompt, 6852ms) > /leverage
+  [mistral] t22 (prompt, 1829ms) > /people
+  [llama] t13 (prompt, 1672ms) > /conclude
+  [mistral] t23 (prompt, 2548ms) > `
+  [deepseek] t15 (prompt, 3170ms) > talk to Sister Maren
+  [qwen] t13 (prompt, 5059ms) > retreat to the Chapel Nave
+  [gemini] t15 (prompt, 10171ms) > I am bound by no master.
+  [mistral] t24 (prompt, 4254ms) > speak to Brother Aldric
+  [mistral] t25 (prompt, 3572ms) > speak to Brother Aldric
+  [deepseek] t16 (prompt, 7437ms) > I heard the dead do not stay buried here.
+  [qwen] t14 (prompt, 8271ms) > ask Brother Aldric about the crypt's contents
+  [llama] t14 (prompt, 10865ms) > save
+  [gemini] t16 (prompt, 6692ms) > What opportunities do you speak of?
+  [llama] t15 (prompt, 1904ms) > quit
+  [mistral] t26 (prompt, 6192ms) > Chapel Nave
+  [deepseek] t17 (prompt, 7749ms) > go to chapel nave
+  [gemini] t17 (prompt, 8449ms) > What opportunities do you speak of?
+  [qwen] t15 (prompt, 11165ms) > go to the Crypt Antechamber
+  [mistral] t27 (prompt, 8480ms) > speak to Brother Aldric
+  [deepseek] t18 (prompt, 8236ms) > talk to Brother Aldric
+  [gemini] t18 (prompt, 7867ms) > What opportunities do you speak of?
+  [qwen] t16 (prompt, 7767ms) > go to the Crypt Antechamber
+  [mistral] t28 (prompt, 8225ms) > ask about the crypt
+  [deepseek] t19 (prompt, 7624ms) > Sometimes. Why do you ask?
+  [gemini] t19 (prompt, 7141ms) > Who are these others?
+  [qwen] t17 (prompt, 6281ms) > ask Brother Aldric if he knows where the black market is located
+  [gemini] t20 (prompt, 7259ms) > What allies do you speak of?
+  [mistral] t29 (prompt, 10566ms) > Vestry Passage
+  [deepseek] t20 (prompt, 10680ms) > Tell me everything.
+  [qwen] t18 (prompt, 9252ms) > ask Brother Aldric about the granary district's traders and their wares
+  [mistral] t30 (prompt, 6376ms) > attack Crypt Stalker
+  [llama] done: 15 turns, ended by exit, critique ALIVE
+  [gemini] t21 (prompt, 11924ms) > The dead do not stay buried.
+  [mistral] t31 (prompt, 5523ms) > attack Crypt Stalker
+  [deepseek] t21 (prompt, 11413ms) > I will meet you in the wine cellar tonight.
+  [gemini] t22 (prompt, 4027ms) > speak Brother Aldric
+  [qwen] t19 (prompt, 14003ms) > ask Brother Aldric if he knows of any way to open the sealed passages in the crypt
+  [mistral] t32 (prompt, 5985ms) > attack Ash Ghoul
+  [mistral] t33 (prompt, 5525ms) > attack Crypt Stalker
+  [gemini] t23 (prompt, 7902ms) > The dead do not stay buried.
+  [deepseek] t22 (prompt, 13959ms) > I have my reasons. Until midnight, then.
+  [qwen] t20 (prompt, 10328ms) > go to the ossuary beneath the old cathedral
+  [gemini] t24 (prompt, 3687ms) > speak Brother Aldric
+  [mistral] t34 (prompt, 8397ms) > attack Ash Ghoul twice more then Crypt Antechamber if still standing then Crypt Antechamber anyway if not then flee if I must. I must. I can't fight anymore so I'll accept my fate and see what happens
+  [qwen] t21 (prompt, 9563ms) > ask the pilgrim about the ossuary beneath the old cathedral
+  [deepseek] t23 (prompt, 10407ms) > explore vestry passage
+  [gemini] t25 (prompt, 10177ms) > I am a knight. I seek purpose.
+  [mistral] t35 (prompt, 7321ms) > Crypt Antechamber
+  [mistral] t36 (prompt, 4061ms) > Crypt Antechamber
+  [deepseek] t24 (prompt, 7143ms) > draw sword
+  [qwen] t22 (prompt, 10959ms) > ask the pilgrim if he knows where the Keepers of the Final Rest can be found
+  [gemini] t26 (idle, 13057ms) > ═════════════════════════ Turn 24 ══════════════════════════
+  [gemini] t27 (prompt, 4043ms) > The dead do not stay buried.
+  [mistral] t37 (idle, 12564ms) > Crypt Antechamber
+  [qwen] t23 (prompt, 11529ms) > go to the Shadowed Alcove
+  [gemini] t28 (prompt, 4966ms) > speak Brother Aldric
+  [deepseek] t25 (prompt, 16903ms) > attack Crypt Stalker
+  [mistral] t38 (prompt, 9552ms) > /status
+  [qwen] t24 (prompt, 7825ms) > /keys
+  [mistral] t39 (prompt, 1791ms) > /rumor
+  [deepseek] t26 (prompt, 6565ms) > attack Crypt Stalker
+  [gemini] t29 (prompt, 8506ms) > Yes. Tell me.
+  [qwen] t25 (prompt, 2231ms) > /archive
+  [mistral] t40 (prompt, 1805ms) > /help
+  [qwen] t26 (prompt, 3308ms) > /arcs
+  [deepseek] t27 (prompt, 5623ms) > /jobs
+  [qwen] t27 (prompt, 2213ms) > /jobs
+  [deepseek] t28 (prompt, 2982ms) > attack Crypt Stalker
+  [qwen] t28 (prompt, 2378ms) > take [opp-investigation-chapel-undead-23] INVESTIGATION: Investigate the black market activity
+  [gemini] t30 (prompt, 8657ms) > /jobs
+  [gemini] t31 (prompt, 2015ms) > /talk Brother Aldric
+  [gemini] t32 (prompt, 1866ms) > speak Brother Aldric
+  [deepseek] t29 (prompt, 5230ms) > attack Crypt Stalker
+  [qwen] t29 (prompt, 6032ms) > check for hidden passages or traps in the alcove
+  [mistral] done: 42 turns, ended by turns, critique ALIVE
+  [qwen] t30 (prompt, 7415ms) > /heat
+  [gemini] t33 (prompt, 9647ms) > I failed to protect the innocent.
+  [qwen] t31 (prompt, 1852ms) > /help
+  [deepseek] t30 (prompt, 11062ms) > search Crypt Stalker
+  [qwen] t32 (prompt, 1779ms) > /status
+  [gemini] t34 (prompt, 3757ms) > speak Brother Aldric
+  [qwen] t33 (prompt, 1983ms) > /go Ruined Chapel Entrance
+  [qwen] t34 (prompt, 1883ms) > /move Ruined Chapel Entrance
+  [qwen] t35 (prompt, 1692ms) > /zone Ruined Chapel Entrance
+  [deepseek] t31 (prompt, 8232ms) > talk to Brother Aldric
+  [qwen] t36 (prompt, 2018ms) > look
+  [deepseek] t32 (prompt, 4388ms) > look
+  [gemini] t35 (prompt, 12624ms) > Tell me about the Brotherhood.
+  [qwen] t37 (prompt, 6676ms) > talk to the shadows
+  [qwen] t38 (prompt, 6785ms) > go to Ruined Chapel Entrance
+  [gemini] t36 (prompt, 9317ms) > I seek atonement.
+  [qwen] t39 (prompt, 5264ms) > talk to the Suspicious Pilgrim
+  [deepseek] t33 (idle, 15849ms) > The game is waiting for your input. You said "look" in the previous turn, and the game responded with a description. Now it's your turn to provide the next command. Based on the description, you might
+  [deepseek] t34 (prompt, 688ms) > talk to courier
+  [qwen] t40 (prompt, 5642ms) > ask the Suspicious Pilgrim about the Sunken Sepulcher
+  [gemini] t37 (prompt, 11988ms) > I failed to protect the innocent.
+  [deepseek] t35 (prompt, 7928ms) > speak
+  [gemini] t38 (prompt, 3825ms) > speak Brother Aldric
+  [gemini] t39 (prompt, 9558ms) > Tell me about the noble houses.
+  [deepseek] t36 (prompt, 18762ms) > ask about black market
+  [gemini] t40 (prompt, 11372ms) > What does the Brotherhood propose?
+  [qwen] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] t37 (prompt, 13766ms) > ask about merchants
+  [gemini] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] t38 (prompt, 15347ms) > accept
+  [deepseek] t39 (idle, 16030ms) > The game is waiting for your input. In the previous turn, you said "accept" in response to the hint about an opportunity expiring. Now the game should respond to that choice. However, the game hasn't 
+  [deepseek] t40 (prompt, 6285ms) > go to crypt antechamber
+  [deepseek] done: 42 turns, ended by turns, critique ALIVE
+report: E:\AI\claude-rpg\dogfood\playtest\runs\b1-2026-09-02\REPORT.md
+exit=0

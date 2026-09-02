@@ -1,0 +1,110 @@
+{
+  "alive": true,
+  "summary": "The world showed signs of life through ambushes, NPC interactions, and a dynamic environment. However, some aspects like faction pressures and rumors were not fully explored. The game maintained coherence throughout, with no contradictions or errors. The player's actions influenced the world, and the game provided clear prompts and expectations.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 5: Ambush: Chapel Patrol in Chapel Nave",
+      "turn": 5
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure or bounty was raised by a faction on its own",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressure or alert escalated, resolved, or expired without player action",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant price or market view showed a quote referring to a faction's standing toward the player",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No named NPC's dialogue reflected a rumor about the player, and no /rumors view showed what the street believes about the player",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Turn 15: Chapel Grounds: 'lively despite everything' with alertPressure rose sharply",
+      "turn": 15
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Turn 2: The pilgrim's expression shifts, and Turn 11: Brother Aldric steps forward",
+      "turn": 2
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Turn 15: SESSION SUMMARY shows opportunities offered, ambushes, and asks made of the player",
+      "turn": 15
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors were found in the game world",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts and expectations were provided throughout the game",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "No deterministic combat line naming a kill was printed",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "No enemy hit the player, and no combat line named the attacker and damage",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was revealed with a named cost, and no cues were planted for a fair reveal",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine petitioner was helped, and no later view showed the deed remembered",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Turn 12: Unknown command /say was answered with a correction",
+      "turn": 12
+    }
+  ],
+  "highlights": [
+    "Turn 5: Ambush in the Chapel Nave",
+    "Turn 11: Brother Aldric steps forward",
+    "Turn 15: SESSION SUMMARY shows opportunities offered, ambushes, and asks made of the player"
+  ],
+  "deadSpots": [
+    "Turn 4: The game felt scripted when Sister Maren's expression was unreadable",
+    "Turn 12: The unknown command /say was not clearly explained"
+  ],
+  "confusions": [
+    "Turn 12: The unknown command /say and its correction were unclear",
+    "Turn 13: The unknown command /play and its correction were unclear"
+  ],
+  "wouldPlayAgain": true
+}

@@ -1,0 +1,16 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "label": "b1-2026-09-02",
+  "seat": {
+    "id": "llama",
+    "family": "llama",
+    "model": "meta-llama/llama-3.3-70b-instruct"
+  },
+  "turns": 40,
+  "turnsPlayed": 15,
+  "endedBy": "exit",
+  "error": null,
+  "critiqueError": null,
+  "durationMs": 160313,
+  "finishedAt": "2026-09-02T04:49:47.199Z"
+}

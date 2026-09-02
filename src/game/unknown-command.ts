@@ -15,6 +15,10 @@ import { DIRECTOR_COMMANDS } from '../display/director-renderer.js';
 // not a bare rejection.
 
 /** Bare command names (no leading slash, no arguments) valid in PLAY mode -- mirrors game.ts's own playCmd dispatch. */
+/** The commands a lost player needs first, in this order (see computeUnknownCommandInfo). */
+export const PLAY_VALID_NOW: readonly string[] = ['help', 'status', 'leverage'];
+export const DIRECTOR_VALID_NOW: readonly string[] = ['world', 'people', 'back'];
+
 export const PLAY_COMMAND_NAMES: readonly string[] = [
   'help', 'status', 'map', 'leverage', 'jobs', 'contracts', 'arcs',
   'conclude', 'recruit', 'dismiss', 'archive', 'export',
@@ -111,12 +115,13 @@ export function computeUnknownCommandInfo(input: string, mode: 'play' | 'directo
   // The 2-3 most broadly useful commands for the CURRENT mode -- a curated,
   // deterministic (alphabetical) default; design doc §3 names no specific
   // set, only "the two or three commands valid right now."
-  const validNow = (mode === 'play' ? PLAY_COMMAND_NAMES : DIRECTOR_COMMAND_NAMES)
-    .filter((n) => n.length > 1) // drop single-letter aliases (d/b) from the suggestion list
-    .slice()
-    .sort()
-    .slice(0, 3)
-    .map((n) => `/${n}`);
+  // Stitch ruling (second family playtest, b1-2026-09-02): the alphabetical
+  // default surfaced `/archive · /arcs · /conclude` in play mode -- one seat
+  // followed it into /conclude and ended its own game at turn 15. The
+  // "two or three commands valid right now" are the ones a lost player
+  // needs, in a fixed order, not the first three by letter.
+  const priority = mode === 'play' ? PLAY_VALID_NOW : DIRECTOR_VALID_NOW;
+  const validNow = priority.map((n) => `/${n}`);
 
   return {
     input,

@@ -1722,12 +1722,28 @@ export class GameSession {
       // defaults and the composed-proof fixtures all place named NPCs
       // inside a district).
       const playerZoneId = this.engine.world.entities[this.engine.world.playerId]?.zoneId;
+      // A6 wave T2 (dogfood/tuning/WAVE_2_OUTCOMES.md): 'adjacent-districts'
+      // widens the district filter to every district that shares a zone
+      // edge with the player's -- the street talks across a doorway. The
+      // T0/T1 sheets measured NPC hearers <= 2 and 0 on four rumor-producing
+      // worlds because the fixed script leaves the player where no named
+      // NPC lives after the milestone that spawned the rumor.
+      const audienceDistrictIds = new Set<string>([playerDistrictId]);
+      if (this.tuning.rumorSpreadScope === 'adjacent-districts') {
+        const zoneIds = getDistrictDefinition(this.engine.world, playerDistrictId)?.zoneIds ?? [];
+        for (const zoneId of zoneIds) {
+          for (const neighborId of this.engine.world.zones[zoneId]?.neighbors ?? []) {
+            const neighborDistrict = getDistrictForZone(this.engine.world, neighborId);
+            if (neighborDistrict) audienceDistrictIds.add(neighborDistrict);
+          }
+        }
+      }
       const namedNpcIds = Object.values(this.engine.world.entities)
         .filter((e) => isNamedNpc(e, this.engine.world.playerId))
         .filter((e) => e.zoneId !== undefined && (
           this.tuning.rumorSpreadScope === 'zone'
             ? e.zoneId === playerZoneId
-            : getDistrictForZone(this.engine.world, e.zoneId) === playerDistrictId
+            : audienceDistrictIds.has(getDistrictForZone(this.engine.world, e.zoneId) ?? '')
         ))
         .map((e) => e.id);
 

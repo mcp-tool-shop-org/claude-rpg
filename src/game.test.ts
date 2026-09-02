@@ -3374,7 +3374,7 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
     expect(DEFAULT_LIVING_WORLD_TUNING).toEqual({
       rumorStanceFadeTicks: 24,
       rumorBelieveSuspicionBelow: 0, // A6 wave T1 default (WAVE_1_OUTCOMES.md)
-      rumorSpreadScope: 'district',
+      rumorSpreadScope: 'adjacent-districts', // A6 wave T2 default (WAVE_2_OUTCOMES.md)
       worldMovedCap: 200,
       narrationPressureLines: 10,
       narrationOpportunityLines: Infinity,
@@ -3401,7 +3401,7 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
     expect(session.getTuning().ambushHeadline).toBe('never');
     // Untouched fields still read their measured default.
     expect(session.getTuning().rumorStanceFadeTicks).toBe(24);
-    expect(session.getTuning().rumorSpreadScope).toBe('district');
+    expect(session.getTuning().rumorSpreadScope).toBe('adjacent-districts'); // A6 wave T2 default
   });
 
   it('worldMovedCap tunes pushWorldMoved\'s eviction ceiling (RED before this WO: pushWorldMoved always capped at the hard-coded MAX_WORLD_MOVED_ENTRIES literal, ignoring any override)', async () => {
@@ -3479,7 +3479,8 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
     // (same district, different zone) hear it -- this is the EXISTING
     // WO-A5-4 proof's own assertion, re-verified here as the lever's
     // null hypothesis baseline.
-    const districtHarness = createHarness();
+    // 'district' set explicitly since A6 wave T2 made 'adjacent-districts' the default.
+    const districtHarness = createHarness({ gameOpts: { tuning: { rumorSpreadScope: 'district' } } });
     ensureImmersionInferAndTransitionStub(districtHarness.session);
     districtHarness.session.rumorEngine.create({
       claim: 'the stranger killed a merchant', subject: 'player', key: 'killed-merchant',
@@ -3500,6 +3501,38 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
     await zoneHarness.play('look around');
     expect(zoneHarness.session.getHearerRumors('pilgrim').length).toBe(1);
     expect(zoneHarness.session.getHearerRumors('brother-aldric').length).toBe(0);
+  });
+});
+
+describe("A6 wave T2: rumorSpreadScope adjacent-districts (dogfood/tuning/WAVE_2_OUTCOMES.md)", () => {
+  it("reaches named NPCs in districts adjacent to the player's (a rumor spawned in crypt-depths, which has no named NPC, reaches chapel-grounds' pilgrim and brother-aldric through the vestry-door <-> chapel-nave edge) while district reaches none (RED before T2: the scope union had no adjacency value, so the string fell through to the district-only filter)", async () => {
+    const { createHarness } = await import('../test/helpers/game-harness.js');
+    const { getDistrictForZone } = await import('@ai-rpg-engine/modules');
+
+    const boot = (scope: 'district' | 'adjacent-districts') => {
+      const h = createHarness({ gameOpts: { tuning: { rumorSpreadScope: scope as never } } });
+      ensureImmersionInferAndTransitionStub(h.session);
+      const world = h.session.engine.world;
+      // Stand in the crypt (crypt-depths): no named NPC lives there.
+      world.entities[world.playerId].zoneId = 'crypt-chamber';
+      (world as { locationId: string }).locationId = 'crypt-chamber';
+      expect(getDistrictForZone(world, 'crypt-chamber')).toBe('crypt-depths');
+      h.session.rumorEngine.create({
+        claim: 'the stranger cleared the crypt alone', subject: 'player', key: 'cleared-crypt',
+        value: true, sourceId: 'some-witness', originTick: h.session.engine.tick, confidence: 0.8,
+      });
+      return h;
+    };
+
+    const districtHarness = boot('district');
+    await districtHarness.play('look around');
+    expect(districtHarness.session.getHearerRumors('pilgrim').length).toBe(0);
+    expect(districtHarness.session.getHearerRumors('brother-aldric').length).toBe(0);
+
+    const adjacentHarness = boot('adjacent-districts');
+    await adjacentHarness.play('look around');
+    expect(adjacentHarness.session.getHearerRumors('pilgrim').length).toBe(1);
+    expect(adjacentHarness.session.getHearerRumors('brother-aldric').length).toBe(1);
   });
 });
 

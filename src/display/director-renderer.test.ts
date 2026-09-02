@@ -885,7 +885,7 @@ describe('/tuning director view (WO-A6-5)', () => {
   const defaultTuning = {
     rumorStanceFadeTicks: 24,
     rumorBelieveSuspicionBelow: 0,
-    rumorSpreadScope: 'district' as const,
+    rumorSpreadScope: 'adjacent-districts' as const,
     worldMovedCap: 200,
     narrationPressureLines: 10,
     narrationOpportunityLines: Infinity,
@@ -916,7 +916,7 @@ describe('/tuning director view (WO-A6-5)', () => {
     // fallback (see DEFAULT_LIVING_WORLD_TUNING's doc comment).
     expect(result).toContain('Rumor stance fade (ticks): 24 (default)');
     expect(result).toContain('Rumor believe threshold (suspicion below): 0 (default)');
-    expect(result).toContain('Rumor spread scope: district (default)');
+    expect(result).toContain('Rumor spread scope: adjacent-districts (default)');
     expect(result).toContain('World-moved ledger cap: 200 (default)');
     expect(result).toContain('Narration pressure lines: 10 (default)');
     expect(result).toContain('Ambush headline: always (default)');

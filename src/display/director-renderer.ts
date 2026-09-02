@@ -260,23 +260,12 @@ export type MarketQuoteSummary = {
 };
 
 /**
- * WO-A6-5 (slice A6 §3, lock 1): structurally identical to game-core's
- * WO-A6-1 `LivingWorldTuning` (`src/game/tuning.ts`, not yet on this branch
- * -- "green expected at merge" per ADDENDUM-COMMON lock 6). Field set and
- * defaults are the design doc's own §3 / ADDENDUM-COMMON lock 1 list; once
- * game-core's real module lands, this domain should import its type instead
- * of mirroring it (a stitch-time follow-up, not this wave's job).
+ * WO-A6-5 (slice A6 §3, lock 1): the tuning shape is game-core's ONE type
+ * (`src/game/tuning.ts`); the wave-9 mirror was replaced by this alias at
+ * the A6 T2 stitch, the moment a third scope value would have made the two
+ * copies disagree.
  */
-export type LivingWorldTuning = {
-  rumorStanceFadeTicks: number;
-  rumorBelieveSuspicionBelow: number;
-  rumorSpreadScope: 'district' | 'zone';
-  worldMovedCap: number;
-  narrationPressureLines: number;
-  narrationOpportunityLines: number;
-  narrationRumorLines: number;
-  ambushHeadline: 'always' | 'never';
-};
+export type LivingWorldTuning = CoreLivingWorldTuning;
 
 /**
  * WO-A6-5: `QUIET_ROUNDS_BEFORE_DECAY` above is imported live from the
@@ -309,7 +298,7 @@ const PRESSURES_MAX_COUNT_FALLBACK = 10;
 // a local copy drifted the moment T1 changed a value (the (default) marker
 // went stale). Two independently maintained copies of one list is this
 // codebase's recurring bug shape; the import ends it here.
-import { DEFAULT_LIVING_WORLD_TUNING } from '../game/tuning.js';
+import { DEFAULT_LIVING_WORLD_TUNING, type LivingWorldTuning as CoreLivingWorldTuning } from '../game/tuning.js';
 
 /**
  * WO-A6-5: structurally identical to game-core's WO-A6-2 `RoundMetrics`

@@ -1280,7 +1280,7 @@ The scene unfolds before you.
 
   WHAT THE STREET BELIEVES
 
-  "Angered the Chapel Undead" (1 witness)
+  "Angered the Chapel Undead" (3 witnesses)
 
 ═══ beat 9 ── > /director
 
@@ -1835,7 +1835,7 @@ The scene unfolds before you.
 
   Rumor stance fade (ticks): 24 (default)
   Rumor believe threshold (suspicion below): 0 (default)
-  Rumor spread scope: district (default)
+  Rumor spread scope: adjacent-districts (default)
   World-moved ledger cap: 200 (default)
   Narration pressure lines: 10 (default)
   Narration opportunity lines: unlimited (default)

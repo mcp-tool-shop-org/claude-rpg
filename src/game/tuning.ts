@@ -38,11 +38,13 @@ export type LivingWorldTuning = {
   /**
    * Per-round rumor spread scope (runWorldRound's named-NPC predicate):
    * 'district' spreads to every named NPC in the player's current district;
+   * 'adjacent-districts' (A6 wave T2, dogfood/tuning/WAVE_2_OUTCOMES.md) adds
+   * every district that shares a zone edge with it;
    * 'zone' restricts to the player's own zone. Measured default: 'district'
    * -- today's only behavior, pre-wave (the filter's `getDistrictForZone(...)
    * === playerDistrictId` clause).
    */
-  rumorSpreadScope: 'district' | 'zone';
+  rumorSpreadScope: 'district' | 'zone' | 'adjacent-districts';
   /**
    * Cap for `worldMovedLedger` (game/world-moved.ts's MAX_WORLD_MOVED_ENTRIES),
    * oldest-first eviction. Measured default: `MAX_WORLD_MOVED_ENTRIES` (200)
@@ -109,7 +111,11 @@ export const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
   // never earns belief; a hearer believes a rumor about the player only when
   // their faction has already taken it up, and doubts it otherwise.
   rumorBelieveSuspicionBelow: 0,
-  rumorSpreadScope: 'district',
+  // A6 wave T2 (dogfood/tuning/WAVE_2_OUTCOMES.md): 'district' -> 'adjacent-districts'.
+  // The street talks across a doorway: named NPCs in the player's district
+  // and every district sharing a zone edge with it hear a rumor about the
+  // player once per round.
+  rumorSpreadScope: 'adjacent-districts',
   worldMovedCap: MAX_WORLD_MOVED_ENTRIES,
   narrationPressureLines: 10,
   narrationOpportunityLines: Infinity,

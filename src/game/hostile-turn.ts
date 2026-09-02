@@ -181,6 +181,8 @@ export function runHostileTurn(engine: Engine, tuning: LivingWorldTuning): Hosti
   const playerId = world.playerId;
   const events: ResolvedEvent[] = [];
   const telegraphs: HostileTelegraph[] = [];
+  // T4 (tuning.maxHostileAttackersPerRound): landed attacks so far this round.
+  let landedThisRound = 0;
 
   // Stitch ruling (wave 10): co-location is the fourth awareness trigger.
   // A live hostile standing in the player's zone when the hostile turn
@@ -254,10 +256,17 @@ export function runHostileTurn(engine: Engine, tuning: LivingWorldTuning): Hosti
         telegraphs.push({ hostileId: entity.id, hostileName: entity.name });
         continue;
       }
+      if (landedThisRound >= tuning.maxHostileAttackersPerRound) {
+        // T4: the pile-on cap -- this hostile holds its attack (keeps its
+        // telegraph) and is announced again so the threat stays legible.
+        telegraphs.push({ hostileId: entity.id, hostileName: entity.name });
+        continue;
+      }
       delete world.globals[telegraphKey(entity.id)];
       const submitted = engine.submitActionAs(entity.id, 'attack', { targetIds: [playerId] });
       applyDamageScale(world, playerId, submitted, tuning.enemyDamageScale);
       events.push(...submitted);
+      landedThisRound += 1;
       continue;
     }
 

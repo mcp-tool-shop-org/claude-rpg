@@ -1,0 +1,258 @@
+claude-rpg living world (starter-fantasy): mistral, qwen, llama, deepseek, gemini × 40 turns → E:\AI\claude-rpg\dogfood\playtest\runs\b1h-2026-09-02
+  [llama] t0 (setup, 1529ms) > Wanderer
+  [qwen] t0 (setup, 1523ms) > Wanderer
+  [deepseek] t0 (setup, 1532ms) > Wanderer
+  [mistral] t0 (setup, 1527ms) > Wanderer
+  [gemini] t0 (setup, 1521ms) > Wanderer
+  [deepseek] t0 (setup, 1201ms) > 1
+  [mistral] t0 (setup, 1201ms) > 1
+  [gemini] t0 (setup, 1201ms) > 1
+  [llama] t0 (setup, 1310ms) > 1
+  [qwen] t0 (setup, 1311ms) > 1
+  [deepseek] t0 (setup, 1209ms) > 1
+  [mistral] t0 (setup, 1209ms) > 1
+  [gemini] t0 (setup, 1209ms) > 1
+  [llama] t0 (setup, 1209ms) > 1
+  [qwen] t0 (setup, 1209ms) > 1
+  [deepseek] t0 (setup, 1207ms) > 3
+  [mistral] t0 (setup, 1207ms) > 3
+  [gemini] t0 (setup, 1207ms) > 3
+  [llama] t0 (setup, 1204ms) > 3
+  [qwen] t0 (setup, 1205ms) > 3
+  [deepseek] t0 (setup, 1308ms) > done
+  [mistral] t0 (setup, 1308ms) > done
+  [gemini] t0 (setup, 1308ms) > done
+  [llama] t0 (setup, 1309ms) > done
+  [qwen] t0 (setup, 1309ms) > done
+  [deepseek] t0 (setup, 1210ms) > n
+  [mistral] t0 (setup, 1210ms) > n
+  [gemini] t0 (setup, 1210ms) > n
+  [llama] t0 (setup, 1210ms) > n
+  [qwen] t0 (setup, 1210ms) > n
+  [deepseek] t0 (setup, 1204ms) > 1
+  [mistral] t0 (setup, 1204ms) > 1
+  [gemini] t0 (setup, 1204ms) > 1
+  [llama] t0 (setup, 1204ms) > 1
+  [qwen] t0 (setup, 1204ms) > 1
+  [deepseek] t0 (setup, 1200ms) > 1
+  [mistral] t0 (setup, 1200ms) > 1
+  [gemini] t0 (setup, 1200ms) > 1
+  [llama] t0 (setup, 1309ms) > 1
+  [qwen] t0 (setup, 1310ms) > 1
+  [deepseek] t0 (setup, 1208ms) > 1
+  [mistral] t0 (setup, 1208ms) > 1
+  [gemini] t0 (setup, 1208ms) > 1
+  [llama] t0 (setup, 1208ms) > 1
+  [qwen] t0 (setup, 1208ms) > 1
+  [deepseek] t0 (setup, 1202ms) > y
+  [mistral] t0 (setup, 1202ms) > y
+  [gemini] t0 (setup, 1202ms) > y
+  [llama] t0 (setup, 1310ms) > y
+  [qwen] t0 (setup, 1310ms) > y
+  [mistral] t1 (prompt, 5444ms) > talk to the hooded figure
+  [llama] t1 (prompt, 5688ms) > talk to the pilgrim
+  [gemini] t1 (prompt, 6017ms) > talk to the woman
+  [qwen] t1 (prompt, 6219ms) > talk to the pilgrim
+  [deepseek] t1 (prompt, 6578ms) > talk to the pilgrim
+  [llama] t2 (prompt, 7841ms) > ask the pilgrim about the chapel and its troubles
+  [deepseek] t2 (prompt, 7740ms) > I seek redemption and answers. What signs have you seen?
+  [mistral] t2 (prompt, 9120ms) > intimidate the suspicious pilgrim
+  [gemini] t2 (prompt, 9386ms) > accept Investigate the black market activity
+  [qwen] t2 (prompt, 9460ms) > bribe Suspicious Pilgrim
+  [mistral] t3 (prompt, 4539ms) > inspect the chapel nave
+  [llama] t3 (prompt, 8737ms) > ask Sister Maren about the darkness and the unholy stirrings
+  [qwen] t3 (prompt, 6603ms) > intimidate Suspicious Pilgrim
+  [gemini] t3 (prompt, 7594ms) > talk to the pilgrim
+  [mistral] t4 (prompt, 4400ms) > go chapel nave
+  [deepseek] t3 (prompt, 9791ms) > I walk my own path. What do you know of the black market here?
+  [mistral] t5 (prompt, 5433ms) > attack Ash Ghoul
+  [llama] t4 (prompt, 7352ms) > approach Sister Maren and ask her directly about the chapel's situation
+  [qwen] t4 (prompt, 7499ms) > talk to Suspicious Pilgrim
+  [gemini] t4 (prompt, 7971ms) > What do you know of the chalice?
+  [deepseek] t4 (prompt, 8177ms) > intimidate the pilgrim
+  [mistral] t6 (prompt, 6294ms) > attack Crypt Stalker
+  [llama] t5 (prompt, 6989ms) > look around the room to see if Sister Maren is actually there
+  [gemini] t5 (prompt, 6662ms) > threaten the pilgrim
+  [deepseek] t5 (prompt, 7230ms) > /director
+  [mistral] t7 (prompt, 5231ms) > attack Crypt Stalker
+  [qwen] t5 (prompt, 11391ms) > ask Suspicious Pilgrim about the shrine
+  [deepseek] t6 (prompt, 2528ms) > /inspect Suspicious Pilgrim
+  [llama] t6 (prompt, 5272ms) > go Chapel Nave
+  [deepseek] t7 (prompt, 2280ms) > /inspect pilgrim
+  [mistral] t8 (prompt, 5232ms) > attack Ash Ghoul
+  [deepseek] t8 (prompt, 2303ms) > /people
+  [gemini] t6 (prompt, 9118ms) > attack the pilgrim
+  [llama] t7 (prompt, 5585ms) > talk to Brother Aldric
+  [qwen] t6 (prompt, 8009ms) > go Chapel Nave
+  [mistral] t9 (prompt, 5638ms) > attack Ash Ghoul again with 2 now 18/20 hp left but it hit for 2 already so I'm at 16/20 now and I've just missed twice and hit once so maybe I should use a slash command to check something first befo
+  [deepseek] t9 (prompt, 4885ms) > go Chapel Nave
+  [gemini] t7 (prompt, 5098ms) > go Chapel Nave
+  [qwen] t7 (prompt, 6600ms) > talk to Brother Aldric
+  [deepseek] t10 (prompt, 5141ms) > talk to Brother Aldric
+  [gemini] t8 (prompt, 5065ms) > talk to Brother Aldric
+  [llama] t8 (prompt, 9199ms) > ask Brother Aldric to explain his concerns about the chapel's pronouncements regarding the undead
+  [mistral] t10 (prompt, 9282ms) > /rumor
+  [mistral] t11 (prompt, 1819ms) > /rumors
+  [qwen] t8 (prompt, 7432ms) > accept Investigate the black market activity
+  [gemini] t9 (prompt, 7149ms) > What do you know of changing sides?
+  [mistral] t12 (prompt, 1853ms) > /news
+  [mistral] t13 (prompt, 1837ms) > /world
+  [deepseek] t11 (prompt, 9771ms) > I follow my conscience. What paths are you questioning?
+  [llama] t9 (prompt, 10290ms) > ask Brother Aldric about the crypt-keepers and their domain below
+  [mistral] t14 (prompt, 2150ms) > /director
+  [mistral] t15 (prompt, 1991ms) > /people
+  [mistral] t16 (prompt, 1673ms) > talk to Brother Aldric
+  [qwen] t9 (prompt, 8926ms) > go Vestry Passage
+  [gemini] t10 (prompt, 9759ms) > They do. What do you suggest?
+  [deepseek] t12 (prompt, 8922ms) > help a shivering pilgrim
+  [llama] t10 (prompt, 8559ms) > ask Brother Aldric about the sanctified crypts and the management of the restless dead
+  [qwen] t10 (prompt, 5237ms) > attack Crypt Stalker
+  [mistral] t17 (prompt, 6834ms) > There is none.
+  [gemini] t11 (prompt, 8117ms) > Tell me more about this circle.
+  [llama] t11 (prompt, 8652ms) > go Vestry Passage
+  [qwen] t11 (prompt, 7486ms) > attack Crypt Stalker
+  [deepseek] t13 (prompt, 10073ms) > give a coin
+  [mistral] t18 (prompt, 8096ms) > go Vestry Passage
+  [qwen] t12 (prompt, 4667ms) > go Crypt Antechamber
+  [deepseek] t14 (prompt, 6580ms) > go Vestry Passage
+  [llama] t12 (prompt, 8655ms) > attack Crypt Stalker
+  [gemini] t12 (prompt, 11721ms) > I seek truth. And I am tired of righteous lies.
+  [mistral] t19 (prompt, 6849ms) > attack Crypt Stalker
+  [qwen] t13 (prompt, 6567ms) > attack Crypt Warden
+  [llama] t13 (prompt, 5337ms) > attack Crypt Stalker
+  [deepseek] t15 (prompt, 6689ms) > attack Crypt Stalker
+  [mistral] t20 (prompt, 5445ms) > attack Crypt Stalker
+  [llama] t14 (prompt, 4701ms) > attack Crypt Stalker
+  [qwen] t14 (prompt, 7568ms) > attack Ash Ghoul
+  [deepseek] t16 (prompt, 6194ms) > attack Crypt Stalker
+  [gemini] t13 (prompt, 11406ms) > I will be there.
+  [mistral] t21 (prompt, 6137ms) > flee Chapel Nave; attack Ash Ghoul; talk to a courier on the vestry stair; go Crypt Antechamber; attack Crypt Stalker; go Chapel Nave; flee Vestry Passage; attack Crypt Stalker; help a courier on the 
+  [llama] t15 (prompt, 5318ms) > talk to a courier on the vestry stair
+  [qwen] t15 (prompt, 6870ms) > flee
+  [gemini] t14 (prompt, 6953ms) > talk to a woman at the chapel door
+  [deepseek] t17 (prompt, 7323ms) > attack Crypt Stalker
+  [mistral] t22 (prompt, 8266ms) > /help a courier on the vestry stair; flee Chapel Nave; attack Ash Ghoul; go Crypt Antechamber; talk to a courier on the vestry stair; go Chapel Nave; attack Crypt Stalker; attack Ash Ghoul; help a cou
+  [mistral] t23 (prompt, 1861ms) > help a courier on the vestry stair
+  [qwen] t16 (prompt, 4899ms) > attack Crypt Warden
+  [llama] t16 (prompt, 9679ms) > attack Crypt Stalker
+  [gemini] t15 (prompt, 6461ms) > What do you mean, stench of undeath?
+  [deepseek] t18 (prompt, 6578ms) > flee
+  [qwen] t17 (prompt, 5362ms) > attack Ash Ghoul
+  [mistral] t24 (prompt, 7100ms) > continue
+  [llama] t17 (prompt, 5164ms) > talk to a courier on the vestry stair
+  [qwen] t18 (prompt, 4909ms) > continue
+  [deepseek] t19 (prompt, 7954ms) > help a shivering pilgrim
+  [gemini] t16 (prompt, 8612ms) > The priests are wrong.
+  [qwen] t19 (prompt, 2007ms) > go Vestry Passage
+  [mistral] t25 (prompt, 7754ms) > help a courier on the vestry stair
+  [qwen] t20 (prompt, 5308ms) > go Chapel Nave
+  [llama] t18 (prompt, 10054ms) > ask the courier what they mean by shadows clinging to my armor
+  [gemini] t17 (prompt, 7274ms) > What signs? Show me.
+  [deepseek] t20 (prompt, 7709ms) > give a coin
+  [mistral] t26 (prompt, 6955ms) > go Crypt Antechamber
+  [qwen] t21 (prompt, 6282ms) > talk to a shivering pilgrim
+  [gemini] t18 (prompt, 7120ms) > I see nothing. Only shadows.
+  [mistral] t27 (prompt, 4963ms) > /world
+  [mistral] t28 (prompt, 1857ms) > /rumors
+  [deepseek] t21 (prompt, 10021ms) > go Crypt Antechamber
+  [mistral] t29 (prompt, 1811ms) > /jobs
+  [mistral] t30 (prompt, 2035ms) > 5
+  [qwen] t22 (prompt, 8461ms) > attack Ash Ghoul
+  [gemini] t19 (prompt, 7844ms) > And what is your name?
+  [mistral] t31 (prompt, 4320ms) > accept Investigate the black market activity from pilgrim in chapel-grounds district if possible 80% chance take it and do it now immediately please if any issues please address them i understand you 
+  [deepseek] t22 (prompt, 7959ms) > /rumors
+  [qwen] t23 (prompt, 5465ms) > continue
+  [llama] t19 (prompt, 21066ms) > ask the courier what they know about the depths and what lies below
+  [qwen] t24 (prompt, 1892ms) > go Ruined Chapel Entrance
+  [deepseek] t23 (prompt, 3583ms) > go Crypt Antechamber
+  [gemini] t20 (prompt, 9486ms) > What petitioners?
+  [mistral] t32 (prompt, 7503ms) > continue
+  [qwen] t25 (prompt, 4622ms) > talk to Suspicious Pilgrim
+  [deepseek] t24 (prompt, 7262ms) > go Crypt Antechamber
+  [mistral] t33 (prompt, 3845ms) > flee
+  [llama] t20 (prompt, 13362ms) > go Crypt Antechamber
+  [qwen] t26 (prompt, 8511ms) > go Shadowed Alcove
+  [mistral] t34 (prompt, 5539ms) > attack Ash Ghoul
+  [gemini] t21 (prompt, 10705ms) > What kind of ailments?
+  [deepseek] t25 (prompt, 7547ms) > talk to a shivering pilgrim
+  [llama] t21 (prompt, 5633ms) > attack Ash Ghoul
+  [mistral] t35 (prompt, 5222ms) > continue
+  [qwen] t27 (prompt, 6577ms) > go Ruined Chapel Entrance
+  [mistral] t36 (prompt, 3977ms) > go Vestry Passage
+  [gemini] t22 (prompt, 9481ms) > Do these people come from the crypt?
+  [llama] t22 (prompt, 6105ms) > attack Crypt Warden
+  [deepseek] t26 (prompt, 9292ms) > What do you know about the crypt?
+  [qwen] t28 (prompt, 6760ms) > talk to Suspicious Pilgrim
+  [mistral] t37 (prompt, 5312ms) > talk to a courier on the vestry stair
+  [llama] t23 (prompt, 6093ms) > talk to a one-armed veteran
+  [deepseek] t27 (prompt, 7630ms) > go Crypt Antechamber
+  [gemini] t23 (prompt, 9082ms) > I seek to know the truth.
+  [qwen] t29 (prompt, 7786ms) > accept Investigate the black market activity
+  [mistral] t38 (prompt, 8628ms) > continue
+  [llama] t24 (prompt, 7632ms) > go Vestry Passage
+  [gemini] t24 (prompt, 8367ms) > I am.
+  [qwen] t30 (prompt, 7233ms) > go Chapel Nave
+  [deepseek] t28 (prompt, 9465ms) > go Crypt Antechamber
+  [llama] t25 (prompt, 6248ms) > talk to a courier on the vestry stair
+  [mistral] t39 (prompt, 7764ms) > go Chapel Nave
+  [gemini] t25 (prompt, 7566ms) > Thank you, Sister Meredith.
+  [deepseek] t29 (prompt, 7331ms) > go Crypt Antechamber
+  [qwen] t31 (prompt, 7790ms) > attack Ash Ghoul
+  [mistral] t40 (prompt, 5074ms) > continue
+  [llama] t26 (prompt, 10400ms) > attack Ash Ghoul
+  [qwen] t32 (prompt, 5688ms) > continue
+  [gemini] t26 (prompt, 7305ms) > You told me.
+  [deepseek] t30 (prompt, 8956ms) > help a woman at the chapel door
+  [qwen] t33 (prompt, 3229ms) > go Vestry Passage
+  [llama] t27 (prompt, 5613ms) > continue
+  [llama] t28 (prompt, 2142ms) > go Chapel Nave
+  [qwen] t34 (prompt, 6632ms) > talk to a courier on the vestry stair
+  [gemini] t27 (prompt, 9143ms) > Then who are you?
+  [deepseek] t31 (prompt, 9818ms) > What troubles you?
+  [mistral] done: 42 turns, ended by turns, critique ALIVE
+  [gemini] t28 (prompt, 7307ms) > I heard your voice.
+  [llama] t29 (prompt, 10376ms) > talk to Brother Aldric
+  [qwen] t35 (prompt, 10381ms) > go Crypt Antechamber
+  [deepseek] t32 (prompt, 11253ms) > /reputation
+  [qwen] t36 (prompt, 5535ms) > attack Crypt Warden
+  [deepseek] t33 (prompt, 2683ms) > /status
+  [gemini] t29 (prompt, 11472ms) > Your first words to me, you said "sister".
+  [llama] t30 (prompt, 11600ms) > attack Ash Ghoul
+  [deepseek] t34 (prompt, 3661ms) > go Chapel Nave
+  [qwen] t37 (prompt, 4898ms) > continue
+  [qwen] t38 (prompt, 1606ms) > go Vestry Passage
+  [llama] t31 (prompt, 5475ms) > continue
+  [deepseek] t35 (prompt, 5086ms) > /jobs
+  [llama] t32 (prompt, 2922ms) > go Ruined Chapel Entrance
+  [deepseek] t36 (prompt, 3319ms) > talk to a shivering pilgrim
+  [gemini] t30 (prompt, 10807ms) > Talk to Brother Aldric.
+  [qwen] t39 (prompt, 8210ms) > attack Ash Ghoul
+  [llama] t33 (prompt, 6299ms) > talk to a hooded figure near a side altar
+  [qwen] t40 (prompt, 5508ms) > talk to a courier on the vestry stair
+  [deepseek] t37 (prompt, 7675ms) > help a shivering pilgrim
+  [gemini] t31 (prompt, 8415ms) > Go Vestry Passage.
+  [deepseek] t38 (prompt, 9126ms) > I can guide you through the crypt.
+  [llama] t34 (prompt, 12181ms) > talk to Sister Maren
+  [gemini] t32 (prompt, 12339ms) > Accept Investigate the black market activity.
+  [llama] t35 (prompt, 7648ms) > talk to Sister Maren about my burdens
+  [deepseek] t39 (prompt, 11353ms) > go Crypt Antechamber
+  [gemini] t33 (prompt, 8683ms) > Go Ruined Chapel Entrance.
+  [qwen] done: 42 turns, ended by turns, critique ALIVE
+  [llama] t36 (prompt, 9137ms) > accept Investigate the black market activity
+  [deepseek] t40 (prompt, 8125ms) > help a woman at the chapel door
+  [gemini] t34 (prompt, 8102ms) > /examine Brother Aldric
+  [gemini] t35 (prompt, 1699ms) > Talk to Brother Aldric.
+  [llama] t37 (prompt, 9952ms) > go Shadowed Alcove
+  [gemini] t36 (prompt, 7787ms) > /examine Brother Aldric
+  [gemini] t37 (prompt, 1906ms) > Who are you?
+  [llama] t38 (prompt, 6424ms) > go Ruined Chapel Entrance
+  [llama] t39 (prompt, 7506ms) > talk to a courier on the vestry stair
+  [gemini] t38 (prompt, 9938ms) > Talk to Marta.
+  [llama] t40 (prompt, 7929ms) > help a one-armed veteran
+  [gemini] t39 (prompt, 7085ms) > Investigate the crypts.
+  [gemini] t40 (prompt, 9597ms) > Go Vestry Passage.
+  [gemini] done: 42 turns, ended by turns, critique ALIVE
+  [llama] done: 42 turns, ended by turns, critique ALIVE
+  [deepseek] done: 42 turns, ended by turns, critique ALIVE
+report: E:\AI\claude-rpg\dogfood\playtest\runs\b1h-2026-09-02\REPORT.md
+exit=0

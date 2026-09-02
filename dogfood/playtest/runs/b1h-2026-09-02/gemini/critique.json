@@ -1,0 +1,136 @@
+{
+  "alive": true,
+  "summary": "The world felt very alive, with NPCs reacting dynamically to my actions and dialogue. The narrative shifted based on my choices, and there were clear indications of background events and character motivations. The game maintained coherence throughout, even when presenting contradictory information from different NPCs.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The 'Investigate the black market activity' opportunity expired on its own without player action, as seen in the session summary.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Brother Aldric's dialogue in turn 9 and 10 reflects rumors about the player seeking new allegiances and having doubts about the Chapel's methods.",
+      "turn": 9
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session summary shows 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"' and 'alertPressure rose sharply'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "The session summary indicates 'Marks the street left on you: 2 — \"a courier on the vestry stair's story wasn't true. You never bit.\"'. This implies the courier acted on their own to present a false story.",
+      "turn": 42
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session summary at turn 42 clearly lists 'Opportunities offered', 'Opportunities expired', 'Marks the street left on you', and 'Asks made of you'.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The world remained coherent. Even when NPCs contradicted each other (e.g., Marta saying Brother Aldric was missing while he was present), it felt intentional and part of the narrative, not a bug.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The prompts and 'You can:' lists were consistently clear, indicating available actions and commands.",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "took-damage",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "The session summary explicitly states 'a courier on the vestry stair's story wasn't true. You never bit.' and 'a woman at the chapel door's story wasn't true. You never bit.' indicating cons were revealed, though the player didn't fall for them.",
+      "turn": 42
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "When I typed '/examine Brother Aldric' in turn 35 and 37, the game immediately replied 'Unknown command /examine. Right now you can: ...' without costing a turn or narrating it as an in-world action.",
+      "turn": 35
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "When I replied with plain sentences like 'What do you know of the chalice?' (turn 5) or 'They do. What do you suggest?' (turn 11), the game treated it as dialogue and the NPC replied in kind.",
+      "turn": 5
+    },
+    {
+      "id": "alias-moved",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "The play screen consistently showed 'Market: Healing Draught 13 (+30% vs base)' at the bottom of the status block.",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "The dynamic dialogue with Sister Maren and the Suspicious Pilgrim in turns 2-6, where the pilgrim's nervousness and eventual reveal of the chalice felt very responsive.",
+    "The nuanced interaction with Brother Aldric from turn 9 onwards, where his dialogue shifted based on my responses, creating a sense of a developing relationship and hidden agendas.",
+    "The contradictory information from Marta (the woman at the chapel door) about Brother Aldric's whereabouts (turns 31, 36, 38), which added a layer of mystery and suspicion.",
+    "The clear and immediate feedback for unknown commands (turns 35, 37).",
+    "The comprehensive session summary (turn 42) that recapped world changes and opportunities."
+  ],
+  "deadSpots": [
+    "The 'accept Investigate the black market activity' option remained available even after Sister Maren denied knowledge of it (turn 3), which felt a bit off, though it eventually expired.",
+    "The repeated 'accept Investigate the black market activity' option in the 'You can:' list even after it was clearly rejected or denied by NPCs (e.g., turn 33) felt like a minor UI oversight."
+  ],
+  "confusions": [
+    "The 'accept Investigate the black market activity' option appearing repeatedly even after the initial context for it seemed to have passed or been denied (e.g., turn 3, 33).",
+    "The discrepancy between Brother Aldric being present and interacting with me, and Marta claiming he had been missing for three days (turns 31, 36, 38). While this added mystery, it was initially confusing as to whether it was a narrative device or a contradiction."
+  ],
+  "wouldPlayAgain": true
+}

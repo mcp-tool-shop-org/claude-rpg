@@ -496,6 +496,9 @@ export function filterSupportedVerbs(rawVerbs: string[]): string[] {
 
 /** Execute one full turn of the game loop. */
 export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
+  // Reeling warning bracket: HP at the start of the turn, so damage landed by
+  // the player's own action or an ambush counts, not only the hostile turn.
+  const playerHpBeforeHostileTurn = opts.engine.world.entities[opts.engine.world.playerId]?.resources.hp ?? 0;
   const {
     engine, client, history, playerInput, tone, immersion,
     characterPresence, npcPlayerPresence, playerProfile, getHearerRumors,
@@ -673,7 +676,6 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
   // identity from a merged, order-ambiguous list.
   const playerEvents = events;
   markAwarenessFromEvents(engine.world, playerEvents, engine.tick);
-  const playerHpBeforeHostileTurn = engine.world.entities[engine.world.playerId]?.resources.hp ?? 0;
   const hostileTurn = runHostileTurn(engine, tuning);
   events = [...events, ...hostileTurn.events];
 

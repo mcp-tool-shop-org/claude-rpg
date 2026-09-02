@@ -1,0 +1,133 @@
+{
+  "alive": true,
+  "summary": "The world presented a complex, immersive environment with various NPCs, each having their own agendas and stories. The player's actions influenced the world, and the world reacted to the player's decisions. However, some aspects, such as the 'ambush-on-entry' and 'pressure-moves-on-its-own' criteria, were not fully met. The game maintained coherence throughout the session, with no noticeable contradictions or errors.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 12: Crypt Stalker readies an attack against you.",
+      "turn": 12
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "SESSION SUMMARY: alertPressure rose sharply in Chapel Grounds and Crypt Depths",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No evidence of pressure moving on its own without player action",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": true,
+      "evidence": "Market: Healing Draught 13 (+30% vs base)",
+      "turn": 2
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No evidence of rumors with stance",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "SESSION SUMMARY: Mood transitions: 1 — 'crypt-depths: volatile -> grim'",
+      "turn": null
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No evidence of NPCs acting unprompted",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "SESSION SUMMARY: THE WORLD MOVED",
+      "turn": null
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No noticeable contradictions or errors throughout the session",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The player was able to navigate the game world and make decisions based on the provided information",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 13: Your strike lands — Crypt Stalker: unhurt.",
+      "turn": 13
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Turn 13: Crypt Stalker's attack finds you — 2 damage.",
+      "turn": 13
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No evidence of a con being revealed",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "Turn 41: a one-armed veteran will remember who carried the coin.",
+      "turn": 41
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": false,
+      "evidence": "No evidence of unknown commands being answered",
+      "turn": null
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": false,
+      "evidence": "No evidence of replies landing as dialogue",
+      "turn": null
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "The player was able to move using aliases (e.g., '/go')",
+      "turn": null
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "Market: Healing Draught 13 (+30% vs base)",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "No evidence of pressure lines being seen",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 12: Crypt Stalker readies an attack against you.",
+    "Turn 13: Your strike lands — Crypt Stalker: unhurt.",
+    "SESSION SUMMARY: THE WORLD MOVED"
+  ],
+  "deadSpots": [
+    "No evidence of NPCs acting unprompted",
+    "No evidence of rumors with stance"
+  ],
+  "confusions": [
+    "The player's understanding of the 'investigation opportunity' and its expiration"
+  ],
+  "wouldPlayAgain": true
+}

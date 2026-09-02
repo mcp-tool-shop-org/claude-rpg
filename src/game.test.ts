@@ -3398,6 +3398,7 @@ describe('Slice A6 (WO-A6-1): the tuning surface (design doc §3, design lock 1)
       askPredatorRatio: 0.33,
       askRevealRounds: 6,
       honorificAt: 25,
+      maxHostileAttackersPerRound: 1,
     });
 
     const session = new GameSession({

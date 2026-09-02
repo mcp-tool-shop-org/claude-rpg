@@ -138,6 +138,13 @@ export type LivingWorldTuning = {
    * unlocks (game/recognition.ts's `getHonorific`). Default 25.
    */
   honorificAt: number;
+  /**
+   * A6 lever T4 (2026-09-02, dogfood/tuning/WAVE_4_OUTCOMES.md): how many
+   * aware hostiles may LAND an attack on the player in one round. The
+   * others keep their telegraph and wait. Sixth family playtest: every
+   * downed seat was taking 2-3 landed hits a round from a pile-on.
+   */
+  maxHostileAttackersPerRound: number;
 };
 
 /**
@@ -171,6 +178,7 @@ export const DEFAULT_LIVING_WORLD_TUNING: LivingWorldTuning = {
   askPredatorRatio: 0.33,
   askRevealRounds: 6,
   honorificAt: 25,
+  maxHostileAttackersPerRound: 1,
 };
 
 /** Resolve a partial tuning override onto the measured defaults. */

@@ -1,0 +1,16 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "label": "b1h-2026-09-02",
+  "seat": {
+    "id": "deepseek",
+    "family": "deepseek",
+    "model": "deepseek/deepseek-chat-v3.1"
+  },
+  "turns": 40,
+  "turnsPlayed": 42,
+  "endedBy": "turns",
+  "error": null,
+  "critiqueError": null,
+  "durationMs": 367657,
+  "finishedAt": "2026-09-02T07:37:54.194Z"
+}

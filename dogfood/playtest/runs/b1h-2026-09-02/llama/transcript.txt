@@ -1,0 +1,1359 @@
+# ai-playtest transcript -- claude-rpg living world (starter-fantasy) -- seat llama (llama: meta-llama/llama-3.3-70b-instruct) -- label b1h-2026-09-02
+# turns 42, ended by turns, 360s
+
+═══ setup ── screen (1529ms)
+  Type "cancel" at any prompt to stop character creation.
+
+  World: The Chapel Threshold (preselected via --world)
+
+  The Chapel Threshold: Explore a ruined chapel and descend into its cursed crypt. Face an ash ghoul, speak with a suspicious pilgrim, and survive the threshold.
+
+  Character name:
+> Wanderer
+
+═══ setup ── screen (1310ms)
+
+  Choose your archetype:
+
+    1. Penitent Knight — A warrior burdened by an oath
+    2. Gravewalker — Stalker of the dead, sharp and quiet
+    3. Chapel Seer — Vessel of divine whispers
+
+  Choose (1-3):
+> 1
+
+═══ setup ── screen (1209ms)
+
+  Choose your background:
+
+    1. Oath-Breaker — Once swore a holy vow, then shattered
+      it
+    2. Temple Orphan — Raised by chapel priests, steeped in
+      ritual
+    3. Gravedigger — Buried the dead for years — knows what
+      comes back
+
+  Choose (1-3):
+> 1
+
+═══ setup ── screen (1204ms)
+
+  Choose traits (at least 1 flaw required): (pick up to 3)
+
+    1. Iron Frame (perk) — Unusually resilient body
+    2. Second Sight (perk) — Sees what others cannot
+    3. Glass Faith (flaw) — Faith cracks under pressure
+    4. Cursed Blood (flaw) — Dark lineage seeps through
+
+  Choose (1-4, or "done"):
+> 3
+
+═══ setup ── screen (1309ms)
+  Selected: Glass Faith (flaw)
+  Choose (1-4, or "done") [1 selected]:
+> done
+
+═══ setup ── screen (1210ms)
+  Choose a secondary discipline? (y/n):
+> n
+
+═══ setup ── screen (1204ms)
+
+  You have 3 stat points to allocate.
+
+    Vigor (vigor, max 3):
+> 1
+
+═══ setup ── screen (1309ms)
+    Instinct (instinct, max 2):
+> 1
+
+═══ setup ── screen (1208ms)
+    Will (will, max 1):
+> 1
+
+═══ setup ── screen (1310ms)
+
+════════════════════════════════════════════════════════════
+  CHARACTER SUMMARY
+════════════════════════════════════════════════════════════
+
+  Name: Wanderer
+  Archetype: Penitent Knight
+  Background: Oath-Breaker
+  Traits: Glass Faith
+  Stats: vigor: 8, instinct: 5, will: 2
+  Resources: hp: 20, stamina: 8, coin: 0, maxHp: 20
+
+════════════════════════════════════════════════════════════
+
+  Accept this character? (y/n):
+> y
+
+═══ turn 1 ── screen (prompt, 5688ms)
+
+────────────────────────────────────────────────────────────
+  The Chapel Threshold
+  dark fantasy, concise, atmospheric, foreboding
+────────────────────────────────────────────────────────────
+
+  Type actions in plain English. Type "quit" to exit, "save" to save.
+  Type "/director" to inspect hidden truth, "/sheet" to view character.
+  Type "/help" for the full command reference.
+
+  ... thinking
+
+────────────────────────────────────────────────────────────
+
+You step through weathered stone archways into the chapel's entrance hall. Cracked marble floors stretch beneath your boots, and fractured stained glass casts muted colors across dust motes dancing in the air. A figure in pilgrim's garb lingers near a collection box, their hood drawn low as they glance your way with calculating eyes. Across the chamber, a woman in nun's robes tends to flickering votive candles, her movements reverent despite the chapel's decay. The scent of old incense mingles with damp stone, and somewhere deeper within, you hear the distant echo of whispered prayers.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+────────────────────────────────────────────────────────────
+
+  What do you do?
+
+····························································
+  Sacred ground, corrupted below. The dead stir beneath crumbling stones.
+
+  TRY:
+    > talk to the pilgrim
+    > inspect the chapel nave
+    > bribe the pilgrim for safe passage
+  WARNING: The Ash Ghoul hits hard. Build Favor before descending.
+  Type /help for commands, /help leverage for social verbs.
+
+  >
+> talk to the pilgrim
+
+═══ turn 2 ── screen (prompt, 7841ms)
+  ... thinking
+
+══════════════════════════ Turn 2 ══════════════════════════
+
+You remain in the chapel's entrance hall, the fractured light still painting shadows across worn stone. The hooded pilgrim by the collection box shifts slightly, their attention seeming to drift between you and the nun across the chamber. Sister Maren continues her quiet work with the candles, though you catch her stealing glances toward both you and the other figure. 
+
+The atmosphere feels charged with unspoken tensions, as if multiple currents of purpose flow through this sacred space. The distant prayers from deeper within the chapel provide a backdrop of sanctity that seems at odds with the calculating looks being exchanged in this antechamber.
+
+····························································
+  Suspicious Pilgrim: "*looks up from the worn prayer book clutched in weathered hands*
+
+Another soul walks the dark roads, I see. What brings a knight to these forsaken paths - penance or duty?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to Suspicious Pilgrim · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+  hint: Try "bribe" or "intimidate" a target to spend leverage
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  >
+> ask the pilgrim about the chapel and its troubles
+
+═══ turn 3 ── screen (prompt, 8737ms)
+  ... thinking
+
+══════════════════════════ Turn 3 ══════════════════════════
+
+You remain motionless in the chapel's entrance, caught between the two figures as an uncomfortable silence settles over the chamber. The pilgrim's hood shifts slightly as they turn their attention more fully toward you, though their face remains obscured in shadow. Sister Maren pauses in her candle-tending, her hands stilling as she seems to weigh some internal decision.
+
+The weight of unspoken words hangs heavy in the incense-laden air, and you sense that both figures are waiting—perhaps for you to make the first move, or perhaps for something else entirely. The distant prayers continue their rhythmic murmur, but even they seem more subdued now, as if the very walls hold their breath.
+
+····························································
+  Suspicious Pilgrim: "*closes the prayer book with trembling fingers, eyes darting nervously*
+
+The chapel... aye, I've heard whispers on the road. They say something unholy stirs in those hallowed halls - the dead walk where they should rest, and the priests speak in hushed, fearful tones. I was bound there myself, but... *voice drops to barely a whisper* ...perhaps it's better to seek absolution elsewhere until the darkness passes."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to Suspicious Pilgrim · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> ask Sister Maren about the darkness and the unholy stirrings
+
+═══ turn 4 ── screen (prompt, 7352ms)
+  ... thinking
+
+══════════════════════════ Turn 4 ══════════════════════════
+
+You stand in the charged stillness, the weight of expectation pressing down like the stone vaults above. The pilgrim's shadowed gaze feels heavy upon you, while Sister Maren's fingers worry at the hem of her habit. 
+
+The silence stretches taut as a bowstring, broken only by the soft drip of wax from an overladen candle and the muffled devotions echoing from the nave beyond. Both figures seem poised on the edge of speech, yet neither breaks the sacred quiet first.
+
+····························································
+  Suspicious Pilgrim: "*shifts uncomfortably and glances around the empty road*
+
+Sister Maren? I... I know no Sister by that name, friend. The chapel I spoke of lies still many leagues ahead - I've not yet reached those cursed grounds myself. The whispers I heard came from other travelers fleeing southward, their faces pale with terror.
+
+*clutches the prayer book tighter*
+
+Perhaps you mistake me for someone who has walked closer to that unholy place than I dare."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to Suspicious Pilgrim · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> approach Sister Maren and ask her directly about the chapel's situation
+
+═══ turn 5 ── screen (prompt, 6989ms)
+  ... thinking
+
+══════════════════════════ Turn 5 ══════════════════════════
+
+You remain frozen in the tense tableau, the silence becoming almost suffocating in its intensity. The pilgrim's hooded head tilts slightly, a gesture that might be curiosity or calculation, while Sister Maren's knuckles whiten as she grips her prayer beads.
+
+The very air seems to thicken with unspoken words and hidden purposes. Even the distant prayers from the nave have faded to barely a whisper, as if the entire chapel holds its breath, waiting for someone—anyone—to shatter this crystalline moment of suspended time.
+
+····························································
+  Suspicious Pilgrim: "*takes a step back, eyes widening with confusion and growing alarm*
+
+Friend, you speak strangely - I am no Sister Maren, nor any sister at all. I am but a humble pilgrim on this dark road, same as you.
+
+*voice drops to a worried whisper*
+
+The way you speak... as if seeing someone who is not there. Have the shadows of this cursed land already begun to touch your mind?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to Suspicious Pilgrim · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+  hint: Type /help leverage for social action reference
+
+  What do you do?
+
+  >
+> look around the room to see if Sister Maren is actually there
+
+═══ turn 6 ── screen (prompt, 5272ms)
+  ... thinking
+
+══════════════════════════ Turn 6 ══════════════════════════
+
+The standoff continues, each heartbeat echoing in the vaulted space like a funeral drum. The pilgrim's fingers drum once against their staff—a barely perceptible motion that somehow carries the weight of impatience or decision. Sister Maren's eyes dart between you and the hooded figure, her breathing shallow and quick.
+
+A draft stirs through the entrance, carrying with it the scent of grave earth and wilted flowers, causing the candle flames to dance and throw writhing shadows across the worn stones. The chapel seems to lean in around you all, as if the very walls hunger for whatever words or actions will finally break this suffocating silence.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to Suspicious Pilgrim · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  [autosaved]
+  >
+> go Chapel Nave
+
+═══ turn 7 ── screen (prompt, 5585ms)
+  ... thinking
+
+══════════════════════════ Turn 7 ══════════════════════════
+
+You step through the arched doorway into the chapel's nave, leaving behind the charged atmosphere of the entrance. Stone pillars march in orderly procession toward a modest altar, their surfaces worn smooth by centuries of faithful hands. Pale light filters through narrow windows, casting long shadows between the wooden pews.
+
+A figure kneels before the altar in silent prayer—Brother Aldric, his brown robes pooling around him on the cold flagstones. His shoulders seem tense beneath the rough fabric, and though his head is bowed in devotion, there's something restless in his posture, as if his thoughts war with his prayers. The soft echo of your footsteps causes him to glance back briefly, his expression unreadable in the chapel's dim light.
+
+  · Brother Aldric stands quietly, lost in thought.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to Brother Aldric · go Ruined Chapel Entrance · go Vestry Passage · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> talk to Brother Aldric
+
+═══ turn 8 ── screen (prompt, 9199ms)
+  ... thinking
+
+══════════════════════════ Turn 8 ══════════════════════════
+
+You remain in the quiet nave, the weight of sacred silence pressing down like a physical presence. Brother Aldric has risen from his prayers and turned toward you, his weathered face partially visible in the filtering light—though shadows still obscure his full expression. Near one of the worn pillars, a huddled figure clutches a walking staff, their form trembling either from cold or something deeper, their features lost beneath a heavy hood.
+
+The monk's eyes study you with careful calculation, as if weighing something unseen against your presence here. His hands remain folded within his sleeves, but there's a tension in his stance that suggests readiness—though for what, you cannot tell.
+
+····························································
+  Brother Aldric: "*glances around nervously before leaning closer*
+
+You've come at a fortuitous time, knight. I've been... reconsidering certain loyalties of late. Tell me, do you find the chapel's recent pronouncements regarding the undead to be as troubling as I do?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a shivering pilgrim · go Ruined Chapel Entrance · go Vestry Passage · accept Investigate the black market activity
+
+  What do you do?
+
+  [a shivering pilgrim asks you: "Would you carry this to the district for me? I can't make the trip myself." (help a shivering pilgrim to answer, or walk on)]
+  >
+> ask Brother Aldric to explain his concerns about the chapel's pronouncements regarding the undead
+
+═══ turn 9 ── screen (prompt, 10290ms)
+  ... thinking
+
+══════════════════════════ Turn 9 ══════════════════════════
+
+The chapel's stillness stretches between you and the two figures, thick with unspoken tension. Brother Aldric's gaze continues to assess you, his weathered features caught between shadow and the pale light streaming through the narrow windows. You sense calculation behind his eyes, as if he's measuring your worth against some internal scale.
+
+The pilgrim near the pillar shifts restlessly, their grip tightening on their walking staff. A soft whimper escapes from beneath their hood, barely audible above the whisper of wind through stone.
+
+Brother Aldric finally speaks, his voice low and measured. "Few venture into these depths uninvited, wanderer. The crypt-keepers have... grown particular about their domain below." His hands emerge from his sleeves, revealing calloused fingers that drum once against his rope belt before stilling.
+
+····························································
+  Brother Aldric: "*shifts weight uncomfortably, voice dropping to barely above a whisper*
+
+The chapel preaches that all undead are abominations to be destroyed without question, yet I've witnessed... complexities they refuse to acknowledge. Some retain fragments of their former selves, even show mercy or restraint. *pauses, studying your reaction carefully* Their blanket condemnation troubles me deeply, especially when I see how they treat those who've had... encounters with such beings."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a shivering pilgrim · go Ruined Chapel Entrance · go Vestry Passage · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> ask Brother Aldric about the crypt-keepers and their domain below
+
+═══ turn 10 ── screen (prompt, 8559ms)
+  ... thinking
+
+═════════════════════════ Turn 10 ══════════════════════════
+
+The chapel air grows heavier as Brother Aldric's words settle between you. His weathered face remains partially obscured, but you catch the glint of something shrewd in his eyes—a man testing waters before committing to deeper currents.
+
+"The old allegiances grow... strained," he continues, his voice dropping to barely above a whisper. "Perhaps it is time to consider where true loyalty should lie." The pilgrim's trembling intensifies, their staff scraping against stone as they shift nervously behind their pillar.
+
+Brother Aldric takes a measured step closer, his sandaled feet silent on the worn flagstones. "Tell me, knight—do you serve the light above, or are you willing to walk darker paths for greater purpose?"
+
+····························································
+  Brother Aldric: "*glances around nervously before leaning closer, voice barely audible*
+
+The crypt-keepers... they maintain domains the chapel pretends don't exist. Ancient pacts, older than current doctrine. *hesitates, clearly wrestling with himself* I've heard whispers of sanctified crypts where the restless dead are... managed rather than destroyed. The keepers walk a line between the living and dead that would see them branded heretics if discovered. 
+
+*fixes you with an intense stare* Why do you ask of such forbidden knowledge?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a shivering pilgrim · go Ruined Chapel Entrance · go Vestry Passage · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> ask Brother Aldric about the sanctified crypts and the management of the restless dead
+
+═══ turn 11 ── screen (prompt, 8652ms)
+  ... thinking
+
+═════════════════════════ Turn 11 ══════════════════════════
+
+Brother Aldric's eyes narrow as he studies your silence, reading something in your posture that seems to satisfy him. The monk's weathered hands clasp behind his back, and he nods slowly, as if confirming a private suspicion.
+
+"Wise to listen before speaking," he murmurs, stepping closer until you can smell the musty scent of old parchment and incense that clings to his robes. "The chapel-undead below have grown... territorial. They bar passage to the deeper crypts, claiming ancient rights." His voice carries a note of bitter frustration.
+
+The pilgrim's whimpering grows more pronounced, their hooded form pressing deeper into the shadow of the stone pillar. Brother Aldric spares them a dismissive glance before returning his attention to you, his expression hardening with newfound resolve.
+
+····························································
+  Brother Aldric: "*shifts uncomfortably, voice dropping to barely a whisper*
+
+The sanctified crypts... they're bound by rites that predate the current orthodoxy. The keepers use ancient consecrations - not to banish the dead, but to... contain them, guide them. *glances toward the chapel doors* 
+
+Some say the restless are given purpose there, bound to eternal service rather than destruction. The chapel's current doctrine would call it blasphemy, but... *pauses, clearly conflicted* ...there are things walking in those depths that serve a greater good, even in undeath.
+
+*leans back slightly, studying your reaction with keen eyes* You speak as one who might understand such... nuanced approaches to the divine will."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a shivering pilgrim · go Ruined Chapel Entrance · go Vestry Passage · accept Investigate the black market activity
+
+  What do you do?
+
+  [autosaved]
+  >
+> go Vestry Passage
+
+═══ turn 12 ── screen (prompt, 8655ms)
+  ... thinking
+
+═════════════════════════ Turn 12 ══════════════════════════
+  Crypt Stalker readies an attack against you.
+
+You step through the narrow archway into a cramped passage where shadows pool thick between flickering torch brackets. The air hangs close and stale, carrying the scent of old stone and something else—something that makes your skin crawl with unease.
+
+A pale shape shifts in the darkness ahead, its movements jerky and unnatural. You catch glimpses of tattered fabric and bone-white skin, but the dim light makes it difficult to discern whether this lurking figure is wholly dead or something caught between states. It seems aware of your presence, hovering just beyond the reach of the torchlight like a sentinel guarding the way deeper into the crypts.
+
+The passage stretches before you, offering two paths—back toward the chapel's nave where Brother Aldric's whispered conspiracies still echo, or forward into the crypt antechamber where this restless guardian blocks your way.
+
+  · Crypt Stalker shifts their weight from foot to foot.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 20/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: go Chapel Nave · go Crypt Antechamber · attack Crypt Stalker · flee · accept Investigate the black market activity
+  hint: Black market activity detected — contraband may be available
+  hint: An opportunity is about to expire — accept or decline soon
+
+  What do you do?
+
+  >
+> attack Crypt Stalker
+
+═══ turn 13 ── screen (prompt, 5337ms)
+  ... thinking
+
+═════════════════════════ Turn 13 ══════════════════════════
+  Your strike lands — Crypt Stalker: unhurt.
+  Crypt Stalker's attack finds you — 2 damage.
+
+Your blade finds its mark, slicing through decayed flesh with a wet sound that echoes off the narrow passage walls. The stalker recoils with a hissing shriek, black ichor spattering the stone at your feet, but its clawed fingers rake across your side in return, tearing through cloth and scoring flesh. 
+
+The creature's pale eyes burn with malevolent hunger as it presses forward despite its wound, forcing you back against the cold wall. In the flickering torchlight, you catch clearer glimpses of its nature—neither fully dead nor truly alive, its form caught in some terrible state between the two.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 18/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: go Chapel Nave · go Crypt Antechamber · attack Crypt Stalker · flee · accept Investigate the black market activity
+
+  · a warning tone sounds
+  · music intensifies
+
+  What do you do?
+
+  [a shivering pilgrim needed help that never came.]
+  >
+> attack Crypt Stalker
+
+═══ turn 14 ── screen (prompt, 4701ms)
+  ... thinking
+
+═════════════════════════ Turn 14 ══════════════════════════
+  Your strike misses.
+  Crypt Stalker readies an attack against you.
+
+Your blade whistles through empty air as the stalker weaves away from your strike with unnatural fluidity. The creature's hollow laugh echoes off the passage walls, a sound like grinding bone that makes your teeth ache.
+
+The pale figure continues its relentless advance, forcing you deeper into the cramped confines of the vestry passage. Behind it, you glimpse another shape on the narrow stairs—a figure in travel-worn clothes who watches the deadly dance with keen interest, though whether friend or foe remains unclear in the guttering torchlight.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 18/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber · attack Crypt Stalker · flee
+
+  What do you do?
+
+  [a courier on the vestry stair asks you: "Would you carry this to the district for me? I can't make the trip myself." (help a courier on the vestry stair to answer, or walk on)]
+  >
+> attack Crypt Stalker
+
+═══ turn 15 ── screen (prompt, 5318ms)
+  ... thinking
+
+═════════════════════════ Turn 15 ══════════════════════════
+  Your strike misses.
+  Crypt Stalker's attack finds you — 2 damage.
+
+Your swing cuts through shadow as the stalker flows backward like smoke, its form seeming to blur at the edges in the dim torchlight. Before you can recover your stance, its claws rake across your shoulder, sending fresh pain lancing down your arm as fabric tears and blood wells.
+
+The creature presses its advantage, driving you further back toward the chapel entrance while its hollow breathing fills the narrow passage. On the vestry stairs, the courier shifts slightly, lamplight catching the glint of metal at their belt—though their intentions remain as shadowy as their features in this uncertain light.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber · attack Crypt Stalker · flee
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  >
+> talk to a courier on the vestry stair
+
+═══ turn 16 ── screen (prompt, 9679ms)
+  ... thinking
+
+═════════════════════════ Turn 16 ══════════════════════════
+  Crypt Stalker readies an attack against you.
+
+The stalker's claws find their mark again, tearing through your guard and opening fresh wounds across your chest. Pain flares hot and immediate as the creature's bone-white fingers leave bloody furrows in their wake, your vision blurring momentarily from the shock.
+
+You stumble backward, your retreat becoming less controlled with each exchange. The cramped passage offers no room to maneuver, and the stalker seems to flow around your defenses like mist made flesh. On the vestry stairs, the courier takes a deliberate step down, their hand moving to whatever gleams at their belt—though in the wavering torchlight, you cannot tell if they mean to help or hinder your desperate fight.
+
+····························································
+  a courier on the vestry stair: "*looks up from a sealed scroll case, weathered leather satchel slung across shoulder*
+
+You've got the look of someone who's walked dark roads, stranger. I carry word between the faithful - what business brings you to these sacred steps?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber · attack Crypt Stalker · flee
+
+  What do you do?
+
+  [autosaved]
+  >
+> attack Crypt Stalker
+
+═══ turn 17 ── screen (prompt, 5164ms)
+  ... thinking
+
+═════════════════════════ Turn 17 ══════════════════════════
+  Your strike lands — Crypt Stalker: down.
+  The Crypt Stalker falls.
+
+Your blade finds its mark at last, cutting deep into the stalker's writhing form. The creature's hollow shriek echoes through the narrow passage as dark ichor sprays from the wound, its shadowy flesh parting like torn silk. The stalker staggers, then collapses into itself, dissolving into wisps of acrid smoke that dissipate in the dim torchlight.
+
+As the last traces of your foe fade, you sense a shift in the oppressive atmosphere—the very walls seem to press closer, as if unseen eyes now watch your every move through the crypt depths. The courier on the vestry stairs remains motionless, their partially obscured form still clutching whatever gleams at their belt, waiting in the uncertain shadows.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Blackmail: 13
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber
+  hint: Black market activity detected — contraband may be available
+
+  · a success chime sounds
+  · music softens
+
+  What do you do?
+
+  >
+> talk to a courier on the vestry stair
+
+═══ turn 18 ── screen (prompt, 10054ms)
+  ... thinking
+
+═════════════════════════ Turn 18 ══════════════════════════
+
+The vestry passage feels smaller now, the walls seeming to lean inward as shadows gather in the corners where torchlight cannot reach. Your breathing echoes strangely in the confined space, each exhale creating phantom movements in your peripheral vision that make you question what lurks just beyond sight.
+
+The courier remains on the stairs, their form still partially shrouded but more distinct now—you can make out the rough fabric of their cloak and the deliberate way they hold themselves, as if weighing some crucial decision. Whatever gleams at their belt catches the flickering light with each subtle shift of their posture, yet their intentions remain as obscured as their features in the wavering shadows.
+
+····························································
+  a courier on the vestry stair: "*shifts the scroll case protectively against chest, eyes narrowing slightly*
+
+I already told you my purpose here - carrying messages for the faithful. But you... there's something about you that sets my teeth on edge. The way shadows seem to cling to your armor, perhaps. What do you want from me, knight?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Blackmail: 13
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber
+
+  What do you do?
+
+  >
+> ask the courier what they mean by shadows clinging to my armor
+
+═══ turn 19 ── screen (prompt, 21066ms)
+  ... thinking
+
+═════════════════════════ Turn 19 ══════════════════════════
+
+The courier shifts slightly on the vestry stairs, and you catch a glimpse of weathered hands emerging from their cloak. Their voice carries a note of recognition as they speak, though their face remains lost in shadow.
+
+"I remember you from the chapel above," they say quietly, their tone measured but wary. "You were asking questions about the depths, weren't you? About what lies below." The gleaming object at their belt—now clearly visible as a sealed scroll case—seems to grow heavier in their grip as they study your bloodied form in the dim torchlight.
+
+The oppressive weight of unseen observation presses closer around you both, as if the very stones disapprove of this chance encounter in the narrow passage.
+
+····························································
+  a courier on the vestry stair: "*takes a half-step back on the stone stairs, grip tightening on the scroll case*
+
+Don't play coy with me, Penitent. Even from here I can feel the chill that follows you - it's like standing near a tomb that's been cracked open. The faithful whisper of knights who've walked too close to death's door, and whatever came back... well, let's just say it wasn't entirely what went in."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Blackmail: 13
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber
+
+  What do you do?
+
+  [a courier on the vestry stair needed help that never came.]
+  >
+> ask the courier what they know about the depths and what lies below
+
+═══ turn 20 ── screen (prompt, 13362ms)
+  ... thinking
+
+═════════════════════════ Turn 20 ══════════════════════════
+
+The courier's recognition hangs in the air between you, their shadowed form still poised on the vestry stairs with that sealed scroll case clutched tightly. Behind them, something shifts in the deeper darkness—a subtle scratching against stone that sends ice through your veins.
+
+The Crypt Stalker emerges from the shadows like a nightmare given form, its elongated limbs scraping against the narrow walls as it positions itself between you and any hope of retreat. The courier freezes, their grip white-knuckled on the scroll case as they realize they're trapped in this confined space with both you and the creature that now blocks their escape route.
+
+The passage feels suffocatingly small as the stalker's hollow eye sockets fix upon you with predatory intent, its movements unnaturally fluid in the flickering torchlight.
+
+····························································
+  a courier on the vestry stair: "*glances nervously toward the chapel doors above, then leans slightly closer but maintains distance*
+
+The depths? I'm just a message-runner, knight - I stick to the upper ways and stone paths where the light still reaches. But I've carried sealed letters to the Sanctum's lower chambers, and the priests who receive them... they always look like they haven't slept in days. The old stones down there weep condensation that never dries, and sometimes you hear things that aren't quite voices echoing up from below. Whatever's down in those forgotten vaults, it's why they need Penitents like you in the first place."
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Blackmail: 13
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber
+
+  What do you do?
+
+  >
+> go Crypt Antechamber
+
+═══ turn 21 ── screen (prompt, 5633ms)
+  ... thinking
+
+═════════════════════════ Turn 21 ══════════════════════════
+  Ash Ghoul readies an attack against you.
+  Crypt Warden readies an attack against you.
+
+You step through the arched doorway into a wider chamber, the oppressive walls of the vestry passage giving way to a space that breathes with ancient malevolence. Dim light filters down from unseen sources above, casting long shadows between crumbling stone pillars that stretch toward a vaulted ceiling lost in darkness.
+
+Two figures detach themselves from the deeper shadows—one a hunched form wrapped in tattered burial shrouds that seem to smolder with ember-like traces, the other a taller sentinel whose armor bears the corrosion of centuries. They move with deliberate purpose as they become aware of your presence, their forms indistinct in the wavering half-light but unmistakably hostile.
+
+The air here tastes of ash and old bones, and somewhere in the distance, you hear the faint echo of footsteps—as if others move through passages you cannot see.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 16/20
+  Blackmail: 13
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+  You can: go Vestry Passage · attack Ash Ghoul · attack Crypt Warden · flee
+
+  · ambient: a low, tense drone
+
+  What do you do?
+
+  [autosaved]
+  >
+> attack Ash Ghoul
+
+═══ turn 22 ── screen (prompt, 6105ms)
+  ... thinking
+
+═════════════════════════ Turn 22 ══════════════════════════
+  Your strike misses.
+  Ash Ghoul's attack finds you — 3 damage.
+  Crypt Warden's attack finds you — 5 damage.
+
+The ghoul's ashen claws rake across your armor with a sound like grinding bone, finding gaps in your protection and tearing flesh beneath. You stagger back as the warden's corroded blade follows immediately after, its ancient steel biting deep through your defenses. Blood seeps warm against the cold stone as pain flares sharp and immediate.
+
+Through the haze of combat, you catch a glimpse of movement in the shadows beyond—figures conducting some manner of exchange in the deeper recesses of the chamber, their hushed voices carrying the weight of forbidden commerce. The sight lingers for only a moment before the ghoul lunges again, forcing your attention back to the immediate threat of claws and rusted steel.
+
+The chamber's dim light wavers as if responding to the violence, casting your attackers in shifting silhouettes that make their next moves difficult to predict.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 8/20
+  Blackmail: 13
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: unhurt
+────────────────────────────────────────────────────────────
+  You can: go Vestry Passage · attack Ash Ghoul · attack Crypt Warden · flee · accept Investigate the black market activity
+  hint: Black market activity detected — contraband may be available
+  hint: A new opportunity is available — type /jobs to see contracts
+
+  · a warning tone sounds
+  · music intensifies
+
+  What do you do?
+
+  >
+> attack Crypt Warden
+
+═══ turn 23 ── screen (prompt, 6093ms)
+  ... thinking
+
+═════════════════════════ Turn 23 ══════════════════════════
+  Your strike lands — Crypt Warden: hurt.
+  Ash Ghoul readies an attack against you.
+  Crypt Warden readies an attack against you.
+
+Your blade finds its mark against the warden's corroded armor, biting through ancient metal with a grinding screech that echoes off the stone pillars. Dark ichor seeps from the wound as the sentinel staggers, its hollow eye sockets flaring with malevolent light. The creature's pained shriek mingles with the ghoul's answering hiss, both forms wavering in the uncertain light.
+
+From the shadowed recesses where you glimpsed movement before, a one-armed figure emerges partially into view—his scarred features caught between torchlight and darkness. His gaze shifts between you and your attackers with calculating intensity, as if the outcome of this battle might determine more than just who lives or dies. The weight of some unspoken decision hangs heavy in the stale air.
+
+The ash ghoul circles closer, ember-traces in its shroud pulsing brighter as it prepares another assault.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 8/20
+  Blackmail: 13
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: hurt
+────────────────────────────────────────────────────────────
+  You can: talk to a one-armed veteran · go Vestry Passage · attack Ash Ghoul · attack Crypt Warden · flee
+
+  What do you do?
+
+  [a one-armed veteran asks you: "Would you vouch for me to the Guard? They won't hear me out on my own." (help a one-armed veteran to answer, or walk on)]
+  >
+> talk to a one-armed veteran
+
+═══ turn 24 ── screen (prompt, 7632ms)
+  ... thinking
+
+═════════════════════════ Turn 24 ══════════════════════════
+  Ash Ghoul's attack finds you — 3 damage.
+  You are reeling — flee (Vestry Passage) before you fall.
+
+The ash ghoul's claws slice through the air where you stood moments before, missing by mere inches as you twist away from its hungering grasp. The creature's frustrated shriek mingles with the grinding sound of the warden's blade as it too fails to find its mark, ancient steel scraping harmlessly against stone.
+
+Blood still seeps from your earlier wounds, the pain sharp and insistent as you struggle to maintain your footing on the slick stones. The one-armed veteran steps further into the wavering torchlight, his weathered face etched with recognition—something in your bearing, your stance, sparks a memory that cuts through the chaos of combat.
+
+The shadows seem to press closer as your enemies reposition themselves, their forms flickering between substance and nightmare in the chamber's uncertain illumination.
+
+····························································
+  a one-armed veteran: "*adjusts position against the weathered stone wall, eyeing you with practiced wariness*
+
+You've got the look of someone who's seen their share of trouble, friend. What brings you to speak with an old soldier like me?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 5/20
+  Blackmail: 13
+  Location: Crypt Antechamber | Exits: Vestry Passage
+  Hostiles: Ash Ghoul!: unhurt · Crypt Warden!: hurt
+────────────────────────────────────────────────────────────
+  You can: talk to a one-armed veteran · go Vestry Passage · attack Ash Ghoul · attack Crypt Warden · flee
+
+  What do you do?
+
+  >
+> go Vestry Passage
+
+═══ turn 25 ── screen (prompt, 6248ms)
+  ... thinking
+
+═════════════════════════ Turn 25 ══════════════════════════
+  ── Ambush: Chapel Patrol in Vestry Passage ──
+
+You stumble through a narrow stone archway, blood still trickling from your wounds as the vestry passage opens before you. The dim light here casts everything in uncertain shadows—tall, vaulted stonework stretches overhead while worn steps wind upward into deeper gloom.
+
+Movement ripples through the shadows as shapes emerge from alcoves and recesses. Something tall and skeletal shifts near the far wall, while another figure wreathed in ashen traces drifts between the stone pillars. A third form lurks in the darkness, its outline barely distinguishable from the weathered masonry.
+
+On the vestry stairs, you catch sight of another presence—someone hunched and watchful, though the poor light makes their features indistinct. The air feels thick with menace and the weight of old stone, each breath carrying the scent of decay and something else—something that speaks of the chapel's growing influence seeping deeper into these forgotten depths.
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 5/20
+  Blackmail: 13
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Ash Ghoul!: unhurt · Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber · attack Ash Ghoul · attack Crypt Stalker
+
+  What do you do?
+
+  >
+> talk to a courier on the vestry stair
+
+═══ turn 26 ── screen (prompt, 10400ms)
+  ... thinking
+
+═════════════════════════ Turn 26 ══════════════════════════
+  Ash Ghoul readies an attack against you.
+  Crypt Stalker readies an attack against you.
+
+The courier on the stairs shifts slightly, and in the wavering light you catch a glimpse of recognition flickering across their partially visible features—as if some memory stirs at the sight of your battered form and bloodied surcoat. The moment passes quickly as shadows claim their face once more.
+
+The skeletal stalker nearest the wall takes a measured step forward, its movements deliberate and predatory. The ash-wreathed figure continues its restless drift between the pillars, while the third stalker emerges more fully from its alcove, all three creatures slowly tightening their positions around you.
+
+Your wounds throb with each heartbeat, the vestry's cold air stinging against torn flesh. The stone beneath your feet feels treacherous, slick with moisture that could be condensation—or something else entirely.
+
+····························································
+  a courier on the vestry stair: "*shifts the leather satchel on my shoulder and nods respectfully, though keeping a careful distance*
+
+Another message run, knight? The paths between here and the outer settlements grow stranger by the day - even the main roads seem to... shift when the mists roll in. What brings a Penitent to these steps?"
+
+····························································
+  Wanderer (Lv1 Penitent Knight) | HP: 5/20
+  Blackmail: 13
+  Location: Vestry Passage | Exits: Chapel Nave, Crypt Antechamber
+  Hostiles: Ash Ghoul!: unhurt · Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Crypt Antechamber · attack Ash Ghoul · attack Crypt Stalker
+
+  What do you do?
+
+  [autosaved]
+  >
+> attack Ash Ghoul
+
+═══ turn 27 ── screen (prompt, 5613ms)
+  ... thinking
+
+════════════════════════════════════════════════════════════
+  Wanderer HAS FALLEN
+════════════════════════════════════════════════════════════
+
+Your blade finds its mark against the skeletal stalker, cutting deep into its ancient frame with a wet crack of bone. The creature staggers but does not fall, its hollow sockets burning with malevolent light as dark ichor seeps from the wound.
+
+Before you can press the advantage, claws rake across your already battered armor with savage precision. Pain flares through your chest as another gash opens, your knees nearly buckling under the assault. The vestry spins slightly as your vision wavers, blood loss making the shadows dance more wildly.
+
+Another attacker lunges from the gloom but its strike goes wide, scraping uselessly against the stone pillar beside you. The courier on the stairs watches with what might be growing concern, their form tense against the weathered steps as the battle rages below.
+
+────────────────────────────────────────────────────────────
+  Type "continue" when you are ready to rise.
+  "quit" auto-saves before exiting.
+
+  [Level up! You are now level 2.]
+  · a critical alarm sounds
+
+
+
+════════════════════════════════════════════════════════════
+  >
+> continue
+
+═══ turn 28 ── screen (prompt, 2142ms)
+  ... thinking
+
+  You steady yourself and rise. The world resumes its breath.
+
+  >
+> go Chapel Nave
+
+═══ turn 29 ── screen (prompt, 10376ms)
+  ... thinking
+
+═════════════════════════ Turn 28 ══════════════════════════
+  ── Ambush: Chapel Patrol in Chapel Nave ──
+
+You emerge into the sacred nave, where pale light filters through cracked stained glass windows, casting fractured rainbows across worn stone floors. The space feels simultaneously holy and violated, with rows of splintered pews facing an altar shrouded in shadows. Your wounds from the vestry ambush continue to seep, leaving dark spots on the ancient stones as you move forward.
+
+A robed figure kneels near the altar—Brother Aldric, you realize, though his posture seems different somehow, conflicted. A pilgrim huddles against one of the massive pillars, their form trembling with cold or fear. But your attention is drawn to the immediate threat: the ash-wreathed specter that drifts between the columns and another skeletal stalker that emerges from behind the ruined pulpit, both creatures moving with predatory intent.
+
+The chapel's acoustics amplify every sound—your labored breathing, the scrape of bone on stone, the pilgrim's whispered prayers. Brother Aldric's head turns slightly at your entrance, and you sense recognition in his partially visible features, though whether it bodes well or ill remains unclear in the shifting shadows.
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 3/20
+  Blackmail: 18
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+  Hostiles: Ash Ghoul!: unhurt · Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a shivering pilgrim · go Ruined Chapel Entrance · go Vestry Passage · attack Ash Ghoul · attack Crypt Stalker
+  hint: Black market activity detected — contraband may be available
+
+  · a warning tone sounds
+
+  What do you do?
+
+  [a one-armed veteran needed help that never came.]
+  >
+> talk to Brother Aldric
+
+═══ turn 30 ── screen (prompt, 11600ms)
+  ... thinking
+
+═════════════════════════ Turn 29 ══════════════════════════
+  Ash Ghoul readies an attack against you.
+  Crypt Stalker readies an attack against you.
+
+Brother Aldric rises slowly from his knees, his robes rustling in the chapel's stillness. His eyes meet yours across the sacred space, and something shifts in his expression—a flicker of recognition that seems to carry weight beyond mere memory. "The penitent returns," he murmurs, his voice echoing softly among the broken pews. "I wondered if our paths would cross again."
+
+The pilgrim's trembling intensifies at the monk's words, their whispered prayers growing more urgent. The ash ghoul drifts closer, its spectral form seeming to respond to the tension in the air, while the skeletal stalker's hollow gaze fixes upon you with renewed malice. Brother Aldric's hands remain folded, but his stance suggests a man poised on the edge of a crucial decision.
+
+····························································
+  Brother Aldric: "*straightens slightly, still keeping voice low but with growing confidence*
+
+You return to me again, friend. I sense the weight of seeking in you grows heavier each time we speak. *glances around cautiously before continuing*
+
+The path I hinted at before - it requires more than understanding. It demands... commitment to truths the chapel fears to acknowledge. *pauses, watching your face carefully* 
+
+There are others who share these deeper insights about the sanctified crypts, about the true nature of service beyond death. But such knowledge comes with a price - and certain... loyalties must shift."
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 3/20
+  Blackmail: 18
+  Location: Chapel Nave | Exits: Ruined Chapel Entrance, Vestry Passage
+  Market: Healing Draught 13 (+30% vs base)
+  Hostiles: Ash Ghoul!: unhurt · Crypt Stalker!: unhurt
+────────────────────────────────────────────────────────────
+  You can: talk to a shivering pilgrim · go Ruined Chapel Entrance · go Vestry Passage · attack Ash Ghoul · attack Crypt Stalker
+
+  What do you do?
+
+  >
+> attack Ash Ghoul
+
+═══ turn 31 ── screen (prompt, 5475ms)
+  ... thinking
+
+════════════════════════════════════════════════════════════
+  Wanderer HAS FALLEN
+════════════════════════════════════════════════════════════
+
+Pain lances through your battered form as the creatures press their assault. The ash ghoul's spectral touch burns through your armor like acid, while the skeletal stalker's claws rake across your ribs with bone-deep precision. Your vision blurs as darkness creeps in from the edges, and you stagger against one of the broken pews, your strength failing.
+
+Brother Aldric watches your collapse with that same calculating expression, his silence heavy with unspoken judgment. The pilgrim's prayers dissolve into terrified whimpers as your blood pools on the sacred stones. The creatures circle closer, sensing your weakness, their hollow gazes fixed upon your prone form with predatory satisfaction.
+
+────────────────────────────────────────────────────────────
+  Type "continue" when you are ready to rise.
+  "quit" auto-saves before exiting.
+
+  · a critical alarm sounds
+
+
+
+════════════════════════════════════════════════════════════
+  >
+> continue
+
+═══ turn 32 ── screen (prompt, 2922ms)
+  ... thinking
+
+  You steady yourself and rise. The world resumes its breath.
+
+  >
+> go Ruined Chapel Entrance
+
+═══ turn 33 ── screen (prompt, 6299ms)
+  ... thinking
+
+═════════════════════════ Turn 31 ══════════════════════════
+
+You push through an arched doorway into the chapel's entrance hall, your wounds still throbbing from the recent violence. Dim light filters through cracked stained glass, casting fractured colors across weathered stone floors. The air carries the musty scent of old incense and something less pleasant—decay mixed with fear-sweat.
+
+A hooded figure kneels near a side altar, their shoulders rigid with barely contained tension. Across the space, a woman in nun's robes stands motionless, her face turned toward shadows you cannot quite penetrate. On the vestry stairs, another figure shifts nervously, clutching what appears to be a leather satchel.
+
+All three turn slightly at your entrance, their movements cautious and measured. The chapel's broken acoustics carry the sound of your labored breathing, marking you as wounded prey in this sacred but uncertain sanctuary.
+
+  · Suspicious Pilgrim shifts their weight from foot to foot.
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  [a courier on the vestry stair asks you: "Would you hold this for me a while? I can't risk carrying it myself right now." (help a courier on the vestry stair to answer, or walk on)]
+
+  [autosaved]
+  >
+> talk to a hooded figure near a side altar
+
+═══ turn 34 ── screen (prompt, 12181ms)
+  ... thinking
+
+═════════════════════════ Turn 32 ══════════════════════════
+
+The three figures regard you with a mixture of wariness and recognition. The hooded pilgrim's hands tremble slightly as they clutch their prayer beads, while Sister Maren's pale face emerges more clearly from the shadows—her eyes holding a flicker of familiarity as she takes in your bloodied state.
+
+The courier on the stairs shifts the leather satchel to their other arm, their posture suggesting they've been waiting here longer than intended. All three seem caught between offering aid and maintaining their distance, the chapel's sacred walls offering no guarantee of safety in these troubled times.
+
+Your wounds pulse with each heartbeat, and the filtered light through the stained glass seems dimmer than it should be at this hour.
+
+····························································
+  Suspicious Pilgrim: "*glances around nervously, seeing no hooded figure where you seem to be looking*
+
+Friend, there is no one by the altar save empty stone and shadow. You speak of phantoms that my eyes cannot see.
+
+*backs away further, hand moving instinctively toward a worn holy symbol*
+
+The corruption of this place runs deeper than I feared if it makes pilgrims see what is not there. Perhaps you should seek blessed water and prayer before these visions lead you to darker delusions."
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> talk to Sister Maren
+
+═══ turn 35 ── screen (prompt, 7648ms)
+  ... thinking
+
+═════════════════════════ Turn 33 ══════════════════════════
+
+The tense silence stretches between you and the three figures, each seemingly waiting for someone else to break the standoff. The Suspicious Pilgrim's prayer beads click softly in the dim light, while Sister Maren's recognition of you appears to deepen—though whether that brings comfort or concern remains unclear in her guarded expression.
+
+The courier shifts again on the vestry stairs, their impatience growing more evident as they glance between you and the chapel's deeper shadows. The satchel they carry seems to weigh heavier with each passing moment, and you sense that whatever business brought them here grows more urgent by the minute.
+
+Your isolation feels complete despite being surrounded by others, the sacred space offering no warmth against the chill of distrust that permeates the air.
+
+····························································
+  Sister Maren: "Peace be with you, traveler. I sense you carry burdens that weigh heavily upon your soul - the darkness clings to you like morning mist to a graveyard."
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+  hint: An opportunity is about to expire — accept or decline soon
+
+  What do you do?
+
+  >
+> talk to Sister Maren about my burdens
+
+═══ turn 36 ── screen (prompt, 9137ms)
+  ... thinking
+
+═════════════════════════ Turn 34 ══════════════════════════
+
+The three figures maintain their careful distance, their initial wariness having settled into a cold indifference. The Suspicious Pilgrim turns away entirely, focusing their muttered prayers on the stained glass rather than acknowledging your presence further. Sister Maren's brief flicker of recognition has hardened into something resembling disappointment, her pale features retreating back into shadow.
+
+The courier on the vestry stairs makes an impatient sound, clearly deciding that whatever they came for will have to wait no longer. They adjust their satchel with purpose, their attention now fixed on the deeper reaches of the chapel rather than the bloodied figure you present.
+
+The sacred walls seem to echo with unspoken judgment, and you feel the weight of rejection settling over you like dust from the ancient stones above.
+
+····························································
+  Sister Maren: "Your aura speaks of communion with the restless dead, knight. Such paths often lead to wisdom, but at what cost to one's spirit? Tell me - do you seek absolution, or have you made peace with walking between the worlds of the living and the departed?"
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> accept Investigate the black market activity
+
+═══ turn 37 ── screen (prompt, 9952ms)
+  ... thinking
+
+═════════════════════════ Turn 35 ══════════════════════════
+
+The rejection deepens like frost settling on stone. The Suspicious Pilgrim's prayer beads fall silent as they deliberately turn their back to you, their murmured devotions now clearly meant to ward against your presence rather than welcome it. Sister Maren withdraws further into the shadows near the alcove, her recognition of you having crystallized into something closer to revulsion—whatever she remembers of you carries no fondness.
+
+The courier descends another step, their patience finally exhausted. They clutch their satchel tighter and cast you a look of open disdain before turning toward the nave, clearly deciding that your bloodied, isolated figure poses no threat worth considering. The sound of their footsteps echoes with finality.
+
+You stand alone in the center of the dim entrance, the sacred space offering no sanctuary from the cold judgment that surrounds you on all sides.
+
+····························································
+  Sister Maren: "I'm afraid I don't understand what you're asking of me, knight. I am but a simple sister tending to spiritual matters - I know nothing of markets, black or otherwise. Perhaps you've mistaken me for someone else, or the weight of your burdens has clouded your thoughts?"
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove · accept Investigate the black market activity
+
+  What do you do?
+
+  >
+> go Shadowed Alcove
+
+═══ turn 38 ── screen (prompt, 6424ms)
+  ... thinking
+
+═════════════════════════ Turn 36 ══════════════════════════
+
+You slip away from the cold stares and silent condemnation, finding refuge in a narrow alcove carved into the chapel's ancient stone. The shadows here are deeper, more welcoming than the judgment you've left behind in the main entrance. Dim light filters through from the chapel proper, but barely reaches into this hidden recess.
+
+The air is still and heavy with the scent of old stone and forgotten prayers. Here, in this forgotten corner, you can hear your own labored breathing and feel the weight of your wounds more acutely. The alcove offers solitude—a momentary reprieve from the eyes that see only your bloodied state and find you wanting.
+
+The carved walls seem to absorb sound, muffling even the distant murmur of activity from the chapel beyond.
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Shadowed Alcove | Exits: Ruined Chapel Entrance
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: go Ruined Chapel Entrance · accept Investigate the black market activity
+
+  · ambient: a low, tense drone
+
+  What do you do?
+
+  [autosaved]
+  >
+> go Ruined Chapel Entrance
+
+═══ turn 39 ── screen (prompt, 7506ms)
+  ... thinking
+
+═════════════════════════ Turn 37 ══════════════════════════
+
+You emerge from the sheltering alcove back into the chapel's entrance, the dim sacred space spreading before you once more. The air carries the familiar weight of old prayers and burning incense, though something has shifted in your absence—or perhaps in your perception of it.
+
+The Suspicious Pilgrim remains near the entrance, their form partially obscured by shadow and the play of candlelight across worn stone. Sister Maren hovers near the alcove you've just vacated, her robes rustling softly as she moves with measured, deliberate steps. On the vestry stairs, a courier lingers partway down, their presence patient but somehow expectant.
+
+The sacred space feels neither welcoming nor hostile now—simply watchful, as if the very stones are taking your measure anew.
+
+  · Suspicious Pilgrim gazes into the middle distance.
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove
+  hint: Black market activity detected — contraband may be available
+
+  What do you do?
+
+  [a courier on the vestry stair's story wasn't true. You never bit.]
+  >
+> talk to a courier on the vestry stair
+
+═══ turn 40 ── screen (prompt, 7929ms)
+  ... thinking
+
+═════════════════════════ Turn 38 ══════════════════════════
+
+The chapel entrance holds you in its measured quiet, the weight of recent rejection still lingering in the air like incense grown cold. Your wounds throb with each careful movement, a constant reminder of battles fought and blood spilled in these sacred halls.
+
+The figures around you maintain their careful distances—the Suspicious Pilgrim's form wavering in the uncertain light near the doorway, Sister Maren's robes a whisper of movement in your peripheral vision, the courier's silhouette patient on the vestry steps. The one-armed veteran stands apart, a weathered presence that seems carved from the same stone as the chapel walls.
+
+Each breath draws in the familiar scents of old prayers and burning wax, but beneath it all runs an undercurrent of something else—judgment, perhaps, or simply the weight of choices made and paths yet to be chosen. The sacred space watches and waits, offering neither comfort nor condemnation, only the heavy silence of witness.
+
+····························································
+  a courier on the vestry stair: "*clutches scroll case tighter and glances around nervously*
+
+Another soul seeking passage through these sacred halls... I carry word between the upper chambers and the crypts below, but these stairs grow more treacherous each day. What brings you to the vestry, stranger?"
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove
+
+  What do you do?
+
+  [a one-armed veteran asks you: "Could you lend me a little coin? My child is sick and I have nothing left." (help a one-armed veteran to answer, or walk on)]
+  >
+> help a one-armed veteran
+
+═══ turn 41 ── screen (prompt, 8788ms)
+  ... thinking
+
+═════════════════════════ Turn 39 ══════════════════════════
+  a one-armed veteran will remember who carried the coin.
+
+The chapel entrance continues to hold you in its weighted silence, your isolation pressing against you like the shadows that gather in the corners of this sacred space. The dim light wavers across worn stone, casting the assembled figures in half-glimpsed relief—each maintaining their careful distance as if drawn by invisible threads that refuse to pull taut.
+
+Sister Maren's robes rustle with quiet purpose near the alcove, while the Suspicious Pilgrim remains a shifting presence by the entrance, their form never quite settling into clarity. The courier on the vestry stairs seems frozen in patient waiting, and the one-armed veteran stands sentinel-still, as weathered and immutable as the chapel stones themselves.
+
+The air grows thick with unspoken words and unmade choices, heavy with incense and the lingering echo of your recent rejection. Something stirs in the deeper shadows—not movement, but possibility, like the held breath before a prayer is answered or denied.
+
+····························································
+  a one-armed veteran: "You've got the look of someone who's seen their share of battles. What kind of help are you offering, knight? These days, a man learns to be wary of charity - especially from one who walks the penitent's path."
+
+····························································
+  Wanderer (Lv2 Penitent Knight) | HP: 2/20
+  Blackmail: 23
+  Location: Ruined Chapel Entrance | Exits: Chapel Nave, Shadowed Alcove
+  Market: Healing Draught 13 (+30% vs base)
+────────────────────────────────────────────────────────────
+  You can: talk to a courier on the vestry stair · go Chapel Nave · go Shadowed Alcove
+
+  What do you do?
+
+  >
+> save
+
+═══ turn 42 ── screen (prompt, 1208ms)
+
+  Saved to ~/.claude-rpg/saves/Wanderer-1788334642961.json
+
+════════════════════════════════════════════════════════════
+  SESSION SUMMARY
+════════════════════════════════════════════════════════════
+
+  ────────────────────────────────────────────────────────────
+  CHARACTER CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Turns played: 38 | +174 XP (Level 1 → 2)
+
+  ────────────────────────────────────────────────────────────
+  DISTRICT CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Chapel Grounds: "lively despite everything"
+    alertPressure rose sharply
+  Crypt Depths: "subdued, fearful" → "dangerous and despairing"
+    alertPressure rose sharply
+
+  ────────────────────────────────────────────────────────────
+  FACTION SHIFTS
+  ────────────────────────────────────────────────────────────
+
+  chapel-undead: -95 (now -95)
+
+  ────────────────────────────────────────────────────────────
+  WHAT PEOPLE ARE SAYING
+  ────────────────────────────────────────────────────────────
+
+  Chapel Undead (hostile)
+
+  ────────────────────────────────────────────────────────────
+  NOTABLE CHARACTERS
+  ────────────────────────────────────────────────────────────
+
+  Brother Aldric (none) — wavering | greed-driven
+    owes you ×9, you owe ×0 | "Unpredictable; watch for shifts"
+
+  ────────────────────────────────────────────────────────────
+  OPPORTUNITIES & CONTRACTS
+  ────────────────────────────────────────────────────────────
+
+  investigation opportunity (investigation): expired — investigation "Investigate the black market activity" expired before resolution.
+  investigation opportunity (investigation): expired — investigation "Investigate the black market activity" expired before resolution.
+
+  ────────────────────────────────────────────────────────────
+  CAMPAIGN ARC
+  ────────────────────────────────────────────────────────────
+
+  Dominant arc: descent (steady)
+
+  ────────────────────────────────────────────────────────────
+  THE WORLD MOVED
+  ────────────────────────────────────────────────────────────
+
+  Opportunities offered: 2 — "Investigate the black market activity"
+  Opportunities expired: 2 — "investigation "Investigate the black market activity" expired before resolution."
+  Ambushes: 2 — "Chapel Patrol in chapel-nave"
+  Mood transitions: 1 — "crypt-depths: volatile -> grim"
+  Marks the street left on you: 1 — "a courier on the vestry stair's story wasn't true. You never bit."
+  Asks made of you: 5 — "Could you lend me a little coin? My child is sick and I have nothing left."
+  Help left ungiven: 3 — "a one-armed veteran needed help that never came."
+  Deeds recognized: 1 — "a one-armed veteran will remember who carried the coin."
+
+════════════════════════════════════════════════════════════
+
+  >
+> quit
+
+═══ turn 43 ── screen (exit, 0ms)
+  ... thinking
+
+  Saving your progress...
+  Auto-saved to ~/.claude-rpg/saves/Wanderer-autosave-1788334644170.json
+
+════════════════════════════════════════════════════════════
+  SESSION SUMMARY
+════════════════════════════════════════════════════════════
+
+  ────────────────────────────────────────────────────────────
+  CHARACTER CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Turns played: 38 | +174 XP (Level 1 → 2)
+
+  ────────────────────────────────────────────────────────────
+  DISTRICT CHANGES
+  ────────────────────────────────────────────────────────────
+
+  Chapel Grounds: "lively despite everything"
+    alertPressure rose sharply
+  Crypt Depths: "subdued, fearful" → "dangerous and despairing"
+    alertPressure rose sharply
+
+  ────────────────────────────────────────────────────────────
+  FACTION SHIFTS
+  ────────────────────────────────────────────────────────────
+
+  chapel-undead: -95 (now -95)
+
+  ────────────────────────────────────────────────────────────
+  WHAT PEOPLE ARE SAYING
+  ────────────────────────────────────────────────────────────
+
+  Chapel Undead (hostile)
+
+  ────────────────────────────────────────────────────────────
+  NOTABLE CHARACTERS
+  ────────────────────────────────────────────────────────────
+
+  Brother Aldric (none) — wavering | greed-driven
+    owes you ×9, you owe ×0 | "Unpredictable; watch for shifts"
+
+  ────────────────────────────────────────────────────────────
+  OPPORTUNITIES & CONTRACTS
+  ────────────────────────────────────────────────────────────
+
+  investigation opportunity (investigation): expired — investigation "Investigate the black market activity" expired before resolution.
+  investigation opportunity (investigation): expired — investigation "Investigate the black market activity" expired before resolution.
+
+  ────────────────────────────────────────────────────────────
+  CAMPAIGN ARC
+  ────────────────────────────────────────────────────────────
+
+  Dominant arc: descent (steady)
+
+  ────────────────────────────────────────────────────────────
+  THE WORLD MOVED
+  ────────────────────────────────────────────────────────────
+
+  Opportunities offered: 2 — "Investigate the black market activity"
+  Opportunities expired: 2 — "investigation "Investigate the black market activity" expired before resolution."
+  Ambushes: 2 — "Chapel Patrol in chapel-nave"
+  Mood transitions: 1 — "crypt-depths: volatile -> grim"
+  Marks the street left on you: 1 — "a courier on the vestry stair's story wasn't true. You never bit."
+  Asks made of you: 5 — "Could you lend me a little coin? My child is sick and I have nothing left."
+  Help left ungiven: 3 — "a one-armed veteran needed help that never came."
+  Deeds recognized: 1 — "a one-armed veteran will remember who carried the coin."
+
+════════════════════════════════════════════════════════════
+
+
+  Farewell.
+

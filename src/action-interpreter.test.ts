@@ -1325,3 +1325,25 @@ describe('WO-B1F-7: help path tracing + the article-stripping fix', () => {
     expect(entry!.data?.branch).toBe('none');
   });
 });
+
+describe('flee <exit> (sixth family playtest)', () => {
+  function quietClient() {
+    return {
+      model: 'mock',
+      generate: async () => ({ ok: true, text: '', inputTokens: 0, outputTokens: 0 }),
+      generateStructured: async () => ({ ok: false, data: null, raw: '', error: 'mock' }),
+    };
+  }
+  it('a named exit after flee resolves as a move to that exit; bare flee stays disengage', async () => {
+    const { interpretAction } = await import('./action-interpreter.js');
+    const engine = createGame();
+    const world = engine.world;
+    const exitId = world.zones[world.locationId]?.neighbors?.[0] as string;
+    const exitName = world.zones[exitId]?.name ?? exitId;
+    const moved = await interpretAction(quietClient(), world, `flee ${exitName}`, engine.getAvailableActions());
+    expect(moved.verb).toBe('move');
+    expect(moved.targetIds).toEqual([exitId]);
+    const bare = await interpretAction(quietClient(), world, 'flee', engine.getAvailableActions());
+    expect(bare.verb).toBe('disengage');
+  });
+});

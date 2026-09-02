@@ -147,3 +147,43 @@ describe('markEntitiesAware', () => {
     expect(isHostileAware(engine.world, 'crypt-warden')).toBe(true);
   });
 });
+
+describe('T4 -- maxHostileAttackersPerRound (sixth family playtest: the pile-on)', () => {
+  it('with two aware, telegraphed hostiles only one lands per round at the default; the other re-telegraphs', () => {
+    const engine = createGame();
+    const world = engine.world;
+    const zone = world.entities[world.playerId]!.zoneId ?? world.locationId;
+    for (const id of ['crypt-stalker', 'ash-ghoul']) {
+      world.entities[id]!.zoneId = zone;
+      // Both aggressive so both target the PLAYER (the stalker's cautious
+      // profile otherwise picks the ghoul as its target -- traced 2026-09-02).
+      (world.entities[id] as unknown as { ai: { profileId: string } }).ai.profileId = 'aggressive';
+      markAware(world, id, engine.tick);
+      world.globals[`hostile_telegraph_${id}`] = engine.tick; // both would land this round
+    }
+    const result = runHostileTurn(engine, resolveTuning());
+    // Exactly one hostile attacked (its telegraph cleared); the other held
+    // its telegraph and was announced again. (Counted by telegraph state,
+    // not by damage events: a landed attack can still miss under the
+    // engine's own roll.)
+    const stillArmed = ['crypt-stalker', 'ash-ghoul'].filter((id) => hasTelegraph(world, id));
+    expect(stillArmed.length).toBe(1);
+    expect(result.telegraphs.length).toBe(1);
+    expect(result.telegraphs[0].hostileId).toBe(stillArmed[0]);
+  });
+
+  it('at maxHostileAttackersPerRound 2 both land', () => {
+    const engine = createGame();
+    const world = engine.world;
+    const zone = world.entities[world.playerId]!.zoneId ?? world.locationId;
+    for (const id of ['crypt-stalker', 'ash-ghoul']) {
+      world.entities[id]!.zoneId = zone;
+      (world.entities[id] as unknown as { ai: { profileId: string } }).ai.profileId = 'aggressive';
+      markAware(world, id, engine.tick);
+      world.globals[`hostile_telegraph_${id}`] = engine.tick;
+    }
+    const result = runHostileTurn(engine, resolveTuning({ maxHostileAttackersPerRound: 2 }));
+    expect(['crypt-stalker', 'ash-ghoul'].filter((id) => hasTelegraph(world, id))).toEqual([]);
+    expect(result.telegraphs).toEqual([]);
+  });
+});

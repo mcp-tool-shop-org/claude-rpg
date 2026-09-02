@@ -1,0 +1,141 @@
+{
+  "alive": true,
+  "summary": "The world felt alive with dynamic encounters, shifting moods, and reactive NPCs. The game generated two ambushes on entry (Chapel Nave and Vestry Passage), escalated pressure in districts, and provided clear opportunities and rumors. However, combat was punishingly difficult, and some slash commands were poorly handled, causing confusion. The session recap effectively summarized world moves.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 5: Ambush 'Chapel Patrol in Chapel Nave' announced on entering the chapel nave. Turn 19: Ambush 'Chapel Patrol in Vestry Passage' announced on entering the vestry passage.",
+      "turn": 5
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Turn 42: Session recap shows 'alertPressure rose sharply' in Chapel Grounds and Crypt Depths districts after player actions.",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Turn 42: Session recap shows 'alertPressure rose sharply' in districts, indicating pressure escalated without direct player intervention.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No evidence of merchant prices reacting to faction standing in the transcript.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Turn 42: Session recap notes 'Marks the street left on you: a shivering pilgrim's story wasn't true. You never bit.' indicating a rumor with stance.",
+      "turn": 42
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Turn 42: Session recap shows mood transitions: 'Chapel Grounds: lively despite everything → on edge, jumpy' and 'Crypt Depths: subdued, fearful → dangerous and despairing'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Turn 2: Sister Maren and the Suspicious Pilgrim react to player arrival with dialogue. Turn 19: Courier on vestry stair asks for help unprompted. Turn 37: Shivering pilgrim asks to hold an item unprompted.",
+      "turn": 2
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Turn 42: Session recap lists ambushes, mood transitions, rumors, opportunities offered/expired, and asks made of the player.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions or errors observed. Locations, characters, and facts remained consistent throughout the session.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "Turns 10-11: Player struggled with slash commands (/rumor, /news, /world) and plain English inputs. Turn 31: Game failed to parse '5' as an input. Turn 33: Game asked for clarification after ambiguous input.",
+      "turn": 10
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "Turn 8: 'Your strike lands — Crypt Stalker: down.' and 'The Crypt Stalker falls.' Turn 34: 'Your desperate swing finds its mark...' indicates kill lines.",
+      "turn": 8
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "Turn 7: 'Ash Ghoul's attack finds you — 2 damage.' Turn 20: 'Crypt Stalker's attack finds you — 3 damage.' Multiple telegraph lines ('readies') appeared before hits.",
+      "turn": 7
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": false,
+      "evidence": "No con was attempted or revealed in the transcript.",
+      "turn": null
+    },
+    {
+      "id": "recognized",
+      "met": false,
+      "evidence": "No genuine petitioner was helped in the transcript.",
+      "turn": null
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "Turn 11: '/rumor' corrected to '/rumors'. Turn 13: '/news' corrected. Turn 14: '/world' corrected to '/director'. Turn 23: 'help a' corrected to 'help a courier on the vestry stair'.",
+      "turn": 11
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "Turn 2: Player's 'talk to the hooded figure' led to NPC dialogue. Turn 17: Player's plain English 'There is none.' led to Brother Aldric's reply. Turn 37: Player's 'talk to a courier on the vestry stair' led to NPC dialogue.",
+      "turn": 2
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "Turn 4: 'inspect the chapel nave' worked as a movement command. Turn 36: 'go Vestry Passage' moved the player. Turn 11: '/rumors' answered in play mode.",
+      "turn": 4
+    },
+    {
+      "id": "price-seen",
+      "met": false,
+      "evidence": "No market lines with prices were shown without /market or /trade commands.",
+      "turn": null
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": false,
+      "evidence": "No pressure lines were shown on the play screen; only in the session recap.",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 5: Ambush 'Chapel Patrol in Chapel Nave' announced on entry, creating immediate tension and combat.",
+    "Turn 8: Clear kill lines ('Your strike lands — Crypt Stalker: down.') and NPC reactions (Brother Aldric's dialogue).",
+    "Turn 19: Ambush 'Chapel Patrol in Vestry Passage' and unprompted NPC ask for help (courier).",
+    "Turn 42: Comprehensive session recap listing world moves (ambushes, mood shifts, rumors, opportunities).",
+    "Turn 2-17: Dynamic NPC interactions (Sister Maren, Suspicious Pilgrim, Brother Aldric) reacting to player choices."
+  ],
+  "deadSpots": [
+    "Turns 10-11: Player confusion with slash commands (/rumor, /news, /world) and plain English inputs.",
+    "Turn 31: Game failed to parse '5' as an input, requiring clarification.",
+    "Turn 33: Game asked for clarification after ambiguous input ('I'm not sure what you mean. Did you want to attack Ash Ghoul or attack Crypt Warden or move?').",
+    "Combat was punishingly difficult, with the player dying multiple times (Turns 23, 24, 32, 35, 40) despite strategic attempts.",
+    "Turn 22: Player's long input with multiple commands was not parsed correctly, leading to repetition."
+  ],
+  "confusions": [
+    "Turn 10: Player struggled with plain English input ('attack Crypt Stalker again with 2 now 18/20 hp left but it hit for 2 already so I'm at 16/20 now and I've just missed twice and hit once so maybe I should use a slash command to check something first befo').",
+    "Turn 22: Player's long input with multiple commands was not parsed correctly, leading to repetition and confusion.",
+    "Turn 31: Game failed to parse '5' as an input, requiring clarification.",
+    "Turn 33: Game asked for clarification after ambiguous input ('I'm not sure what you mean. Did you want to attack Ash Ghoul or attack Crypt Warden or move?')."
+  ],
+  "wouldPlayAgain": false
+}

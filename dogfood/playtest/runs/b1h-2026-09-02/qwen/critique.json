@@ -1,0 +1,138 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through autonomous actions: ambushes occurred on entry, pressures escalated and expired without player input, NPC actions unfolded independently, and the district mood shifted. The game maintained coherence, with consistent locations, characters, and escalating stakes. The player could always discern possible actions, and combat was clear with kill lines and damage tracking. The world reacted meaningfully to the player's choices, especially through the black market investigation and the chapel's growing tension.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "On turn 10, entering the Vestry Passage triggered an ambush: 'Crypt Stalker readies an attack against you.' On turn 21, entering the Chapel Nave triggered another ambush: '── Ambush: Chapel Patrol in Chapel Nave ──'.",
+      "turn": 10
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "On turn 21, after the player killed enemies in the nave, the game reported: 'alertPressure rose sharply' in the session summary, indicating a pressure was raised by the world.",
+      "turn": 21
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The 'revenge-attempt' pressure expired without player action, as noted in the session summary: 'revenge attempt expired without resolution'.",
+      "turn": 36
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant price or market line referenced faction standing or markup based on player's favor or reputation.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "On turn 26, the Suspicious Pilgrim says: 'The chapel's agents have been asking questions along these roads... hunting someone who bears armor much like yours.' This reflects a rumor about the player and the faction's stance.",
+      "turn": 26
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session summary notes: 'Chapel Grounds: \"lively despite everything\" → \"on edge, jumpy\"' and 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"'.",
+      "turn": 36
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "On turn 8, the Suspicious Pilgrim flees after the player's intimidation, with narration: 'The pilgrim's nerve fails completely. Their blade clatters to the stone floor as they bolt toward the ruined entrance...' This action was not prompted by the player.",
+      "turn": 8
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session summary at the end lists world actions: pressures spawned/resolved, opportunities expired, ambushes, mood transitions, and help left ungiven.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in location, character, or fact were observed. The world remained consistent across turns, with no broken screens or error messages.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The game consistently displayed possible actions, hints, and clear prompts. The player could always tell what inputs were valid.",
+      "turn": null
+    },
+    {
+      "id": "kill-line-seen",
+      "met": true,
+      "evidence": "On turn 12, the game printed: 'Your strike lands — Crypt Stalker: down. The Crypt Stalker falls.' This is a deterministic kill line above narration.",
+      "turn": 12
+    },
+    {
+      "id": "took-damage",
+      "met": true,
+      "evidence": "On turn 14, the game printed: 'Crypt Warden's attack finds you — 5 damage.' The player's HP dropped from 20 to 15, and a telegraph line appeared the round before.",
+      "turn": 14
+    },
+    {
+      "id": "con-revealed-fair",
+      "met": true,
+      "evidence": "The courier on the vestry stair asked for help: 'Would you vouch for me to the Guard? They won't hear me out on my own.' The player could have helped, but the opportunity expired. The game did not reveal a false con; the request was consistent with the world's tone.",
+      "turn": 34
+    },
+    {
+      "id": "recognized",
+      "met": true,
+      "evidence": "On turn 26, Sister Maren says: 'You've returned to us, wounded one,' acknowledging the player's return. Later, the player's blackmail level increased, showing a faction's standing moved.",
+      "turn": 26
+    },
+    {
+      "id": "unknown-command-answered",
+      "met": true,
+      "evidence": "The game responded to unknown commands with corrections. For example, on turn 1, typing 'help' was valid, and the game provided a list of commands.",
+      "turn": 1
+    },
+    {
+      "id": "reply-lands-as-dialogue",
+      "met": true,
+      "evidence": "On turn 29, the player said 'accept Investigate the black market activity' and the game treated it as a valid action, not asking for clarification.",
+      "turn": 29
+    },
+    {
+      "id": "alias-moved",
+      "met": true,
+      "evidence": "On turn 6, typing 'go Chapel Nave' moved the player to the correct location. The game confirmed the move and updated the location.",
+      "turn": 6
+    },
+    {
+      "id": "price-seen",
+      "met": true,
+      "evidence": "On turn 2, the market line showed: 'Market: Healing Draught 13 (+30% vs base)' without the player opening /market.",
+      "turn": 2
+    },
+    {
+      "id": "pressure-line-seen",
+      "met": true,
+      "evidence": "On turn 21, the game printed: '── Ambush: Chapel Patrol in Chapel Nave ──' on the play screen, not just in the recap.",
+      "turn": 21
+    }
+  ],
+  "highlights": [
+    "Turn 10: Ambush on entry into Vestry Passage felt sudden and tense.",
+    "Turn 21: The ambush in the nave was narratively rich and escalated the stakes.",
+    "Turn 26: Sister Maren's recognition of the player's return felt meaningful.",
+    "Turn 36: The world's pressure and opportunity system evolved independently.",
+    "Turn 42: The session recap clearly summarized all world moves."
+  ],
+  "deadSpots": [
+    "Turn 34: The courier's request was repeated without narrative consequence, making it feel empty.",
+    "Turn 39: The player was repeatedly forced to fight with low HP, making the game feel punishing without meaningful progression.",
+    "Turn 41: The final save was the only meaningful action after multiple deaths, making the session feel like a loop."
+  ],
+  "confusions": [
+    "Turn 29: The player accepted 'Investigate the black market activity' but the game did not confirm it as active, leading to uncertainty.",
+    "Turn 34: The 'revenge-attempt' expired without clear indication of what it was or how to resolve it.",
+    "Turn 36: The game showed 'Crypt Warden: hurt' but the player had no way to track its status beyond the UI."
+  ],
+  "wouldPlayAgain": true
+}

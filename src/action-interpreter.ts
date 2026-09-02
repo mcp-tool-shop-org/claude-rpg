@@ -166,7 +166,24 @@ function tryFastInterpret(
   // player-facing name change at the interpreter layer. Bare `flee` only
   // (no target): disengage always leaves via the zone's own neighbor list,
   // never a chosen direction.
-  if (/^flee$/.test(lower) && verbs.includes('disengage')) {
+  // Sixth family playtest (b1h-2026-09-02): seats typed `flee <exit>`; the
+  // bare-only rule sent that to the LLM mid-fight. A named exit is a move.
+  if (/^flee\s+/.test(lower) && verbs.includes('move')) {
+    const dest = lower.replace(/^flee\s+(to\s+)?/i, '');
+    const target = findZoneByName(dest, zone?.neighbors ?? [], world);
+    if (target) {
+      return {
+        verb: 'move',
+        targetIds: [target],
+        toolId: null,
+        parameters: null,
+        confidence: 'high',
+        reasoning: `Flee to ${target}`,
+        alternatives: null,
+      };
+    }
+  }
+  if (/^flee\b/.test(lower) && verbs.includes('disengage')) {
     return {
       verb: 'disengage',
       targetIds: null,

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { executeDirectorCommand, renderDirectorHelp } from './director-renderer.js';
+import { DEFAULT_LIVING_WORLD_TUNING } from '../game/tuning.js';
 import { createObligation, type NpcProfile, type NpcObligationLedger } from '@ai-rpg-engine/modules';
 import { formatRumorBoard, type Rumor } from '@ai-rpg-engine/rumor-system';
 
@@ -882,16 +883,9 @@ describe('director-renderer section headers are bolded (F-de13eb60)', () => {
  * -- no verb, no mutation (R6).
  */
 describe('/tuning director view (WO-A6-5)', () => {
-  const defaultTuning = {
-    rumorStanceFadeTicks: 24,
-    rumorBelieveSuspicionBelow: 0,
-    rumorSpreadScope: 'adjacent-districts' as const,
-    worldMovedCap: 200,
-    narrationPressureLines: 10,
-    narrationOpportunityLines: Infinity,
-    narrationRumorLines: Infinity,
-    ambushHeadline: 'always' as const,
-  };
+  // Stitch (wave 10): the fixture is the ONE defaults list (game-core's), so
+  // new levers (enemyAggression, asks, honorificAt) never strand this file.
+  const defaultTuning = { ...DEFAULT_LIVING_WORLD_TUNING };
 
   it('should return "No tuning data available" when tuningView is missing', () => {
     const result = executeDirectorCommand({ command: '/tuning', world: makeWorld() });

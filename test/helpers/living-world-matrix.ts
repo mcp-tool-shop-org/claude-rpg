@@ -264,14 +264,23 @@ function buildMatrixProfile(engine: Engine, packId: string, catalog?: { archetyp
   );
 }
 
-async function buildHarnessForWorld(input: MatrixWorldInput, seed: number, tuning?: Partial<LivingWorldTuning>): Promise<GameHarness> {
+async function buildHarnessForWorld(input: MatrixWorldInput, seed: number, tuningIn?: Partial<LivingWorldTuning>): Promise<GameHarness> {
+  // Wave-10 stitch: the matrix's fixed 30-round script predates slice B1's
+  // hostile turn (enemies now telegraph and land hits), and its scripted
+  // walker neither flees nor heals, so at the defaults it is downed before
+  // the kill-driven links can fire on 9 of 13 worlds (measured 2026-09-02:
+  // 19 reds at defaults, 4 with aggression off). This proof measures the
+  // six living-world LINKS, not survival; the hostile turn has its own
+  // proof (test/integration/reactive-street.test.ts). Aggression is
+  // therefore pinned off here unless a caller's tuning names it.
+  const tuning: Partial<LivingWorldTuning> = { enemyAggression: 'off', ...(tuningIn ?? {}) };
   if (input.kind === 'pack') {
     const engine = input.pack.createGame(seed);
     return createHarness({
       gameOpts: {
         engine,
         profile: buildMatrixProfile(engine, input.pack.meta.id, input.pack.buildCatalog as never),
-        ...(tuning ? { tuning } : {}),
+        tuning,
         itemCatalog: input.pack.itemCatalog,
         genre: input.pack.meta.genres?.[0] ?? 'fantasy',
         title: input.pack.meta.name,
@@ -287,7 +296,7 @@ async function buildHarnessForWorld(input: MatrixWorldInput, seed: number, tunin
       // The generated fixture has no pack catalog; a fantasy build stands in
       // (the profile's pack id only names the catalog the build came from).
       profile: undefined,
-      ...(tuning ? { tuning } : {}),
+      tuning,
     },
   });
   harness.session.profile = buildMatrixProfile(harness.session.engine, 'chapel-threshold', undefined);

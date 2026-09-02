@@ -3,7 +3,7 @@
 import type { WorldState, EntityState } from '@ai-rpg-engine/core';
 import type { ClaudeClient, StructuredResult } from './claude-client.js';
 import { INTERPRET_SYSTEM, buildInterpretPrompt } from './prompts/interpret-action.js';
-import { findOpenAskForEntity } from './game/asks.js';
+import { findOpenAskForEntity, getOpenAsks } from './game/asks.js';
 
 export type InterpretedAction = {
   verb: string;
@@ -181,6 +181,29 @@ function tryFastInterpret(
           alternatives: null,
         };
       }
+    }
+    // Stitch (wave 10): the petitioner may be an ask-ledger record without
+    // a body in the player's zone (a courier who left word, a petitioner
+    // seeded straight onto the storage contract). Match the open asks by
+    // petitioner name; when the petitioner has no entity, the commitment
+    // resolves as a plain look (no engine target to speak to) and the ask
+    // itself still carries `helpAskId` to game.ts's recognition step.
+    const byName = getOpenAsks(world).find((a) => {
+      const name = a.petitioner?.name.toLowerCase() ?? '';
+      return name.length > 0 && (name.includes(targetName) || targetName.includes(name));
+    });
+    if (byName) {
+      const petitionerId = byName.petitioner?.id;
+      const hasEntity = petitionerId !== undefined && world.entities[petitionerId] !== undefined;
+      return {
+        verb: hasEntity ? 'speak' : 'look',
+        targetIds: hasEntity ? [petitionerId] : null,
+        toolId: null,
+        parameters: { helpAskId: byName.id },
+        confidence: 'high',
+        reasoning: `Help ${byName.petitioner?.name ?? 'the petitioner'} with: ${byName.surface}`,
+        alternatives: null,
+      };
     }
   }
 

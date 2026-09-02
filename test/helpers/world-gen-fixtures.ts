@@ -172,6 +172,14 @@ export function makePhase9WorldGenProposal(
         ],
       },
     ],
+    // Stitch (wave 10, slice B1 §4, lock 7): two petitioners in the
+    // proposal shape runtime-foundry's mapPetitionersFromProposal reads --
+    // genuine/predatory is decided at instantiation by askPredatorRatio,
+    // never here (no at-a-glance tell).
+    petitioners: [
+      { name: 'Weary Pilgrim', zoneId: 'town-square', kind: 'carry' },
+      { name: 'Widow Anselm', zoneId: 'market', factionId: 'guard', kind: 'lend' },
+    ],
     ...overrides,
   };
 }

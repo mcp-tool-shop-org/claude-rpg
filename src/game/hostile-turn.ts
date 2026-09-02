@@ -182,6 +182,25 @@ export function runHostileTurn(engine: Engine, tuning: LivingWorldTuning): Hosti
   const events: ResolvedEvent[] = [];
   const telegraphs: HostileTelegraph[] = [];
 
+  // Stitch ruling (wave 10): co-location is the fourth awareness trigger.
+  // A live hostile standing in the player's zone when the hostile turn
+  // runs has noticed the player, however it got there (a walk-in the
+  // zone-entry event already covers, a spawn, a fixture placing it) -- it
+  // still telegraphs before it lands, so the beginner-safety promise of
+  // design lock 3 holds unchanged.
+  const player = world.entities[playerId];
+  const playerZone = player?.zoneId ?? world.locationId;
+  const colocated = Object.values(world.entities)
+    .filter(
+      (e) =>
+        e.id !== playerId &&
+        (e.resources.hp ?? 0) > 0 &&
+        (e.tags.includes('enemy') || e.tags.includes('hostile')) &&
+        (e.zoneId ?? world.locationId) === playerZone,
+    )
+    .map((e) => e.id);
+  markEntitiesAware(world, colocated, engine.tick);
+
   for (const hostile of liveAwareHostilesInPlayerZone(world)) {
     // Player downed mid-round (an earlier hostile's landed hit) -> the
     // defeat screen owns what happens next, not a pile-on. Mirrors the

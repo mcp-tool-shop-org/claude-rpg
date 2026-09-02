@@ -166,7 +166,7 @@ describe('ask lifecycle mutators', () => {
     expect(askSubjectName(open, engine.world)).toBe('a courier');
   });
 
-  it('dueReveals returns only helped predatory asks whose reveal window has elapsed', () => {
+  it('dueReveals returns only predatory asks (helped or still open) whose reveal window has elapsed', () => {
     const engine = createGame();
     const notYet: Ask = {
       id: 'a', petitioner: { id: 'p1', name: 'x', zoneId: 'z' }, kind: 'lend', surface: 's',
@@ -178,6 +178,6 @@ describe('ask lifecycle mutators', () => {
     engine.world.globals['claude_rpg.asks'] = JSON.stringify([notYet, due, genuine, stillOpen]);
 
     const result = dueReveals(engine.world, 0, 6);
-    expect(result.map((a) => a.id)).toEqual(['b']);
+    expect(result.map((a) => a.id)).toEqual(['b', 'd']);
   });
 });

@@ -351,7 +351,7 @@ import {
   computePartyAbilities,
   computeAbilityModifiers,
 } from '@ai-rpg-engine/modules';
-import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp, renderConcludeHelp } from './display/help-system.js';
+import { renderPlayHelp, renderLeverageHelp, renderPackQuickstart, renderArcHelp, renderConcludeHelp, renderUnknownCommand } from './display/help-system.js';
 import { renderCompactStatus } from './display/status-compact.js';
 import { generateSuggestions } from './display/contextual-suggestions.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
@@ -1952,28 +1952,16 @@ export class GameSession {
     const world = this.engine.world;
     const tick = this.engine.tick;
 
-    // Age out an open ask nobody answered within a fixed window. Design
-    // doc §4 names no expiry lever (only askPredatorRatio/askRevealRounds),
-    // so this app declares its own measured-free default: 3x the reveal
-    // window, long enough that a player mid-errand doesn't lose an ask
-    // they were about to act on, short enough that the ledger doesn't grow
-    // unbounded. A genuine ask ignored "resolves badly for the petitioner
-    // ... and the world says so later" (design doc §4); a predatory ask
-    // ignored is simply dropped -- the player dodged it, nothing to report.
-    const expiryWindow = this.tuning.askRevealRounds * 3;
-    for (const ask of getAllAsks(world)) {
-      if (ask.status !== 'open') continue;
-      if (tick - ask.offeredTick < expiryWindow) continue;
-      markAskIgnored(world, ask.id);
-      if (ask.truth === 'genuine') {
-        this.pushWorldMoved('ask-ignored', `${askSubjectName(ask, world)} needed help that never came.`);
-      }
-    }
-
     // A predatory ask's reveal, once its window has elapsed.
     for (const ask of dueReveals(world, tick, this.tuning.askRevealRounds)) {
-      const consequence = resolveAskConsequence(ask);
       const subjectName = askSubjectName(ask, world);
+      if (ask.status !== 'helped') {
+        // The player never bit: the reveal is free, and named.
+        markAskRevealed(world, ask.id, tick);
+        this.pushWorldMoved('ask-revealed', `${subjectName}'s story wasn't true. You never bit.`);
+        continue;
+      }
+      const consequence = resolveAskConsequence(ask);
       switch (consequence.kind) {
         case 'coin-lost': {
           const player = world.entities[world.playerId];
@@ -2010,6 +1998,19 @@ export class GameSession {
       markAskRevealed(world, ask.id, tick);
       this.pushWorldMoved('ask-revealed', `${subjectName}'s story wasn't true.`);
     }
+    // Age out a GENUINE ask nobody answered within the reveal window
+    // (stitch ruling, wave 10: one cadence for both truths -- the con shows
+    // its hand after askRevealRounds, and a real need left that long
+    // "resolves badly for the petitioner ... and the world says so later",
+    // design doc §4). Predatory asks never reach this loop: the reveal step
+    // above already resolved them, at no cost when the player never bit.
+    for (const ask of getAllAsks(world)) {
+      if (ask.status !== 'open' || ask.truth !== 'genuine') continue;
+      if (tick - ask.offeredTick < this.tuning.askRevealRounds) continue;
+      markAskIgnored(world, ask.id);
+      this.pushWorldMoved('ask-ignored', `${askSubjectName(ask, world)} needed help that never came.`);
+    }
+
 
     // Offer a fresh ask for the player's district, at most one open at a
     // time (maybeOfferAsk's own gate).
@@ -2264,22 +2265,16 @@ export class GameSession {
       // WO-B1-7 (slice B1 §3, design lock 4): every known play-mode `/word`
       // above has already returned by this point -- anything left is
       // genuinely unknown. Costs no turn and never reaches the interpreter
-      // (matches the Phase-9 playtest finding this whole WO exists to fix:
-      // an unknown slash command used to fall through to the LLM as free
-      // prose). Honesty floor: cli-display's own `renderUnknownCommand`
-      // (this WO's contract, ADDENDUM-game-core) is not present in this
-      // isolated worktree yet -- rendered here as a plain inline string
-      // instead of importing a function that does not exist yet; swap in
-      // the real renderer once cli-display's own WO lands (their render
-      // call site, not this domain's -- src/display/** is out of scope).
+      // (the Phase-9 playtest finding this WO exists to fix: an unknown
+      // slash command used to fall through to the LLM as free prose).
+      // Stitched at wave 10: rendered by cli-display's own renderUnknownCommand.
       const info = computeUnknownCommandInfo(trimmed, this.mode);
-      if (info.nearest) {
-        const familyNote = info.family === 'director'
-          ? ` (${info.nearest} lives in director mode — type /director first)`
-          : '';
-        return `Unknown command "${playCmd}". Did you mean ${info.nearest}?${familyNote}\nValid now: ${info.validNow.join(', ')}`;
-      }
-      return `Unknown command "${playCmd}".\nValid now: ${info.validNow.join(', ')}`;
+      return renderUnknownCommand({
+        input: playCmd,
+        nearest: info.nearest,
+        family: info.family ?? undefined,
+        validNow: info.validNow,
+      });
     }
 
     // F-6bc0721e (SLATE-6, death-as-setback per Director ruling R1): gate

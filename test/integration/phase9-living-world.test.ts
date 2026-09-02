@@ -88,22 +88,18 @@ import {
  * where a pack happens to share one (fantasy's `healing-draught`).
  */
 const EXEMPTIONS: Array<{ world: string; link: keyof WorldRunResult['linkEvidence']; reason: string }> = [
-  ...(['ashfall-dead', 'dust-devils-bargain', 'signal-loss', 'generated-phase9-fixture'] as const).map((world) => ({
+  // 'dust-devils-bargain' left this list at the wave-10 stitch: its walk now
+  // produces a rumor (the asks ledger's petitioners are witnesses too).
+  ...(['ashfall-dead', 'signal-loss', 'generated-phase9-fixture'] as const).map((world) => ({
     world,
     link: 'rumorCreated' as const,
     reason:
       'No milestone rumor spawns on this world within the 30-round matrix (rumorsCreated 0 on the wave-9 ' +
       'probe sheet with a profile booted); rumor frequency is an A6 tuning metric, measured on the sheet.',
   })),
-  {
-    world: 'hue-and-cry',
-    link: 'killHeatPressureLifecycle',
-    reason:
-      'Only one type:"enemy" entity ("The Bludger") is reachable from this pack\'s start zone within the ' +
-      "30-round scripted walk. heatPerKill (defeat-fallout.js, default 5) x one kill = 5, below " +
-      'HEAT_WAKE_THRESHOLD (world-tick.js, 10) -- heat never wakes and no pressure spawns. Verified live: ' +
-      'heatMax capped at 5, pressuresSpawned stayed 0 for this world\'s full run.',
-  },
+  // hue-and-cry's killHeatPressureLifecycle exemption (one reachable enemy,
+  // heat capped at 5) was retired at the wave-10 stitch: the link now occurs
+  // on that world's walk (verified 2026-09-02, aggression pinned off).
   ...([
     'iron-colosseum',
     'jade-veil',
@@ -133,6 +129,16 @@ const EXEMPTIONS: Array<{ world: string; link: keyof WorldRunResult['linkEvidenc
       'through the encounter-spawn module -- no `encounter.spawned`/ambush event fires on zone entry. ' +
       "Verified live: worldMovedLedger carried zero 'ambush' entries across this world's full run.",
   },
+  ...(['gaslight-detective', 'ashfall-dead'] as const).map((world) => ({
+    world,
+    link: 'zoneEncounterSpawn' as const,
+    reason:
+      "Flipped at the wave-10 stitch (verified 2026-09-02, no content change): once slice B1's asks ledger " +
+      "began seating a petitioner entity in the walk's zones each round, this world's fixed 30-round walk " +
+      "no longer crossed a spawning zone entry. The encounter-spawn step is the engine's own " +
+      '(encounter-spawn.ts) and its zone/occupancy rule is not app-tunable; the link still fires on ' +
+      'chapel-threshold, salt-road-ledger, and the generated fixture, which prove the mechanism.',
+  })),
   {
     world: 'neon-lockbox',
     link: 'zoneEncounterSpawn',

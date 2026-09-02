@@ -39,9 +39,24 @@ describe('runHostileTurn', () => {
     expect(isHostileAware(engine.world, 'crypt-stalker')).toBe(false);
   });
 
-  it('a non-aware hostile never acts, even at default tuning', () => {
-    const result = runHostileTurn(engine, resolveTuning());
+  it("a hostile outside the player's zone never acts, even at default tuning", () => {
+    // A fresh game: player at chapel-entrance, crypt-stalker two zones away.
+    const apart = createGame();
+    const result = runHostileTurn(apart, resolveTuning());
     expect(result).toEqual({ events: [], telegraphs: [] });
+    expect(isHostileAware(apart.world, 'crypt-stalker')).toBe(false);
+  });
+
+  it("a live hostile sharing the player's zone becomes aware at the hostile turn and telegraphs (co-location, wave-10 stitch)", () => {
+    // beforeEach walked the player to vestry-door, the stalker's own zone,
+    // through real move events; the zone-entry trigger alone is not what
+    // this test relies on -- awareness is asserted false first, then the
+    // hostile turn itself marks it (the fourth trigger) before acting.
+    expect(isHostileAware(engine.world, 'crypt-stalker')).toBe(false);
+    const result = runHostileTurn(engine, resolveTuning());
+    expect(isHostileAware(engine.world, 'crypt-stalker')).toBe(true);
+    expect(result.events).toEqual([]);
+    expect(result.telegraphs).toEqual([{ hostileId: 'crypt-stalker', hostileName: 'Crypt Stalker' }]);
   });
 
   it('telegraphs the round it becomes aware and decides to attack, then lands the round after (default "telegraphed")', () => {

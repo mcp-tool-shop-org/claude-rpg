@@ -124,6 +124,12 @@ export type WorldMovedEventKind =
   | 'ambush'
   | 'mood-transition'
   | 'rumor-mutated'
+  | 'ask-offered'
+  | 'ask-helped'
+  | 'ask-revealed'
+  | 'ask-ignored'
+  | 'deed-recognized'
+  | 'gratitude-repaid'
   /**
    * WO-B1-10 (slice B1 §5, design lock 8): a genuine ask the player helped —
    * headline is game-core's same-round recognitionLine text (or an
@@ -173,6 +179,12 @@ const WORLD_MOVED_KIND_ORDER: readonly WorldMovedEventKind[] = [
   // predates slice B1.
   'ask-helped',
   'ask-revealed',
+  // Stitch (wave 10): game-core's WorldMovedKind also carries the two
+  // ask kinds below; appended after narrative-llm's pair, same rule.
+  'ask-offered',
+  'ask-ignored',
+  'deed-recognized',
+  'gratitude-repaid',
 ];
 
 const WORLD_MOVED_KIND_LABELS: Record<WorldMovedEventKind, string> = {
@@ -188,6 +200,10 @@ const WORLD_MOVED_KIND_LABELS: Record<WorldMovedEventKind, string> = {
   // per ADDENDUM-narrative-llm.md — coordinator ratifies at stitch.
   'ask-helped': 'Deeds remembered',
   'ask-revealed': 'Marks the street left on you',
+  'ask-offered': 'Asks made of you',
+  'ask-ignored': 'Help left ungiven',
+  'deed-recognized': 'Deeds recognized',
+  'gratitude-repaid': 'Gratitude repaid',
 };
 
 // --- Computation ---

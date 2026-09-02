@@ -351,10 +351,16 @@ export function markAskExpired(world: WorldState, id: string): Ask | undefined {
   return updateAsk(world, id, { status: 'expired' });
 }
 
-/** Predatory asks helped and not yet revealed, whose reveal window has elapsed. */
+/**
+ * Predatory asks whose reveal window has elapsed and that are not yet
+ * revealed -- helped (the con pays off) OR still open (the player never
+ * bit; the world shows the con's hand anyway, at no cost). Stitch ruling,
+ * wave 10: the reveal is what makes the earlier ambiguity legible either
+ * way; only a HELPED ask carries a consequence (game.ts's reveal step).
+ */
 export function dueReveals(world: WorldState, tick: number, revealRounds: number): Ask[] {
   return getAllAsks(world).filter(
-    (a) => a.truth === 'predatory' && a.status === 'helped' && tick - a.offeredTick >= revealRounds,
+    (a) => a.truth === 'predatory' && (a.status === 'helped' || a.status === 'open') && tick - a.offeredTick >= revealRounds,
   );
 }
 

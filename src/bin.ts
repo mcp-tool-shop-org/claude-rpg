@@ -161,8 +161,16 @@ function installEarlySigintGuard(): () => void {
  */
 function question(rlInst: ReturnType<typeof createInterface>, promptText: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    rlInst.question(promptText, resolve);
-    rlInst.once('close', () => reject(new Error('__STDIN_CLOSED__')));
+    // ai-playtest finding (2026-09-01): the close listener was never removed
+    // on the happy path, so every prompt added one and Node warned at eleven
+    // (MaxListenersExceededWarning on every playtest seat's stderr). Mirrors
+    // src/character/prompts.ts's own once/off pair.
+    const onClose = () => reject(new Error('__STDIN_CLOSED__'));
+    rlInst.question(promptText, (answer) => {
+      rlInst.off('close', onClose);
+      resolve(answer);
+    });
+    rlInst.once('close', onClose);
   });
 }
 

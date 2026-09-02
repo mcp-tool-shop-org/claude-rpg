@@ -211,6 +211,12 @@ export function renderPlayScreen(opts: {
    */
   combatLines?: string[];
   /**
+   * Stitch (wave 10, slice B1 §5, lock 8): game-core's acknowledgment line
+   * for a genuine ask helped this turn. Rendered directly under the combat
+   * channel; absent renders nothing.
+   */
+  recognitionLine?: string;
+  /**
    * WO-B1-18 (slice B1 §3, lock 5): the per-context command strip
    * (contextual-suggestions.ts's `generateCommandStrip`) -- state-derived,
    * always-true affordances (`talk to <npc>`, `go <exit>`, `attack
@@ -249,6 +255,9 @@ export function renderPlayScreen(opts: {
       const styled = kind === 'kill' ? critical(`  ${line}`) : kind === 'hit' ? danger(`  ${line}`) : `  ${line}`;
       parts.push(styled);
     }
+  }
+  if (opts.recognitionLine) {
+    parts.push(yellow(`  ${opts.recognitionLine}`));
   }
 
   // Narration

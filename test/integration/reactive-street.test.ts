@@ -351,9 +351,21 @@ describe('WO-B1-21 proof 2 -- enemy turn (design doc §2, ADDENDUM-COMMON design
         await hDefault.play(input);
       }
 
-      expect(JSON.stringify(hOff.session.engine.world.eventLog)).toBe(
-        JSON.stringify(hDefault.session.engine.world.eventLog),
-      );
+      // Stitch (wave 10): co-location now makes a hostile aware (hostile-
+      // turn.ts's fourth trigger), so the default run legitimately carries
+      // hostile-turn artifacts the 'off' run must not. The pin is therefore
+      // asserted directly: 'off' leaves no awareness/telegraph globals and
+      // no hostile-initiated combat event, while the default run (same seed,
+      // same script) does -- proving the switch is what makes the difference.
+      const offWorld = hOff.session.engine.world;
+      const defaultWorld = hDefault.session.engine.world;
+      const hostileGlobals = (w: typeof offWorld) => Object.keys(w.globals).filter((k) => k.startsWith('hostile_'));
+      const hostileCombat = (w: typeof offWorld) =>
+        w.eventLog.filter((e) => e.type.startsWith('combat.') && JSON.stringify(e.payload).includes('ash-ghoul'));
+      expect(hostileGlobals(offWorld), "'off' must leave no awareness/telegraph globals").toEqual([]);
+      expect(hostileCombat(offWorld), "'off' must produce no hostile combat events").toEqual([]);
+      expect(hostileGlobals(defaultWorld).length, 'the default run must show the hostile turn ran').toBeGreaterThan(0);
+      expect(hostileCombat(defaultWorld).length, 'the default run must show the hostile landing hits').toBeGreaterThan(0);
     },
   );
 });

@@ -3683,6 +3683,6 @@ describe('Slice B1 §3 (WO-B1-7): unknown play-mode slash command', () => {
     const reply = await h.session.processInput('/xyzzyplugh');
 
     expect(h.session.history.getAll().length).toBe(before);
-    expect(reply).toContain('Valid now:');
+    expect(reply).toContain('Right now you can:');
   });
 });

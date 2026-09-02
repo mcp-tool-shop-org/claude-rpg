@@ -1,3 +1,4 @@
+import { DIRECTOR_COMMANDS } from '../display/director-renderer.js';
 // WO-B1-7 (slice B1 §3, design lock 4, ADDENDUM-COMMON): the parser-layer
 // reply for an unknown play-mode `/word` -- costs no turn and never reaches
 // the interpreter. Computes `{ nearest, family, validNow }`
@@ -31,12 +32,11 @@ export const PLAY_COMMAND_NAMES: readonly string[] = [
  * long-term fix (noted in this domain's skipped[]).
  */
 export const DIRECTOR_COMMAND_NAMES: readonly string[] = [
-  'inspect', 'faction', 'zone', 'trace', 'rumors', 'pressures', 'world',
-  'aftermath', 'factions', 'people', 'npc', 'leverage', 'map', 'party',
-  'item', 'districts', 'district', 'market', 'trade', 'craft', 'materials',
-  'salvage', 'jobs', 'contracts', 'contract', 'accepted', 'arcs', 'endgame',
-  'finale', 'status', 'stats', 'tuning', 'chronicle', 'history', 'snapshot',
-  'divergences', 'back', 'b',
+  // Stitch (wave 10): derived from cli-display's exported DIRECTOR_COMMANDS
+  // (the cross-domain export this domain's skipped[] asked for) so the two
+  // lists cannot drift; `back`/`b` are handled outside that table.
+  ...DIRECTOR_COMMANDS.map((c) => c.cmd.slice(1).split(' ')[0]),
+  'back', 'b',
 ];
 
 /** Levenshtein edit distance -- classic DP, O(m*n), fine for short command names. */

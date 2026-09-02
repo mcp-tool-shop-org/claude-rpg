@@ -120,7 +120,7 @@ function divider(): string {
  * any row -- matching the plain-name convention every sibling reference
  * table in this domain already uses.
  */
-const DIRECTOR_COMMANDS: { cmd: string; desc: string }[] = [
+export const DIRECTOR_COMMANDS: { cmd: string; desc: string }[] = [
   { cmd: '/inspect <entity-id>', desc: 'Show entity cognition state' },
   { cmd: '/faction <faction-id>', desc: 'Show faction beliefs and alert' },
   { cmd: '/zone <zone-id>', desc: 'Show zone properties' },

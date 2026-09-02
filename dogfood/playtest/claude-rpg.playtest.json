@@ -144,6 +144,26 @@
     {
       "id": "player-understood-what-to-do",
       "check": "The player could always tell what inputs were possible and what the game expected; prompts and menus were clear."
+    },
+    {
+      "id": "kill-line-seen",
+      "check": "When the player defeated an enemy, the game itself printed a deterministic combat line naming the kill (not only narrator prose), in a reserved block above the narration."
+    },
+    {
+      "id": "took-damage",
+      "check": "An enemy hit the player at least once: a combat line named the attacker and the damage, and the player's HP on screen went down. A telegraph line ('readies', 'raises', or similar) appeared the round before the hit landed."
+    },
+    {
+      "id": "con-revealed-fair",
+      "check": "Someone asked the player for help (coin, an errand, an escort, holding an item, vouching); if the player helped a con, the reveal came later with a named cost, and the reveal felt fair given cues the game had planted (a rumor, a contradiction, a too-eager offer), not arbitrary."
+    },
+    {
+      "id": "recognized",
+      "check": "After the player helped a genuine petitioner, the game acknowledged it the same round (a named line), and a later view (/status, /leverage, a recap, an NPC's greeting) showed the deed remembered, a faction's standing moved, or an honorific."
+    },
+    {
+      "id": "unknown-command-answered",
+      "check": "A slash command the game does not know was answered at once with a correction or the commands valid now, without costing a turn or being narrated as an in-world action."
     }
   ],
   "screenChars": 7000,

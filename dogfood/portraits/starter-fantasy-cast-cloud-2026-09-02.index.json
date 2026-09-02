@@ -1,0 +1,150 @@
+{
+  "emittedAt": "2026-09-02T04:29:33.025Z",
+  "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+  "graphs": [
+    {
+      "entityId": "pilgrim",
+      "prefix": "starter-fantasy-pilgrim-r0-0",
+      "seed": 3465954364175499,
+      "descriptionHash": "8d9a5da792566ec8dd41ec7de91dc4ff9e2f291de7f0cdb3b6b336b0d4a1e40e",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "pilgrim",
+      "prefix": "starter-fantasy-pilgrim-r0-1",
+      "seed": 3465954364175500,
+      "descriptionHash": "8d9a5da792566ec8dd41ec7de91dc4ff9e2f291de7f0cdb3b6b336b0d4a1e40e",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "pilgrim",
+      "prefix": "starter-fantasy-pilgrim-r0-2",
+      "seed": 3465954364175501,
+      "descriptionHash": "8d9a5da792566ec8dd41ec7de91dc4ff9e2f291de7f0cdb3b6b336b0d4a1e40e",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "brother-aldric",
+      "prefix": "starter-fantasy-brother-aldric-r0-0",
+      "seed": 4665552129421289,
+      "descriptionHash": "03220ddfa070da988d0610e6a026d90062ccde5a3a1f3dae130b661f12a05168",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "brother-aldric",
+      "prefix": "starter-fantasy-brother-aldric-r0-1",
+      "seed": 4665552129421290,
+      "descriptionHash": "03220ddfa070da988d0610e6a026d90062ccde5a3a1f3dae130b661f12a05168",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "brother-aldric",
+      "prefix": "starter-fantasy-brother-aldric-r0-2",
+      "seed": 4665552129421291,
+      "descriptionHash": "03220ddfa070da988d0610e6a026d90062ccde5a3a1f3dae130b661f12a05168",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "sister-maren",
+      "prefix": "starter-fantasy-sister-maren-r0-0",
+      "seed": 8223240167636469,
+      "descriptionHash": "a3743f97e346c9ca73dd8314cf0583be95f194b0d742758d8d6ed661b10a438f",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "sister-maren",
+      "prefix": "starter-fantasy-sister-maren-r0-1",
+      "seed": 8223240167636470,
+      "descriptionHash": "a3743f97e346c9ca73dd8314cf0583be95f194b0d742758d8d6ed661b10a438f",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "sister-maren",
+      "prefix": "starter-fantasy-sister-maren-r0-2",
+      "seed": 8223240167636471,
+      "descriptionHash": "a3743f97e346c9ca73dd8314cf0583be95f194b0d742758d8d6ed661b10a438f",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "crypt-stalker",
+      "prefix": "starter-fantasy-crypt-stalker-r0-0",
+      "seed": 5087968718352347,
+      "descriptionHash": "87c8d2883e1343342a27191ae2b68b59bcb96f548ec827f51ee78ca6034951c7",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "crypt-stalker",
+      "prefix": "starter-fantasy-crypt-stalker-r0-1",
+      "seed": 5087968718352348,
+      "descriptionHash": "87c8d2883e1343342a27191ae2b68b59bcb96f548ec827f51ee78ca6034951c7",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "crypt-stalker",
+      "prefix": "starter-fantasy-crypt-stalker-r0-2",
+      "seed": 5087968718352349,
+      "descriptionHash": "87c8d2883e1343342a27191ae2b68b59bcb96f548ec827f51ee78ca6034951c7",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "ash-ghoul",
+      "prefix": "starter-fantasy-ash-ghoul-r0-0",
+      "seed": 2220512888884720,
+      "descriptionHash": "7c38b506e11dcb6b6594250f6f5f561056e9cb2c265701b774d55943327b410b",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "ash-ghoul",
+      "prefix": "starter-fantasy-ash-ghoul-r0-1",
+      "seed": 2220512888884721,
+      "descriptionHash": "7c38b506e11dcb6b6594250f6f5f561056e9cb2c265701b774d55943327b410b",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "ash-ghoul",
+      "prefix": "starter-fantasy-ash-ghoul-r0-2",
+      "seed": 2220512888884722,
+      "descriptionHash": "7c38b506e11dcb6b6594250f6f5f561056e9cb2c265701b774d55943327b410b",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "crypt-warden",
+      "prefix": "starter-fantasy-crypt-warden-r0-0",
+      "seed": 1698699157870478,
+      "descriptionHash": "dceecdd14ecbf8333d67f0d98b0ebdb99ea663c40ec7d2d6bb93acf67f4184d5",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "crypt-warden",
+      "prefix": "starter-fantasy-crypt-warden-r0-1",
+      "seed": 1698699157870479,
+      "descriptionHash": "dceecdd14ecbf8333d67f0d98b0ebdb99ea663c40ec7d2d6bb93acf67f4184d5",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    },
+    {
+      "entityId": "crypt-warden",
+      "prefix": "starter-fantasy-crypt-warden-r0-2",
+      "seed": 1698699157870480,
+      "descriptionHash": "dceecdd14ecbf8333d67f0d98b0ebdb99ea663c40ec7d2d6bb93acf67f4184d5",
+      "workflowSha256": "0f586da32e7e3a58480e1ab3e4f5139ed2d4bf2b24e864e50193320856c2761c",
+      "loraNameOverride": "SaintEloi__sfhd-style-v1-lora__sfhd_style_v1_1250.safetensors"
+    }
+  ]
+}

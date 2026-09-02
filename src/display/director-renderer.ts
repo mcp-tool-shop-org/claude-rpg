@@ -54,7 +54,9 @@ import {
   type NpcProfile,
   type NpcActionResult,
   type NpcObligationLedger,
+  getObligationsToward,
   type LeverageState,
+  type LeverageCurrency,
   type StrategicMap,
   type PartyState,
   type DistrictEconomy,
@@ -70,6 +72,11 @@ import {
   // from the mechanic it's reporting on.
   QUIET_ROUNDS_BEFORE_DECAY,
 } from '@ai-rpg-engine/modules';
+// WO-A5-16 (slice A5 §6, lock 6): the RumorEngine read side. formatRumorBoard
+// is the engine's own collapse-to-one-line-per-(subject,key) formatter
+// (rumor-system's format.ts) -- no director-text renderer exists for its
+// RumorBoardLine[] output (that part is this domain's own DRAFT, below).
+import { formatRumorBoard, type Rumor, type RumorBoardLine } from '@ai-rpg-engine/rumor-system';
 import { formatFinaleForDirector, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
@@ -216,6 +223,39 @@ export type WorldLedgerSummary = {
   factionAlerts: Record<string, number>;
   /** `getWorldTickState(world).districtTones[<current district>]`. */
   districtTone?: string;
+  /**
+   * WO-A5-3 (slice A5 §4, lock 4): leverage income this round -- the diff of
+   * `getLeverageState(player.custom)` across `runWorldRound`, keyed by
+   * currency. Absent or all-zero currencies mean formatLeverageWorldLedgerBlock
+   * omits the "Income this round" line entirely (see its own doc comment).
+   */
+  income?: Partial<Record<LeverageCurrency, number>>;
+  /**
+   * WO-A5-3: the decay threshold to echo alongside `quietRounds` on
+   * `/leverage`. Optional -- defaults to `QUIET_ROUNDS_BEFORE_DECAY` (the
+   * SAME constant `formatWorldLedgerLine`'s `/status` line already reads)
+   * when game-core omits it, so the two screens can never disagree about
+   * what "quiet rounds to cooling" counts toward.
+   */
+  decayAfter?: number;
+};
+
+/**
+ * WO-A5-1 (slice A5 §1, lock 1): one district's market-quote data, built by
+ * game-core's director-opts assembly via the engine's own `quoteBuyPrice`
+ * (no hand-rolled price math -- see ADDENDUM-game-core.md's WO-A5-1). This
+ * domain only renders it (formatMarketQuoteLine below).
+ */
+export type MarketQuoteSummary = {
+  districtId: string;
+  /** Absent when the district has no controlling faction -- the quote line is omitted in that case (see formatMarketQuoteLine). */
+  controllingFactionId?: string;
+  /** The pack's item catalog's first tradeable item stocked in this district (fallback: the first catalog item) -- game-core's choice, not this domain's. */
+  sampleItemId: string;
+  /** `quoteBuyPrice(world, sampleItemId, genre)`'s result for this district. */
+  quotedPrice: number;
+  /** The same item's unmodified base price, for the "vs base" percentage. */
+  basePrice: number;
 };
 
 export type ExecuteDirectorCommandOptions = {
@@ -250,6 +290,15 @@ export type ExecuteDirectorCommandOptions = {
   finaleOutline?: FinaleOutline | null;
   /** WO-A4-8: see WorldLedgerSummary's doc comment. */
   worldLedger?: WorldLedgerSummary;
+  /** WO-A5-1 (slice A5 §1, lock 1): see MarketQuoteSummary's doc comment. One entry per district; /market and /trade look up their district(s) by `districtId`. */
+  marketQuotes?: MarketQuoteSummary[];
+  /**
+   * WO-A5-4 (slice A5 §6, lock 6): the raw rumors game-core's `getRumorBoard()`
+   * exposes (the engine's own `formatRumorBoard` input -- ADDENDUM-game-core.md).
+   * `/rumors` calls `formatRumorBoard` on this itself so the collapse-to-
+   * one-line-per-(subject,key) logic stays the engine's, not a reimplementation.
+   */
+  rumorBoardInput?: Rumor[];
 };
 
 /**
@@ -281,6 +330,147 @@ export function formatWorldLedgerLine(ledger: WorldLedgerSummary | undefined): s
   return segments.join(' · ');
 }
 
+/**
+ * WO-A5-13 (slice A5 §4, lock 4): the `/leverage` ledger block appended
+ * after the existing wallet -- DRAFT lines, coordinator ratifies. Unlike
+ * `formatWorldLedgerLine`'s `/status` line (byte-absent when heat/alerts/
+ * tone are all empty, since `/status` is a compact multi-signal snapshot),
+ * `/leverage` always renders this block when `worldLedger` is present --
+ * this screen exists specifically to show the heat/income ledger, so a
+ * quiet round ("Heat 0", no alerts, no income) is still informative here.
+ */
+function formatLeverageWorldLedgerBlock(ledger: WorldLedgerSummary): string[] {
+  const decayAfter = ledger.decayAfter ?? QUIET_ROUNDS_BEFORE_DECAY;
+  const cooling = ledger.quietRounds >= decayAfter;
+  const lines: string[] = [
+    cooling
+      ? `  Heat ${ledger.heat} · cooling`
+      : `  Heat ${ledger.heat} · ${ledger.quietRounds}/${decayAfter} quiet rounds to cooling`,
+  ];
+  const alertEntries = Object.entries(ledger.factionAlerts ?? {}).filter(([, level]) => level > 0);
+  for (const [factionId, level] of alertEntries) {
+    lines.push(`  Alerts: ${factionId} ${level}`);
+  }
+  const incomeEntries = Object.entries(ledger.income ?? {}).filter(([, amount]) => (amount ?? 0) > 0);
+  if (incomeEntries.length > 0) {
+    const incomeStr = incomeEntries.map(([currency, amount]) => `+${amount} ${currency}`).join(' · ');
+    lines.push(`  Income this round: ${incomeStr}`);
+  }
+  return lines;
+}
+
+/**
+ * WO-A5-12 (slice A5 §1, lock 1): faction standing label for the `/market`
+ * and `/trade` quote line -- DRAFT vocabulary, coordinator ratifies.
+ * Thresholds mirror trade-value.ts's own `computeFactionAttitudeMultiplier`
+ * bands (collapsed from its 7 price tiers to 4 labels), so the word printed
+ * next to a quote always agrees with the markup/discount the quote itself
+ * already shows: <=-30 is the same cut where that multiplier crosses into
+ * its 1.3x/1.5x "gouge" tier, >60 the same cut where it reaches the best
+ * 0.85x discount tier.
+ */
+function deriveFactionStandingLabel(reputation: number): string {
+  if (reputation <= -30) return 'hostile';
+  if (reputation <= 10) return 'wavering';
+  if (reputation <= 60) return 'favorable';
+  return 'allied';
+}
+
+/**
+ * WO-A5-12: "Merchants here quote {item} at {price} ({+N%|-N%} vs base ·
+ * {faction}: {standing})" -- DRAFT, listed verbatim for coordinator review.
+ * Returns undefined when the district has no controlling faction (per the
+ * work order's "absent when no controlling faction" rule). Reputation
+ * composition mirrors trade-core.ts's own internal read
+ * (`world.factions[f].reputation + globals['reputation_<f>']`, verified
+ * against the installed 3.11 dist) -- the exact number `quoteBuyPrice`
+ * itself priced from, not a re-derivation the price could someday disagree
+ * with.
+ */
+function formatMarketQuoteLine(
+  quote: MarketQuoteSummary,
+  world: WorldState,
+  itemCatalog?: ItemCatalog | null,
+): string | undefined {
+  if (!quote.controllingFactionId) return undefined;
+  const itemName = itemCatalog?.items.find((i) => i.id === quote.sampleItemId)?.name ?? quote.sampleItemId;
+  const pctDelta = quote.basePrice > 0
+    ? Math.round(((quote.quotedPrice - quote.basePrice) / quote.basePrice) * 100)
+    : 0;
+  const sign = pctDelta >= 0 ? '+' : '';
+  const factionName = world.factions[quote.controllingFactionId]?.name ?? quote.controllingFactionId;
+  const reputation = (world.factions[quote.controllingFactionId]?.reputation ?? 0)
+    + Number(world.globals?.[`reputation_${quote.controllingFactionId}`] ?? 0);
+  const standing = deriveFactionStandingLabel(reputation);
+  return `Merchants here quote ${itemName} at ${quote.quotedPrice} (${sign}${pctDelta}% vs base · ${factionName}: ${standing})`;
+}
+
+/**
+ * WO-A5-14 (slice A5 §3, lock 3): "same two lines the dialogue prompt gets,
+ * in the director register" -- deliberately mirrors narrative-llm's WO-A5-6
+ * DRAFT wording exactly ("Current goal: ...", "Standing with you: owes you
+ * a favor" / "you owe them a debt" / "was betrayed by you" / neither -> line
+ * absent) so `/npc` and the dialogue prompt never tell two different
+ * stories about the same NPC. Coded against ADDENDUM-narrative-llm.md's
+ * WO-A5-6 contract -- that domain owns src/dialogue/**, so this is an
+ * independent implementation from the same engine-typed inputs
+ * (NpcProfile.goals, NpcObligationLedger), not a shared import; the two
+ * should read identically once both land, and any drift is a stitch-time
+ * reconciliation, not a bug in either alone.
+ */
+function formatNpcGoalObligationLines(
+  profile: NpcProfile,
+  obligations: NpcObligationLedger | undefined,
+  playerId: string,
+): string[] {
+  const lines: string[] = [];
+  const topGoal = profile.goals[0];
+  if (topGoal) {
+    lines.push(`  Current goal: ${topGoal.label}`);
+  }
+  if (obligations) {
+    const toward = getObligationsToward(obligations, playerId);
+    const wasBetrayed = toward.some((o) => o.kind === 'betrayed' && o.direction === 'player-owes-npc');
+    const owesFavor = toward.some((o) => o.direction === 'npc-owes-player');
+    const owesDebt = toward.some((o) => o.direction === 'player-owes-npc');
+    const standing = wasBetrayed
+      ? 'was betrayed by you'
+      : owesFavor
+        ? 'owes you a favor'
+        : owesDebt
+          ? 'you owe them a debt'
+          : undefined;
+    if (standing) lines.push(`  Standing with you: ${standing}`);
+  }
+  return lines;
+}
+
+/**
+ * WO-A5-16 (slice A5 §6, lock 6): "What the street believes" -- renders the
+ * engine's own `formatRumorBoard(...)` output (game-core supplies the raw
+ * `Rumor[]` input via `getRumorBoard()`). No engine director-text formatter
+ * exists for the board shape (rumor-system's format.ts exports structured
+ * `RumorBoardLine[]`, not rendered text) -- this text render is this
+ * domain's own DRAFT, coordinator ratifies.
+ */
+function formatRumorBoardForDirector(lines: RumorBoardLine[]): string {
+  const out: string[] = ['', `  ${bold('WHAT THE STREET BELIEVES')}`, ''];
+  for (const line of lines) {
+    const witnesses = `${line.witnessCount} witness${line.witnessCount === 1 ? '' : 'es'}`;
+    // RumorBoardLine carries `mutated` (boolean) and `hops` -- not a raw
+    // mutationCount (that field lives on the underlying Rumor, not on the
+    // collapsed board line rumor-system's format.ts exports) -- so "mutated
+    // over N hops" is the closest honest rendering of the doc's "mutation
+    // count" language from what this type actually gives us.
+    const mutation = line.mutated ? `, mutated over ${line.hops} hop${line.hops === 1 ? '' : 's'}` : '';
+    out.push(`  "${line.spoken}" (${witnesses}${mutation})`);
+    if (line.denied && line.denialLine) {
+      out.push(`    Denied: ${line.denialLine}`);
+    }
+  }
+  return out.join('\n');
+}
+
 /** Execute a director command and return the rendered output. */
 export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): string {
   const {
@@ -289,7 +479,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     leverageState, strategicMap, statusData, suggestedMove, situationTag, profileCustom,
     npcProfiles, lastNpcActions, npcObligations, partyState, profile, itemCatalog,
     districtEconomies, genre, activeOpportunities, arcSnapshot, endgameTriggers, finaleOutline,
-    worldLedger,
+    worldLedger, marketQuotes, rumorBoardInput,
   } = opts;
 
   const parts = command.trim().split(/\s+/);
@@ -336,21 +526,39 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
 
     case '/rumors': {
       const rumors = playerRumors ?? [];
-      if (rumors.length === 0) return '  No player rumors yet.';
       const factionFilter = parts[1];
-      const filtered = factionFilter
-        ? getRumorsKnownToFaction(rumors, factionFilter)
-        : rumors;
-      if (filtered.length === 0) return `  No rumors known to faction "${factionFilter}".`;
-      // F-de13eb60: this was one of 8 section headers in this switch
-      // rendering plain, uncolored text -- unlike renderDirectorHelp's own
-      // `${bold('DIRECTOR MODE')}` treatment above, despite all 9 serving the
-      // identical structural role (a boxed title between two divider()
-      // calls) within this same director-views renderer family.
-      const header = factionFilter
-        ? bold(`  PLAYER RUMORS — faction "${factionFilter}" (${filtered.length})`)
-        : bold(`  PLAYER RUMORS (${filtered.length})`);
-      return `\n${divider()}\n${header}\n${divider()}\n\n${filtered.map(formatRumorForDirector).join('\n\n')}\n`;
+      let output: string;
+      if (rumors.length === 0) {
+        output = '  No player rumors yet.';
+      } else {
+        const filtered = factionFilter
+          ? getRumorsKnownToFaction(rumors, factionFilter)
+          : rumors;
+        if (filtered.length === 0) {
+          output = `  No rumors known to faction "${factionFilter}".`;
+        } else {
+          // F-de13eb60: this was one of 8 section headers in this switch
+          // rendering plain, uncolored text -- unlike renderDirectorHelp's
+          // own `${bold('DIRECTOR MODE')}` treatment above, despite all 9
+          // serving the identical structural role (a boxed title between two
+          // divider() calls) within this same director-views renderer family.
+          const header = factionFilter
+            ? bold(`  PLAYER RUMORS — faction "${factionFilter}" (${filtered.length})`)
+            : bold(`  PLAYER RUMORS (${filtered.length})`);
+          output = `\n${divider()}\n${header}\n${divider()}\n\n${filtered.map(formatRumorForDirector).join('\n\n')}\n`;
+        }
+      }
+      // WO-A5-16 (slice A5 §6, lock 6): "What the street believes" -- after
+      // the player-side list above, regardless of whether that list itself
+      // was empty (the board can carry rumors even when the filtered
+      // player-side view above doesn't).
+      if (rumorBoardInput && rumorBoardInput.length > 0) {
+        const boardLines = formatRumorBoard(rumorBoardInput);
+        if (boardLines.length > 0) {
+          output += formatRumorBoardForDirector(boardLines);
+        }
+      }
+      return output;
     }
 
     case '/pressures': {
@@ -402,12 +610,25 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       if (!profile) return `  NPC "${npcId}" not found (or not a named NPC).`;
       const lastAction = actions.find((a) => a.action.npcId === npcId);
       const obligations = npcObligations?.get(npcId);
-      return formatNpcProfileForDirector(profile, lastAction, obligations);
+      let output = formatNpcProfileForDirector(profile, lastAction, obligations);
+      // WO-A5-14 (slice A5 §3, lock 3): see formatNpcGoalObligationLines's
+      // doc comment.
+      const goalObligationLines = formatNpcGoalObligationLines(profile, obligations, world.playerId);
+      if (goalObligationLines.length > 0) {
+        output += `\n${goalObligationLines.join('\n')}`;
+      }
+      return output;
     }
 
     case '/leverage': {
       if (!leverageState) return '  No leverage data available.';
-      return formatLeverageForDirector(leverageState);
+      let output = formatLeverageForDirector(leverageState);
+      // WO-A5-13 (slice A5 §4, lock 4): see formatLeverageWorldLedgerBlock's
+      // doc comment.
+      if (worldLedger) {
+        output += `\n${formatLeverageWorldLedgerBlock(worldLedger).join('\n')}\n`;
+      }
+      return output;
     }
 
     case '/map': {
@@ -437,7 +658,27 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
         const dDef = getDistrictDefinition(world, districtId);
         entries.push({ districtId, districtName: dDef?.name ?? districtId, economy });
       }
-      return formatAllDistrictEconomiesForDirector(entries);
+      let output = formatAllDistrictEconomiesForDirector(entries);
+      // WO-A5-12 (slice A5 §1, lock 1): per-district quote lines, grouped in
+      // their own section after the overview rather than interleaved --
+      // interleaving would mean reimplementing
+      // formatAllDistrictEconomiesForDirector's own per-district loop here,
+      // duplicating engine-owned tone/black-market formatting this domain
+      // doesn't own. Grouping keeps that engine render untouched while still
+      // showing each district's quote line, clearly labeled by district.
+      if (marketQuotes && marketQuotes.length > 0) {
+        const quoteLines: string[] = [];
+        for (const entry of entries) {
+          const quote = marketQuotes.find((q) => q.districtId === entry.districtId);
+          if (!quote) continue;
+          const line = formatMarketQuoteLine(quote, world, itemCatalog);
+          if (line) quoteLines.push(`  ${entry.districtName}: ${line}`);
+        }
+        if (quoteLines.length > 0) {
+          output += `\n\n  MARKET QUOTES\n${quoteLines.join('\n')}`;
+        }
+      }
+      return output;
     }
 
     case '/trade': {
@@ -448,7 +689,15 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       if (!economy) return `  No economy data for district "${districtId}".`;
       const dDef = getDistrictDefinition(world, districtId);
       const descriptor = deriveEconomyDescriptor(economy);
-      return formatEconomyForDirector(districtId, dDef?.name ?? districtId, economy, descriptor);
+      let output = formatEconomyForDirector(districtId, dDef?.name ?? districtId, economy, descriptor);
+      // WO-A5-12 (slice A5 §1, lock 1): see formatMarketQuoteLine's doc
+      // comment.
+      const quote = marketQuotes?.find((q) => q.districtId === districtId);
+      if (quote) {
+        const line = formatMarketQuoteLine(quote, world, itemCatalog);
+        if (line) output += `\n  ${line}`;
+      }
+      return output;
     }
 
     case '/chronicle': {

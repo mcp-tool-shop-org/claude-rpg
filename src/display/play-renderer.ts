@@ -148,6 +148,15 @@ export function renderPlayScreen(opts: {
    * of how many the channel supplies.
    */
   ambientLines?: string[];
+  /**
+   * WO-A5-15 (slice A5 §5, lock 5): the round's `encounter.spawned`
+   * describeEvent line ("Ambush: {name} in {zone}" -- scene-context.ts's
+   * existing case), surfaced as this screen's own banner register (matching
+   * the endgame banner just below) instead of only appearing buried inside
+   * the narration paragraph beneath it. Optional -- absent is
+   * byte-identical to every existing caller, none of which pass this yet.
+   */
+  ambushHeadline?: string;
 }): string {
   const parts: string[] = [];
 
@@ -156,6 +165,12 @@ export function renderPlayScreen(opts: {
     parts.push(makeTurnDivider(opts.turnNumber));
   } else {
     parts.push(makeDivider());
+  }
+
+  // Ambush headline (WO-A5-15) -- the round's headline when present,
+  // above the narration block per the work order.
+  if (opts.ambushHeadline) {
+    parts.push(critical(`  ── ${opts.ambushHeadline} ──`));
   }
 
   // Endgame approach banner (v2.1)

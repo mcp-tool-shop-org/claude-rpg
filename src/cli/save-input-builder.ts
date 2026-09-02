@@ -78,5 +78,8 @@ export function buildSaveInput(session: GameSession, savePath: string, packId?: 
     // rumorEngine precedent above, WO-A3-4).
     worldGenProposal: session.getWorldGenProposal(),
     worldSeed: session.getWorldSeed(),
+    // WO-A5-5 (slice A5 §7, stitched at wave 8): the round-by-round ledger,
+    // pre-serialized by game-core; undefined when empty.
+    worldMoved: session.getWorldMovedSnapshot(),
   };
 }

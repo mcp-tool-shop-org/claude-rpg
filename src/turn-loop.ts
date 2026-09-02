@@ -769,10 +769,10 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
         tone,
         npcPlayerPresence,
         playerProfile,
-        // WO-A5-4 (slice A5 §6, design lock 6): resolved for the SAME npcId
-        // being spoken to, same positional slot `playerRumors` used to
-        // occupy — see ExecuteTurnOpts.getHearerRumors's doc comment.
-        getHearerRumors ? getHearerRumors(interpreted.targetIds[0]) : [],
+        // Stitch (wave 8, design doc §6): the 4-valence playerRumors slot is
+        // retired from the dialogue path; hearer rumors ride narrative-llm's
+        // trailing `hearerRumors` parameter below.
+        undefined,
         worldPressures,
         lastNpcActions,
         economyContext,
@@ -791,6 +791,12 @@ export async function executeTurn(opts: ExecuteTurnOpts): Promise<TurnResult> {
         undefined,
         activeOpportunities,
         partyPresence,
+        // obligations: defaulted inside buildNPCDialogueContext from the
+        // world's persisted ledger (WO-A4-5).
+        undefined,
+        // WO-A5-4 / WO-A5-8 (slice A5 §6, design lock 6): resolved for the
+        // SAME npcId being spoken to — see ExecuteTurnOpts.getHearerRumors.
+        getHearerRumors ? getHearerRumors(interpreted.targetIds[0]) : [],
       );
 
       // Add voice cast to dialogue if immersion is active

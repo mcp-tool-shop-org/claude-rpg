@@ -142,7 +142,7 @@ export function buildSceneContext(
   return { narrationInput, perceivedEvents };
 }
 
-function describeEvent(event: ResolvedEvent): string {
+export function describeEvent(event: ResolvedEvent): string {
   const p = event.payload;
   switch (event.type) {
     case 'combat.contact.hit':

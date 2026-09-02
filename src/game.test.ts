@@ -3142,7 +3142,9 @@ describe('Slice A5 (WO-A5-1): market quote data (design lock 1)', () => {
 
   it('returns undefined (not a thrown error) when the session has no itemCatalog at all', async () => {
     const { createHarness } = await import('../test/helpers/game-harness.js');
-    const h = createHarness();
+    // Stitch (wave 8): createHarness now hands the pack catalog over like
+    // bin.ts runNew does; this proof wants the catalog-less session.
+    const h = createHarness({ gameOpts: { itemCatalog: undefined } });
 
     const quote = (h.session as unknown as { buildMarketQuote: () => unknown }).buildMarketQuote();
     expect(quote).toBeUndefined();

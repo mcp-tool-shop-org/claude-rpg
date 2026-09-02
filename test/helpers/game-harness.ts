@@ -1,7 +1,7 @@
 // Test harness for creating GameSession instances with fake Claude clients.
 // Provides a quick way to set up a game, execute turns, and inspect state.
 
-import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import { createGame, itemCatalog as fantasyItemCatalog } from '@ai-rpg-engine/starter-fantasy';
 // WO-A3-7 (slice A3, run swarm-1788288802-f5a0, wave 6, "tests" domain):
 // the engine package the design doc admits this slice (docs/
 // living-world-slice-a3.md §3) -- already an installed dependency
@@ -29,6 +29,7 @@ import {
   saveSession,
   type SaveSessionInput,
   type SavedSession,
+  loadWorldMovedFromSession,
 } from '../../src/session/session.js';
 import { getPackById } from '../../src/character/packs.js';
 import { validateEngineState } from '../../src/cli/engine-state-validator.js';
@@ -151,6 +152,11 @@ export function createHarness(opts: HarnessOptions = {}): GameHarness {
     title: 'Test Game',
     tone: 'dark fantasy',
     genre: 'fantasy',
+    // Stitch (wave 8): the pack's item catalog rides the fresh session the
+    // way bin.ts runNew hands it over (and resumeHarness already does) --
+    // without it no /market or /trade quote can be priced (WO-A5-1 reads
+    // GameConfig.itemCatalog). gameOpts overrides still win.
+    itemCatalog: fantasyItemCatalog,
     ...opts.gameOpts,
   });
 
@@ -395,6 +401,8 @@ export async function resumeHarness(
     // the serialized snapshot itself (GameConfig.rumorEngineSnapshot); the
     // deserializeSafe above runs only to expose restore warnings to tests.
     ...(rumorSnapshotRaw ? { rumorEngineSnapshot: rumorSnapshotRaw } : {}),
+    // WO-A5-5 (stitched at wave 8): mirrors bin.ts runLoad.
+    ...(savedSession.worldMoved ? { worldMoved: loadWorldMovedFromSession(savedSession) } : {}),
     ...(resumedProposal !== undefined ? { worldGenProposal: resumedProposal } : {}),
     ...(savedSession.worldSeed !== undefined ? { worldSeed: savedSession.worldSeed } : {}),
     ...opts.gameOpts,

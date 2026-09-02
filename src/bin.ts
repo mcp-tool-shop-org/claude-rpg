@@ -49,6 +49,7 @@ import {
   getSavePath,
   getDefaultSaveDir,
   type SavedSession,
+  loadWorldMovedFromSession,
 } from './session/session.js';
 import { renderArchiveBrowser } from './display/archive-browser.js';
 import { presentError, renderError, type ErrorPresentation } from './cli/error-presenter.js';
@@ -729,6 +730,9 @@ async function runLoad(): Promise<void> {
     // ordering. `undefined` on a v1/v2 save is a legitimate "no RumorEngine
     // data yet" case: the constructor starts a fresh engine instance.
     rumorEngineSnapshot: savedSession.rumorEngine,
+    // WO-A5-5 (slice A5 §7, stitched at wave 8): the "world moved" ledger
+    // resumes with the session; [] on a save that predates it.
+    worldMoved: loadWorldMovedFromSession(savedSession),
   }, (calls) => { presentationBox.calls = calls; }), streamBox));
 
   // WO-A4-7 (slice A4, coordinator honesty-floor finding): see the doc
@@ -1511,6 +1515,9 @@ function buildUnifiedRecap(
     hasCrafting ? craftingData : undefined,
     opportunityRecapEntries.length > 0 ? opportunityRecapEntries : undefined,
     arcRecapData,
+    // WO-A5-5 / WO-A5-9 (slice A5 §7, stitched at wave 8): the round ledger
+    // feeds the recap's THE WORLD MOVED section; omitted when empty.
+    session.worldMovedLedger.length > 0 ? { events: session.worldMovedLedger } : undefined,
   );
 }
 

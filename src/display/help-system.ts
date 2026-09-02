@@ -511,8 +511,18 @@ ${divider()}
     Debt         Accumulated from calling in favors, repaid by helping factions
     Blackmail    From inspecting faction members, discoveries, investigation
     Influence    Derived from your highest faction reputation (not stored)
-    Heat         From hostile actions. Decays 3/turn. High Heat triggers hunts
+    Heat         From hostile social actions. Cools 3 per round on its own;
+                 sustained Heat draws faction attention
     Legitimacy   From milestones, title evolution, resolving official pressures
+
+  THE STREET'S LEDGER (see /leverage and /status)
+    Wanted       Every kill adds 5. At 10 the street starts to react
+                 (pressures can spawn); at 25 every active pressure sharpens
+                 each round; after 37 quiet rounds it begins to cool.
+    Alerts       Factions you cross raise an alert level of their own;
+                 alerts above zero appear on /leverage.
+    Income       Favor and Influence accrue each round from reputation and
+                 milestones - no verb required.
 
 ${renderVerbTable('SOCIAL VERBS', SOCIAL_VERBS)}
 
@@ -524,8 +534,6 @@ ${renderVerbTable('SABOTAGE VERBS', SABOTAGE_VERBS)}
 
   SCARCITY RULES
     Max 1 leverage action per turn
-    Heat > 50 triggers faction investigations
-    Heat > 80 risks bounty pressure
     Some actions require minimum reputation with target faction
 
 ${divider()}

@@ -76,7 +76,7 @@ import {
 // is the engine's own collapse-to-one-line-per-(subject,key) formatter
 // (rumor-system's format.ts) -- no director-text renderer exists for its
 // RumorBoardLine[] output (that part is this domain's own DRAFT, below).
-import { formatRumorBoard, type Rumor, type RumorBoardLine } from '@ai-rpg-engine/rumor-system';
+import { type RumorBoardLine } from '@ai-rpg-engine/rumor-system';
 import { formatFinaleForDirector, type FinaleOutline } from '@ai-rpg-engine/campaign-memory';
 import type { CharacterProfile } from '@ai-rpg-engine/character-profile';
 import type { ItemCatalog } from '@ai-rpg-engine/equipment';
@@ -298,7 +298,8 @@ export type ExecuteDirectorCommandOptions = {
    * `/rumors` calls `formatRumorBoard` on this itself so the collapse-to-
    * one-line-per-(subject,key) logic stays the engine's, not a reimplementation.
    */
-  rumorBoardInput?: Rumor[];
+  /** Stitch (wave 8): game-core's getRumorBoard() hands the engine's formatRumorBoard lines with entity names resolved; this side renders them. */
+  rumorBoard?: RumorBoardLine[];
 };
 
 /**
@@ -343,9 +344,10 @@ function formatLeverageWorldLedgerBlock(ledger: WorldLedgerSummary): string[] {
   const decayAfter = ledger.decayAfter ?? QUIET_ROUNDS_BEFORE_DECAY;
   const cooling = ledger.quietRounds >= decayAfter;
   const lines: string[] = [
+    // Coordinator-ratified copy (wave 8 stitch, design doc §4's own line).
     cooling
-      ? `  Heat ${ledger.heat} · cooling`
-      : `  Heat ${ledger.heat} · ${ledger.quietRounds}/${decayAfter} quiet rounds to cooling`,
+      ? `  Heat: ${ledger.heat} (cooling)`
+      : `  Heat: ${ledger.heat} (${ledger.quietRounds}/${decayAfter} quiet rounds to cooling)`,
   ];
   const alertEntries = Object.entries(ledger.factionAlerts ?? {}).filter(([, level]) => level > 0);
   for (const [factionId, level] of alertEntries) {
@@ -479,7 +481,7 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     leverageState, strategicMap, statusData, suggestedMove, situationTag, profileCustom,
     npcProfiles, lastNpcActions, npcObligations, partyState, profile, itemCatalog,
     districtEconomies, genre, activeOpportunities, arcSnapshot, endgameTriggers, finaleOutline,
-    worldLedger, marketQuotes, rumorBoardInput,
+    worldLedger, marketQuotes, rumorBoard,
   } = opts;
 
   const parts = command.trim().split(/\s+/);
@@ -529,7 +531,9 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       const factionFilter = parts[1];
       let output: string;
       if (rumors.length === 0) {
-        output = '  No player rumors yet.';
+        // Stitch (wave 8): the empty player-side notice yields to the board
+        // when the street has something to say.
+        output = rumorBoard && rumorBoard.length > 0 ? '' : '  No player rumors yet.';
       } else {
         const filtered = factionFilter
           ? getRumorsKnownToFaction(rumors, factionFilter)
@@ -552,11 +556,8 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
       // the player-side list above, regardless of whether that list itself
       // was empty (the board can carry rumors even when the filtered
       // player-side view above doesn't).
-      if (rumorBoardInput && rumorBoardInput.length > 0) {
-        const boardLines = formatRumorBoard(rumorBoardInput);
-        if (boardLines.length > 0) {
-          output += formatRumorBoardForDirector(boardLines);
-        }
+      if (rumorBoard && rumorBoard.length > 0) {
+        output += formatRumorBoardForDirector(rumorBoard);
       }
       return output;
     }

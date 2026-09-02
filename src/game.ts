@@ -260,6 +260,7 @@ import { executeTurn, getFatalTurnBookkeeping, type TurnResult, type ProfileUpda
 // and re-exports through that same path.
 import type { ConversationExchange } from './prompts/dialogue-npc.js';
 import { executeDirectorCommand, renderDirectorHelp, formatWorldLedgerLine } from './display/director-renderer.js';
+import { buildAmbushHeadline } from './game/ambush-headline.js';
 import { ImmersionRuntime, type ImmersionConfig } from './runtime/immersion-runtime.js';
 import { hasLivingHostiles } from './runtime/hooks.js';
 // F-79a25863 (presentation seam contract): McpToolCall is turn-loop.ts's own
@@ -1812,7 +1813,10 @@ export class GameSession {
         // (their own worktree this wave) gain the matching
         // ExecuteDirectorCommandOptions field; green expected at merge,
         // same pattern as worldLedger above.
-        marketQuote: this.buildMarketQuote(),
+        // Stitch (wave 8): cli-display keys quotes by districtId over a list;
+        // game-core can only price the player's own district (its
+        // buildMarketQuote doc comment), so the list holds that one quote.
+        marketQuotes: (() => { const quote = this.buildMarketQuote(); return quote ? [quote] : []; })(),
         // WO-A5-4 (slice A5 §6, design lock 6): see getRumorBoard()'s own
         // doc comment — cli-display's /rumors renderer (its own worktree)
         // gains the matching field; green expected at merge.
@@ -2309,6 +2313,10 @@ export class GameSession {
           profileStatus: this.getStatusData() ?? undefined,
           leverageStatus,
           partyStatusLine: buildPartyStatusLine(this.partyState, this.engine.world),
+          // Stitch (wave 8, WO-A5-15 routed from cli-display): the round's
+          // encounter.spawned event, rendered by the same describeEvent line
+          // the narration prompt carries, becomes the play screen's headline.
+          ambushHeadline: buildAmbushHeadline(turnResult.events),
           suggestions,
           hasEndgameTriggers: this.endgameTriggers.some((t) => !t.acknowledged),
           // Contract A (turn divider): cli-display's play-renderer consumes this

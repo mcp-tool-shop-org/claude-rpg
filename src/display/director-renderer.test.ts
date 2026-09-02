@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { executeDirectorCommand, renderDirectorHelp } from './director-renderer.js';
 import { createObligation, type NpcProfile, type NpcObligationLedger } from '@ai-rpg-engine/modules';
-import type { Rumor } from '@ai-rpg-engine/rumor-system';
+import { formatRumorBoard, type Rumor } from '@ai-rpg-engine/rumor-system';
 
 // Minimal world stub for tests
 function makeWorld(): any {
@@ -296,7 +296,7 @@ describe('executeDirectorCommand', () => {
         command: '/rumors',
         world: makeWorld(),
         playerRumors: [makePlayerRumor()],
-        rumorBoardInput: [makeRumor()],
+        rumorBoard: formatRumorBoard([makeRumor()]),
       });
       expect(result).toContain('WHAT THE STREET BELIEVES');
       expect(result).toContain('player helped the chapel');
@@ -310,7 +310,7 @@ describe('executeDirectorCommand', () => {
         command: '/rumors',
         world: makeWorld(),
         playerRumors: [makePlayerRumor()],
-        rumorBoardInput: [makeRumor({ mutationCount: 2, spreadPath: ['npc_witness', 'npc_two', 'npc_three'] })],
+        rumorBoard: formatRumorBoard([makeRumor({ mutationCount: 2, spreadPath: ['npc_witness', 'npc_two', 'npc_three'] })]),
       });
       expect(result).toContain('mutated over 2 hops');
     });
@@ -320,13 +320,15 @@ describe('executeDirectorCommand', () => {
         command: '/rumors',
         world: makeWorld(),
         playerRumors: [],
-        rumorBoardInput: [makeRumor()],
+        rumorBoard: formatRumorBoard([makeRumor()]),
       });
-      expect(result).toContain('No player rumors yet.');
+      // Coordinator ratification (wave 8 stitch): the empty player-side
+      // notice yields to the board when the street has something to say.
+      expect(result).not.toContain('No player rumors yet.');
       expect(result).toContain('WHAT THE STREET BELIEVES');
     });
 
-    it('omits the board section entirely when rumorBoardInput is absent (existing callers unaffected)', () => {
+    it('omits the board section entirely when rumorBoard is absent (existing callers unaffected)', () => {
       const result = executeDirectorCommand({
         command: '/rumors',
         world: makeWorld(),
@@ -465,7 +467,7 @@ describe('executeDirectorCommand', () => {
           income: { favor: 2, influence: 1, debt: 0 },
         },
       });
-      expect(result).toContain('Heat 15 · 5/37 quiet rounds to cooling');
+      expect(result).toContain('Heat: 15 (5/37 quiet rounds to cooling)');
       expect(result).toContain('Alerts: chapel-undead 20');
       expect(result).not.toContain('quiet-guild');
       expect(result).toContain('Income this round: +2 favor · +1 influence');
@@ -478,7 +480,7 @@ describe('executeDirectorCommand', () => {
         leverageState,
         worldLedger: { heat: 0, quietRounds: 37, decayAfter: 37, factionAlerts: {} },
       });
-      expect(result).toContain('Heat 0 · cooling');
+      expect(result).toContain('Heat: 0 (cooling)');
       expect(result).not.toContain('37/37');
     });
 

@@ -39,6 +39,8 @@ export function renderPlayOutput(input: {
   leverageStatus?: string;
   partyStatusLine?: string;
   suggestions?: ContextualSuggestion[];
+  /** Stitch (wave 8, slice A5 §5): passed straight through to renderPlayScreen's ambush banner slot. */
+  ambushHeadline?: string;
   hasEndgameTriggers?: boolean;
   /**
    * Cross-domain contract (game-core half): the current turn number, passed

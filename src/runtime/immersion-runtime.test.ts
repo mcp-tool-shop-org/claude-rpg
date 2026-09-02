@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Engine } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
+import { getDistrictForZone, getWorldTickState } from '@ai-rpg-engine/modules';
 import { ImmersionRuntime } from './immersion-runtime.js';
 
 // F-0ad073b8: this file's suites build a real @ai-rpg-engine Engine via createGame()
@@ -1741,5 +1742,91 @@ describe('immersion-runtime: hazard death with no defeat event (F-e57d6a60)', ()
     expect(runtime.stateMachine.current).toBe('menu');
     const effectIds = playSfxSpy.mock.calls.map(([cue]) => cue.effectId);
     expect(effectIds).toContain('alert_critical');
+  });
+});
+
+// ─── WO-A5-10 (slice A5 §2, design lock 2): the zone music bed follows a
+// district-mood transition. game-core's own before/after tick comparison
+// threads `moodTransition` into narrateScene for the narration line (a
+// separate call site this runtime's processPresentation(engine, events, verb,
+// narrationPlan) inputs cannot reach) -- this domain performs its OWN
+// independent before/after comparison against
+// getWorldTickState(world).districtTones[districtId], per
+// ADDENDUM-runtime-foundry's fallback instruction. ───
+
+describe('immersion-runtime: zone music bed follows district mood transition (WO-A5-10)', () => {
+  it('re-derives the zone music bed through districtToneToSoundMood when the player district tone transitions', async () => {
+    const engine = createGame();
+    const districtId = getDistrictForZone(engine.world, engine.world.locationId);
+    expect(districtId).toBeTruthy();
+
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    // Round 1: seed the district's tone as 'calm' -- first observation for
+    // this district this session, so there is no "before" to compare
+    // against yet; must not itself read as a transition.
+    getWorldTickState(engine.world).districtTones![districtId!] = 'calm';
+    await runtime.processPresentation(engine, [], 'look');
+    expect(setMusicSpy).not.toHaveBeenCalled();
+
+    // Round 2: the tick moves the district's tone to 'grim' -- the
+    // transition this WO exists to surface as a re-derived music bed.
+    getWorldTickState(engine.world).districtTones![districtId!] = 'grim';
+    await runtime.processPresentation(engine, [], 'look');
+
+    expect(setMusicSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'crossfade', trackId: 'music_dread' }),
+    );
+  });
+
+  it('does not re-derive the music bed when the district tone is unchanged round to round (byte-identical when no transition)', async () => {
+    const engine = createGame();
+    const districtId = getDistrictForZone(engine.world, engine.world.locationId);
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    getWorldTickState(engine.world).districtTones![districtId!] = 'tense';
+    await runtime.processPresentation(engine, [], 'look');
+    setMusicSpy.mockClear();
+
+    // Same tone again next round -- no transition, no re-derivation.
+    await runtime.processPresentation(engine, [], 'look');
+    expect(setMusicSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not let a same-round mood transition clobber an ambush round\'s combat-start intensify cue', async () => {
+    const engine = createGame();
+    engine.store.addEntity({
+      id: 'bandit-1',
+      blueprintId: 'bandit-1',
+      type: 'enemy',
+      name: 'Bandit',
+      tags: ['hostile'],
+      stats: {},
+      resources: { hp: 10 },
+      statuses: [],
+      zoneId: engine.world.locationId,
+    });
+    const districtId = getDistrictForZone(engine.world, engine.world.locationId);
+    const runtime = new ImmersionRuntime({ audioEnabled: false, voiceEnabled: false });
+    const setMusicSpy = vi.spyOn(runtime.bridge, 'setMusic');
+
+    getWorldTickState(engine.world).districtTones![districtId!] = 'calm';
+    await runtime.processPresentation(engine, [], 'look'); // seed, no transition
+    setMusicSpy.mockClear();
+
+    // Same round the ambush spawns, the district's tone also transitions --
+    // the ambush's own combatStartHook 'intensify' cue must be the one that
+    // survives, not a mood-bed crossfade landing right after it.
+    getWorldTickState(engine.world).districtTones![districtId!] = 'grim';
+    await runtime.processPresentation(
+      engine,
+      [{ type: 'encounter.spawned', payload: { spawnedEntityIds: ['bandit-1'] } }] as any,
+      'move',
+    );
+
+    expect(setMusicSpy).toHaveBeenCalledTimes(1);
+    expect(setMusicSpy).toHaveBeenCalledWith(expect.objectContaining({ action: 'intensify' }));
   });
 });

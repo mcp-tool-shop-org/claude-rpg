@@ -3,7 +3,8 @@
 import type { Engine, ResolvedEvent } from '@ai-rpg-engine/core';
 import type { NarrationPlan, AmbientCue, MusicCue, PresentationState } from '@ai-rpg-engine/presentation';
 import { AudioDirector } from '@ai-rpg-engine/audio-director';
-import { SoundRegistry, CORE_SOUND_PACK } from '@ai-rpg-engine/soundpack-core';
+import { SoundRegistry, CORE_SOUND_PACK, districtToneToSoundMood, hashRoll } from '@ai-rpg-engine/soundpack-core';
+import { getDistrictForZone, getWorldTickState } from '@ai-rpg-engine/modules';
 import {
   PresentationStateMachine,
   type StateTransition,
@@ -134,6 +135,22 @@ export class ImmersionRuntime {
   private lastMusicState: { action: MusicCue['action']; trackId?: string } | undefined;
 
   /**
+   * WO-A5-10 (slice A5 §2, design lock 2): last district-mood `tone` this
+   * instance has observed per district id, backing
+   * `deriveDistrictMoodMusicCue` below. game-core's own `runWorldRound`
+   * compares `getWorldTickState(world).districtTones[districtId]`
+   * before/after the tick for its `moodTransition` narration param (a
+   * different call site, not reachable from processPresentation's
+   * (engine, events, verb, narrationPlan) inputs) -- this is this domain's
+   * OWN independent before/after comparison, per ADDENDUM-runtime-foundry's
+   * fallback instruction. One instance per session (mirrors
+   * lastAmbientAction/lastMusicState immediately above), so "before" is
+   * simply "what this method returned the last time it ran", not a value
+   * threaded in from outside.
+   */
+  private lastDistrictTones = new Map<string, string>();
+
+  /**
    * F-251bd7d7: consecutive-failure streak per processPresentation pipeline stage
    * ('pre-narration' | 'event-hooks' | 'audio' | 'post-narration'), backing
    * noteStageFailure()/noteStageSuccess() below. All four stages already degrade to
@@ -229,6 +246,48 @@ export class ImmersionRuntime {
     }
     this.lastMusicState = { action: cue.action, trackId: cue.trackId };
     return cue;
+  }
+
+  /**
+   * WO-A5-10 (slice A5 §2, design lock 2): when the player's CURRENT
+   * district's mood `tone` differs from the tone this instance last
+   * observed for that same district, re-derive the zone music bed through
+   * the engine's `districtToneToSoundMood(tone)` composed with this
+   * runtime's own loaded `soundRegistry` (the exact composition
+   * `districtToneToSoundMood`'s own doc comment in soundpack-core
+   * describes -- "composed with a loaded SoundRegistry's
+   * pickMusicStem/pickAmbientBed"). Returns undefined (no cue) when:
+   *   - the player's zone doesn't resolve to a district at all;
+   *   - the tick hasn't computed a tone for this district yet;
+   *   - this is the FIRST time this instance has observed a tone for this
+   *     district (nothing to compare against -- first-arrival scene-setting
+   *     is enterRoomHook's/the narrator's own job, not this method's);
+   *   - the tone is unchanged from last observation (byte-identical when no
+   *     transition, per the WO);
+   *   - the tone is one `districtToneToSoundMood` doesn't recognize, or no
+   *     loaded music stem matches the resulting mood query.
+   * `hashRoll(districtId)` keeps the pick deterministic across runs (same
+   * district, same stem) without a hidden RNG, matching every other
+   * roll-consuming call in this codebase.
+   */
+  private deriveDistrictMoodMusicCue(engine: Engine): MusicCue | undefined {
+    const districtId = getDistrictForZone(engine.world, engine.world.locationId);
+    if (!districtId) return undefined;
+
+    const tone = getWorldTickState(engine.world).districtTones?.[districtId];
+    if (!tone) return undefined;
+
+    const previousTone = this.lastDistrictTones.get(districtId);
+    this.lastDistrictTones.set(districtId, tone);
+    if (previousTone === undefined || previousTone === tone) return undefined;
+
+    const moods = districtToneToSoundMood(tone);
+    if (!moods || moods.length === 0) return undefined;
+
+    const stem = this.soundRegistry.pickMusicStem({ mood: moods }, hashRoll(districtId));
+    if (!stem) return undefined;
+
+    return { action: 'crossfade', trackId: stem.id, fadeMs: 2000 };
   }
 
   /**
@@ -440,6 +499,26 @@ export class ImmersionRuntime {
           await this.bridge.applyUiEffect(effect);
         }
         audioCalls = [...audioCalls, ...this.bridge.flush()];
+      }
+
+      // WO-A5-10 (slice A5 §2): re-derive the zone music bed on a
+      // district-mood transition, independent of whether this turn carries
+      // a narrationPlan at all. Skipped on the very turn combat is entered
+      // (justEnteredCombat) so a same-round ambush's own combatStartHook
+      // 'intensify' sting (fireEventHooks, above) isn't immediately
+      // clobbered by a mood-bed crossfade landing right after it --
+      // dedupeMusicCue's shared lastMusicState only suppresses a REPEATED
+      // action/trackId pair, not a different cue arriving the same turn.
+      // deriveDistrictMoodMusicCue still runs every turn regardless (not
+      // skipped) so its own before/after bookkeeping stays current even on
+      // a turn whose cue is suppressed here.
+      const moodMusicCue = this.deriveDistrictMoodMusicCue(engine);
+      if (moodMusicCue && !justEnteredCombat) {
+        const dedupedMoodCue = this.dedupeMusicCue(moodMusicCue);
+        if (dedupedMoodCue) {
+          await this.bridge.setMusic(dedupedMoodCue);
+          audioCalls = [...audioCalls, ...this.bridge.flush()];
+        }
       }
       this.noteStageSuccess('audio');
     } catch (err) {

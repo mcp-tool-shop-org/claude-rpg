@@ -239,6 +239,22 @@ export type WorldLedgerSummary = {
    * what "quiet rounds to cooling" counts toward.
    */
   decayAfter?: number;
+  /**
+   * WO-B1-20 (slice B1 §5, lock 8): count of witnessed good deeds recorded
+   * for the player (game-core's recognition wiring, not yet on this branch
+   * -- "green expected at merge"). `/status`'s ledger line gains a `Deeds:
+   * N` segment when this is > 0; absent or 0 renders no segment (matching
+   * every other optional segment `formatWorldLedgerLine` already has).
+   */
+  deedsCount?: number;
+  /**
+   * WO-B1-20: the reputation-threshold honorific text (`tuning.honorificAt`,
+   * game-core) the street uses for the player, e.g. "the Water-Bearer" --
+   * DRAFT, coordinator ratifies. Rendered under `/leverage`'s ledger block
+   * when present; absent renders no line (symbolic-only per the design
+   * doc's §5 -- no aggregate meter, no material payoff listed here).
+   */
+  honorific?: string;
 };
 
 /**
@@ -484,7 +500,9 @@ export function formatWorldLedgerLine(ledger: WorldLedgerSummary | undefined): s
   const hasHeat = ledger.heat > 0;
   const hasAlerts = alertEntries.length > 0;
   const hasDistrict = !!ledger.districtTone;
-  if (!hasHeat && !hasAlerts && !hasDistrict) return undefined;
+  // WO-B1-20 (slice B1 §5, lock 8): "Deeds: N" segment when > 0.
+  const hasDeeds = (ledger.deedsCount ?? 0) > 0;
+  if (!hasHeat && !hasAlerts && !hasDistrict && !hasDeeds) return undefined;
 
   const segments: string[] = [`Heat ${ledger.heat} (${ledger.quietRounds}/${QUIET_ROUNDS_BEFORE_DECAY} quiet)`];
   if (hasAlerts) {
@@ -492,6 +510,9 @@ export function formatWorldLedgerLine(ledger: WorldLedgerSummary | undefined): s
   }
   if (hasDistrict) {
     segments.push(`District: ${ledger.districtTone}`);
+  }
+  if (hasDeeds) {
+    segments.push(`Deeds: ${ledger.deedsCount}`);
   }
   return segments.join(' · ');
 }
@@ -522,6 +543,13 @@ function formatLeverageWorldLedgerBlock(ledger: WorldLedgerSummary): string[] {
   if (incomeEntries.length > 0) {
     const incomeStr = incomeEntries.map(([currency, amount]) => `+${amount} ${currency}`).join(' · ');
     lines.push(`  Income this round: ${incomeStr}`);
+  }
+  // WO-B1-20 (slice B1 §5, lock 8): the honorific under the ledger block --
+  // DRAFT wording verbatim from ADDENDUM-cli-display.md: "Known as: the
+  // Water-Bearer". Symbolic only (design doc §5: an announced material
+  // reward would crowd the motive out) -- no aggregate meter alongside it.
+  if (ledger.honorific) {
+    lines.push(`  Known as: ${ledger.honorific}`);
   }
   return lines;
 }
@@ -768,12 +796,20 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     }
 
     case '/npc': {
-      const npcId = parts[1];
-      if (!npcId) return '  Usage: /npc <npc-id>';
+      // WO-B1-17 (slice B1 §3, lock 4): director commands join multi-word
+      // arguments (`/npc Suspicious Pilgrim`) instead of reading only
+      // `parts[1]`; matched by id OR by the entity's display name (a
+      // multi-word arg is a name, not an npcId) so `/npc Suspicious
+      // Pilgrim` resolves the same NPC `/npc suspicious_pilgrim` would.
+      const npcArg = parts.slice(1).join(' ');
+      if (!npcArg) return '  Usage: /npc <npc-id>';
       const profiles = npcProfiles ?? [];
       const actions = lastNpcActions ?? [];
-      const profile = profiles.find((p) => p.npcId === npcId);
-      if (!profile) return `  NPC "${npcId}" not found (or not a named NPC).`;
+      const profile = profiles.find(
+        (p) => p.npcId === npcArg || world.entities[p.npcId]?.name?.toLowerCase() === npcArg.toLowerCase(),
+      );
+      if (!profile) return `  NPC "${npcArg}" not found (or not a named NPC).`;
+      const npcId = profile.npcId;
       const lastAction = actions.find((a) => a.action.npcId === npcId);
       const obligations = npcObligations?.get(npcId);
       let output = formatNpcProfileForDirector(profile, lastAction, obligations);
@@ -848,11 +884,24 @@ export function executeDirectorCommand(opts: ExecuteDirectorCommandOptions): str
     }
 
     case '/trade': {
-      const districtId = parts[1];
-      if (!districtId) return '  Usage: /trade <district-id>';
+      // WO-B1-17 (slice B1 §3, lock 4): join multi-word arguments
+      // (`/trade Crypt Depths`) and resolve by district id OR by the
+      // district's display name -- a multi-word arg is a name, not an id.
+      const districtArg = parts.slice(1).join(' ');
+      if (!districtArg) return '  Usage: /trade <district-id>';
       if (!districtEconomies) return '  No economy data available.';
-      const economy = districtEconomies.get(districtId);
-      if (!economy) return `  No economy data for district "${districtId}".`;
+      let districtId = districtArg;
+      let economy = districtEconomies.get(districtId);
+      if (!economy) {
+        for (const id of districtEconomies.keys()) {
+          if (getDistrictDefinition(world, id)?.name?.toLowerCase() === districtArg.toLowerCase()) {
+            districtId = id;
+            economy = districtEconomies.get(id);
+            break;
+          }
+        }
+      }
+      if (!economy) return `  No economy data for district "${districtArg}".`;
       const dDef = getDistrictDefinition(world, districtId);
       const descriptor = deriveEconomyDescriptor(economy);
       let output = formatEconomyForDirector(districtId, dDef?.name ?? districtId, economy, descriptor);

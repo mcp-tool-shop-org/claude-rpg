@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSuggestions } from './contextual-suggestions.js';
+import { generateSuggestions, generateCommandStrip } from './contextual-suggestions.js';
 
 /** Minimal defaults for generateSuggestions options. */
 function defaults(overrides: Record<string, unknown> = {}) {
@@ -240,5 +240,108 @@ describe('crafting-hint text does not suggest a suppressed verb (F-d6f7107e)', (
     expect(craftHint).toBeTruthy();
     expect(craftHint!.text).toBe('You have materials — type "craft" to use them');
     expect(craftHint!.text).not.toContain('salvage');
+  });
+});
+
+/**
+ * WO-B1-19 (slice B1 §3, lock 6): hint phrasing variants rotated by the
+ * ledger's fire count, and opportunity hints naming the exact `accept
+ * <title>` input. Before this wave `generateSuggestions` had no
+ * `hintFireCounts`/`newOpportunityTitle`/`expiringOpportunityTitle` opts --
+ * these cases were red (fire count 1 rendered the same text as fire count 0,
+ * and the opportunity hints never named a title) until the rotation + title
+ * plumbing were added above.
+ */
+describe('hint phrasing variants (WO-B1-19)', () => {
+  it('black-market hint rotates to a second variant on fire count 1, keeping the original text at fire count 0', () => {
+    const fireZero = generateSuggestions(defaults({
+      turnCount: 15, hasUsedLeverage: true, hasBlackMarket: true,
+      hintFireCounts: { 'black-market': 0 },
+    })).find((s) => s.trigger === 'black-market')!;
+    const fireOne = generateSuggestions(defaults({
+      turnCount: 15, hasUsedLeverage: true, hasBlackMarket: true,
+      hintFireCounts: { 'black-market': 1 },
+    })).find((s) => s.trigger === 'black-market')!;
+    expect(fireZero.text).toBe('Black market activity detected — contraband may be available');
+    expect(fireOne.text).not.toBe(fireZero.text);
+  });
+
+  it('black-market hint defaults to the original text when no fire count is supplied (existing callers unaffected)', () => {
+    const result = generateSuggestions(defaults({
+      turnCount: 15, hasUsedLeverage: true, hasBlackMarket: true,
+    })).find((s) => s.trigger === 'black-market')!;
+    expect(result.text).toBe('Black market activity detected — contraband may be available');
+  });
+
+  it('new-opportunity hint names the exact accept <title> input when a title is supplied', () => {
+    const result = generateSuggestions(defaults({
+      turnCount: 15, hasUsedLeverage: true, hasNewOpportunity: true,
+      newOpportunityTitle: 'Carry the Relic',
+    })).find((s) => s.trigger === 'new-opportunity')!;
+    expect(result.text).toContain('accept Carry the Relic');
+  });
+
+  it('new-opportunity hint falls back to the pre-B1 generic text when no title is supplied', () => {
+    const result = generateSuggestions(defaults({
+      turnCount: 15, hasUsedLeverage: true, hasNewOpportunity: true,
+    })).find((s) => s.trigger === 'new-opportunity')!;
+    expect(result.text).toBe('A new opportunity is available — type /jobs to see contracts');
+  });
+
+  it('expiring-opportunity hint names the exact accept <title> input when a title is supplied', () => {
+    const result = generateSuggestions(defaults({
+      turnCount: 15, hasUsedLeverage: true, hasExpiringOpportunity: true,
+      expiringOpportunityTitle: 'Guide the Courier',
+    })).find((s) => s.trigger === 'expiring-opportunity')!;
+    expect(result.text).toContain('accept Guide the Courier');
+  });
+});
+
+/**
+ * WO-B1-18 (slice B1 §3, lock 5): the per-context command strip.
+ * `generateCommandStrip` did not exist before this wave -- red
+ * (ReferenceError on import) until it was added above.
+ */
+describe('generateCommandStrip (WO-B1-18)', () => {
+  it('builds talk / go / attack / flee / accept entries in that fixed order, derived from state', () => {
+    const strip = generateCommandStrip({
+      namedNpcsHere: ['Suspicious Pilgrim'],
+      exits: ['Chapel Nave'],
+      hostiles: [{ name: 'Crypt Stalker', aware: true }],
+      openOpportunityTitle: 'Carry the Relic',
+    });
+    expect(strip).toEqual([
+      'talk to Suspicious Pilgrim',
+      'go Chapel Nave',
+      'attack Crypt Stalker',
+      'flee',
+      'accept Carry the Relic',
+    ]);
+  });
+
+  it('omits flee and attack when no hostile is aware', () => {
+    const strip = generateCommandStrip({
+      namedNpcsHere: ['Suspicious Pilgrim'],
+      exits: ['Chapel Nave'],
+      hostiles: [{ name: 'Crypt Stalker', aware: false }],
+    });
+    expect(strip).toEqual(['talk to Suspicious Pilgrim', 'go Chapel Nave']);
+  });
+
+  it('returns an empty array when nothing in the state qualifies', () => {
+    expect(generateCommandStrip({})).toEqual([]);
+  });
+
+  it('caps at 5 entries when more than 5 would qualify', () => {
+    const strip = generateCommandStrip({
+      namedNpcsHere: ['Pilgrim'],
+      exits: ['Nave', 'Crypt', 'Gate'],
+      hostiles: [
+        { name: 'Stalker', aware: true },
+        { name: 'Ghoul', aware: true },
+      ],
+      openOpportunityTitle: 'Carry the Relic',
+    });
+    expect(strip.length).toBe(5);
   });
 });

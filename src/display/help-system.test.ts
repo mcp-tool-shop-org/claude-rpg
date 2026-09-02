@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { renderConcludeHelp, renderArcHelp, renderPlayHelp, renderLeverageHelp, renderPackQuickstart, getPackOnboarding, getOnboardingByGenre, getOnboardingForSession, renderFirstTurnOrientation, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK, wrapWords, renderNameDescriptionRow } from './help-system.js';
+import { renderConcludeHelp, renderArcHelp, renderPlayHelp, renderLeverageHelp, renderPackQuickstart, getPackOnboarding, getOnboardingByGenre, getOnboardingForSession, renderFirstTurnOrientation, renderUnknownCommand, ARC_KIND_HELP, ARC_MOMENTUM_HELP, PACK_ONBOARDING, GENRE_TO_PACK, wrapWords, renderNameDescriptionRow } from './help-system.js';
 import { RESOLUTION_CLASS_LABELS } from './archive-browser.js';
 import { PLAY_COMMANDS } from '../cli/slash-completer.js';
 import { allPacks } from '../character/packs.js';
@@ -548,5 +548,46 @@ describe('help-system dividers are dimmed (F-624591cf)', () => {
     const onboarding = mod.getPackOnboarding('chapel-threshold')!;
     const text = mod.renderFirstTurnOrientation(onboarding);
     expect(text).toContain('\x1b[2m'); // dim
+  });
+});
+
+/**
+ * WO-B1-17 (slice B1 §3, lock 4): the parser-layer reply to an unknown
+ * play-mode slash command. Before this wave `renderUnknownCommand` did not
+ * exist at all -- this describe block was red (ReferenceError on import)
+ * until the function was added above in this file.
+ */
+describe('renderUnknownCommand (WO-B1-17)', () => {
+  it('names the input and the nearest known command', () => {
+    const text = renderUnknownCommand({
+      input: '/pressures',
+      nearest: '/status',
+      validNow: [],
+    });
+    expect(text).toContain('Unknown command /pressures.');
+    expect(text).toContain('Did you mean /status?');
+  });
+
+  it('names the family a mode-mismatched command belongs to', () => {
+    const text = renderUnknownCommand({
+      input: '/pressures',
+      nearest: '/status',
+      family: 'director',
+      validNow: [],
+    });
+    expect(text).toContain('/pressures lives in director mode — type /director.');
+  });
+
+  it('lists what is valid right now', () => {
+    const text = renderUnknownCommand({
+      input: '/xyzzy',
+      validNow: ['talk to the pilgrim', 'go chapel nave', '/status'],
+    });
+    expect(text).toContain('Right now you can: talk to the pilgrim · go chapel nave · /status');
+  });
+
+  it('omits the "Did you mean" and family sentences when neither is known', () => {
+    const text = renderUnknownCommand({ input: '/xyzzy', validNow: [] });
+    expect(text).toBe('  Unknown command /xyzzy.');
   });
 });

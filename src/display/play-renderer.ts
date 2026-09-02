@@ -7,7 +7,7 @@ import type { WorldState } from '@ai-rpg-engine/core';
 import type { DialogueResult } from '../dialogue/dialogue-mind.js';
 import type { StatusData } from '../character/presence.js';
 import type { ContextualSuggestion } from './contextual-suggestions.js';
-import { bold, dim, secondary, speaker, hint, cyan, yellow, red, critical } from '../cli/colors.js';
+import { bold, dim, secondary, speaker, hint, cyan, yellow, red, critical, danger } from '../cli/colors.js';
 
 // PFE-005: Adapt divider width to terminal, clamped to 40-120, fallback 60.
 function getTerminalWidth(): number {
@@ -59,6 +59,41 @@ const CRITICAL_HP_RATIO = 0.25;
 export function isCriticalHp(hp: number, maxHp?: number): boolean {
   return maxHp !== undefined && maxHp > 0 && hp / maxHp <= CRITICAL_HP_RATIO;
 }
+
+/**
+ * WO-B1-15 (slice B1 §1, lock 1): formats one hostile's status-line entry
+ * from game-core's `describeHostiles(world, zoneId)` (`{ id, name, rung,
+ * aware }`) -- the SAME `conditionRung` vocabulary the design doc requires
+ * every surface (status line, outcome lines, inspect, narration) to share,
+ * never a second threshold table. An aware hostile is marked with a
+ * trailing `!` on its name (DRAFT -- coordinator ratifies the exact glyph
+ * vs. the doc's alternative `aware` word-marker).
+ */
+function formatHostileEntry(h: { name: string; rung: string; aware: boolean }): string {
+  return `${h.name}${h.aware ? '!' : ''}: ${h.rung}`;
+}
+
+/**
+ * WO-B1-16 (slice B1 §1-2, lock 2): classifies one `TurnResult.combatLines`
+ * entry so the reserved combat channel can style kills and landed enemy hits
+ * in this domain's existing critical/warning registers while leaving plain
+ * outcome and telegraph lines unstyled, per the design doc's own rule ("in
+ * the existing critical/warning register for kills and landed hits, plain
+ * for outcomes and telegraphs"). The contract (ADDENDUM-COMMON lock 2) pins
+ * the SHAPE of each line kind, not a type tag alongside the string, so this
+ * classifies by the shape itself: a kill line's shape is "<subject> falls."
+ * (`The Crypt Stalker falls.`); a landed-hit line's shape ends in "N
+ * damage." (`... — 4 damage.`). Anything else (the player's own outcome
+ * line, a telegraph) renders plain.
+ */
+function classifyCombatLine(line: string): 'kill' | 'hit' | 'plain' {
+  if (/ falls\.$/.test(line)) return 'kill';
+  if (/\d+ damage\.$/.test(line)) return 'hit';
+  return 'plain';
+}
+
+// Exported for testing.
+export { formatHostileEntry, classifyCombatLine };
 
 /**
  * F-7eff9b3a: wrap a " | "-joined status line at segment boundaries once it
@@ -157,6 +192,33 @@ export function renderPlayScreen(opts: {
    * byte-identical to every existing caller, none of which pass this yet.
    */
   ambushHeadline?: string;
+  /**
+   * WO-B1-15 (slice B1 §1, lock 1): game-core's `describeHostiles(world,
+   * zoneId)` -- hostiles sharing the player's zone. Rendered as one line
+   * under the location line (`Crypt Stalker: bloodied · Ash Ghoul:
+   * unhurt`); absent or empty renders nothing (byte-identical to every
+   * existing caller, none of which pass this yet).
+   */
+  hostiles?: Array<{ id: string; name: string; rung: string; aware: boolean }>;
+  /**
+   * WO-B1-16 (slice B1 §1-2, lock 2): `TurnResult.combatLines` -- the
+   * turn's deterministic combat lines (player outcome, kills, landed enemy
+   * hits, next-round telegraphs), in that order, from game-core's
+   * `runHostileTurn`/combat events (not yet on this branch -- "green
+   * expected at merge"). Rendered in a reserved block ABOVE the narration,
+   * below the ambush headline / endgame banner. Optional so every existing
+   * caller renders unchanged.
+   */
+  combatLines?: string[];
+  /**
+   * WO-B1-18 (slice B1 §3, lock 5): the per-context command strip
+   * (contextual-suggestions.ts's `generateCommandStrip`) -- state-derived,
+   * always-true affordances (`talk to <npc>`, `go <exit>`, `attack
+   * <hostile>`, `flee`, `accept <title>`). Rendered as one "You can: ..."
+   * line, capped at 5 entries by the generator itself. Optional/absent
+   * renders nothing.
+   */
+  commandStrip?: string[];
 }): string {
   const parts: string[] = [];
 
@@ -176,6 +238,17 @@ export function renderPlayScreen(opts: {
   // Endgame approach banner (v2.1)
   if (opts.hasEndgameTriggers) {
     parts.push(yellow('  ── approaching conclusion ──'));
+  }
+
+  // WO-B1-16 (slice B1 §1-2, lock 2): the reserved combat channel -- one
+  // line per combatLines entry, ABOVE the narration, below the ambush
+  // headline / endgame banner per the work order.
+  if (opts.combatLines && opts.combatLines.length > 0) {
+    for (const line of opts.combatLines) {
+      const kind = classifyCombatLine(line);
+      const styled = kind === 'kill' ? critical(`  ${line}`) : kind === 'hit' ? danger(`  ${line}`) : `  ${line}`;
+      parts.push(styled);
+    }
   }
 
   // Narration
@@ -264,7 +337,20 @@ export function renderPlayScreen(opts: {
     parts.push(`  Location: ${zone.name}${exits ? ` | Exits: ${exits}` : ''}`);
   }
 
+  // WO-B1-15 (slice B1 §1, lock 1): the status hostile line -- one line
+  // under the location line, absent when the zone has no hostile.
+  if (opts.hostiles && opts.hostiles.length > 0) {
+    parts.push(`  Hostiles: ${opts.hostiles.map(formatHostileEntry).join(' · ')}`);
+  }
+
   parts.push(makeDivider());
+
+  // WO-B1-18 (slice B1 §3, lock 5): the per-context command strip --
+  // REPLACES the generic TRY list (see generateCommandStrip's doc comment
+  // for what "replaces" means against the current tree).
+  if (opts.commandStrip && opts.commandStrip.length > 0) {
+    parts.push(`  You can: ${opts.commandStrip.join(' · ')}`);
+  }
 
   // Contextual suggestions
   if (opts.suggestions && opts.suggestions.length > 0) {

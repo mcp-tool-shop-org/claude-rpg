@@ -561,3 +561,152 @@ describe('renderDeathScreen (F-7484bd2e, SLATE-6, director ruling R3: setback no
     expect(output).toContain('\x1b[1m'); // bold
   });
 });
+
+/**
+ * WO-B1-15 (slice B1 §1, lock 1): the status hostile line. Before this wave
+ * `renderPlayScreen` had no `hostiles` opt at all -- this describe block was
+ * red (the field didn't exist, so nothing could render it) until the opts
+ * field + render branch were added above in this file.
+ */
+describe('renderPlayScreen status hostile line (WO-B1-15)', () => {
+  it('renders one line under the location line, joining hostiles with their rung', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      hostiles: [
+        { id: 'h1', name: 'Crypt Stalker', rung: 'bloodied', aware: false },
+        { id: 'h2', name: 'Ash Ghoul', rung: 'unhurt', aware: false },
+      ],
+    });
+    expect(output).toContain('Hostiles: Crypt Stalker: bloodied · Ash Ghoul: unhurt');
+    const locationIdx = output.indexOf('Location:');
+    const hostilesIdx = output.indexOf('Hostiles:');
+    expect(hostilesIdx).toBeGreaterThan(locationIdx);
+  });
+
+  it('marks an aware hostile distinctly from an unaware one', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      hostiles: [{ id: 'h1', name: 'Ash Ghoul', rung: 'hurt', aware: true }],
+    });
+    expect(output).toContain('Ash Ghoul!: hurt');
+  });
+
+  it('renders no hostile line when hostiles is absent or empty (existing callers unaffected)', () => {
+    const engine = createGame();
+    const base = { narration: 'Test.', world: engine.world, availableActions: [] };
+    const withoutField = renderPlayScreen(base);
+    const withEmpty = renderPlayScreen({ ...base, hostiles: [] });
+    expect(withEmpty).toBe(withoutField);
+    expect(withoutField).not.toContain('Hostiles:');
+  });
+});
+
+/**
+ * WO-B1-16 (slice B1 §1-2, lock 2): the reserved combat channel. Before this
+ * wave `renderPlayScreen` had no `combatLines` opt at all -- red until the
+ * opts field + render branch were added above.
+ */
+describe('renderPlayScreen reserved combat channel (WO-B1-16)', () => {
+  it('renders combatLines above the narration, below the ambush headline', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'The corridor is silent.',
+      world: engine.world,
+      availableActions: [],
+      ambushHeadline: 'Ambush: Crypt Stalker in Chapel Nave',
+      combatLines: [
+        'Your strike lands — Crypt Stalker: reeling.',
+        'The Crypt Stalker falls.',
+      ],
+    });
+    const headlineIdx = output.indexOf('Ambush:');
+    const outcomeIdx = output.indexOf('Your strike lands');
+    const killIdx = output.indexOf('The Crypt Stalker falls.');
+    const narrationIdx = output.indexOf('The corridor is silent.');
+    expect(headlineIdx).toBeGreaterThan(-1);
+    expect(outcomeIdx).toBeGreaterThan(headlineIdx);
+    expect(killIdx).toBeGreaterThan(outcomeIdx);
+    expect(narrationIdx).toBeGreaterThan(killIdx);
+  });
+
+  it('renders no combat block when combatLines is absent or empty (existing callers unaffected)', () => {
+    const engine = createGame();
+    const base = { narration: 'Test.', world: engine.world, availableActions: [] };
+    const withoutField = renderPlayScreen(base);
+    const withEmpty = renderPlayScreen({ ...base, combatLines: [] });
+    expect(withEmpty).toBe(withoutField);
+  });
+
+  it('styles a kill line in critical() (bold red) when colors are enabled', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./play-renderer.js');
+    const engine = createGame();
+    const output = mod.renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      combatLines: ['The Crypt Stalker falls.'],
+    });
+    expect(output).toContain('\x1b[31m'); // red
+    expect(output).toContain('\x1b[1m'); // bold
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = undefined;
+    delete process.env.NO_COLOR;
+  });
+
+  it('styles a landed-hit line in danger() (bold yellow) when colors are enabled, and leaves a plain outcome line unstyled', async () => {
+    delete process.env.NO_COLOR;
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = true;
+    vi.resetModules();
+    const mod = await import('./play-renderer.js');
+    const engine = createGame();
+    const output = mod.renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      combatLines: [
+        "The Ash Ghoul's claw finds your flank — 4 damage.",
+        'Your strike misses.',
+      ],
+    });
+    expect(output).toContain('\x1b[33m'); // yellow (danger)
+    // The plain outcome line renders with no ANSI wrapper around it.
+    expect(output).toContain('  Your strike misses.\n');
+    (process.stdout as unknown as { isTTY: boolean | undefined }).isTTY = undefined;
+    delete process.env.NO_COLOR;
+  });
+});
+
+/**
+ * WO-B1-18 (slice B1 §3, lock 5): the per-context command strip. Before this
+ * wave `renderPlayScreen` had no `commandStrip` opt at all -- red until the
+ * opts field + render branch were added above.
+ */
+describe('renderPlayScreen command strip (WO-B1-18)', () => {
+  it('renders a "You can:" line joining the strip entries', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      commandStrip: ['talk to the pilgrim', 'go chapel nave', 'flee'],
+    });
+    expect(output).toContain('You can: talk to the pilgrim · go chapel nave · flee');
+  });
+
+  it('renders no strip line when commandStrip is absent or empty (existing callers unaffected)', () => {
+    const engine = createGame();
+    const base = { narration: 'Test.', world: engine.world, availableActions: [] };
+    const withoutField = renderPlayScreen(base);
+    const withEmpty = renderPlayScreen({ ...base, commandStrip: [] });
+    expect(withEmpty).toBe(withoutField);
+    expect(withoutField).not.toContain('You can:');
+  });
+});

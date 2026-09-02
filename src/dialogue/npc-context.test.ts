@@ -735,3 +735,54 @@ describe('buildNPCDialogueContext WO-A5-8: hearerRumors pass-through', () => {
     expect(ctx!.hearerRumors).toBeUndefined();
   });
 });
+
+// WO-B1-9 (slice B1 §4, design lock 7): ask is a straight pass-through
+// parameter (game-core's asks ledger computes it; this file has no ask
+// state of its own). RED before this wave: buildNPCDialogueContext had no
+// 14th parameter at all and DialogueInput had no ask field.
+describe('buildNPCDialogueContext WO-B1-9: ask pass-through', () => {
+  beforeEach(() => {
+    mockedGetCognition.mockReturnValue(makeCognition());
+    mockedGetRumorsFrom.mockReturnValue([]);
+  });
+
+  it('forwards ask verbatim onto the returned DialogueInput', () => {
+    const ask = { kind: 'lend' as const, surface: 'Could you lend me a few coins?', stake: 5, signature: 'evasive' as const };
+    const ctx = buildNPCDialogueContext(
+      makeWorld(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, ask,
+    );
+    expect(ctx!.ask).toEqual(ask);
+  });
+
+  it('is undefined when omitted', () => {
+    const ctx = buildNPCDialogueContext(makeWorld(), 'npc-1', 'hello', 'dark fantasy');
+    expect(ctx!.ask).toBeUndefined();
+  });
+});
+
+// WO-B1-10 (slice B1 §5, design lock 8): honorific is a straight pass-
+// through parameter (game-core's reputation-threshold check computes it).
+// RED before this wave: buildNPCDialogueContext had no 15th parameter at
+// all and DialogueInput had no honorific field.
+describe('buildNPCDialogueContext WO-B1-10: honorific pass-through', () => {
+  beforeEach(() => {
+    mockedGetCognition.mockReturnValue(makeCognition());
+    mockedGetRumorsFrom.mockReturnValue([]);
+  });
+
+  it('forwards honorific verbatim onto the returned DialogueInput', () => {
+    const ctx = buildNPCDialogueContext(
+      makeWorld(), 'npc-1', 'hello', 'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, 'the Water-Bearer',
+    );
+    expect(ctx!.honorific).toBe('the Water-Bearer');
+  });
+
+  it('is undefined when omitted', () => {
+    const ctx = buildNPCDialogueContext(makeWorld(), 'npc-1', 'hello', 'dark fantasy');
+    expect(ctx!.honorific).toBeUndefined();
+  });
+});

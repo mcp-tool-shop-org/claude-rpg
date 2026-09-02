@@ -375,6 +375,66 @@ describe('narrateScene F-7815df9e: chronicleContext seam', () => {
   });
 });
 
+// === WO-B1-8 (slice B1 §1, design lock 2): the combat channel seam ===
+describe('narrateScene WO-B1-8: combatLines seam', () => {
+  it('should fold opts.combatLines into the prompt sent to the client when present', async () => {
+    const client = makeClient('plain text fallback');
+    const opts = makeOpts({
+      client,
+      combatLines: ['Your strike lands — Crypt Stalker: reeling.', 'The Crypt Stalker falls.'],
+    });
+
+    await narrateScene(opts);
+
+    expect(client.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('Your strike lands — Crypt Stalker: reeling.'),
+      }),
+    );
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).toContain('The Crypt Stalker falls.');
+  });
+
+  it('should not add a "What happened this turn" block when combatLines is absent', async () => {
+    const client = makeClient('plain text fallback');
+    const opts = makeOpts({ client });
+
+    await narrateScene(opts);
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain('What happened this turn');
+  });
+});
+
+// === WO-B1-10 (slice B1 §5, design lock 8): the recognition-line seam ===
+describe('narrateScene WO-B1-10: recognitionLine seam', () => {
+  it('should fold opts.recognitionLine into the prompt sent to the client when present', async () => {
+    const client = makeClient('plain text fallback');
+    const opts = makeOpts({
+      client,
+      recognitionLine: 'Sister Maren will remember who carried the water.',
+    });
+
+    await narrateScene(opts);
+
+    expect(client.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('Sister Maren will remember who carried the water.'),
+      }),
+    );
+  });
+
+  it('should not add a "Recognition:" line when recognitionLine is absent', async () => {
+    const client = makeClient('plain text fallback');
+    const opts = makeOpts({ client });
+
+    await narrateScene(opts);
+
+    const call = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain('Recognition:');
+  });
+});
+
 // === F-304fc328: LLM call sites must not throw uncaught ===
 describe('narrateScene F-304fc328: LLM failure fallback', () => {
   it('should return a fallback NarrationResult instead of throwing when generate() rejects', async () => {

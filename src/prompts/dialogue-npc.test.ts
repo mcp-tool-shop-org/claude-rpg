@@ -179,6 +179,83 @@ describe('buildDialogueSystemPrompt (FT-BR-002)', () => {
   });
 });
 
+// === WO-B1-9 (slice B1 §4, design lock 7): asks in dialogue ===
+describe('buildDialogueSystemPrompt WO-B1-9: ask rule block', () => {
+  it('should not append the ask rule block when ask is absent', () => {
+    const result = buildDialogueSystemPrompt({});
+    expect(result).toBe(DIALOGUE_SYSTEM_BASE);
+  });
+
+  it('should append the ask rule block when ask is present', () => {
+    const result = buildDialogueSystemPrompt({
+      ask: { kind: 'lend', surface: 'Could you lend me a few coins?', stake: 5, signature: 'direct' },
+    });
+    expect(result.length).toBeGreaterThan(DIALOGUE_SYSTEM_BASE.length);
+    expect(result).toContain('never state or hint at the truth');
+  });
+});
+
+describe('buildDialoguePrompt WO-B1-9: ask rendering', () => {
+  const askInput: DialogueInput = {
+    ...baseInput,
+    ask: { kind: 'lend', surface: 'Could you lend me a few coins for my sick child?', stake: 5, signature: 'evasive' },
+  };
+
+  it('renders the ask surface text verbatim', () => {
+    const result = buildDialoguePrompt(askInput);
+    expect(result).toContain('Could you lend me a few coins for my sick child?');
+  });
+
+  it('is byte-identical to before this wave when ask is absent', () => {
+    const withAsk = buildDialoguePrompt(askInput);
+    const without = buildDialoguePrompt(baseInput);
+    expect(withAsk).not.toBe(without);
+    expect(without).not.toContain('ask');
+  });
+
+  it('never states or hints the truth value in the rendered prompt body', () => {
+    const genuine = buildDialoguePrompt({
+      ...baseInput,
+      ask: { kind: 'lend', surface: 'Could you lend me a few coins?', stake: 5, signature: 'direct' },
+    });
+    const predatory = buildDialoguePrompt({
+      ...baseInput,
+      ask: { kind: 'lend', surface: 'Could you lend me a few coins?', stake: 5, signature: 'evasive' },
+    });
+    expect(genuine).not.toContain('genuine');
+    expect(genuine).not.toContain('predatory');
+    expect(predatory).not.toContain('genuine');
+    expect(predatory).not.toContain('predatory');
+  });
+});
+
+// === WO-B1-10 (slice B1 §5, design lock 8): honorifics in dialogue ===
+describe('buildDialogueSystemPrompt WO-B1-10: honorific rule block', () => {
+  it('should not append the honorific rule block when honorific is absent', () => {
+    const result = buildDialogueSystemPrompt({});
+    expect(result).toBe(DIALOGUE_SYSTEM_BASE);
+  });
+
+  it('should append the honorific rule block when honorific is present', () => {
+    const result = buildDialogueSystemPrompt({ honorific: 'the Water-Bearer' });
+    expect(result.length).toBeGreaterThan(DIALOGUE_SYSTEM_BASE.length);
+    expect(result).toContain('once per exchange');
+  });
+});
+
+describe('buildDialoguePrompt WO-B1-10: honorific rendering', () => {
+  it('renders the honorific verbatim', () => {
+    const result = buildDialoguePrompt({ ...baseInput, honorific: 'the Water-Bearer' });
+    expect(result).toContain('the Water-Bearer');
+  });
+
+  it('is byte-identical to before this wave when honorific is absent', () => {
+    const without = buildDialoguePrompt(baseInput);
+    expect(without).not.toContain('Water-Bearer');
+    expect(without).not.toContain('Address');
+  });
+});
+
 // === FT-BR-003: NPC conversation memory ===
 describe('buildDialoguePrompt conversation history (FT-BR-003)', () => {
   it('should include conversation history when provided', () => {

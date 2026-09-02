@@ -98,6 +98,8 @@ Rules:
 - When opportunity context is provided (active contracts, bounties, jobs), create ambient awareness through the world: an NPC quest-giver glances expectantly, a posted bounty notice catches the eye, the weight of a deadline looms. After completion, show the aftermath — grateful employers, newfound respect, or consequences of betrayal. Never state quest objectives directly — show the world reacting to the player's commitments
 - When campaign arc context is provided, let the arc's theme subtly color the atmosphere. A rising-power arc means people defer, watch nervously, or seek favor. A hunted arc means furtive glances, locked doors, and whispered warnings. Never name the arc — show its reality through the world's texture
 - When a turning point / endgame context is provided, the atmosphere shifts dramatically. The air feels heavier, NPCs act with urgency or resignation, the world holds its breath. This is a pivotal moment — convey gravity through environmental weight, not exposition
+- When a "What happened this turn (mechanical):" block is provided, weave every outcome it lists into the prose. The prose describes these outcomes; it does not invent hits, misses, or deaths, and it never contradicts one that is listed
+- When a "Recognition:" line is provided, weave its exact acknowledgment into the scene naturally — do not invent a different version of what the NPC remembers
 
 Respond with a JSON object (NarrationPlan) with this shape:
 {
@@ -129,6 +131,8 @@ Rules:
 - If entities have low clarity, describe them vaguely ("a figure", "something moves")
 - Environmental instability should affect prose tone
 - Do not list game mechanics or stats — describe experiences
+- When a "What happened this turn (mechanical):" block is provided, weave every outcome it lists into the prose. The prose describes these outcomes; it does not invent hits, misses, or deaths, and it never contradicts one that is listed
+- When a "Recognition:" line is provided, weave its exact acknowledgment into the scene naturally — do not invent a different version of what the NPC remembers
 
 Respond with narration text only, no JSON or formatting.`;
 
@@ -237,6 +241,27 @@ export type SceneNarrationInput = {
    * the coordinator note.
    */
   budget?: NarrationLineBudget;
+  /**
+   * WO-B1-8 (slice B1 §1, design lock 2): game-core's `TurnResult.combatLines`
+   * — deterministic outcome/kill/telegraph lines derived from this turn's
+   * combat events and the hostile turn (e.g. "Your strike lands — Crypt
+   * Stalker: reeling.", "The Crypt Stalker falls.", "The Ash Ghoul readies a
+   * lunge at you."). Rendered as its own labeled "What happened this turn
+   * (mechanical):" block, in the array's given order — narrateScene's system
+   * prompt instructs the model to reflect these outcomes, never invent or
+   * contradict them (finding 7: prose derives from the state delta, never
+   * substitutes for it). Omitted or empty: byte-identical to before this wave.
+   */
+  combatLines?: string[];
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): game-core's combatLines-style
+   * acknowledgment line for a genuine ask the player just helped (e.g.
+   * "Sister Maren will remember who carried the water."), computed
+   * deterministically by game-core the same round the ask resolves. Rendered
+   * verbatim — this file never invents or rephrases it. Omitted: byte-
+   * identical to before this wave.
+   */
+  recognitionLine?: string;
 };
 
 /**
@@ -404,6 +429,17 @@ export function buildNarratePrompt(input: SceneNarrationInput): string {
     ? formatOpportunityContext(input.opportunityContext, input.budget?.opportunityLines)
     : undefined;
 
+  // WO-B1-8 (slice B1 §1, design lock 2): rendered only when combatLines is
+  // present and non-empty — byte-identical to before this wave otherwise.
+  const combatBlock = input.combatLines && input.combatLines.length > 0
+    ? `\n\nWhat happened this turn (mechanical):\n${input.combatLines.map((l) => `  - ${l}`).join('\n')}`
+    : '';
+
+  // WO-B1-10 (slice B1 §5, design lock 8): rendered verbatim only when present.
+  const recognitionBlock = input.recognitionLine
+    ? `\n\nRecognition: ${input.recognitionLine}`
+    : '';
+
   return `${input.isNewZone ? 'The player just entered a new area.' : 'The player is still in the same area.'}
 
 Zone: ${input.zoneName} [${input.zoneTags.join(', ')}]${input.districtDescriptor ? `\nDistrict: ${input.districtDescriptor}` : ''}
@@ -414,7 +450,7 @@ Visible entities:
 ${entities || '  (none)'}
 
 Recent events:
-${events || '  (none)'}
+${events || '  (none)'}${combatBlock}${recognitionBlock}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 

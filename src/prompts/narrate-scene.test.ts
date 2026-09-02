@@ -82,6 +82,58 @@ describe('buildNarratePrompt moodTransition (WO-A5-7)', () => {
   });
 });
 
+// WO-B1-8 (slice B1 §1, design lock 2): the combat channel threaded into the
+// narration prompt as a "What happened this turn (mechanical):" block the
+// narrator must reflect, never contradict — game-core's TurnResult.combatLines
+// (deterministic outcome/kill/telegraph lines) forwarded verbatim. RED before
+// this wave: SceneNarrationInput had no combatLines field at all.
+describe('buildNarratePrompt combatLines (WO-B1-8)', () => {
+  it('renders a "What happened this turn (mechanical):" block listing every line, in order', () => {
+    const prompt = buildNarratePrompt(makeInput({
+      combatLines: [
+        'Your strike lands — Crypt Stalker: reeling.',
+        'The Crypt Stalker falls.',
+      ],
+    }));
+    expect(prompt).toContain('What happened this turn (mechanical):');
+    const idxHeader = prompt.indexOf('What happened this turn (mechanical):');
+    const idxFirst = prompt.indexOf('Your strike lands — Crypt Stalker: reeling.');
+    const idxSecond = prompt.indexOf('The Crypt Stalker falls.');
+    expect(idxHeader).toBeGreaterThan(-1);
+    expect(idxFirst).toBeGreaterThan(idxHeader);
+    expect(idxSecond).toBeGreaterThan(idxFirst);
+  });
+
+  it('is byte-identical to before this wave when combatLines is absent', () => {
+    const withoutCombat = buildNarratePrompt(makeInput());
+    expect(withoutCombat).not.toContain('What happened this turn');
+  });
+
+  it('is byte-identical to before this wave when combatLines is an empty array', () => {
+    const withEmpty = buildNarratePrompt(makeInput({ combatLines: [] }));
+    const without = buildNarratePrompt(makeInput());
+    expect(withEmpty).toBe(without);
+  });
+});
+
+// WO-B1-10 (slice B1 §5, design lock 8): recognitionLine rendered verbatim —
+// game-core's combatLines-style acknowledgment for a helped genuine ask
+// ("Sister Maren will remember who carried the water."). RED before this
+// wave: SceneNarrationInput had no recognitionLine field at all.
+describe('buildNarratePrompt recognitionLine (WO-B1-10)', () => {
+  it('renders the recognition line verbatim', () => {
+    const prompt = buildNarratePrompt(makeInput({
+      recognitionLine: 'Sister Maren will remember who carried the water.',
+    }));
+    expect(prompt).toContain('Sister Maren will remember who carried the water.');
+  });
+
+  it('is byte-identical to before this wave when recognitionLine is absent', () => {
+    const without = buildNarratePrompt(makeInput());
+    expect(without).not.toContain('Recognition');
+  });
+});
+
 // F-9ee9b5a7: buildNarratePrompt previously included chronicleContext and the
 // activePressures/recentEvents/visibleEntities arrays in full, with no cap of
 // its own -- correctness today depended entirely on every upstream caller

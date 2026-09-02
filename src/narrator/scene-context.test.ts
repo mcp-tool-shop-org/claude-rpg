@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
 import { setPersistedMoveRecommendation } from '@ai-rpg-engine/modules';
-import { buildSceneContext } from './scene-context.js';
+import { buildSceneContext, describeAskHelped, describeAskReveal } from './scene-context.js';
 
 describe('scene-context', () => {
   it('should build scene context for the starting zone', () => {
@@ -786,5 +786,114 @@ describe('describeEvent world-tick coverage (WO-A2-6)', () => {
 
       expect(context.narrationInput.budget).toBeUndefined();
     });
+  });
+});
+
+// WO-B1-11 (slice B1 §4/§5, design locks 7/8): describeAskHelped/
+// describeAskReveal — narrative-craft formatting for the two ask-related
+// WorldMovedEventKinds (session-recap.ts WO-B1-10) and for a same-round
+// 'ask.helped'/'ask.revealed' event flowing through describeEvent's own
+// "Recent events:" channel. RED before this wave: neither export existed,
+// and describeEvent had no case for either type (both fell through to the
+// bare default arm).
+describe('describeAskHelped (WO-B1-11)', () => {
+  it('names the NPC and reads as a settled, past-tense fact (recap register)', () => {
+    const line = describeAskHelped({ npcName: 'Sister Maren', askKind: 'lend' });
+    expect(line).toContain('Sister Maren');
+    expect(line).not.toContain('will remember');
+  });
+
+  it('is deterministic across ask kinds — every kind produces distinct, non-empty text', () => {
+    const kinds = ['carry', 'lend', 'guide', 'hold', 'vouch'] as const;
+    const lines = kinds.map((k) => describeAskHelped({ npcName: 'Aldo', askKind: k }));
+    expect(new Set(lines).size).toBe(kinds.length);
+    for (const line of lines) expect(line.length).toBeGreaterThan(0);
+  });
+});
+
+describe('describeAskReveal (WO-B1-11)', () => {
+  it('renders a predatory sting naming the NPC, without stating the word "predatory"', () => {
+    const line = describeAskReveal({ npcName: 'the courier', askKind: 'lend', truth: 'predatory' });
+    expect(line).toContain('the courier');
+    expect(line.toLowerCase()).not.toContain('predatory');
+  });
+
+  it('names the planted cues in the reveal (finding 28)', () => {
+    const line = describeAskReveal({
+      npcName: 'the courier',
+      askKind: 'lend',
+      truth: 'predatory',
+      cues: [
+        { kind: 'rumor', detail: 'a board rumor about a courier fleecing pilgrims' },
+        { kind: 'contradiction', detail: 'they claimed to be new in town but were seen last season' },
+      ],
+    });
+    expect(line).toContain('a board rumor about a courier fleecing pilgrims');
+    expect(line).toContain('they claimed to be new in town but were seen last season');
+  });
+
+  it('renders a different, non-con line for a genuine ask the player ignored', () => {
+    const line = describeAskReveal({ npcName: 'the petitioner', askKind: 'carry', truth: 'genuine' });
+    expect(line).toContain('the petitioner');
+    expect(line.toLowerCase()).not.toContain('genuine');
+    expect(line).not.toBe(describeAskReveal({ npcName: 'the petitioner', askKind: 'carry', truth: 'predatory' }));
+  });
+
+  it('never appends cue-naming to a genuine-ignored reveal (nothing to have "caught")', () => {
+    const line = describeAskReveal({
+      npcName: 'the petitioner',
+      askKind: 'carry',
+      truth: 'genuine',
+      cues: [{ kind: 'rumor', detail: 'should never appear' }],
+    });
+    expect(line).not.toContain('should never appear');
+  });
+});
+
+describe('describeEvent ask.helped / ask.revealed (WO-B1-11)', () => {
+  it('renders an ask.helped event via buildSceneContext\'s "Recent events:" channel', () => {
+    const engine = createGame();
+    const events = [
+      { type: 'ask.helped', tick: 1, payload: { npcName: 'Sister Maren', askKind: 'lend' } },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      describeAskHelped({ npcName: 'Sister Maren', askKind: 'lend' }),
+    ]);
+  });
+
+  it('renders an ask.revealed event via buildSceneContext, naming planted cues', () => {
+    const engine = createGame();
+    const cues: Array<{ kind: 'rumor' | 'faction-tie' | 'contradiction'; detail: string }> = [
+      { kind: 'faction-tie', detail: 'the courier answers to the Iron Covenant' },
+    ];
+    const events = [
+      {
+        type: 'ask.revealed',
+        tick: 7,
+        payload: { npcName: 'the courier', askKind: 'lend', truth: 'predatory', cues },
+      },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents).toEqual([
+      describeAskReveal({ npcName: 'the courier', askKind: 'lend', truth: 'predatory', cues }),
+    ]);
+    expect(context.narrationInput.recentEvents[0]).toContain('the Iron Covenant');
+  });
+
+  it('falls back to generic naming when payload fields are missing', () => {
+    const engine = createGame();
+    const events = [
+      { type: 'ask.revealed', tick: 1, payload: {} },
+    ] as any;
+
+    const context = buildSceneContext(engine.world, events, 'dark fantasy', []);
+
+    expect(context.narrationInput.recentEvents.length).toBe(1);
+    expect(context.narrationInput.recentEvents[0].length).toBeGreaterThan(0);
   });
 });

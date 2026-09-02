@@ -152,6 +152,107 @@ export function buildSceneContext(
   return { narrationInput, perceivedEvents };
 }
 
+// WO-B1-11 (slice B1 §4/§5, design locks 7/8): narrative-craft formatting for
+// asks. game-core owns the Ask state itself (src/game/asks.ts, outside this
+// domain — its ask kind/truth/cues shapes are declared here, LOCALLY and
+// narrower, rather than importing that file's own types, to keep this
+// prompt-formatting module free of a compile-time dependency on game-core's
+// internal state shape — the same discipline narrate-scene.ts's
+// districtDescriptor doc comment already documents for this codebase).
+export type AskKind = 'carry' | 'lend' | 'guide' | 'hold' | 'vouch';
+export type AskCueKind = 'rumor' | 'faction-tie' | 'contradiction';
+export type AskCue = { kind: AskCueKind; detail: string };
+
+export type AskHelpedDescribeInput = {
+  npcName: string;
+  askKind: AskKind;
+};
+
+export type AskRevealDescribeInput = {
+  npcName: string;
+  askKind: AskKind;
+  truth: 'genuine' | 'predatory';
+  /** Present only for a predatory reveal (finding 28: name the planted details). Ignored for a genuine-ignored reveal — there is no con to have "caught". */
+  cues?: AskCue[];
+};
+
+// WO-B1-11: settled, past-tense recap register ("remembers", not "will
+// remember") — distinct from game-core's own same-round recognitionLine
+// (design lock 8), which is forward-looking ("will remember") and rendered
+// verbatim by narrator.ts/prompts/narrate-scene.ts. This is the LATER,
+// session-recap-facing text for the 'ask-helped' WorldMovedEventKind
+// (session-recap.ts, WO-B1-10).
+const ASK_HELPED_LINES: Record<AskKind, (npcName: string) => string> = {
+  carry: (n) => `${n} remembers who carried the parcel safely through.`,
+  lend: (n) => `${n} remembers who lent the coin when it was needed.`,
+  guide: (n) => `${n} remembers who guided the way below.`,
+  hold: (n) => `${n} remembers who kept the relic safe.`,
+  vouch: (n) => `${n} remembers who spoke for them to the Guard.`,
+};
+
+// WO-B1-11: the predatory sting, landing offeredTick + tuning.askRevealRounds
+// rounds later (design lock 7). Never states the word "predatory" — the
+// reveal is dramatized, not labeled.
+const PREDATORY_REVEAL_LINES: Record<AskKind, (npcName: string) => string> = {
+  carry: (n) => `The parcel you carried for ${n} held more than they claimed, and ${n} is nowhere to be found now.`,
+  lend: (n) => `The coin you lent ${n} is gone, and so is ${n} — nowhere to be found now.`,
+  guide: (n) => `The path you guided ${n} along led straight into an ambush waiting at the other end.`,
+  hold: (n) => `The relic you held for ${n} turns out to be stolen goods, and a faction has pinned it on you.`,
+  vouch: (n) => `The one you vouched for, ${n}, burned your standing the moment they were out of sight.`,
+};
+
+// WO-B1-11: a genuine ask the player ignored resolves badly for the
+// petitioner, and the world says so later (design doc §4) — distinct from
+// the predatory sting above (there was never a con here to have "caught").
+const GENUINE_IGNORED_REVEAL_LINES: Record<AskKind, (npcName: string) => string> = {
+  carry: (n) => `You never carried the parcel for ${n} — and it went badly for them because you didn't.`,
+  lend: (n) => `You never lent ${n} the coin they needed — and it went badly for them because you didn't.`,
+  guide: (n) => `You never guided ${n} below — and it went badly for them because you didn't.`,
+  hold: (n) => `You never held the relic for ${n} — and it went badly for them because you didn't.`,
+  vouch: (n) => `You never vouched for ${n} — and it went badly for them because you didn't.`,
+};
+
+/**
+ * WO-B1-11: named, past-tense recap of a genuine ask the player helped. See
+ * ASK_HELPED_LINES' own comment for how this differs in register from
+ * game-core's same-round recognitionLine (design lock 8) — the two are
+ * deliberately different tenses for two different moments, not duplicates.
+ */
+export function describeAskHelped(input: AskHelpedDescribeInput): string {
+  return ASK_HELPED_LINES[input.askKind](input.npcName);
+}
+
+/**
+ * WO-B1-11: append the ask's pre-planted, re-inspectable cues (finding 28:
+ * "fair play needs clues present but not obvious, so the reveal produces
+ * retrospective recognition") — the reveal names them so it reads "I
+ * missed it," never "the game cheated." Only meaningful for a predatory
+ * reveal; describeAskReveal never calls this for a genuine-ignored one.
+ */
+function formatCueNaming(cues?: AskCue[]): string {
+  if (!cues || cues.length === 0) return '';
+  return ` You might have caught it: ${cues.map((c) => c.detail).join('; ')}.`;
+}
+
+/**
+ * WO-B1-11 (slice B1 §4, design lock 7): the ask's reveal — a predatory
+ * sting (naming the planted cues) or a genuine ask's ignored consequence —
+ * landing several rounds after the offer. Feeds the 'ask-revealed'
+ * WorldMovedEventKind (session-recap.ts, WO-B1-10) and describeEvent's
+ * 'ask.revealed' case below.
+ */
+export function describeAskReveal(input: AskRevealDescribeInput): string {
+  const { npcName, askKind, truth, cues } = input;
+  if (truth === 'genuine') {
+    return GENUINE_IGNORED_REVEAL_LINES[askKind](npcName);
+  }
+  return `${PREDATORY_REVEAL_LINES[askKind](npcName)}${formatCueNaming(cues)}`;
+}
+
+function isAskKind(value: unknown): value is AskKind {
+  return value === 'carry' || value === 'lend' || value === 'guide' || value === 'hold' || value === 'vouch';
+}
+
 export function describeEvent(event: ResolvedEvent): string {
   const p = event.payload;
   switch (event.type) {
@@ -354,6 +455,29 @@ export function describeEvent(event: ResolvedEvent): string {
       const zoneName = typeof p.zoneName === 'string' ? p.zoneName : 'The area';
       const to = typeof p.to === 'string' ? p.to : 'a new state';
       return `${zoneName} has changed: now ${to}`;
+    }
+
+    // WO-B1-11 (slice B1 §4/§5, design locks 7/8): a synthesized event for
+    // the SAME-round 'ask.helped'/'ask.revealed' moment, mirroring
+    // npc.action.resolved's payload-driven house style. game-core (asks.ts,
+    // outside this domain) is the only prospective caller that would ever
+    // construct one of these into a turn's recentEvents[] — the fields read
+    // here are this file's own contract for what such a payload must carry;
+    // cross-domain wiring is not on this branch (green expected at merge),
+    // but every branch below is independently verified with synthetic
+    // events (scene-context.test.ts), so nothing here is unproven.
+    case 'ask.helped': {
+      const npcName = typeof p.npcName === 'string' ? p.npcName : 'Someone';
+      const askKind = isAskKind(p.askKind) ? p.askKind : 'lend';
+      return describeAskHelped({ npcName, askKind });
+    }
+    case 'ask.revealed': {
+      const npcName = typeof p.npcName === 'string' ? p.npcName : 'someone';
+      const askKind = isAskKind(p.askKind) ? p.askKind : 'lend';
+      const truth = (p as { truth?: string }).truth === 'genuine' ? 'genuine' : 'predatory';
+      const cuesRaw = (p as { cues?: unknown }).cues;
+      const cues = Array.isArray(cuesRaw) ? (cuesRaw as AskCue[]) : undefined;
+      return describeAskReveal({ npcName, askKind, truth, cues });
     }
 
     default:

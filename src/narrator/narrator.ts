@@ -188,6 +188,27 @@ export type NarrateSceneOpts = {
    * expected at merge) — behavior is unchanged when absent.
    */
   budget?: NarrationLineBudget;
+  /**
+   * WO-B1-8 (slice B1 §1, design lock 2): game-core's `TurnResult.combatLines`
+   * — see SceneNarrationInput.combatLines's own doc comment (prompts/
+   * narrate-scene.ts) for the full contract. Forwarded verbatim onto
+   * enrichedInput below, same pattern as presentationState/chronicleContext.
+   * Omitted by every current caller (turn-loop.ts doesn't pass one here yet —
+   * the hostile-turn step that would populate it, game-core's WO-B1-1..7, is
+   * a sibling domain not on this branch; green expected at merge) — behavior
+   * is unchanged when absent.
+   */
+  combatLines?: string[];
+  /**
+   * WO-B1-10 (slice B1 §5, design lock 8): game-core's combatLines-style
+   * acknowledgment line for a helped genuine ask — see
+   * SceneNarrationInput.recognitionLine's own doc comment for the full
+   * contract. Forwarded verbatim, same pattern as combatLines above. Omitted
+   * by every current caller (the asks ledger that would populate it,
+   * game-core's WO-B1-*, is a sibling domain not on this branch; green
+   * expected at merge) — behavior is unchanged when absent.
+   */
+  recognitionLine?: string;
 };
 
 /** Narrate the current scene after action resolution. Returns structured plan when possible. */
@@ -199,6 +220,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, situationHint, chronicleContext, onChunk, logger,
     consecutiveFallbacks, onStreamReset, moodTransition, budget,
+    combatLines, recognitionLine,
   } = opts;
 
   // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
@@ -239,6 +261,8 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     ...sceneContext.narrationInput,
     presentationState,
     chronicleContext,
+    combatLines,
+    recognitionLine,
   };
 
   const prompt = buildNarratePrompt(enrichedInput);

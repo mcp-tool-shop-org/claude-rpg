@@ -501,3 +501,45 @@ describe('generateDialogue F-d8184410/F-ff0b4af6: activeOpportunities/partyPrese
     expect(forwardedArgs[10]).toBeUndefined();
   });
 });
+
+// WO-B1-9/WO-B1-10 (slice B1 §4/§5, design locks 7/8): ask and honorific are
+// straight pass-through params, same shape as F-d8184410/F-ff0b4af6 above.
+// RED before this wave: generateDialogue had no ask/honorific parameters at
+// all, and buildNPCDialogueContext was never called with a 14th or 15th arg.
+describe('generateDialogue WO-B1-9/WO-B1-10: ask/honorific passthrough', () => {
+  it('forwards ask and honorific to buildNPCDialogueContext', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Welcome.');
+    const ask = { kind: 'lend' as const, surface: 'Could you lend me a few coins?', stake: 5, signature: 'evasive' as const };
+
+    await generateDialogue(
+      client,
+      makeWorld(),
+      'npc-1',
+      'Hello',
+      'dark fantasy',
+      undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined,
+      ask,
+      'the Water-Bearer',
+    );
+
+    const forwardedArgs = mockedBuildContext.mock.calls[0];
+    expect(forwardedArgs[13]).toBe(ask);
+    expect(forwardedArgs[14]).toBe('the Water-Bearer');
+  });
+
+  it('leaves both undefined when omitted, unchanged from before this fix', async () => {
+    const ctx = makeContext();
+    mockedBuildContext.mockReturnValue(ctx as any);
+    const client = makeClient('Welcome.');
+
+    await generateDialogue(client, makeWorld(), 'npc-1', 'Hello', 'dark fantasy');
+
+    const forwardedArgs = mockedBuildContext.mock.calls[0];
+    expect(forwardedArgs[13]).toBeUndefined();
+    expect(forwardedArgs[14]).toBeUndefined();
+  });
+});

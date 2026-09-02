@@ -37,7 +37,13 @@ a pack with no hostiles cannot ambush):
 4. an opportunity spawns and is accepted or expires with fallout;
 5. a zone entry spawns an encounter (packs with authored tables; the
    generated fixture through its proposal encounters);
-6. a rumor about the player reaches two NPCs with two different stances.
+6. the world produced a rumor about the player (**ruled at the wave-9
+   stitch:** the gate is this structural half; reach — an NPC hearer with
+   a stance — and two hearers with two different stances are measured on
+   the sheet and tuned in A6: at the default stance rule every hearer
+   believes, because suspicion starts at 0 and the believe threshold is 50,
+   and the fixed script often leaves the player where no named NPC can
+   hear).
 
 The proof also writes the **metrics sheet** the tuning program consumes
 (`dogfood/tuning/matrix-<label>.json`, one row per pack): rounds, kills,

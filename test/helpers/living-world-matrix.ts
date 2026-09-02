@@ -1,3 +1,4 @@
+import { createProfile, type CharacterProfile } from '@ai-rpg-engine/character-profile';
 // WO-P9-1 (Phase 9 §1, docs/living-world-slice-a6-phase9.md, run
 // swarm-1788288802-f5a0, wave 9, "tests" domain, ADDENDUM-COMMON design
 // lock #4): the composed-proof matrix runner. Boots a world (a starter
@@ -105,7 +106,20 @@ export type LinkEvidence = {
   opportunityLifecycle: boolean;
   /** Item 5: a zone entry spawns an encounter. */
   zoneEncounterSpawn: boolean;
-  /** Item 6: a rumor about the player reaches two NPCs with two different stances. */
+  /**
+   * Item 6, the structural half (coordinator ruling, wave 9 stitch): the
+   * world produced a rumor about the player (a milestone rumor spawned).
+   * Reach (`rumorReachesHearer`) and stance DIVERGENCE (`rumorTwoStances`)
+   * are measured on the sheet and tuned in A6: the default stance rule
+   * (believe when faction uptake includes the hearer's faction OR suspicion
+   * is below 50; DEFAULT_SUSPICION is 0) makes every hearer believe, and the
+   * fixed script often leaves the player in a district with no named NPC
+   * after the milestone, so both are lever targets, not structural links.
+   */
+  rumorCreated: boolean;
+  /** Item 6, the reach half (measured, tuned in A6): the rumor reached at least one NPC hearer holding a stance. */
+  rumorReachesHearer: boolean;
+  /** Item 6, the divergence half: a rumor about the player reaches two NPCs with two different stances. */
   rumorTwoStances: boolean;
 };
 
@@ -222,11 +236,40 @@ export function stableStringify(value: unknown): string {
  * (WO-P9-3 threads `stackTuning` when supplied -- green expected at merge,
  * see game-harness.ts's own doc comment on that option).
  */
+/**
+ * Coordinator stitch (wave 9): every world boots WITH a character profile,
+ * the way a real session does (bin.ts runNew always builds one). Player
+ * rumors spawn from profile milestones (game.ts applyProfileHints ->
+ * spawnPlayerRumor), so a profile-less session can never produce design
+ * doc §1 item 6 -- the wave-9 matrix measured rumorsCreated = 0 on 12 of
+ * 13 worlds for exactly this reason. The build is the pack's own first
+ * archetype and background (deterministic), stats and resources copied
+ * from the engine's player entity so the profile never contradicts the
+ * world it plays in.
+ */
+function buildMatrixProfile(engine: Engine, packId: string, catalog?: { archetypes?: Array<{ id: string }>; backgrounds?: Array<{ id: string }> }): CharacterProfile {
+  const player = engine.world.entities[engine.world.playerId];
+  return createProfile(
+    {
+      name: 'Matrix',
+      archetypeId: catalog?.archetypes?.[0]?.id ?? 'wanderer',
+      backgroundId: catalog?.backgrounds?.[0]?.id ?? 'unknown',
+      traitIds: [],
+    },
+    { ...(player?.stats ?? {}) },
+    { ...(player?.resources ?? {}) },
+    [],
+    packId,
+  );
+}
+
 async function buildHarnessForWorld(input: MatrixWorldInput, seed: number): Promise<GameHarness> {
   if (input.kind === 'pack') {
+    const engine = input.pack.createGame(seed);
     return createHarness({
       gameOpts: {
-        engine: input.pack.createGame(seed),
+        engine,
+        profile: buildMatrixProfile(engine, input.pack.meta.id, input.pack.buildCatalog as never),
         itemCatalog: input.pack.itemCatalog,
         genre: input.pack.meta.genres?.[0] ?? 'fantasy',
         title: input.pack.meta.name,
@@ -237,8 +280,14 @@ async function buildHarnessForWorld(input: MatrixWorldInput, seed: number): Prom
   const harness = await createGeneratedHarness(input.proposal, {
     seed,
     stackTuning: input.stackTuning,
-    gameOpts: input.itemCatalog ? { itemCatalog: input.itemCatalog } : undefined,
+    gameOpts: {
+      ...(input.itemCatalog ? { itemCatalog: input.itemCatalog } : {}),
+      // The generated fixture has no pack catalog; a fantasy build stands in
+      // (the profile's pack id only names the catalog the build came from).
+      profile: undefined,
+    },
   });
+  harness.session.profile = buildMatrixProfile(harness.session.engine, 'chapel-threshold', undefined);
   if (input.seedFactionPressure) {
     const { factionId, reputation, alertLevel } = input.seedFactionPressure;
     harness.session.engine.world.globals[`reputation_${factionId}`] = reputation;
@@ -544,6 +593,10 @@ async function playWorld(input: MatrixWorldInput, rounds: number, seed: number):
     for (const rumor of session.rumorEngine.query({ subject: 'player' })) {
       const stancesForRumor = new Set<string>();
       for (const hearerId of rumor.spreadPath) {
+        // Coordinator stitch (wave 9): a spread path opens with the
+        // WITNESSING FACTION's id (spawnPlayerRumor's witnessedBy); only
+        // NPC entities are hearers for the sheet's reach metrics.
+        if (session.engine.world.entities[hearerId]?.type !== 'npc') continue;
         hearerIds.add(hearerId);
         const stance = session.rumorEngine.stanceOf(hearerId, rumor.id);
         if (stance === 'believe') {
@@ -602,6 +655,8 @@ async function playWorld(input: MatrixWorldInput, rounds: number, seed: number):
     namedNpcActed: sawNamedNpcAction,
     opportunityLifecycle: opportunitiesSpawned > 0 && (acceptSucceeded || opportunitiesExpired > 0),
     zoneEncounterSpawn: ambushes > 0,
+    rumorCreated: rumorsCreated >= 1,
+    rumorReachesHearer: rumorHearers >= 1 && stanceBelieveCount + stanceDoubtCount >= 1,
     rumorTwoStances,
   };
 

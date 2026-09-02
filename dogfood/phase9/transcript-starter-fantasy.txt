@@ -110,6 +110,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -207,6 +210,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -325,6 +331,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -419,6 +428,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -857,6 +869,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -952,6 +967,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1032,6 +1050,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1143,6 +1164,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1223,6 +1247,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1320,6 +1347,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1537,6 +1567,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1632,6 +1665,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1745,6 +1781,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart
@@ -1761,7 +1800,32 @@ The scene unfolds before you.
 ────────────────────────────────────────────────────────────
 
 ═══ beat 11 ── > /tuning
-  Unknown command: /tuning. Type /help for available commands.
+
+────────────────────────────────────────────────────────────
+  LIVING WORLD TUNING
+────────────────────────────────────────────────────────────
+
+  Rumor stance fade (ticks): 24 (default)
+  Rumor believe threshold (suspicion below): 50 (default)
+  Rumor spread scope: district (default)
+  World-moved ledger cap: 200 (default)
+  Narration pressure lines: 10 (default)
+  Narration opportunity lines: unlimited (default)
+  Narration rumor lines: unlimited (default)
+  Ambush headline: always (default)
+
+────────────────────────────────────────────────────────────
+  LAST ROUND
+────────────────────────────────────────────────────────────
+
+  Round tick 29 (29 rounds recorded)
+  Heat: 10
+  Quiet rounds: 11
+  Pressures active: 1
+  Rumor hearers: 3
+  Price quote: 13
+
+────────────────────────────────────────────────────────────
 
 ═══ beat 11 ── > /director
 
@@ -1828,6 +1892,9 @@ The scene unfolds before you.
   /status                           Compact strategic
                                     snapshot
   /stats                            Session balance metrics
+  /tuning                           Living-world tuning
+                                    levers + last round
+                                    metrics
   /help leverage                    Full leverage verb
                                     reference
   /help <pack-id>                   Pack-specific quickstart

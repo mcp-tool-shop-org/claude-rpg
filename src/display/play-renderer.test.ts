@@ -710,3 +710,48 @@ describe('renderPlayScreen command strip (WO-B1-18)', () => {
     expect(withoutField).not.toContain('You can:');
   });
 });
+
+/**
+ * WO-B1F-9 (slice B1 follow-ups §4, design lock 4): the quoted price line.
+ * Before this wave `renderPlayScreen` had no `marketQuote` opt at all --
+ * this describe block was red (the field didn't exist, so nothing could
+ * render it) until the opts field + render branch were added above in this
+ * file.
+ */
+describe('renderPlayScreen market quote line (WO-B1F-9)', () => {
+  it('renders "Market: <item> <price> (<note>)" under the location/exits line', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      marketQuote: { item: 'bread', price: 12, note: 'fair prices' },
+    });
+    expect(output).toContain('Market: bread 12 (fair prices)');
+    const locationIdx = output.indexOf('Location:');
+    const marketIdx = output.indexOf('Market:');
+    expect(marketIdx).toBeGreaterThan(locationIdx);
+  });
+
+  it('renders no market line when marketQuote is absent (existing callers unaffected, byte-identical)', () => {
+    const engine = createGame();
+    const base = { narration: 'Test.', world: engine.world, availableActions: [] };
+    const withoutField = renderPlayScreen(base);
+    expect(withoutField).not.toContain('Market:');
+  });
+
+  it('renders the market line above the hostiles line when both are present', () => {
+    const engine = createGame();
+    const output = renderPlayScreen({
+      narration: 'Test.',
+      world: engine.world,
+      availableActions: [],
+      marketQuote: { item: 'bread', price: 12, note: 'fair prices' },
+      hostiles: [{ id: 'h1', name: 'Ash Ghoul', rung: 'unhurt', aware: false }],
+    });
+    const marketIdx = output.indexOf('Market:');
+    const hostilesIdx = output.indexOf('Hostiles:');
+    expect(marketIdx).toBeGreaterThan(-1);
+    expect(hostilesIdx).toBeGreaterThan(marketIdx);
+  });
+});

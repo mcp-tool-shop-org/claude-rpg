@@ -427,6 +427,25 @@ export function renderPlayHelp(): string {
     .map((c) => renderNameDescriptionRow(c.cmd, c.description, 30))
     .join('\n');
 
+  // WO-B1F-10 (slice B1 follow-ups §2, design lock 2): three family
+  // playtest runs typed `/go`, `/move`, `/zone` expecting them to work in
+  // play mode and `/rumors` expecting it readable there -- none were
+  // documented anywhere (design doc's observed item 2). game-core's own
+  // WO-B1F-2 wires the actual resolution (turn-loop.ts/game.ts, out of this
+  // domain's globs); this is this domain's half -- the play help screen
+  // listing them. `/go`, `/move`, `/zone` are named together as ONE entry
+  // per the work order's own wording (they're aliases of the same move
+  // fast path, not three distinct verbs) rather than three PLAY_COMMANDS
+  // rows, which would misrepresent them as independent commands and would
+  // also require bin.ts's USAGE text + SLASH_COMMANDS tab-completion
+  // reconciliation (slash-completer.test.ts) neither of which this WO asks
+  // for. Not routed through PLAY_COMMANDS for that reason -- hand-listed
+  // here, same as BASIC ACTIONS/LEVERAGE ACTIONS above.
+  const aliasRows = [
+    renderNameDescriptionRow('/go, /move, /zone <exit>', 'Alias for "go <exit>" — move to a neighboring zone', 30),
+    renderNameDescriptionRow('/rumors', 'Read the rumor board from play mode', 30),
+  ].join('\n');
+
   return `
 ${divider()}
   ${bold('QUICK REFERENCE')}
@@ -451,6 +470,9 @@ ${divider()}
 
   CRAFTING
     craft <recipe>                Craft an item from gathered materials
+
+  ALIASES
+${aliasRows}
 
   COMMANDS
     /help                         This reference

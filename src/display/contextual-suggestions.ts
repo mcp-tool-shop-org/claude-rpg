@@ -256,6 +256,17 @@ export function generateSuggestions(opts: {
  * than 5 would qualify (e.g. several exits or several aware hostiles), the
  * fixed slot order above decides which entries survive the cap, not an
  * arbitrary array order.
+ *
+ * WO-B1F-11 (slice B1 follow-ups §8, design lock 8): this IS the "command
+ * strip's state-derived suggestion builder" the work order asks to export
+ * for game-core's `validNow` -- already a pure function of these inputs to
+ * `string[]`, already exported from src/display/**, unchanged this wave.
+ * game-core's own WO-B1F-8 (src/game/unknown-command.ts, out of this
+ * domain's globs) is the caller: `computeUnknownCommandInfo`'s `validNow`
+ * should become this function's output when non-empty, falling back to the
+ * curated `PLAY_VALID_NOW` list it already has. Declared as a seam in this
+ * domain's envelope (skipped[]) rather than wired from this side, since the
+ * import would land in src/game/unknown-command.ts.
  */
 export function generateCommandStrip(opts: {
   /** Named NPCs present in the player's current zone, most-relevant first (game-core's ordering). */

@@ -225,6 +225,17 @@ export function renderPlayScreen(opts: {
    * renders nothing.
    */
   commandStrip?: string[];
+  /**
+   * WO-B1F-9 (slice B1 follow-ups §4, design lock 4): one line naming the
+   * player's district's market, when it has one -- game-core fills this
+   * from the district's first buyable stock item and `quoteBuyPrice`'s
+   * number; the note is the existing standing/markup phrase the quote
+   * already carries. Rendered directly under the location/exits line, above
+   * the hostiles line when both are present. Optional/absent renders
+   * nothing (byte-identical for every existing caller, none of which pass
+   * this yet).
+   */
+  marketQuote?: { item: string; price: number; note: string };
 }): string {
   const parts: string[] = [];
 
@@ -344,6 +355,15 @@ export function renderPlayScreen(opts: {
       .map((id) => opts.world.zones[id]?.name ?? id)
       .join(', ');
     parts.push(`  Location: ${zone.name}${exits ? ` | Exits: ${exits}` : ''}`);
+  }
+
+  // WO-B1F-9 (slice B1 follow-ups §4, design lock 4): the quoted price line
+  // -- one line directly under the location/exits line, absent when the
+  // district has no market (byte-identical to every existing caller, none
+  // of which pass this yet).
+  if (opts.marketQuote) {
+    const { item, price, note } = opts.marketQuote;
+    parts.push(`  Market: ${item} ${price} (${note})`);
   }
 
   // WO-B1-15 (slice B1 §1, lock 1): the status hostile line -- one line

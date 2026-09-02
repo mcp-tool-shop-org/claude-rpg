@@ -24,9 +24,9 @@ Rules:
 - Merchants adjust pricing language based on stance (hostile = inflated, awed = discounts)
 - If the NPC's faction has high alert, be evasive or defensive regardless of personal feelings
 - If the NPC has heard rumors about the player, weave them into dialogue naturally
+- Rumors this character has heard about the player are listed with a stance: one they BELIEVE shapes how they treat the player; one they DOUBT they may mention warily or deny
 - High-confidence rumors are stated as fact; low-confidence rumors are hedged ("I heard...", "They say...")
-- High-distortion rumors may be inaccurate — the NPC believes the distorted version
-- Heroic rumors make the NPC more respectful or cautious; fearsome rumors make them wary or hostile
+- A rumor that has mutated several times in the telling may no longer match what actually happened — the NPC believes the version they personally heard, not the original
 - NPCs may ask the player about rumors they've heard, seeking confirmation or denial
 - If there is an active pressure from the NPC's faction, it affects their behavior:
   - bounty-issued: the NPC may threaten, demand surrender, or offer to look the other way
@@ -148,11 +148,24 @@ export type DialogueInput = {
   playerUtterance: string;
   tone: string;
   playerPresence?: string;
-  playerRumors?: Array<{
+  /**
+   * WO-A5-8 (slice A5 §6, design lock 6): REPLACES the old 4-valence
+   * `playerRumors` field (claim/confidence/distortion/valence, sourced from
+   * getRumorsKnownToFaction) with a per-hearer read from the RumorEngine
+   * (rumor-system package): `heardBy(npcId)` + `stanceOf(npcId, rumor.id)`,
+   * threaded in by npc-context.ts's own `hearerRumors` parameter. `stance`
+   * is this SPEAKING NPC's own belief in the rumor (not a world-wide
+   * consensus) -- two NPCs hearing the same rumor can disagree, which is
+   * the whole point of the per-hearer read (design doc §6's "two hearers,
+   * two versions" moment). `mutationCount` replaces `distortion` -- the
+   * RumorEngine tracks how many times a claim's VALUE changed during
+   * spread, not a continuous distortion scalar.
+   */
+  hearerRumors?: Array<{
     claim: string;
+    stance: 'believe' | 'doubt' | 'unknown';
     confidence: number;
-    distortion: number;
-    valence: string;
+    mutationCount: number;
   }>;
   activePressures?: Array<{
     kind: string;
@@ -162,6 +175,14 @@ export type DialogueInput = {
   }>;
   // v1.2: NPC agency fields
   npcGoal?: string;
+  /**
+   * WO-A5-6 (slice A5 §3, design lock 3): one of three mechanical strings —
+   * "owes you a favor" / "you owe them a debt" / "was betrayed by you" —
+   * collapsed from the NPC's obligation ledger by npc-context.ts's
+   * deriveObligationStanding. Absent when the ledger has nothing standing
+   * between this NPC and the player (never a fabricated "none" line).
+   */
+  npcObligationStanding?: string;
   npcStance?: string;
   npcRecentAction?: string;
   isLying?: boolean;
@@ -235,13 +256,23 @@ function formatWorldPressureHint(hint?: string): string {
   return `\nElsewhere in the world:\n  - ${hint}\n`;
 }
 
-function formatPlayerRumors(
-  rumors?: DialogueInput['playerRumors'],
+/**
+ * WO-A5-8 (slice A5 §6, design lock 6): renders DialogueInput.hearerRumors
+ * (the per-hearer RumorEngine read) under the same "Rumors about the
+ * player:" header the deleted formatPlayerRumors used, so this section's
+ * position/wording in the assembled prompt is unchanged -- only its data
+ * source and per-line content change (stance replaces valence, mutation
+ * count replaces distortion). An 'unknown' stance (heardBy without a set
+ * stance yet) still renders -- the NPC has heard it even if undecided.
+ */
+function formatHearerRumors(
+  rumors?: DialogueInput['hearerRumors'],
 ): string {
   if (!rumors || rumors.length === 0) return '';
   const lines = rumors.map((r) => {
     const conf = r.confidence >= 0.8 ? 'certain' : r.confidence >= 0.5 ? 'heard' : 'vague whisper';
-    return `  - "${r.claim}" (${conf}, ${r.valence})`;
+    const mutated = r.mutationCount > 0 ? `, mutated ${r.mutationCount}x` : '';
+    return `  - "${r.claim}" (${conf}, ${r.stance}${mutated})`;
   });
   return `\nRumors about the player:\n${lines.join('\n')}\n`;
 }
@@ -275,6 +306,12 @@ function formatVoiceStyle(input: DialogueInput): string {
 function formatNpcAgencyContext(input: DialogueInput): string {
   const parts: string[] = [];
   if (input.npcGoal) parts.push(`Current goal: ${input.npcGoal}`);
+  // WO-A5-6 (slice A5 §3, design lock 3): mechanical "Standing with you"
+  // line, immediately after the goal line per the design doc's own pairing
+  // ("Current goal: ...", "Standing with you: ..."). Absent when
+  // npcObligationStanding is undefined -- byte-identical to before this
+  // wave for any NPC with nothing standing between them and the player.
+  if (input.npcObligationStanding) parts.push(`Standing with you: ${input.npcObligationStanding}`);
   if (input.npcStance) parts.push(`Stance toward player: ${input.npcStance}`);
   if (input.npcRecentAction) parts.push(`Recent action: ${input.npcRecentAction}`);
   if (input.isLying) parts.push('BEHAVIOR: NPC is actively lying or concealing — give wrong info confidently but with subtle tells');
@@ -336,7 +373,7 @@ Rumors heard:
 ${rumors || '  (none)'}
 
 Tone: ${input.tone}
-${formatVoiceStyle(input)}${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.textureHint ? `\n${input.textureHint}\n` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${input.opportunityHint ? `\nDirect dealings with you: ${input.opportunityHint}\n` : ''}${formatPlayerRumors(input.playerRumors)}${formatActivePressures(input.activePressures)}${formatWorldPressureHint(input.worldPressureHint)}${formatNpcAgencyContext(input)}${formatConversationHistory(input.conversationHistory)}
+${formatVoiceStyle(input)}${input.playerPresence ? `\n${input.playerPresence}\n` : ''}${input.textureHint ? `\n${input.textureHint}\n` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}${input.economyContext ? `\nEconomy: ${input.economyContext}\n` : ''}${input.craftingContext ? `\nPlayer gear: ${input.craftingContext}\n` : ''}${input.opportunityContext ? `\nActive commitment: ${input.opportunityContext}\n` : ''}${input.opportunityHint ? `\nDirect dealings with you: ${input.opportunityHint}\n` : ''}${formatHearerRumors(input.hearerRumors)}${formatActivePressures(input.activePressures)}${formatWorldPressureHint(input.worldPressureHint)}${formatNpcAgencyContext(input)}${formatConversationHistory(input.conversationHistory)}
 Player says:
 <player_speech>
 ${sanitizePlayerUtterance(input.playerUtterance)}

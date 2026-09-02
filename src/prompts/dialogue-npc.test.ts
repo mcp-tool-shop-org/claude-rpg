@@ -438,3 +438,73 @@ describe('buildDialoguePrompt opportunityHint (F-d8184410)', () => {
     expect(prompt).not.toContain('Direct dealings');
   });
 });
+
+// WO-A5-6 (slice A5 §3, design lock 3): "Standing with you" mechanical line,
+// paired with the pre-existing "Current goal" line inside the "NPC agency
+// state:" block. RED before this wave: DialogueInput had no
+// npcObligationStanding field and formatNpcAgencyContext had no branch for it.
+describe('buildDialoguePrompt npcObligationStanding (WO-A5-6)', () => {
+  it('renders "Standing with you: owes you a favor" when present', () => {
+    const prompt = buildDialoguePrompt({ ...baseInput, npcObligationStanding: 'owes you a favor' });
+    expect(prompt).toContain('Standing with you: owes you a favor');
+  });
+
+  it('renders alongside Current goal as two distinct lines in NPC agency state', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      npcGoal: 'Warn an ally',
+      npcObligationStanding: 'you owe them a debt',
+    });
+    expect(prompt).toContain('Current goal: Warn an ally');
+    expect(prompt).toContain('Standing with you: you owe them a debt');
+  });
+
+  it('does not render a "Standing with you" line when absent', () => {
+    const prompt = buildDialoguePrompt(baseInput);
+    expect(prompt).not.toContain('Standing with you');
+  });
+
+  it('is byte-identical to before this wave when the NPC has neither goal nor standing', () => {
+    const withNeither = buildDialoguePrompt(baseInput);
+    const withStanding = buildDialoguePrompt({ ...baseInput, npcObligationStanding: 'was betrayed by you' });
+    expect(withNeither).not.toContain('NPC agency state');
+    expect(withStanding).toContain('NPC agency state');
+  });
+});
+
+// WO-A5-8 (slice A5 §6, design lock 6): hearerRumors replaces the deleted
+// 4-valence playerRumors field/formatter. RED before this wave: DialogueInput
+// had no hearerRumors field, no formatHearerRumors existed, and the rendered
+// section was fed by playerRumors (confidence/distortion/valence) instead.
+describe('buildDialoguePrompt hearerRumors (WO-A5-8)', () => {
+  it('renders a believed rumor under "Rumors about the player:" with its stance', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      hearerRumors: [{ claim: 'defeated the Bone Collector', stance: 'believe', confidence: 0.9, mutationCount: 0 }],
+    });
+    expect(prompt).toContain('Rumors about the player:');
+    expect(prompt).toContain('"defeated the Bone Collector" (certain, believe)');
+  });
+
+  it('renders a doubted, mutated rumor with its mutation count', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      hearerRumors: [{ claim: 'burned the Chapel archive', stance: 'doubt', confidence: 0.4, mutationCount: 2 }],
+    });
+    expect(prompt).toContain('"burned the Chapel archive" (vague whisper, doubt, mutated 2x)');
+  });
+
+  it('omits the mutation suffix when mutationCount is zero', () => {
+    const prompt = buildDialoguePrompt({
+      ...baseInput,
+      hearerRumors: [{ claim: 'saved the merchant', stance: 'believe', confidence: 0.6, mutationCount: 0 }],
+    });
+    expect(prompt).toContain('"saved the merchant" (heard, believe)');
+    expect(prompt).not.toContain('mutated');
+  });
+
+  it('does not render a "Rumors about the player" section when hearerRumors is absent or empty', () => {
+    expect(buildDialoguePrompt(baseInput)).not.toContain('Rumors about the player');
+    expect(buildDialoguePrompt({ ...baseInput, hearerRumors: [] })).not.toContain('Rumors about the player');
+  });
+});

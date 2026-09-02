@@ -717,4 +717,39 @@ describe('describeEvent world-tick coverage (WO-A2-6)', () => {
       'Market Square has changed: now strained',
     ]);
   });
+
+  // WO-A5-7 (slice A5 §2, design lock 2): buildSceneContext threads the
+  // trailing moodTransition param straight onto narrationInput.moodTransition
+  // -- see that field's own doc comment (prompts/narrate-scene.ts) for who
+  // computes it and why. RED before this wave: buildSceneContext had no such
+  // trailing param at all.
+  describe('WO-A5-7: moodTransition threading', () => {
+    it('threads moodTransition onto narrationInput when provided', () => {
+      const engine = createGame();
+      const context = buildSceneContext(
+        engine.world, [], 'dark fantasy', [],
+        undefined, // previousLocationId
+        undefined, // characterPresence
+        undefined, // activePressures
+        undefined, // districtDescriptor
+        undefined, // partyPresence
+        undefined, // economyContext
+        undefined, // craftingContext
+        undefined, // opportunityContext
+        undefined, // arcContext
+        undefined, // endgameContext
+        undefined, // situationHint
+        { from: 'calm', to: 'grim' }, // moodTransition
+      );
+
+      expect(context.narrationInput.moodTransition).toEqual({ from: 'calm', to: 'grim' });
+    });
+
+    it('leaves narrationInput.moodTransition undefined when omitted', () => {
+      const engine = createGame();
+      const context = buildSceneContext(engine.world, [], 'dark fantasy', []);
+
+      expect(context.narrationInput.moodTransition).toBeUndefined();
+    });
+  });
 });

@@ -106,6 +106,68 @@ export type OpportunityRecapEntry = {
   detail?: string;
 };
 
+/**
+ * WO-A5-9 (slice A5 §7): the eight kinds of round-ledger entries the design
+ * doc names for the "The world moved" recap section — pressures spawned/
+ * resolved/expired, opportunities offered/expired, ambushes, district mood
+ * transitions, rumors mutated. One entry per occurrence; `headline` is
+ * mechanical-register prose describing that one occurrence (e.g. "bounty-
+ * issued: The Chapel Guard puts a price on your head", "Ambush: Bone
+ * Collector in the Sunken Docks", "Chapel Undead: calm -> grim").
+ */
+export type WorldMovedEventKind =
+  | 'pressure-spawned'
+  | 'pressure-resolved'
+  | 'pressure-expired'
+  | 'opportunity-offered'
+  | 'opportunity-expired'
+  | 'ambush'
+  | 'mood-transition'
+  | 'rumor-mutated';
+
+export type WorldMovedEvent = {
+  kind: WorldMovedEventKind;
+  headline: string;
+};
+
+/**
+ * WO-A5-9: game-core's `this.worldMovedLedger` (ADDENDUM-game-core.md
+ * WO-A5-5) — accumulated per round, capped oldest-first at the source. This
+ * file only reads it; it never mutates or caps it further.
+ */
+export type WorldMovedLedger = {
+  events: WorldMovedEvent[];
+};
+
+/**
+ * Fixed render order — NOT the ledger's own (chronological) event order.
+ * Determinism (this cycle's byte-identical living-world-driver proof)
+ * requires the section's kind-to-kind ordering to be independent of which
+ * kind happened to occur first in a given session, so this is a constant
+ * array walked in order rather than a Map built from insertion order.
+ */
+const WORLD_MOVED_KIND_ORDER: readonly WorldMovedEventKind[] = [
+  'pressure-spawned',
+  'pressure-resolved',
+  'pressure-expired',
+  'opportunity-offered',
+  'opportunity-expired',
+  'ambush',
+  'mood-transition',
+  'rumor-mutated',
+];
+
+const WORLD_MOVED_KIND_LABELS: Record<WorldMovedEventKind, string> = {
+  'pressure-spawned': 'Pressures spawned',
+  'pressure-resolved': 'Pressures resolved',
+  'pressure-expired': 'Pressures expired',
+  'opportunity-offered': 'Opportunities offered',
+  'opportunity-expired': 'Opportunities expired',
+  'ambush': 'Ambushes',
+  'mood-transition': 'Mood transitions',
+  'rumor-mutated': 'Rumors mutated',
+};
+
 // --- Computation ---
 
 export function computeFactionDeltas(
@@ -517,6 +579,34 @@ export function computeOpportunityRecapEntries(
   return entries;
 }
 
+/**
+ * WO-A5-9 (slice A5 §7): render "counts + the headline of each" (design
+ * doc's own words) — one line per kind that occurred at least once this
+ * session, showing the count and the MOST RECENT occurrence's headline
+ * (last in the ledger's chronological array), not every individual
+ * occurrence. Returns [] (renders nothing) when the ledger is absent or
+ * empty, per WO-A5-9's "absent when empty" contract.
+ */
+function renderWorldMovedLines(ledger?: WorldMovedLedger): string[] {
+  if (!ledger || ledger.events.length === 0) return [];
+
+  const byKind = new Map<WorldMovedEventKind, WorldMovedEvent[]>();
+  for (const event of ledger.events) {
+    const list = byKind.get(event.kind);
+    if (list) list.push(event);
+    else byKind.set(event.kind, [event]);
+  }
+
+  const lines: string[] = [];
+  for (const kind of WORLD_MOVED_KIND_ORDER) {
+    const events = byKind.get(kind);
+    if (!events || events.length === 0) continue;
+    const mostRecent = events[events.length - 1];
+    lines.push(`  ${WORLD_MOVED_KIND_LABELS[kind]}: ${events.length} — "${mostRecent.headline}"`);
+  }
+  return lines;
+}
+
 // --- Rendering ---
 
 export type ArcRecapData = {
@@ -539,6 +629,13 @@ export function renderFullRecap(
   craftingData?: { entries: CraftingRecapEntry[]; materialChanges: { category: string; before: number; after: number }[] },
   opportunityRecapEntries?: OpportunityRecapEntry[],
   arcRecapData?: ArcRecapData,
+  /**
+   * WO-A5-9 (slice A5 §7): game-core's `worldMovedLedger` — see this file's
+   * WorldMovedLedger doc comment for the full contract. Additive trailing
+   * param; omitted (or empty), the "THE WORLD MOVED" section renders
+   * nothing, byte-identical to before this wave.
+   */
+  worldMovedLedger?: WorldMovedLedger,
 ): string {
   // F-579e70a8: hoisted so the "nothing happened" gate below can reuse the exact
   // same conditions that gate each individual section, instead of a hand-maintained
@@ -547,6 +644,7 @@ export function renderFullRecap(
   const changedDistricts = districtDeltas?.filter((d) => d.changed) ?? [];
   const hasCraftingData = !!craftingData &&
     (craftingData.entries.length > 0 || craftingData.materialChanges.length > 0);
+  const worldMovedLines = renderWorldMovedLines(worldMovedLedger);
 
   const hasAnyContent =
     characterDelta.turnsPlayed > 0 ||
@@ -567,7 +665,8 @@ export function renderFullRecap(
     (itemRecapEntries?.length ?? 0) > 0 ||
     hasCraftingData ||
     (opportunityRecapEntries?.length ?? 0) > 0 ||
-    !!(arcRecapData && (arcRecapData.dominantArc || arcRecapData.endgameTriggers.length > 0));
+    !!(arcRecapData && (arcRecapData.dominantArc || arcRecapData.endgameTriggers.length > 0)) ||
+    worldMovedLines.length > 0;
 
   // Nothing to show if no section would actually render.
   if (!hasAnyContent) {
@@ -837,6 +936,16 @@ export function renderFullRecap(
     for (const trigger of arcRecapData.endgameTriggers) {
       lines.push(`  Turning point: ${trigger.resolutionClass} — ${trigger.reason}`);
     }
+  }
+
+  // Section: The World Moved (WO-A5-9, slice A5 §7)
+  if (worldMovedLines.length > 0) {
+    lines.push('');
+    lines.push(`  ${divider()}`);
+    lines.push('  THE WORLD MOVED');
+    lines.push(`  ${divider()}`);
+    lines.push('');
+    lines.push(...worldMovedLines);
   }
 
   lines.push('');

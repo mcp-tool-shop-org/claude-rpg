@@ -10,7 +10,6 @@ import {
   getRumorsFrom,
   deriveStance,
   getReputationConsequence,
-  getRumorsKnownToFaction,
   getPressuresForFaction,
   buildNpcProfile,
   getVisiblePressures,
@@ -19,6 +18,8 @@ import {
   formatOpportunityForDialogue,
   generateNpcTextures,
   getPersistedNpcObligations,
+  getObligationsToward,
+  getNetObligationWeight,
   type Belief,
   type Memory,
   type PlayerRumor,
@@ -66,6 +67,35 @@ export function deriveNpcPersonality(npc: EntityState): string {
 // establishes for its other three array fields.
 const BELIEFS_MAX = 8;
 const RUMORS_MAX = 5;
+
+/**
+ * WO-A5-6 (slice A5 §3, design lock 3): the NPC's standing obligation toward
+ * the player, reduced to ONE of three mechanical strings (or absent) for the
+ * dialogue prompt's "Standing with you: ..." line -- distinct from
+ * formatObligationsForDirector's multi-line director view (which lists every
+ * obligation individually), this is a single collapsed read for a spoken-NPC
+ * context. `betrayed` wins over the net-weight read regardless of magnitude:
+ * a betrayal is a standing fact about the relationship, not a quantity that
+ * should be able to be outweighed by an unrelated favor stacked on top of it.
+ * Absent (undefined) when the ledger has nothing involving this counterparty,
+ * or nets to exactly zero (a favor and a debt of equal magnitude canceling
+ * out reads as "nothing standing," not a fabricated tie-breaker string) --
+ * the caller's line is omitted entirely in either case, matching every other
+ * optional NPC-agency field's absent-means-silent contract in this file.
+ */
+function deriveObligationStanding(
+  ledger: NpcObligationLedger | undefined,
+  playerId: string,
+): string | undefined {
+  if (!ledger) return undefined;
+  const relevant = getObligationsToward(ledger, playerId);
+  if (relevant.length === 0) return undefined;
+  if (relevant.some((o) => o.kind === 'betrayed')) return 'was betrayed by you';
+  const net = getNetObligationWeight(ledger, playerId);
+  if (net > 0) return 'owes you a favor';
+  if (net < 0) return 'you owe them a debt';
+  return undefined;
+}
 
 /** Build the dialogue context for an NPC from their simulation state. */
 export function buildNPCDialogueContext(
@@ -115,6 +145,20 @@ export function buildNPCDialogueContext(
    * still pass it explicitly to override the world read.
    */
   obligations?: NpcObligationLedger,
+  /**
+   * WO-A5-8 (slice A5 §6, design lock 6): per-hearer rumor read, replacing
+   * DialogueInput.playerRumors (the deleted 4-valence formatting below).
+   * Sourced by the caller from game-core's `getHearerRumors(npcId)` (the
+   * RumorEngine's own `heardBy(npcId)` + `stanceOf(npcId, rumor.id)`, which
+   * this file has no access to -- unlike `obligations` above, there is no
+   * "read it from the world" default here: the RumorEngine instance is
+   * host-owned (GameSession.rumorEngine, ADDENDUM-COMMON.md's inherited-state
+   * note), never attached to the `WorldState` this function actually
+   * receives. Additive and optional -- an omitted value renders no rumor
+   * section at all (formatHearerRumors' own absent-is-silent contract,
+   * prompts/dialogue-npc.ts), matching this file's other pass-through fields.
+   */
+  hearerRumors?: DialogueInput['hearerRumors'],
 ): DialogueInput | null {
   const npc = world.entities[npcId];
   if (!npc) return null;
@@ -221,19 +265,6 @@ export function buildNPCDialogueContext(
     'cautious'
   );
 
-  // Get player rumors known to this NPC's faction
-  const knownPlayerRumors = playerRumors && factionId
-    ? getRumorsKnownToFaction(playerRumors, factionId)
-        .filter((r) => r.confidence > 0.3)
-        .slice(0, 3)
-        .map((r) => ({
-          claim: r.claim,
-          confidence: r.confidence,
-          distortion: r.distortion,
-          valence: r.valence,
-        }))
-    : undefined;
-
   // Get pressures from this NPC's faction (exclude hidden)
   const factionPressures = activePressures && factionId
     ? getPressuresForFaction(activePressures, factionId)
@@ -285,6 +316,23 @@ export function buildNPCDialogueContext(
     }
   }
 
+  // F-4e8dbbad / WO-A4-5: the sixth argument buildNpcProfile already
+  // accepts — obligations were never threaded to it before this wave, so
+  // goal derivation and the loyalty breakpoint were blind to favors owed,
+  // debts, and betrayals. `obligations` (the param) wins when a caller
+  // passes one explicitly; otherwise this reads world truth directly,
+  // same as the getPersistedNpcObligations(world) reads the getters
+  // elsewhere in this codebase use post-A4.
+  //
+  // WO-A5-6: hoisted out of the `if (npc.ai)` block below (was previously
+  // scoped inside it, computed only to feed buildNpcProfile) so
+  // deriveObligationStanding can read it unconditionally -- the "Standing
+  // with you" line reflects the raw obligation ledger, not the NPC's `ai`
+  // profile, so it must not be gated on `npc.ai` the way goal/agency
+  // derivation legitimately is.
+  const npcObligations = obligations ?? getPersistedNpcObligations(world).get(npcId);
+  const npcObligationStanding = deriveObligationStanding(npcObligations, world.playerId);
+
   // v1.2: NPC agency context
   let npcGoal: string | undefined;
   let npcStance: string | undefined;
@@ -297,14 +345,6 @@ export function buildNPCDialogueContext(
   let textureHint: string | undefined;
 
   if (npc.ai) {
-    // F-4e8dbbad / WO-A4-5: the sixth argument buildNpcProfile already
-    // accepts — obligations were never threaded to it before this wave, so
-    // goal derivation and the loyalty breakpoint were blind to favors owed,
-    // debts, and betrayals. `obligations` (the param) wins when a caller
-    // passes one explicitly; otherwise this reads world truth directly,
-    // same as the getPersistedNpcObligations(world) reads the getters
-    // elsewhere in this codebase use post-A4.
-    const npcObligations = obligations ?? getPersistedNpcObligations(world).get(npcId);
     const profile = buildNpcProfile(world, npcId, world.playerId, activePressures ?? [], playerRumors, npcObligations);
     const topGoal = profile.goals[0];
     if (topGoal) {
@@ -374,13 +414,14 @@ export function buildNPCDialogueContext(
     playerUtterance,
     tone,
     playerPresence,
-    playerRumors: knownPlayerRumors,
+    hearerRumors,
     activePressures: factionPressures,
     worldPressureHint,
     opportunityHint,
     textureHint,
     partyPresence,
     npcGoal,
+    npcObligationStanding,
     npcStance,
     npcRecentAction,
     isLying,

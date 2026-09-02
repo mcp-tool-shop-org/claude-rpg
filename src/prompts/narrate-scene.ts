@@ -196,6 +196,21 @@ export type SceneNarrationInput = {
    * Folded into the prompt as its own section when present.
    */
   chronicleContext?: string;
+  /**
+   * WO-A5-7 (slice A5 §2, design lock 2): the player's current district's
+   * mood tone crossing a transition THIS round (`from` !== `to`, both
+   * DistrictMood['tone'] values -- @ai-rpg-engine/modules' district-mood.ts
+   * -- typed as plain strings here to avoid this prompt-template file taking
+   * a compile-time dependency on that engine type). Threaded by game-core's
+   * runWorldRound, which compares getWorldTickState(world).districtTones[
+   * districtId] before/after the tick (no distinct engine event exists for
+   * this -- confirmed in scene-context.ts's own describeEvent comment on
+   * 'companion.reaction': a district-mood transition only ever queues a
+   * companion reaction, never emits its own ResolvedEvent). Rendered as ONE
+   * mechanical line by buildNarratePrompt below; absent (undefined) when no
+   * transition happened this round -- byte-identical to before this wave.
+   */
+  moodTransition?: { from: string; to: string };
 };
 
 // F-9ee9b5a7: defensive budgets enforced by buildNarratePrompt itself,
@@ -285,6 +300,13 @@ export function buildNarratePrompt(input: SceneNarrationInput): string {
     ? `\n\nChronicle (long-term memory): ${capText(input.chronicleContext, CHRONICLE_CHAR_BUDGET)}`
     : '';
 
+  // WO-A5-7 (slice A5 §2, design lock 2): ONE mechanical line, rendered only
+  // when a transition happened this round. Byte-identical to before this
+  // wave when moodTransition is absent.
+  const moodTransition = input.moodTransition
+    ? `\n\nThe district's mood turns ${input.moodTransition.to}`
+    : '';
+
   return `${input.isNewZone ? 'The player just entered a new area.' : 'The player is still in the same area.'}
 
 Zone: ${input.zoneName} [${input.zoneTags.join(', ')}]${input.districtDescriptor ? `\nDistrict: ${input.districtDescriptor}` : ''}
@@ -299,5 +321,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
-Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.situationHint ? `\n\nStrategic read: ${input.situationHint}` : ''}${formatActivePressures(input.activePressures)}${stateHint}${chronicle}${recent}`;
+Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.situationHint ? `\n\nStrategic read: ${input.situationHint}` : ''}${moodTransition}${formatActivePressures(input.activePressures)}${stateHint}${chronicle}${recent}`;
 }

@@ -967,3 +967,41 @@ describe('fallback-sentinel visual marking (F-68cd7368)', () => {
     }
   });
 });
+
+// WO-A6-4 (slice A6, design lock 1): NarrateSceneOpts.budget threaded
+// end-to-end into the actual prompt sent to client.generate. RED before this
+// wave: NarrateSceneOpts had no `budget` field, so passing one was an excess
+// property under strict literal checking and had zero effect on the prompt.
+describe('narrateScene WO-A6-4: narration budget threading', () => {
+  it('bounds activePressures in the prompt actually sent to client.generate via budget.pressureLines', async () => {
+    const client = makeClient(VALID_PLAN);
+    const pressures = ['pressure-00', 'pressure-01', 'pressure-02', 'pressure-03'];
+    const opts = makeOpts({
+      client,
+      activePressures: pressures,
+      budget: { pressureLines: 2 },
+    });
+
+    await narrateScene(opts);
+
+    const sentPrompt = (client.generate as ReturnType<typeof vi.fn>).mock.calls[0][0].prompt as string;
+    expect(sentPrompt).toContain('- pressure-03');
+    expect(sentPrompt).toContain('- pressure-02');
+    expect(sentPrompt).not.toContain('- pressure-01');
+    expect(sentPrompt).not.toContain('- pressure-00');
+  });
+
+  it('sends the byte-identical prompt when budget is omitted, matching pre-wave behavior', async () => {
+    const pressures = ['pressure-a', 'pressure-b'];
+
+    const clientWithBudget = makeClient(VALID_PLAN);
+    await narrateScene(makeOpts({ client: clientWithBudget, activePressures: pressures, budget: undefined }));
+    const promptWithBudgetField = (clientWithBudget.generate as ReturnType<typeof vi.fn>).mock.calls[0][0].prompt as string;
+
+    const clientWithoutBudgetField = makeClient(VALID_PLAN);
+    await narrateScene(makeOpts({ client: clientWithoutBudgetField, activePressures: pressures }));
+    const promptWithoutBudgetField = (clientWithoutBudgetField.generate as ReturnType<typeof vi.fn>).mock.calls[0][0].prompt as string;
+
+    expect(promptWithBudgetField).toBe(promptWithoutBudgetField);
+  });
+});

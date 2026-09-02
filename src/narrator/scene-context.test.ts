@@ -752,4 +752,39 @@ describe('describeEvent world-tick coverage (WO-A2-6)', () => {
       expect(context.narrationInput.moodTransition).toBeUndefined();
     });
   });
+
+  // WO-A6-4 (slice A6, design lock 1): buildSceneContext threads the trailing
+  // budget param straight onto narrationInput.budget -- see that field's own
+  // doc comment (prompts/narrate-scene.ts) for the full contract. RED before
+  // this wave: buildSceneContext had no such trailing param at all.
+  describe('WO-A6-4: budget threading', () => {
+    it('threads budget onto narrationInput when provided', () => {
+      const engine = createGame();
+      const context = buildSceneContext(
+        engine.world, [], 'dark fantasy', [],
+        undefined, // previousLocationId
+        undefined, // characterPresence
+        undefined, // activePressures
+        undefined, // districtDescriptor
+        undefined, // partyPresence
+        undefined, // economyContext
+        undefined, // craftingContext
+        undefined, // opportunityContext
+        undefined, // arcContext
+        undefined, // endgameContext
+        undefined, // situationHint
+        undefined, // moodTransition
+        { pressureLines: 3, opportunityLines: 1 }, // budget
+      );
+
+      expect(context.narrationInput.budget).toEqual({ pressureLines: 3, opportunityLines: 1 });
+    });
+
+    it('leaves narrationInput.budget undefined when omitted', () => {
+      const engine = createGame();
+      const context = buildSceneContext(engine.world, [], 'dark fantasy', []);
+
+      expect(context.narrationInput.budget).toBeUndefined();
+    });
+  });
 });

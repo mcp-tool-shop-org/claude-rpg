@@ -211,6 +211,62 @@ export type SceneNarrationInput = {
    * transition happened this round -- byte-identical to before this wave.
    */
   moodTransition?: { from: string; to: string };
+  /**
+   * WO-A6-4 (slice A6, design lock 1): the tuning surface's per-turn
+   * narration-budget override, forwarded verbatim from NarrateSceneOpts.budget
+   * (narrator.ts) through buildSceneContext (scene-context.ts) onto this
+   * field. Omitted, every group below falls back to its existing measured
+   * default (PRESSURES_MAX_COUNT for pressureLines, DEFAULT_OPPORTUNITY_LINES
+   * for opportunityLines) -- byte-identical to before this wave.
+   *
+   * `rumorLines` is typed here for shape parity with the tuning surface's
+   * three narration-budget fields (doc §3: narrationPressureLines /
+   * narrationOpportunityLines / narrationRumorLines), but is a documented
+   * NO-OP in this file: buildNarratePrompt has no rumor line-group to bound.
+   * Rumors never reach the scene-narration prompt -- there is no rumor field
+   * on SceneNarrationInput and describeEvent (scene-context.ts) does not
+   * surface rumor-propagation events into recentEvents either. The only
+   * rumor-bearing prompt in this domain is the DIALOGUE prompt
+   * (dialogue-npc.ts's `hearerRumors` -> formatHearerRumors, dialogue-npc.ts:
+   * 164-169 / 268-278), built by buildDialoguePrompt via a SEPARATE call path
+   * (dialogue-mind.ts's generateDialogue, not narrateScene) -- out of this
+   * WO's stated scope ("narrateScene -> buildSceneContext / buildNarratePrompt").
+   * formatHearerRumors itself is uncapped today (measured: no maxCount/
+   * maxChars trim, unlike this file's own formatActivePressures) -- flagged
+   * here rather than silently left unaddressed; see this wave's summary for
+   * the coordinator note.
+   */
+  budget?: NarrationLineBudget;
+};
+
+/**
+ * WO-A6-4 (slice A6, design lock 1): the app-lever tuning surface's per-turn
+ * narration-budget shape, threaded NarrateSceneOpts.budget (narrator.ts) ->
+ * buildSceneContext (scene-context.ts) -> SceneNarrationInput.budget (above)
+ * -> buildNarratePrompt below. Every field is optional; omitted entirely,
+ * buildNarratePrompt's output is byte-identical to before this wave (each
+ * field falls back to the existing measured default it is named for).
+ */
+export type NarrationLineBudget = {
+  /** Overrides PRESSURES_MAX_COUNT for this turn's activePressures cap (formatActivePressures below). Default (omitted): PRESSURES_MAX_COUNT (10), unchanged from before this wave. */
+  pressureLines?: number;
+  /**
+   * Overrides DEFAULT_OPPORTUNITY_LINES for this turn's opportunityContext
+   * cap (formatOpportunityContext below). Measured effective cap TODAY,
+   * upstream of this file: game-core's getOpportunityContext
+   * (src/game/game-state.ts:343-349, cross-domain) always returns AT MOST
+   * ONE line (`accepted[0]` only -- never a joined multi-opportunity list),
+   * so this file's own single-line default reproduces, rather than
+   * introduces, today's effective cap. Default (omitted): 1.
+   */
+  opportunityLines?: number;
+  /**
+   * NO-OP today -- see SceneNarrationInput.budget's own doc comment above
+   * for the full honesty-floor explanation (no rumor line-group exists on
+   * the narrateScene path to bound). Typed for shape parity with the
+   * tuning surface only.
+   */
+  rumorLines?: number;
 };
 
 // F-9ee9b5a7: defensive budgets enforced by buildNarratePrompt itself,
@@ -226,6 +282,13 @@ export const EVENTS_MAX_COUNT = 20;
 export const EVENTS_CHAR_BUDGET = 1200;
 export const PRESSURES_MAX_COUNT = 10;
 export const PRESSURES_CHAR_BUDGET = 1200;
+/**
+ * WO-A6-4: measured effective default for NarrationLineBudget.opportunityLines
+ * (see that field's own doc comment above for the upstream measurement this
+ * mirrors -- game-core's getOpportunityContext, src/game/game-state.ts:
+ * 343-349, always returns at most one line today).
+ */
+export const DEFAULT_OPPORTUNITY_LINES = 1;
 export const ENTITIES_MAX_COUNT = 20;
 export const ENTITIES_CHAR_BUDGET = 1500;
 
@@ -266,12 +329,39 @@ export function capText(text: string, maxChars: number): string {
   return text.slice(0, maxChars) + '...[truncated]';
 }
 
-/** Format the world-pressures section, capped like the other array fields below. */
-function formatActivePressures(pressures?: string[]): string {
+/**
+ * Format the world-pressures section, capped like the other array fields below.
+ *
+ * @param maxCount WO-A6-4: overridable via NarrationLineBudget.pressureLines
+ *   (SceneNarrationInput.budget). Defaults to PRESSURES_MAX_COUNT --
+ *   byte-identical to before this wave when the budget is omitted.
+ */
+function formatActivePressures(pressures?: string[], maxCount: number = PRESSURES_MAX_COUNT): string {
   if (!pressures || pressures.length === 0) return '';
-  const lines = capRecentLines(pressures.map((p) => `  - ${p}`), PRESSURES_MAX_COUNT, PRESSURES_CHAR_BUDGET);
+  const lines = capRecentLines(pressures.map((p) => `  - ${p}`), maxCount, PRESSURES_CHAR_BUDGET);
   if (lines.length === 0) return '';
   return `\n\nWorld pressures:\n${lines.join('\n')}`;
+}
+
+/**
+ * WO-A6-4: bound opportunityContext's line count. Today this is a defensive
+ * no-op in production -- getOpportunityContext (src/game/game-state.ts:
+ * 343-349, cross-domain) never emits more than one line -- but the cap is
+ * enforced here (not just documented) so a future multi-line
+ * opportunityContext doesn't silently blow out the prompt, mirroring this
+ * file's other defensive caps (F-9ee9b5a7). Keeps the FIRST `maxLines` lines
+ * (opportunityContext is a single pre-selected top-priority item, not a
+ * chronological log like activePressures/recentEvents -- there is no
+ * "most recent" to prefer).
+ *
+ * @param maxLines Overridable via NarrationLineBudget.opportunityLines.
+ *   Defaults to DEFAULT_OPPORTUNITY_LINES (1) -- byte-identical to before
+ *   this wave when the budget is omitted.
+ */
+function formatOpportunityContext(text: string, maxLines: number = DEFAULT_OPPORTUNITY_LINES): string {
+  const lines = text.split('\n');
+  if (lines.length <= maxLines) return text;
+  return lines.slice(0, maxLines).join('\n');
 }
 
 export function buildNarratePrompt(input: SceneNarrationInput): string {
@@ -307,6 +397,13 @@ export function buildNarratePrompt(input: SceneNarrationInput): string {
     ? `\n\nThe district's mood turns ${input.moodTransition.to}`
     : '';
 
+  // WO-A6-4: capped via NarrationLineBudget.opportunityLines when present
+  // (byte-identical to before this wave when input.budget is omitted --
+  // see formatOpportunityContext's own doc comment).
+  const opportunityContext = input.opportunityContext
+    ? formatOpportunityContext(input.opportunityContext, input.budget?.opportunityLines)
+    : undefined;
+
   return `${input.isNewZone ? 'The player just entered a new area.' : 'The player is still in the same area.'}
 
 Zone: ${input.zoneName} [${input.zoneTags.join(', ')}]${input.districtDescriptor ? `\nDistrict: ${input.districtDescriptor}` : ''}
@@ -321,5 +418,5 @@ ${events || '  (none)'}
 
 Player: HP ${input.playerState.hp}${input.playerState.maxHp ? `/${input.playerState.maxHp}` : ''}${input.playerState.statuses.length > 0 ? `, statuses: ${input.playerState.statuses.join(', ')}` : ''}${input.characterPresence ? `\n${input.characterPresence}` : ''}${input.partyPresence ? `\nParty: ${input.partyPresence}` : ''}
 
-Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${input.opportunityContext ? `\n\nActive commitment: ${input.opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.situationHint ? `\n\nStrategic read: ${input.situationHint}` : ''}${moodTransition}${formatActivePressures(input.activePressures)}${stateHint}${chronicle}${recent}`;
+Tone: ${input.tone}${input.economyContext ? `\n\nEconomy: ${input.economyContext}` : ''}${input.craftingContext ? `\n\nCrafting: ${input.craftingContext}` : ''}${opportunityContext ? `\n\nActive commitment: ${opportunityContext}` : ''}${input.arcContext ? `\n\nCampaign arc: ${input.arcContext}` : ''}${input.endgameContext ? `\n\nTurning point: ${input.endgameContext}` : ''}${input.situationHint ? `\n\nStrategic read: ${input.situationHint}` : ''}${moodTransition}${formatActivePressures(input.activePressures, input.budget?.pressureLines)}${stateHint}${chronicle}${recent}`;
 }

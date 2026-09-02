@@ -8,7 +8,7 @@ import {
   type ObserverPresentedEvent,
   type WorldPressure,
 } from '@ai-rpg-engine/modules';
-import type { SceneNarrationInput } from '../prompts/narrate-scene.js';
+import type { SceneNarrationInput, NarrationLineBudget } from '../prompts/narrate-scene.js';
 
 export type SceneContext = {
   narrationInput: SceneNarrationInput;
@@ -41,6 +41,15 @@ export function buildSceneContext(
    * before this wave.
    */
   moodTransition?: { from: string; to: string },
+  /**
+   * WO-A6-4 (slice A6, design lock 1): the per-turn narration-budget
+   * override, threaded straight onto narrationInput.budget (SceneNarrationInput,
+   * prompts/narrate-scene.ts) — see that field's own doc comment for the
+   * full contract (which groups it bounds, which is a documented no-op).
+   * Additive trailing param; omitted, behavior is unchanged from before this
+   * wave.
+   */
+  budget?: NarrationLineBudget,
 ): SceneContext {
   const zone = world.zones[world.locationId];
   const player = world.entities[world.playerId];
@@ -137,6 +146,7 @@ export function buildSceneContext(
     endgameContext,
     situationHint,
     moodTransition,
+    budget,
   };
 
   return { narrationInput, perceivedEvents };

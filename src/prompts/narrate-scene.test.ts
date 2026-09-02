@@ -8,6 +8,7 @@ import {
   EVENTS_CHAR_BUDGET,
   PRESSURES_MAX_COUNT,
   ENTITIES_MAX_COUNT,
+  DEFAULT_OPPORTUNITY_LINES,
   NARRATE_SYSTEM,
   SOUND_EFFECT_IDS,
   UI_EFFECT_TYPES,
@@ -281,5 +282,72 @@ describe('buildNarratePrompt districtDescriptor contract (F-e003562f)', () => {
 
     const prompt = buildNarratePrompt(makeInput({ districtDescriptor: formatted }));
     expect(prompt).toContain(`District: ${formatted}`);
+  });
+});
+
+// WO-A6-4 (slice A6, design lock 1): NarrateSceneOpts.budget threaded onto
+// SceneNarrationInput.budget, bounding the pressures and opportunity line
+// groups. RED before this wave: SceneNarrationInput had no `budget` field at
+// all, formatActivePressures had no override parameter, and opportunityContext
+// rendered with no cap whatsoever (any override would have been silently
+// ignored / a multi-line opportunityContext would have rendered in full).
+describe('buildNarratePrompt narration budget (WO-A6-4)', () => {
+  const pad = (i: number) => String(i).padStart(2, '0');
+
+  it('caps activePressures at budget.pressureLines when it is tighter than PRESSURES_MAX_COUNT', () => {
+    const pressures = Array.from({ length: PRESSURES_MAX_COUNT }, (_, i) => `pressure-${pad(i)}`);
+    const prompt = buildNarratePrompt(makeInput({ activePressures: pressures, budget: { pressureLines: 3 } }));
+
+    const renderedCount = pressures.filter((p) => prompt.includes(`- ${p}`)).length;
+    expect(renderedCount).toBe(3);
+    // Most recent (highest index) survives; earlier ones are dropped first.
+    expect(prompt).toContain(`- pressure-${pad(pressures.length - 1)}`);
+    expect(prompt).not.toContain('- pressure-00');
+  });
+
+  it('falls back to PRESSURES_MAX_COUNT when budget.pressureLines is omitted (byte-identical to before this wave)', () => {
+    const pressures = Array.from({ length: PRESSURES_MAX_COUNT + 10 }, (_, i) => `pressure-${pad(i)}`);
+    const withBudget = buildNarratePrompt(makeInput({ activePressures: pressures, budget: {} }));
+    const withoutBudget = buildNarratePrompt(makeInput({ activePressures: pressures }));
+    expect(withBudget).toBe(withoutBudget);
+  });
+
+  it('caps opportunityContext at budget.opportunityLines, keeping the first N lines', () => {
+    const opportunityContext = 'first-line\nsecond-line\nthird-line';
+    const prompt = buildNarratePrompt(makeInput({ opportunityContext, budget: { opportunityLines: 1 } }));
+
+    expect(prompt).toContain('Active commitment: first-line');
+    expect(prompt).not.toContain('second-line');
+    expect(prompt).not.toContain('third-line');
+  });
+
+  it('falls back to DEFAULT_OPPORTUNITY_LINES (1) when budget.opportunityLines is omitted', () => {
+    // Synthetic multi-line opportunityContext -- production never emits more
+    // than one line (getOpportunityContext, src/game/game-state.ts:343-349),
+    // but the cap must hold defensively regardless.
+    const opportunityContext = 'first-line\nsecond-line';
+    expect(DEFAULT_OPPORTUNITY_LINES).toBe(1);
+
+    const prompt = buildNarratePrompt(makeInput({ opportunityContext }));
+    expect(prompt).toContain('Active commitment: first-line');
+    expect(prompt).not.toContain('second-line');
+  });
+
+  it('is byte-identical to before this wave for a normal (single-line) opportunityContext when budget is omitted', () => {
+    const opportunityContext = 'Active bounty: The Ashfall cartel (3 turns left)';
+    const withBudget = buildNarratePrompt(makeInput({ opportunityContext, budget: {} }));
+    const withoutBudgetField = buildNarratePrompt(makeInput({ opportunityContext }));
+    expect(withBudget).toBe(withoutBudgetField);
+    expect(withBudget).toContain(`Active commitment: ${opportunityContext}`);
+  });
+
+  it('is byte-identical to before this wave when budget is entirely absent (undefined)', () => {
+    const input = makeInput({
+      activePressures: ['pressure-a', 'pressure-b'],
+      opportunityContext: 'Active bounty: The Ashfall cartel',
+    });
+    const withoutBudgetField = buildNarratePrompt(input);
+    const withExplicitUndefined = buildNarratePrompt({ ...input, budget: undefined });
+    expect(withExplicitUndefined).toBe(withoutBudgetField);
   });
 });

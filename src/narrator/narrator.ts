@@ -7,7 +7,7 @@ import { isValidNarrationPlan } from '@ai-rpg-engine/presentation';
 import type { ClaudeClient, StreamCallback } from '../claude-client.js';
 import { NarrationError, userMessage, type NarrationErrorKind } from '../llm/claude-errors.js';
 import { classifyError } from '../llm/claude-adapter.js';
-import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt } from '../prompts/narrate-scene.js';
+import { NARRATE_SYSTEM, NARRATE_SYSTEM_LEGACY, buildNarratePrompt, type NarrationLineBudget } from '../prompts/narrate-scene.js';
 import { buildSceneContext, type SceneContext } from './scene-context.js';
 // F-fa65fe50: type-only import of the game-core seam's existing structured
 // logger. debug-logger.ts has no imports of its own (a standalone leaf
@@ -176,6 +176,18 @@ export type NarrateSceneOpts = {
    * behavior is unchanged when absent.
    */
   logger?: DebugLogger;
+  /**
+   * WO-A6-4 (slice A6, design lock 1): per-turn narration-budget override,
+   * forwarded straight into buildSceneContext (scene-context.ts), which sets
+   * it verbatim on narrationInput.budget (SceneNarrationInput, prompts/
+   * narrate-scene.ts) — see that field's own doc comment for the full
+   * contract (which groups it bounds, which is a documented no-op). Omitted
+   * by every current caller (turn-loop.ts doesn't pass one here yet — the
+   * app-lever config surface that would resolve one, GameSession.getTuning(),
+   * is game-core's WO-A6-1, a sibling domain not on this branch; green
+   * expected at merge) — behavior is unchanged when absent.
+   */
+  budget?: NarrationLineBudget;
 };
 
 /** Narrate the current scene after action resolution. Returns structured plan when possible. */
@@ -186,7 +198,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     activePressures, districtDescriptor, partyPresence,
     economyContext, craftingContext, opportunityContext,
     arcContext, endgameContext, situationHint, chronicleContext, onChunk, logger,
-    consecutiveFallbacks, onStreamReset, moodTransition,
+    consecutiveFallbacks, onStreamReset, moodTransition, budget,
   } = opts;
 
   // F-e8630a73 (seam contract): never echo a fallback-narration sentinel back
@@ -219,6 +231,7 @@ export async function narrateScene(opts: NarrateSceneOpts): Promise<NarrationRes
     endgameContext,
     situationHint,
     moodTransition,
+    budget,
   );
 
   // Add presentation state and long-term chronicle context to the narration input

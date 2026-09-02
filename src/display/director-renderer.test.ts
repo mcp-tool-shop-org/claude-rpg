@@ -868,3 +868,157 @@ describe('director-renderer section headers are bolded (F-de13eb60)', () => {
     expect(result).not.toContain('\x1b[');
   });
 });
+
+/**
+ * WO-A6-5 (slice A6 §3, lock 1): the read-only `/tuning` director view --
+ * LIVING WORLD TUNING (one line per lever, `(default)` suffix when the
+ * value equals the measured default) and LAST ROUND (round metrics, one
+ * line per non-zero counter; absent when no round has run). Coded against
+ * ADDENDUM-cli-display.md's WO-A6-5 contract and ADDENDUM-COMMON's lock 1 /
+ * lock 2 shapes for `LivingWorldTuning` / `RoundMetrics`
+ * (game-core's WO-A6-1 / WO-A6-2, not yet on this branch -- the `tuningView`
+ * object here is this domain's own structurally-identical local mirror per
+ * the addendum's "green expected at merge" allowance). This is a VIEW only
+ * -- no verb, no mutation (R6).
+ */
+describe('/tuning director view (WO-A6-5)', () => {
+  const defaultTuning = {
+    rumorStanceFadeTicks: 24,
+    rumorBelieveSuspicionBelow: 50,
+    rumorSpreadScope: 'district' as const,
+    worldMovedCap: 200,
+    narrationPressureLines: 10,
+    narrationOpportunityLines: Infinity,
+    narrationRumorLines: Infinity,
+    ambushHeadline: 'always' as const,
+  };
+
+  it('should return "No tuning data available" when tuningView is missing', () => {
+    const result = executeDirectorCommand({ command: '/tuning', world: makeWorld() });
+    expect(result).toContain('No tuning data available');
+  });
+
+  it('lists /tuning in renderDirectorHelp', () => {
+    const help = renderDirectorHelp();
+    expect(help).toContain('/tuning');
+  });
+
+  it('renders every lever with a (default) suffix when the resolved tuning equals the measured defaults', () => {
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: { tuning: defaultTuning, rounds: 0 },
+    });
+    expect(result).toContain('LIVING WORLD TUNING');
+    // Six of the eight levers carry a measured, non-Infinity default --
+    // exercise those explicitly to keep this test resilient to the
+    // still-provisional narrationOpportunityLines/narrationRumorLines
+    // fallback (see DEFAULT_LIVING_WORLD_TUNING's doc comment).
+    expect(result).toContain('Rumor stance fade (ticks): 24 (default)');
+    expect(result).toContain('Rumor believe threshold (suspicion below): 50 (default)');
+    expect(result).toContain('Rumor spread scope: district (default)');
+    expect(result).toContain('World-moved ledger cap: 200 (default)');
+    expect(result).toContain('Narration pressure lines: 10 (default)');
+    expect(result).toContain('Ambush headline: always (default)');
+  });
+
+  it('omits the (default) suffix for a lever that has been tuned away from its default', () => {
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: {
+        tuning: { ...defaultTuning, rumorSpreadScope: 'zone', ambushHeadline: 'never' },
+        rounds: 0,
+      },
+    });
+    expect(result).toContain('Rumor spread scope: zone');
+    expect(result).not.toContain('Rumor spread scope: zone (default)');
+    expect(result).toContain('Ambush headline: never');
+    expect(result).not.toContain('Ambush headline: never (default)');
+    // Untouched levers on the same tuningView still show (default).
+    expect(result).toContain('World-moved ledger cap: 200 (default)');
+  });
+
+  it('renders an unlimited narration cap as "unlimited" rather than the raw Infinity value', () => {
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: { tuning: defaultTuning, rounds: 0 },
+    });
+    expect(result).toContain('Narration opportunity lines: unlimited (default)');
+    expect(result).toContain('Narration rumor lines: unlimited (default)');
+    expect(result).not.toContain('Infinity');
+  });
+
+  it('renders "No rounds played yet" when lastRound is absent', () => {
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: { tuning: defaultTuning, rounds: 0 },
+    });
+    expect(result).toContain('LAST ROUND');
+    expect(result).toContain('No rounds played yet.');
+  });
+
+  it('renders only the non-zero round-metric counters, plus the tick/round-count header', () => {
+    const lastRound = {
+      tick: 42, heat: 12, quietRounds: 0, kills: 1, pressuresActive: 2,
+      pressuresSpawned: 1, pressuresResolved: 0, pressuresExpired: 0,
+      factionActions: 0, opportunitiesSpawned: 0, opportunitiesAccepted: 0,
+      opportunitiesExpired: 0, ambushes: 0, moodTransition: false,
+      rumorsCreated: 0, rumorsMutated: 0, rumorHearers: 0, stanceBelieve: 0,
+      stanceDoubt: 0,
+    };
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: { tuning: defaultTuning, lastRound, rounds: 7 },
+    });
+    expect(result).toContain('Round tick 42 (7 rounds recorded)');
+    expect(result).toContain('Heat: 12');
+    expect(result).toContain('Kills: 1');
+    expect(result).toContain('Pressures active: 2');
+    expect(result).toContain('Pressures spawned: 1');
+    // Zero counters are omitted entirely.
+    expect(result).not.toContain('Quiet rounds:');
+    expect(result).not.toContain('Faction actions:');
+    expect(result).not.toContain('Mood transition');
+    expect(result).not.toContain('Price quote');
+  });
+
+  it('renders mood transition and price quote lines when present, even though the latter can legitimately omit at zero', () => {
+    const lastRound = {
+      tick: 1, heat: 0, quietRounds: 0, kills: 0, pressuresActive: 0,
+      pressuresSpawned: 0, pressuresResolved: 0, pressuresExpired: 0,
+      factionActions: 0, opportunitiesSpawned: 0, opportunitiesAccepted: 0,
+      opportunitiesExpired: 0, ambushes: 0, moodTransition: true,
+      rumorsCreated: 0, rumorsMutated: 0, rumorHearers: 0, stanceBelieve: 0,
+      stanceDoubt: 0, priceQuote: 15,
+    };
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: { tuning: defaultTuning, lastRound, rounds: 1 },
+    });
+    expect(result).toContain('Mood transition: yes');
+    expect(result).toContain('Price quote: 15');
+  });
+
+  it('singles round recorded reads "1 round recorded", not "1 rounds recorded"', () => {
+    const lastRound = {
+      tick: 3, heat: 0, quietRounds: 0, kills: 0, pressuresActive: 0,
+      pressuresSpawned: 0, pressuresResolved: 0, pressuresExpired: 0,
+      factionActions: 0, opportunitiesSpawned: 0, opportunitiesAccepted: 0,
+      opportunitiesExpired: 0, ambushes: 0, moodTransition: false,
+      rumorsCreated: 0, rumorsMutated: 0, rumorHearers: 0, stanceBelieve: 0,
+      stanceDoubt: 0,
+    };
+    const result = executeDirectorCommand({
+      command: '/tuning',
+      world: makeWorld(),
+      tuningView: { tuning: defaultTuning, lastRound, rounds: 1 },
+    });
+    expect(result).toContain('1 round recorded');
+    expect(result).not.toContain('1 rounds recorded');
+  });
+});

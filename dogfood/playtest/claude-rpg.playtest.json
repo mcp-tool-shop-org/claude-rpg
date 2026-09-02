@@ -1,0 +1,153 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "game": {
+    "command": "node",
+    "args": [
+      "dist/bin.js",
+      "play",
+      "--world",
+      "fantasy"
+    ],
+    "cwd": "../..",
+    "env": {
+      "ANTHROPIC_API_KEY": "$OPENROUTER_API_KEY",
+      "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+      "CLAUDE_RPG_MODEL": "anthropic/claude-sonnet-4"
+    },
+    "promptPatterns": [
+      "What do you do\\?\\s*$",
+      "^\\s*>\\s*$",
+      "Character name\\s*:?\\s*$",
+      "max \\d+\\)\\s*:?\\s*$",
+      "\\[y/N\\]\\s*$",
+      "\\(y/n\\)\\s*:?\\s*$",
+      "Enter a number.*$",
+      "Choose .*:\\s*$",
+      "\\?\\s*$"
+    ],
+    "promptQuietMs": 1200,
+    "idleQuietMs": 12000,
+    "screenTimeoutMs": 240000,
+    "quitInputs": [
+      "save",
+      "quit"
+    ]
+  },
+  "seats": [
+    {
+      "id": "mistral",
+      "family": "mistral",
+      "model": "mistralai/mistral-small-2603"
+    },
+    {
+      "id": "qwen",
+      "family": "qwen",
+      "model": "qwen/qwen3-30b-a3b-instruct-2507"
+    },
+    {
+      "id": "llama",
+      "family": "llama",
+      "model": "meta-llama/llama-3.3-70b-instruct"
+    },
+    {
+      "id": "deepseek",
+      "family": "deepseek",
+      "model": "deepseek/deepseek-chat-v3.1"
+    },
+    {
+      "id": "gemini",
+      "family": "google",
+      "model": "google/gemini-2.5-flash"
+    }
+  ],
+  "setup": [
+    {
+      "match": "Character name\\s*:?\\s*$",
+      "answer": "Wanderer"
+    },
+    {
+      "match": "Choose your archetype:[\\s\\S]*Choose \\(1-\\d+\\):\\s*$",
+      "answer": "1"
+    },
+    {
+      "match": "Choose your background:[\\s\\S]*Choose \\(1-\\d+\\):\\s*$",
+      "answer": "1"
+    },
+    {
+      "match": "Choose traits[\\s\\S]*Choose \\(1-\\d+, or \"done\"\\):\\s*$",
+      "answer": "3"
+    },
+    {
+      "match": "\\[1 selected\\]:\\s*$",
+      "answer": "done"
+    },
+    {
+      "match": "secondary discipline\\? \\(y/n\\):\\s*$",
+      "answer": "n"
+    },
+    {
+      "match": "Vigor \\(vigor, max \\d+\\):\\s*$",
+      "answer": "1"
+    },
+    {
+      "match": "Instinct \\(instinct, max \\d+\\):\\s*$",
+      "answer": "1"
+    },
+    {
+      "match": "Will \\(will, max \\d+\\):\\s*$",
+      "answer": "1"
+    },
+    {
+      "match": "Accept this character\\? \\(y/n\\):\\s*$",
+      "answer": "y"
+    }
+  ],
+  "turns": 40,
+  "persona": "You are a seasoned player of text adventures who grew up on Final Fantasy, Chrono Trigger and Suikoden. You have come to a ruined chapel above a crypt because you were told the dead there do not stay buried and that the living around it have their own quarrels. Explore every room you can reach. Talk to everyone with a name, and go back to them later to see whether anything has changed. Fight what attacks you, and if the crypt holds something worth killing, kill it and see what the world does about it afterwards. When the game shows you commands beginning with a slash, use the ones that let you look at how the world is going -- what people think of you, what the market is charging, what people are saying, what pressures are building -- and keep playing between them. You are not trying to win; you are trying to find out whether this world moves on its own. Answer menus and prompts the way a real player would: pick something, give a name, move on. Never repeat the same input more than twice in a row.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "check": "Entering a location produced an ambush or patrol encounter announced by the game itself (a headline line naming the encounter and the place), not something the player asked for."
+    },
+    {
+      "id": "street-raises-pressure",
+      "check": "After the player killed enemies, the game reported a pressure, bounty, investigation or alert raised by a faction on its own, visible in the narration or in a /pressures, /status or /leverage view."
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "check": "A pressure or alert the world raised later escalated, resolved, or expired without the player acting on it directly."
+    },
+    {
+      "id": "price-reacts",
+      "check": "A merchant price or market view (/market or /trade) showed a quote whose markup or discount referred to a faction's standing toward the player."
+    },
+    {
+      "id": "rumor-with-stance",
+      "check": "A named NPC's dialogue reflected a rumor about the player, and the NPC either believed or doubted it; or /rumors showed what the street believes about the player with witness or mutation counts."
+    },
+    {
+      "id": "district-mood-shift",
+      "check": "The narration or status noted the mood or tone of a district changing while the player was in it."
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "check": "A named NPC did something between turns that the player did not cause directly (an action reported in the narration or in /people)."
+    },
+    {
+      "id": "recap-of-world-moves",
+      "check": "On saving or quitting, a session recap listed things the world did on its own (pressures, ambushes, mood transitions, rumors, opportunities)."
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "check": "Across the session the world stayed coherent: no location, character, or fact contradicted an earlier one, and no turn produced an error message or a broken screen."
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "check": "The player could always tell what inputs were possible and what the game expected; prompts and menus were clear."
+    }
+  ],
+  "screenChars": 7000,
+  "playerMemoryTurns": 8,
+  "runsDir": "runs",
+  "playerTemperature": 0.7
+}

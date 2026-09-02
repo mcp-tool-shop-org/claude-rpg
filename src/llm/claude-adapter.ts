@@ -85,6 +85,14 @@ export async function withRetry<T>(
 }
 
 export function createAdaptedClient(config: ClaudeClientConfig = {}, retryConfig?: Partial<RetryConfig>): ClaudeClient {
+  // CLAUDE_RPG_MODEL: an operator override for the narrator model id, read
+  // here because every production client goes through this factory. Used by
+  // the ai-playtest harness to run the shipped narrator through an
+  // Anthropic-compatible gateway (OpenRouter's slugs are `anthropic/...`);
+  // an explicit config.model still wins, and absent both the default holds.
+  if (config.model === undefined && process.env.CLAUDE_RPG_MODEL) {
+    config = { ...config, model: process.env.CLAUDE_RPG_MODEL };
+  }
   // F-0929ac97: explicit short timeout (see claude-client.ts's DEFAULT_TIMEOUT_MS)
   // PLUS maxRetries: 0 to disable the SDK's own internal retry loop entirely.
   //

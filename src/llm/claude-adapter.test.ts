@@ -102,6 +102,23 @@ describe('createAdaptedClient', () => {
       expect(capturedMaxRetries).toBe(0);
     });
 
+    it('reads CLAUDE_RPG_MODEL as the narrator model when config.model is absent, and lets an explicit config.model win (ai-playtest: the shipped narrator through an Anthropic-compatible gateway)', async () => {
+      const seen: string[] = [];
+      createSpy.mockImplementation(function (this: unknown, params: { model: string }) {
+        seen.push(params.model);
+        return Promise.resolve(fakeMessage()) as unknown as ReturnType<typeof Anthropic.Messages.prototype.create>;
+      } as unknown as typeof Anthropic.Messages.prototype.create);
+      const prev = process.env.CLAUDE_RPG_MODEL;
+      process.env.CLAUDE_RPG_MODEL = 'anthropic/claude-sonnet-4';
+      try {
+        await createAdaptedClient({ apiKey: 'test' }).generate({ system: 's', prompt: 'p' });
+        await createAdaptedClient({ apiKey: 'test', model: 'explicit-model' }).generate({ system: 's', prompt: 'p' });
+      } finally {
+        if (prev === undefined) delete process.env.CLAUDE_RPG_MODEL; else process.env.CLAUDE_RPG_MODEL = prev;
+      }
+      expect(seen).toEqual(['anthropic/claude-sonnet-4', 'explicit-model']);
+    });
+
     it('honors a custom config.timeout override', async () => {
       let capturedTimeout: number | undefined;
       createSpy.mockImplementation(function (this: { _client: { timeout: number } }) {

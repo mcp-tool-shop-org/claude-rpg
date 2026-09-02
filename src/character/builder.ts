@@ -155,7 +155,14 @@ export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInf
   let traitIds: string[] = [];
   if (availableTraits.length > 0) {
     const maxTraits = catalog.maxTraits;
-    const traitIndices = await promptMultiSelect(rl, 'Choose traits:', availableTraits.map((t) => ({
+    // ai-playtest finding (2026-09-01): the menu never said a flaw was
+    // required, and a build without one failed validation AFTER stat
+    // allocation -- see the resolveEntity guard below. Say it up front.
+    const requiredFlaws = catalog.requiredFlaws ?? 0;
+    const traitTitle = requiredFlaws > 0
+      ? `Choose traits (at least ${requiredFlaws} flaw${requiredFlaws === 1 ? '' : 's'} required):`
+      : 'Choose traits:';
+    const traitIndices = await promptMultiSelect(rl, traitTitle, availableTraits.map((t) => ({
       label: `${t.name} (${t.category})`,
       description: t.description,
     })), maxTraits);
@@ -232,7 +239,22 @@ export async function buildCharacter(rl: ReadlineInterface, presetPack?: PackInf
   };
 
   // Resolve entity
-  const playerEntity = resolveEntity(build, catalog, ruleset);
+  // ai-playtest finding (2026-09-01): an invalid build (e.g. no flaw picked
+  // where the pack requires one) threw out of the whole creation flow and
+  // ended the session with "Unexpected error ... Exiting". A rejected build
+  // is a prompt outcome, not a crash: say why and start the pass over.
+  let playerEntity: ReturnType<typeof resolveEntity>;
+  try {
+    playerEntity = resolveEntity(build, catalog, ruleset);
+  } catch (err) {
+    if (err instanceof PromptCancelled) throw err;
+    const reason = err instanceof Error ? err.message : String(err);
+    console.log(`
+  That build is not allowed: ${reason}
+  Let's build the character again.
+`);
+    continue;
+  }
 
   // Show summary
   const title = disciplineId ? resolveTitle(archetype.id, disciplineId, catalog) : undefined;

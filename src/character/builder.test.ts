@@ -22,7 +22,7 @@ import { PromptCancelled } from './prompts.js';
  * (1..N, wrapping) instead of ever answering "done with 0 selected", which
  * would stall promptMultiSelect's loop forever.
  */
-function makeScriptedRl(opts: { acceptAnswers?: string[]; statAnswers?: string[] } = {}): { rl: ReadlineInterface; prompts: string[] } {
+function makeScriptedRl(opts: { acceptAnswers?: string[]; statAnswers?: string[]; traitAnswers?: string[] } = {}): { rl: ReadlineInterface; prompts: string[] } {
   const prompts: string[] = [];
   const acceptAnswers = opts.acceptAnswers ?? ['y'];
   // F-86c50a80: scripted per-call queue for stat-allocation prompts (shape
@@ -32,6 +32,8 @@ function makeScriptedRl(opts: { acceptAnswers?: string[]; statAnswers?: string[]
   // differ, and it doesn't change on a rejected answer) -- while every
   // other/unscripted stat prompt keeps the pre-existing safe '0' default.
   const statAnswers = opts.statAnswers ? [...opts.statAnswers] : undefined;
+  // Scripted trait-menu answers (drained first); once empty the cycling default below resumes.
+  const traitAnswers = opts.traitAnswers ? [...opts.traitAnswers] : [];
   let acceptIdx = 0;
   let traitCounter = 0;
 
@@ -50,6 +52,8 @@ function makeScriptedRl(opts: { acceptAnswers?: string[]; statAnswers?: string[]
         if (statAnswers && statAnswers.length > 0) {
           answer = statAnswers.shift()!;
         }
+      } else if (prompt.includes('Choose (1-') && prompt.includes('"done"') && traitAnswers.length > 0) {
+        answer = traitAnswers.shift()!;
       } else if (prompt.includes('Choose (1-') && prompt.includes('"done"')) {
         // The "[N selected]" suffix is absent only on the FIRST question of
         // a fresh promptMultiSelect call (remaining === maxSelections) --
@@ -191,6 +195,30 @@ describe('buildDifficultyGroups (F-6ed5f350 test plan item e: difficulty-split d
 // elsewhere in this same flow. allPacks[0] (fantasy) has a 3-point budget
 // across 3 stats (vigor/instinct/will) -- see ruleset.ts -- so its very
 // first stat prompt always has `max 3`.
+describe('buildCharacter invalid build (ai-playtest finding, 2026-09-01)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('names the flaw requirement on the trait menu and, when the build fails validation, says why and starts the pass over instead of throwing (RED before: the resolveEntity throw escaped buildCharacter and ended the session)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const fantasy = allPacks.find((p) => p.meta.id === 'chapel-threshold')!;
+    expect(fantasy.buildCatalog.requiredFlaws).toBeGreaterThan(0);
+    // First pass: two perks and no flaw (items 1 and 2 are perks in the
+    // fantasy catalog's available-trait order), then "done". The second pass
+    // falls back to the cycling default, which includes a flaw.
+    const { rl, prompts } = makeScriptedRl({ traitAnswers: ['1', '2', 'done'] });
+
+    await expect(buildCharacter(rl, fantasy)).resolves.toBeDefined();
+
+    const printed = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(printed).toMatch(/Choose traits \(at least 1 flaw required\)/);
+    expect(printed).toMatch(/That build is not allowed: .*flaws/);
+    // The name prompt was asked twice: once per pass.
+    expect(prompts.filter((p) => p.includes('Character name')).length).toBe(2);
+  });
+});
+
 describe('buildCharacter stat allocation (F-86c50a80)', () => {
   afterEach(() => {
     vi.restoreAllMocks();

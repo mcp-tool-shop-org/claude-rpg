@@ -1,0 +1,16 @@
+{
+  "name": "claude-rpg living world (starter-fantasy)",
+  "label": "phase9-2026-09-01",
+  "seat": {
+    "id": "qwen",
+    "family": "qwen",
+    "model": "qwen/qwen3-30b-a3b-instruct-2507"
+  },
+  "turns": 40,
+  "turnsPlayed": 42,
+  "endedBy": "turns",
+  "error": null,
+  "critiqueError": null,
+  "durationMs": 273492,
+  "finishedAt": "2026-09-02T02:38:40.410Z"
+}

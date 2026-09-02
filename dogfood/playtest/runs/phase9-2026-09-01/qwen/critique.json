@@ -1,0 +1,87 @@
+{
+  "alive": true,
+  "summary": "The world felt alive through subtle, persistent reactions: the chapel's atmosphere shifted with tension, NPCs acted independently, and an opportunity expired on its own. The environment responded to player inaction with evolving mood and hidden mechanics, maintaining coherence and depth.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "The opportunity 'Investigate the black market activity' expired on turn 35 without player action, as noted in the session recap.",
+      "turn": 35
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The chapel's atmosphere grew heavier and more tense over time, with light pulsing, silence deepening, and figures becoming more spectral—indicating a mood shift not caused by player input.",
+      "turn": 28
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "The suspicious pilgrim shifted position, turned away, and moved with unnatural fluidity without player prompting. Sister Maren's behavior changed subtly over time, including stilling her prayer wheel and flickering in visibility.",
+      "turn": 12
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session recap explicitly listed 'Opportunities expired: 1 — 'investigation \"Investigate the black market activity\" expired before resolution.'",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "No contradictions in location, NPC behavior, or facts occurred. The world remained consistent across turns, with no broken screens or error messages.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "Multiple commands like /ambience, /leaderboard, /pressures, and /locals were rejected with 'I'm not sure what you mean' despite being valid in context. The game failed to guide the player toward correct inputs.",
+      "turn": 7
+    }
+  ],
+  "highlights": [
+    "Turn 12: The pilgrim's unnatural movement and subtle shift in posture created a strong sense of unease and agency.",
+    "Turn 28: The chapel's light pulsing and silence deepening created a palpable, evolving atmosphere.",
+    "Turn 35: The automatic expiration of the opportunity added narrative weight to inaction."
+  ],
+  "deadSpots": [
+    "Turn 7: /leaderboard was rejected with no guidance, breaking immersion.",
+    "Turn 9: /ambience was rejected despite being a valid command.",
+    "Turn 18, 22, 25, 32, 41: Repeated /pressures and /ambience rejections without clarification.",
+    "Turn 34: /locals was rejected with no explanation."
+  ],
+  "confusions": [
+    "Turn 7: The game did not recognize /leaderboard, despite it being a logical command.",
+    "Turn 9: The game did not recognize /ambience, despite it being a valid command.",
+    "Turn 18: The game did not recognize /pressures, despite it being a valid command.",
+    "Turn 22: The game did not recognize /pressures, despite it being a valid command.",
+    "Turn 25: The game did not recognize /pressures, despite it being a valid command.",
+    "Turn 32: The game did not recognize /pressures, despite it being a valid command.",
+    "Turn 41: The game did not recognize /pressures, despite it being a valid command."
+  ],
+  "wouldPlayAgain": false
+}

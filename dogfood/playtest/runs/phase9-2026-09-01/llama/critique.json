@@ -1,0 +1,77 @@
+{
+  "alive": true,
+  "summary": "The world showed signs of life through its reactions to my actions and the unfolding of its own narrative, including ambushes and character interactions. However, some aspects felt scripted or lacked clarity, such as the sudden appearance of creatures and the true intentions of certain characters. Despite this, the game maintained coherence and provided a sense of progression and challenge.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Turn 36: Ambush by Chapel Patrol in Chapel Nave",
+      "turn": 36
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No direct evidence of pressure being raised by a faction on its own",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No evidence of pressures escalating, resolving, or expiring without direct player action",
+      "turn": null
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant prices or market views reacted to faction standing towards the player",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No named NPC reflected a rumor about the player with belief or doubt, and /rumors was not shown",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Chapel Grounds described as 'lively despite everything' with alert pressure rising sharply",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Brother Aldric's actions and decisions seemed to unfold without direct player prompting",
+      "turn": 17
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session summary provided a recap of world changes, including faction shifts and opportunities",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The world maintained coherence across the session, with no location, character, or fact contradicting an earlier one",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Prompts and menus were generally clear, allowing the player to understand possible inputs and expectations",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 36: Ambush by Chapel Patrol in Chapel Nave",
+    "Brother Aldric's character development and interactions"
+  ],
+  "deadSpots": [
+    "Lack of clarity on certain character intentions and sudden creature appearances"
+  ],
+  "confusions": [
+    "Unclear expectations for some interactions and the sudden ambush"
+  ],
+  "wouldPlayAgain": true
+}

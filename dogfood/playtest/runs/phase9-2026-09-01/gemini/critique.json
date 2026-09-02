@@ -1,0 +1,81 @@
+{
+  "alive": true,
+  "summary": "The world felt alive and reactive. NPCs had distinct personalities and agendas, and the environment changed based on my actions. The combat encounters were dynamic, and the world responded to my presence with ambushes and shifting district moods.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "── Ambush: Chapel Patrol in Vestry Passage ──",
+      "turn": 24
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": true,
+      "evidence": "Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\" alertPressure rose sharply",
+      "turn": 42
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "investigation opportunity (investigation): expired — investigation \"Investigate the black market activity\" expired before resolution.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No market view was shown after a faction's stance changed.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Brother Aldric: \"I've been watching you, Penitent Knight... there are whispers that you seek new paths, new loyalties.\"",
+      "turn": 17
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No named NPC took an action between turns that was not a direct response to player input.",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session summary at turn 42 listed 'Opportunities offered', 'Opportunities expired', 'Ambushes', and 'Mood transitions'.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The narrative, character interactions, and environmental descriptions remained consistent throughout the session. No errors or broken screens occurred.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "The prompts and hints were consistently clear, guiding the player on possible actions and available commands.",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "The initial description of the Chapel Threshold and its inhabitants (Turn 1) set a great atmosphere.",
+    "The dialogue with Sister Maren and the Suspicious Pilgrim (Turns 2-4) felt natural and responsive.",
+    "The conversation with Brother Aldric (Turns 17-22) was engaging, with his shifting demeanor and the subtle hints of his true intentions.",
+    "The ambush upon entering the Vestry Passage (Turn 24) was a well-placed and exciting surprise.",
+    "The dynamic combat with the Ash Ghoul and Crypt Warden (Turns 25-36) felt challenging and responsive to my actions."
+  ],
+  "deadSpots": [
+    "The repeated 'hint: Black market activity detected — contraband may be available' (e.g., Turn 2, 15, 20) became a bit repetitive and lost its impact after a while, especially since I couldn't act on it directly yet."
+  ],
+  "confusions": [
+    "I was unsure why the 'investigation: Investigate the black market activity' opportunity expired (Turn 42) without me having a clear way to accept or decline it, or even knowing it was a timed opportunity.",
+    "The 'Suspicious Pilgrim [wavering/greed]' and 'Brother Aldric [wavering/greed]' in /people (Turn 10) didn't clearly indicate what 'wavering' or 'greed' meant for their behavior or my interactions with them."
+  ],
+  "wouldPlayAgain": true
+}

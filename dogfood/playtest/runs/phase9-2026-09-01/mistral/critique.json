@@ -1,0 +1,85 @@
+{
+  "alive": true,
+  "summary": "The world felt alive with reactive NPCs, shifting district moods, and emergent encounters. The chapel entrance and crypt provided atmospheric tension, with NPCs reacting dynamically to player actions. However, some commands were unclear or unsupported, and the session lacked clear faction pressures or market reactions tied to player standing.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": false,
+      "evidence": "No ambush or patrol encounter was announced by the game upon entering any location. The initial chapel entrance had no such headline.",
+      "turn": null
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure, bounty, investigation, or alert was raised by a faction after the player killed enemies or took other actions. The /status and /world commands showed no active pressures.",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": false,
+      "evidence": "No pressure or alert escalated, resolved, or expired without direct player action. The investigation opportunity expired, but this was tied to the player's inaction.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": true,
+      "evidence": "The /market command showed a merchant price for Healing Draught with a markup of +160% vs base, explicitly tied to the Chapel Undead faction's standing ('wavering').",
+      "turn": 39
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": false,
+      "evidence": "No named NPC's dialogue reflected a rumor about the player with belief or doubt, and /rumors was not a valid command. The /people command showed NPC stances but no rumors.",
+      "turn": null
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "The session recap explicitly noted a mood transition in the Crypt Depths district: 'subdued, fearful' → 'on edge, jumpy'.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": true,
+      "evidence": "Multiple NPCs acted without direct player input: Sister Maren and the pilgrim showed dynamic reactions (e.g., shifting posture, dialogue changes) in turns 2-16. The Ash Ghoul and Ashen Revenant also moved and attacked autonomously in turns 21-29.",
+      "turn": 2
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "The session summary at turn 42 listed world actions: opportunities offered/expired and a mood transition in the Crypt Depths.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "The world remained coherent with no contradictions in locations, characters, or facts. No error messages or broken screens occurred.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": false,
+      "evidence": "Some commands were unclear or unsupported (e.g., /go, /rumor, /reputation, /search, /look). The hints were generic and did not clarify possible actions in context. The player had to guess or retry commands multiple times.",
+      "turn": 18
+    }
+  ],
+  "highlights": [
+    "Dynamic NPC reactions in the chapel entrance (turns 2-16): Sister Maren and the pilgrim showed evolving stances, dialogue, and physical reactions to player actions.",
+    "Emergent combat in the Crypt Antechamber (turns 21-29): The Ash Ghoul and Ashen Revenant acted autonomously, circling, attacking, and reacting to player movements without explicit prompts.",
+    "District mood shift recap (turn 42): The session summary explicitly noted the Crypt Depths transitioning from 'subdued, fearful' to 'on edge, jumpy' due to world events.",
+    "Market reaction to faction standing (turn 39): The /market command showed a price markup for Healing Draught tied to the Chapel Undead faction's 'wavering' standing."
+  ],
+  "deadSpots": [
+    "Unclear or unsupported commands (turns 18, 23, 30, 31, 34, 35, 36, 37): The player had to guess or retry commands like /go, /rumor, /reputation, /search, and /look, which were either invalid or not explained.",
+    "No faction pressures or alerts (turns 1-42): Despite the player's actions (e.g., killing enemies, asking about the black market), no pressures, bounties, or investigations were raised by factions.",
+    "Generic hints (multiple turns): Hints like 'Type /help leverage for social action reference' and 'Black market activity detected' were repetitive and did not provide actionable guidance.",
+    "No clear opportunity resolution (turn 42): The investigation opportunity 'Investigate the black market activity' expired without player action, but the reason for expiration was not explained."
+  ],
+  "confusions": [
+    "Command syntax for movement (turn 18): The player tried '/go chapel nave' and 'go Chapel Nave', but the correct syntax was not clear. The game did not provide feedback on the correct format.",
+    "NPC naming inconsistency (turn 11): The player tried '/npc Suspicious Pilgrim', but the system responded 'NPC \"Suspicious\" not found (or not a named NPC)', despite the NPC being named 'Suspicious Pilgrim' in dialogue.",
+    "Looting mechanics (turns 32-36): The player attempted multiple commands to loot corpses ('/search corpses', '/look', 'inspect corpse'), but none worked. The correct command was not provided.",
+    "Rumor system (turns 23, 40): The player tried '/rumor' and 'ask Ash Ghoul about chapel grounds', but no rumor system was accessible. The /people command showed NPC stances but no rumors."
+  ],
+  "wouldPlayAgain": true
+}

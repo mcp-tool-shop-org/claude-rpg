@@ -1,0 +1,80 @@
+{
+  "alive": true,
+  "summary": "The world demonstrated autonomous reactivity through ambushes, pressure systems, and narrative consequences. Entering the Vestry Passage triggered an announced ambush, and the session recap documented world-driven events like pressure spawning and district mood shifts. The game maintained coherence throughout, with NPCs reacting to player choices and the environment responding to violence.",
+  "criteria": [
+    {
+      "id": "ambush-on-entry",
+      "met": true,
+      "evidence": "Entering Vestry Passage triggered 'Ambush: Chapel Patrol in Vestry Passage' with headline announcement.",
+      "turn": 10
+    },
+    {
+      "id": "street-raises-pressure",
+      "met": false,
+      "evidence": "No pressure, bounty, investigation, or alert was reported after killing enemies. /status showed Heat 0 and no faction alerts.",
+      "turn": null
+    },
+    {
+      "id": "pressure-moves-on-its-own",
+      "met": true,
+      "evidence": "Session recap shows 'black-market-boom expired without resolution' and 'Pressures expired: 1' without player action.",
+      "turn": 42
+    },
+    {
+      "id": "price-reacts",
+      "met": false,
+      "evidence": "No merchant price or market view (/market or /trade) was shown in transcript.",
+      "turn": null
+    },
+    {
+      "id": "rumor-with-stance",
+      "met": true,
+      "evidence": "Brother Aldric's dialogue references rumors about 'knights who've strayed from righteous paths' and 'penitent knights who commune with forces better left alone', showing the street's beliefs.",
+      "turn": 38
+    },
+    {
+      "id": "district-mood-shift",
+      "met": true,
+      "evidence": "Session recap shows 'Crypt Depths: \"subdued, fearful\" → \"dangerous and despairing\"' as a district mood transition.",
+      "turn": 42
+    },
+    {
+      "id": "npc-acts-unprompted",
+      "met": false,
+      "evidence": "No named NPC performed an independent action between turns. NPCs only reacted to player dialogue.",
+      "turn": null
+    },
+    {
+      "id": "recap-of-world-moves",
+      "met": true,
+      "evidence": "Session recap lists 'THE WORLD MOVED' with pressures spawned/expired, opportunities offered/expired, ambushes, and mood transitions.",
+      "turn": 42
+    },
+    {
+      "id": "coherent-no-contradiction",
+      "met": true,
+      "evidence": "World remained consistent: locations connected logically, NPCs maintained characterization, no errors or broken screens appeared.",
+      "turn": null
+    },
+    {
+      "id": "player-understood-what-to-do",
+      "met": true,
+      "evidence": "Clear prompts, hints, and menus (TRY, /help, /leverage) provided guidance. Player successfully navigated combat and dialogue.",
+      "turn": null
+    }
+  ],
+  "highlights": [
+    "Turn 10: Ambush triggered naturally upon entering Vestry Passage, creating immediate tension.",
+    "Turn 38: Brother Aldric's rumor dialogue wove player reputation into the world narrative.",
+    "Turn 42: Session recap concretely showed world autonomy with pressures and mood shifts."
+  ],
+  "deadSpots": [
+    "Turns 13-27: Combat with stalkers/ghoul felt repetitive with similar descriptive loops.",
+    "Turn 25: 'Black market activity detected' hint repeated without visible market interaction."
+  ],
+  "confusions": [
+    "Turn 3: Hint 'Not enough heat' appeared without explanation of how to gain Heat.",
+    "Turn 39: '/blackmail' command produced 'Not enough blackmail' but no clear way to acquire it."
+  ],
+  "wouldPlayAgain": true
+}

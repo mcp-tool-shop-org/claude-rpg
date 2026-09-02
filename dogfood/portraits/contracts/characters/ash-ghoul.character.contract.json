@@ -3,7 +3,7 @@
   "id": "char:ash-ghoul",
   "level": "character",
   "extends": "faction:crypt-undead",
-  "_note": "Ash Ghoul -- undead brute, aggressive, guards the crypt.",
+  "_note": "Ash Ghoul -- undead brute, aggressive, guards the crypt. Garment atom rewritten 2026-09-02: \"sexton's work tunic\" rendered as modern overalls on the first contract sheet.",
   "must_have": [
     {
       "id": "body",
@@ -33,7 +33,7 @@
     },
     {
       "id": "tunic",
-      "claim": "the charred, burnt remnants of a plain sexton's work tunic",
+      "claim": "a burnt, threadbare medieval tunic and hose, charred at the hems",
       "check_type": "vqa",
       "severity": "required",
       "spatial": {
@@ -65,6 +65,12 @@
     {
       "id": "no_weapon",
       "claim": "a weapon in hand",
+      "check_type": "vqa",
+      "severity": "required"
+    },
+    {
+      "id": "no_modern_clothes",
+      "claim": "a modern work shirt, overalls or trousers",
       "check_type": "vqa",
       "severity": "required"
     }

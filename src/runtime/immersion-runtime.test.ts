@@ -217,6 +217,63 @@ describe('immersion-runtime: degraded-stage escalation logging (F-251bd7d7)', ()
   });
 });
 
+// ─── WO-B1-12 (slice B1 §2, doc §2): combatLines -> per-line combat cues,
+// dispatched through processPresentation's new (additive, optional)
+// combatLines parameter -- design lock 2, ADDENDUM-COMMON.md, "green
+// expected at merge" since game-core has not landed TurnResult.combatLines
+// on this branch yet. ───
+
+describe('immersion-runtime: combatLines cue dispatch (WO-B1-12)', () => {
+  let runtime: ImmersionRuntime;
+  let engine: Engine;
+
+  beforeEach(() => {
+    runtime = new ImmersionRuntime({ audioEnabled: true, voiceEnabled: false });
+    engine = createGame();
+  });
+
+  it('is byte-identical (no combat-cues dispatch) when combatLines is omitted', async () => {
+    const calls = await runtime.processPresentation(engine, [], 'attack');
+    expect(calls.some((c) => c.tool === 'sound_effect')).toBe(false);
+  });
+
+  it('is byte-identical (no combat-cues dispatch) when combatLines is an empty array', async () => {
+    const calls = await runtime.processPresentation(engine, [], 'attack', undefined, []);
+    expect(calls.some((c) => c.tool === 'sound_effect')).toBe(false);
+  });
+
+  it('dispatches a sound_effect MCP call for a kill line via the combatLines parameter', async () => {
+    const calls = await runtime.processPresentation(
+      engine,
+      [],
+      'attack',
+      undefined,
+      ['The Crypt Stalker falls.'],
+    );
+    const sfxCalls = calls.filter((c) => c.tool === 'sound_effect');
+    expect(sfxCalls).toHaveLength(1);
+    // CORE_SOUND_PACK's alert_critical entry maps to voice-soundboard effect
+    // 'critical' (core-pack.ts) -- combat.defeat's resolved effectId.
+    expect(sfxCalls[0].params.effect).toBe('critical');
+  });
+
+  it('dispatches one sound_effect call per cue-bearing line, skipping the player outcome line', async () => {
+    const calls = await runtime.processPresentation(
+      engine,
+      [],
+      'attack',
+      undefined,
+      [
+        'Your strike lands — Crypt Stalker: reeling.',
+        "The Ash Ghoul's claw finds your flank — 4 damage.",
+        'The Ash Ghoul readies a lunge at you.',
+      ],
+    );
+    const sfxCalls = calls.filter((c) => c.tool === 'sound_effect');
+    expect(sfxCalls).toHaveLength(2);
+  });
+});
+
 // ─── F-06fffa64: ImmersionRuntime.debugMode and HookManager.debugMode share one
 // gating mechanism. Before this, HookManager had no debugMode/gate concept at all
 // (F-9ba5f482), so it was impossible to reach that sibling gate from the flag every

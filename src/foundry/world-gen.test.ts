@@ -987,6 +987,164 @@ describe('generateWorld WO-A1-2: district derivation and mapping (§2)', () => {
   });
 });
 
+describe('generateWorld WO-B1-13: petitioners in generated worlds (§4, design lock 7)', () => {
+  it('is byte-identical (no petitioner entity) when proposal.petitioners is omitted', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'No Petitioners World';
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    const petitionerIds = Object.values(result.engine!.world.entities).filter((e) =>
+      e.tags?.includes('petitioner'),
+    );
+    expect(petitionerIds).toEqual([]);
+  });
+
+  it('seats a valid petitioner as a named, tagged NPC with faction and ask-kind carried through', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner World';
+    proposal.petitioners = [
+      { name: 'Suspicious Pilgrim', zoneId: 'town-square', factionId: 'guard', kind: 'guide' },
+    ];
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    const entity = result.engine!.world.entities['petitioner-suspicious-pilgrim'];
+    expect(entity).toBeTruthy();
+    expect(entity.name).toBe('Suspicious Pilgrim');
+    expect(entity.tags).toContain('petitioner');
+    expect(entity.zoneId).toBe('town-square');
+    expect(entity.faction).toBe('guard');
+    expect(entity.custom).toEqual({ petitionerAskKind: 'guide' });
+  });
+
+  it('drops a petitioner referencing an unknown zone, with a warning', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner Unknown Zone World';
+    proposal.petitioners = [{ name: 'Ghost Courier', zoneId: 'nowhere', kind: 'carry' }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    const petitioners = Object.values(result.engine!.world.entities).filter((e) =>
+      e.tags?.includes('petitioner'),
+    );
+    expect(petitioners).toEqual([]);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('unknown zone'),
+      }),
+    );
+  });
+
+  it('drops a petitioner with a blank name, with a warning', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner Blank Name World';
+    proposal.petitioners = [{ name: '   ', zoneId: 'town-square', kind: 'carry' }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    const petitioners = Object.values(result.engine!.world.entities).filter((e) =>
+      e.tags?.includes('petitioner'),
+    );
+    expect(petitioners).toEqual([]);
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('missing/blank name'),
+      }),
+    );
+  });
+
+  it('clears (not drops) an unknown factionId with a warning, keeping the petitioner', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner Unknown Faction World';
+    proposal.petitioners = [
+      { name: 'Vestry Courier', zoneId: 'town-square', factionId: 'nonexistent-faction', kind: 'carry' },
+    ];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    const entity = result.engine!.world.entities['petitioner-vestry-courier'];
+    expect(entity).toBeTruthy();
+    expect(entity.faction).toBeUndefined();
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('unknown factionId'),
+      }),
+    );
+  });
+
+  it('defaults an unknown ask kind to "carry" with a warning, keeping the petitioner', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner Unknown Kind World';
+    proposal.petitioners = [{ name: 'Odd Petitioner', zoneId: 'town-square', kind: 'bribe' }];
+    const client = makeMockClient(proposal);
+    const logger = createTestLogger();
+
+    const result = await generateWorld(client, 'test', 1, { logger });
+    expect(result.ok).toBe(true);
+    const entity = result.engine!.world.entities['petitioner-odd-petitioner'];
+    expect(entity).toBeTruthy();
+    expect(entity.custom).toEqual({ petitionerAskKind: 'carry' });
+    expect(logger.getEntries()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        subsystem: 'world-gen',
+        message: expect.stringContaining('unknown ask kind'),
+      }),
+    );
+  });
+
+  it('resolves a petitioner id collision with a numeric suffix, mirroring PBR-007', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner Collision World';
+    proposal.petitioners = [
+      { name: 'Suspicious Pilgrim', zoneId: 'town-square', kind: 'carry' },
+      { name: 'Suspicious Pilgrim', zoneId: 'market', kind: 'lend' },
+    ];
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    expect(result.engine!.world.entities['petitioner-suspicious-pilgrim']).toBeTruthy();
+    expect(result.engine!.world.entities['petitioner-suspicious-pilgrim-2']).toBeTruthy();
+    expect(result.engine!.world.entities['petitioner-suspicious-pilgrim-2'].custom).toEqual({
+      petitionerAskKind: 'lend',
+    });
+  });
+
+  it('never lets a petitioner id collide with an authored NPC id (shared usedEntityIds guard)', async () => {
+    const proposal = makeValidProposal();
+    proposal.title = 'Petitioner Npc Collision World';
+    // Deliberately name the petitioner so its derived id ("petitioner-guard-1")
+    // cannot itself collide with the authored NPC id "guard-1" -- this proves
+    // the two id spaces are tracked in the SAME usedEntityIds Set, not that
+    // this particular pair happens to collide.
+    proposal.petitioners = [{ name: 'guard-1', zoneId: 'town-square', kind: 'carry' }];
+    const client = makeMockClient(proposal);
+
+    const result = await generateWorld(client, 'test', 1);
+    expect(result.ok).toBe(true);
+    // The authored NPC keeps its own id...
+    expect(result.engine!.world.entities['guard-1']?.tags).not.toContain('petitioner');
+    // ...and the petitioner gets its own distinct, prefixed id.
+    expect(result.engine!.world.entities['petitioner-guard-1']?.tags).toContain('petitioner');
+  });
+});
+
 describe('generateWorld WO-A1-2: genre validation (§2)', () => {
   it('passes a known genre through without any "Unknown genre" warning', async () => {
     const proposal = makeValidProposal();

@@ -138,7 +138,44 @@ export type WorldGenProposal = {
     zoneIds: string[];
     hostiles: Array<{ npcId: string; count?: number }>;
   }>;
+  /**
+   * WO-B1-13 (slice B1 §4; design lock 7, ADDENDUM-COMMON.md): petitioners
+   * the world seats for game-core's ask generation (`src/game/asks.ts`, not
+   * on this branch -- CODE AGAINST THE LOCK) to draw on. Optional and
+   * additive -- absent, or every entry failing validation, produces zero
+   * petitioner entities and a byte-identical world otherwise (lock 3, same
+   * warn-and-drop contract as `districts`/`encounters` above). Distinct from
+   * `npcs`: a petitioner is a walk-on ask-bearer (doc §4: "a woman at the
+   * chapel door, a courier on the vestry stair"), not a fully authored
+   * character with stats/goals/beliefs -- see `mapPetitionersFromProposal`.
+   */
+  petitioners?: Array<{
+    name: string;
+    zoneId: string;
+    factionId?: string;
+    kind: string;
+  }>;
 };
+
+/**
+ * WO-B1-13 (§4, design lock 7): the ask kinds lock 7 names for game-core's
+ * future `Ask.kind` union (`src/game/asks.ts`, not on this branch --
+ * CODE AGAINST THE LOCK, honesty floor: duplicated here, not imported, since
+ * game-core owns that file and it does not exist on this worktree;
+ * reconcile at merge if the landed union differs). A petitioner's `kind` is
+ * free-string on the wire (WorldGenProposal.petitioners, above) since it may
+ * arrive from an LLM's JSON output with no runtime guarantee of matching a
+ * TS union -- validated against this set in `mapPetitionersFromProposal`,
+ * same warn-and-degrade posture as `validateGenre`'s KNOWN_WORLDGEN_GENRES
+ * check.
+ */
+export const KNOWN_PETITIONER_ASK_KINDS: ReadonlySet<string> = new Set([
+  'carry',
+  'lend',
+  'guide',
+  'hold',
+  'vouch',
+]);
 
 /**
  * F-cbc186cb: distinguishes generateWorld's two failure classes so a caller (e.g.
@@ -521,6 +558,118 @@ function mapEncountersFromProposal(proposal: WorldGenProposal, logger?: DebugLog
   if (encounters.length === 0) return undefined;
 
   return { encounters, entityTemplates: [...entityTemplatesById.values()], zoneTables };
+}
+
+/**
+ * WO-B1-13 (§4, design lock 7): map proposal.petitioners -> EntityState[],
+ * seated as named, inspectable NPCs tagged 'petitioner' so game-core's ask
+ * generation (out of this domain) and cli-display's `/npc` (also out of this
+ * domain) have real entities to draw on instead of a bare data record.
+ * Warn-and-drop semantics throughout (lock 3), mirroring
+ * mapDistrictsFromProposal/mapEncountersFromProposal above:
+ *   - a blank/whitespace-only name, or a zoneId naming no proposal zone,
+ *     drops the WHOLE petitioner (no zone to seat them in, no name to show);
+ *   - a factionId naming no proposal faction clears just that field, keeping
+ *     the petitioner (mirrors an authored district's unknown
+ *     controllingFaction);
+ *   - a kind outside KNOWN_PETITIONER_ASK_KINDS degrades to 'carry' rather
+ *     than dropping the petitioner (lock 3's "never let content kill world
+ *     creation" read at its most permissive: an ask generator downstream
+ *     still gets a seatable petitioner, just with the safest default kind).
+ *
+ * `usedEntityIds` is the SAME collision-guard Set `instantiateWorld`'s own
+ * NPC loop populates (PBR-007) -- passed in and mutated here so a petitioner
+ * id can never collide with an authored NPC's (or an earlier petitioner's)
+ * final entity id. Deterministic id from a slugified name (not the engine's
+ * own hashRoll, which needs a seed this function doesn't take) -- collision
+ * resolution is the identical numeric-suffix loop PBR-007 already uses.
+ *
+ * `faction` (EntityState's own built-in team/side field, core's types.d.ts)
+ * carries the petitioner's factionId directly -- the same field
+ * ability-targeting's friend-or-foe resolution already reads, and the most
+ * direct route to "a faction tie visible in /npc" (doc §4's cue #2) without
+ * this domain inventing a second, parallel faction-membership channel.
+ * `custom.petitionerAskKind` carries the validated kind -- EntityState's
+ * `custom?: Record<string, ScalarValue>` field exists exactly for this kind
+ * of app-level extension (core's types.d.ts: "Pure data — serialized with
+ * state, no closures"), so game-core's ask generation can read it back
+ * without this domain needing an engine-level schema change.
+ */
+function mapPetitionersFromProposal(
+  proposal: WorldGenProposal,
+  usedEntityIds: Set<string>,
+  logger?: DebugLogger,
+): EntityState[] {
+  const proposedPetitioners = proposal.petitioners;
+  if (!proposedPetitioners || proposedPetitioners.length === 0) return [];
+
+  const zoneIds = new Set(proposal.zones.map((z) => z.id));
+  const factionIds = new Set(proposal.factions.map((f) => f.id));
+  const entities: EntityState[] = [];
+
+  proposedPetitioners.forEach((petitioner, index) => {
+    if (!petitioner.name || !petitioner.name.trim()) {
+      logger?.warn('world-gen', `Petitioner at index ${index} missing/blank name -- dropped`, { index });
+      return;
+    }
+    if (!petitioner.zoneId || !zoneIds.has(petitioner.zoneId)) {
+      logger?.warn(
+        'world-gen',
+        `Petitioner "${petitioner.name}" references unknown zone "${petitioner.zoneId}" -- dropped`,
+        { name: petitioner.name, zoneId: petitioner.zoneId },
+      );
+      return;
+    }
+
+    let factionId = petitioner.factionId;
+    if (factionId && !factionIds.has(factionId)) {
+      logger?.warn(
+        'world-gen',
+        `Petitioner "${petitioner.name}" references unknown factionId "${factionId}" -- cleared`,
+        { name: petitioner.name, factionId },
+      );
+      factionId = undefined;
+    }
+
+    let kind = petitioner.kind;
+    if (!KNOWN_PETITIONER_ASK_KINDS.has(kind)) {
+      logger?.warn(
+        'world-gen',
+        `Petitioner "${petitioner.name}" has unknown ask kind "${kind}" -- defaulting to "carry"`,
+        { name: petitioner.name, kind },
+      );
+      kind = 'carry';
+    }
+
+    const slug =
+      petitioner.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'petitioner';
+    let entityId = `petitioner-${slug}`;
+    if (usedEntityIds.has(entityId)) {
+      let suffix = 2;
+      while (usedEntityIds.has(`${entityId}-${suffix}`)) suffix++;
+      entityId = `${entityId}-${suffix}`;
+    }
+    usedEntityIds.add(entityId);
+
+    entities.push({
+      id: entityId,
+      blueprintId: entityId,
+      type: 'npc',
+      name: petitioner.name,
+      tags: ['petitioner'],
+      stats: {},
+      resources: {},
+      statuses: [],
+      zoneId: petitioner.zoneId,
+      ...(factionId ? { faction: factionId } : {}),
+      custom: { petitionerAskKind: kind },
+    });
+  });
+
+  return entities;
 }
 
 /**
@@ -1136,6 +1285,18 @@ export function instantiateWorld(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  // WO-B1-13 (§4, design lock 7): seat petitioners as named, inspectable NPCs
+  // tagged 'petitioner' -- see mapPetitionersFromProposal's doc comment for
+  // the warn-and-drop contract. Reuses the SAME usedEntityIds collision
+  // guard the NPC loop above just populated (PBR-007), so a petitioner id
+  // can never collide with an authored NPC's final entity id. Optional/
+  // additive: an omitted proposal.petitioners (every proposal before this
+  // WO, and every LLM reply that keeps omitting it) produces zero entities
+  // here, so world construction stays byte-identical to before this WO.
+  for (const petitionerEntity of mapPetitionersFromProposal(proposal, usedEntityIds, logger)) {
+    engine.store.addEntity(petitionerEntity);
   }
 
   // Set player and location

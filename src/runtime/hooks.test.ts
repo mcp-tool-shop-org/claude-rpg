@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Engine } from '@ai-rpg-engine/core';
 import { createGame } from '@ai-rpg-engine/starter-fantasy';
-import { HookManager, registerBuiltinHooks, type HookContext } from './hooks.js';
+import {
+  HookManager,
+  registerBuiltinHooks,
+  classifyCombatLine,
+  combatCueForLine,
+  combatCuesHook,
+  type HookContext,
+} from './hooks.js';
 
 // F-0ad073b8: a real @ai-rpg-engine Engine (createGame(), the same starter-fantasy
 // pack test/helpers/game-harness.ts and every test/integration/*.test.ts file already
@@ -284,6 +291,100 @@ describe('Built-in hooks', () => {
 
 // ─── F-e57d6a60: deathHook must also catch a hazard-style death that mutates hp
 // directly and emits no event at all (world-gen.ts's environment-hazard effect) ───
+
+// ─── WO-B1-12 (slice B1 §2, doc §2): combat-cues -- per-line SFX from
+// game-core's TurnResult.combatLines (design lock 2, ADDENDUM-COMMON.md) ───
+
+describe('classifyCombatLine (WO-B1-12)', () => {
+  it('classifies a kill line ("... falls.")', () => {
+    expect(classifyCombatLine('The Crypt Stalker falls.')).toBe('kill');
+  });
+
+  it('classifies a telegraph line ("... readies ... at you.")', () => {
+    expect(classifyCombatLine('The Ash Ghoul readies a lunge at you.')).toBe('telegraph');
+  });
+
+  it('classifies a landed enemy hit line ("... NN damage.")', () => {
+    expect(classifyCombatLine("The Ash Ghoul's claw finds your flank — 4 damage.")).toBe(
+      'landed-hit',
+    );
+  });
+
+  it('classifies the player\'s own outcome line as undefined (out of WO-B1-12 scope)', () => {
+    expect(classifyCombatLine('Your strike lands — Crypt Stalker: reeling.')).toBeUndefined();
+    expect(classifyCombatLine('Your strike misses.')).toBeUndefined();
+  });
+});
+
+describe('combatCueForLine (WO-B1-12)', () => {
+  it('resolves a kill line to the combat.defeat sting (the existing combat-resolve sting)', () => {
+    const cue = combatCueForLine('The Crypt Stalker falls.');
+    expect(cue).toEqual({ effectId: 'alert_critical', timing: 'immediate', intensity: 0.9 });
+  });
+
+  it('resolves a landed enemy hit line to the combat.hit impact cue', () => {
+    const cue = combatCueForLine("The Ash Ghoul's claw finds your flank — 4 damage.");
+    expect(cue).toEqual({ effectId: 'alert_warning', timing: 'immediate', intensity: 0.6 });
+  });
+
+  it('resolves a telegraph line to a warning SFX, distinct in intensity from a landed hit', () => {
+    const cue = combatCueForLine('The Ash Ghoul readies a lunge at you.');
+    expect(cue?.effectId).toBe('alert_warning');
+    expect(cue?.intensity).toBe(0.5);
+    expect(cue?.intensity).not.toBe(combatCueForLine("... 4 damage.")?.intensity);
+  });
+
+  it('returns undefined for a line matching none of the three cue-bearing shapes', () => {
+    expect(combatCueForLine('Your strike misses.')).toBeUndefined();
+  });
+});
+
+describe('combatCuesHook (WO-B1-12)', () => {
+  const makeCombatCuesContext = (
+    engine: Engine,
+    combatLines: string[] | undefined,
+  ): HookContext => ({
+    hookPoint: 'combat-cues',
+    world: engine.world,
+    events: [],
+    presentationState: 'combat',
+    combatLines,
+  });
+
+  it('returns null when combatLines is absent (byte-identical to before this hook existed)', () => {
+    const engine = createGame();
+    expect(combatCuesHook(makeCombatCuesContext(engine, undefined))).toBeNull();
+  });
+
+  it('returns null when combatLines is an empty array', () => {
+    const engine = createGame();
+    expect(combatCuesHook(makeCombatCuesContext(engine, []))).toBeNull();
+  });
+
+  it('emits one sfx cue per cue-bearing line, in order, skipping the player outcome line', () => {
+    const engine = createGame();
+    const combatLines = [
+      'Your strike lands — Crypt Stalker: reeling.',
+      'The Crypt Stalker falls.',
+      "The Ash Ghoul's claw finds your flank — 4 damage.",
+      'The Ash Ghoul readies a lunge at you.',
+    ];
+    const result = combatCuesHook(makeCombatCuesContext(engine, combatLines));
+    expect(result?.sfxCues).toHaveLength(3);
+    expect(result?.sfxCues?.[0]).toEqual({ effectId: 'alert_critical', timing: 'immediate', intensity: 0.9 });
+    expect(result?.sfxCues?.[1]).toEqual({ effectId: 'alert_warning', timing: 'immediate', intensity: 0.6 });
+    expect(result?.sfxCues?.[2]).toEqual({ effectId: 'alert_warning', timing: 'immediate', intensity: 0.5 });
+  });
+
+  it('is wired into registerBuiltinHooks at the combat-cues hookpoint', () => {
+    const manager = new HookManager();
+    registerBuiltinHooks(manager);
+    const engine = createGame();
+    const results = manager.fire(makeCombatCuesContext(engine, ['The Crypt Stalker falls.']));
+    expect(results).toHaveLength(1);
+    expect(results[0].sfxCues).toHaveLength(1);
+  });
+});
 
 describe('deathHook hp-based detection (F-e57d6a60)', () => {
   it('fires the death presentation when hp reaches zero with no defeat event at all', () => {

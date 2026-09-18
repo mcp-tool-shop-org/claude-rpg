@@ -15,10 +15,7 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/mcp-tool-shop-org/claude-rpg' },
       ],
       sidebar: [
-        {
-          label: 'Handbook',
-          autogenerate: { directory: 'handbook' },
-        },
+        { label: 'Handbook', items: [{ autogenerate: { directory: 'handbook' } }] },
       ],
       customCss: ['./src/styles/starlight-custom.css'],
       disable404Route: true,

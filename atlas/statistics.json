@@ -1,0 +1,2653 @@
+{
+  "authorship": {
+    "parts": [],
+    "places": []
+  },
+  "boundaries": [
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": ".github",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "docs",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "dogfood",
+      "qualifyingSourceCommits": 0,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "root",
+      "qualifyingSourceCommits": 3,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": [
+          "test"
+        ]
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "scripts",
+      "qualifyingSourceCommits": 12,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": []
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "low",
+      "highWater": null,
+      "name": "site",
+      "qualifyingSourceCommits": 3,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": [
+          "test"
+        ]
+      },
+      "cohesion": 1,
+      "cohesionDropped": false,
+      "confidence": "full",
+      "highWater": 1,
+      "name": "src",
+      "qualifyingSourceCommits": 141,
+      "rebaseline": null
+    },
+    {
+      "breakage": {
+        "coChangesOnly": [],
+        "collapsed": false,
+        "confidence": "full",
+        "importsAndCoChanges": [],
+        "importsOnly": [
+          "src"
+        ]
+      },
+      "cohesion": null,
+      "cohesionDropped": false,
+      "confidence": "full",
+      "highWater": null,
+      "name": "test",
+      "qualifyingSourceCommits": 59,
+      "rebaseline": null
+    }
+  ],
+  "churn": {
+    "definition": "commits is how many commits in the window touch the file, including merges and commits dropped from coupling. lines is added plus deleted in those commits.",
+    "files": [
+      {
+        "commits": 12,
+        "lines": 56,
+        "path": ".github/workflows/ci.yml"
+      },
+      {
+        "commits": 1,
+        "lines": 8,
+        "path": ".github/workflows/pages.yml"
+      },
+      {
+        "commits": 3,
+        "lines": 101,
+        "path": ".github/workflows/release.yml"
+      },
+      {
+        "commits": 2,
+        "lines": 2,
+        "path": ".gitignore"
+      },
+      {
+        "commits": 9,
+        "lines": 49,
+        "path": ".npmignore"
+      },
+      {
+        "commits": 9,
+        "lines": 241,
+        "path": "CHANGELOG.md"
+      },
+      {
+        "commits": 6,
+        "lines": 371,
+        "path": "README.es.md"
+      },
+      {
+        "commits": 6,
+        "lines": 341,
+        "path": "README.fr.md"
+      },
+      {
+        "commits": 6,
+        "lines": 345,
+        "path": "README.hi.md"
+      },
+      {
+        "commits": 6,
+        "lines": 371,
+        "path": "README.it.md"
+      },
+      {
+        "commits": 6,
+        "lines": 337,
+        "path": "README.ja.md"
+      },
+      {
+        "commits": 7,
+        "lines": 161,
+        "path": "README.md"
+      },
+      {
+        "commits": 6,
+        "lines": 319,
+        "path": "README.pt-BR.md"
+      },
+      {
+        "commits": 6,
+        "lines": 393,
+        "path": "README.zh.md"
+      },
+      {
+        "commits": 2,
+        "lines": 8,
+        "path": "ROADMAP.md"
+      },
+      {
+        "commits": 1,
+        "lines": 49,
+        "path": "SCORECARD.md"
+      },
+      {
+        "commits": 2,
+        "lines": 4,
+        "path": "SHIP_GATE.md"
+      },
+      {
+        "commits": 2,
+        "lines": 86,
+        "path": "docs/living-world-play-session.md"
+      },
+      {
+        "commits": 2,
+        "lines": 217,
+        "path": "docs/living-world-slice-a1.md"
+      },
+      {
+        "commits": 2,
+        "lines": 314,
+        "path": "docs/living-world-slice-a2.md"
+      },
+      {
+        "commits": 2,
+        "lines": 173,
+        "path": "docs/living-world-slice-a3.md"
+      },
+      {
+        "commits": 1,
+        "lines": 153,
+        "path": "docs/living-world-slice-a4.md"
+      },
+      {
+        "commits": 1,
+        "lines": 162,
+        "path": "docs/living-world-slice-a5.md"
+      },
+      {
+        "commits": 4,
+        "lines": 156,
+        "path": "docs/living-world-slice-a6-phase9.md"
+      },
+      {
+        "commits": 1,
+        "lines": 89,
+        "path": "docs/living-world-slice-b1-followups.md"
+      },
+      {
+        "commits": 1,
+        "lines": 211,
+        "path": "docs/living-world-slice-b1.md"
+      },
+      {
+        "commits": 4,
+        "lines": 147,
+        "path": "docs/living-world-slice-b2-cast-sheet.md"
+      },
+      {
+        "commits": 3,
+        "lines": 224,
+        "path": "docs/living-world-slice-b2.md"
+      },
+      {
+        "commits": 1,
+        "lines": 37,
+        "path": "docs/persistence-versioning.md"
+      },
+      {
+        "commits": 4,
+        "lines": 1989,
+        "path": "dogfood/phase9/transcript-starter-fantasy.txt"
+      },
+      {
+        "commits": 5,
+        "lines": 195,
+        "path": "dogfood/playtest/claude-rpg.playtest.json"
+      },
+      {
+        "commits": 1,
+        "lines": 233,
+        "path": "dogfood/playtest/runs/b1-2026-09-02.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 68,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 237,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/deepseek/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1167,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 109,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/gemini/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1232,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/llama/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 547,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 115,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/mistral/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1242,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/qwen/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1135,
+        "path": "dogfood/playtest/runs/b1-2026-09-02/qwen/transcript.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 282,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 53,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 244,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/deepseek/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1245,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 113,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/gemini/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1176,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/llama/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1229,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 114,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/mistral/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 1170,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 111,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/qwen/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 902,
+        "path": "dogfood/playtest/runs/b1-2026-09-02b/qwen/transcript.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 279,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 46,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 234,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/deepseek/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 155,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/deepseek/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1195,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/gemini/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 184,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/gemini/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1202,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 109,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/llama/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 163,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/llama/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1260,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 113,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/mistral/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 132,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/mistral/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1289,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 110,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/qwen/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 201,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/qwen/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1363,
+        "path": "dogfood/playtest/runs/b1-2026-09-02c/qwen/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 258,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 49,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 211,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 135,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/deepseek/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 142,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/deepseek/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1214,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 133,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/gemini/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 144,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/gemini/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1319,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 132,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/llama/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 171,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/llama/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1218,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 3,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/mistral/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 141,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/mistral/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1077,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 134,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/qwen/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 150,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/qwen/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1118,
+        "path": "dogfood/playtest/runs/b1f-2026-09-02/qwen/transcript.txt"
+      },
+      {
+        "commits": 3,
+        "lines": 258,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 52,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 261,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 132,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/deepseek/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 182,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/deepseek/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1411,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 136,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/gemini/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 175,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/gemini/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1369,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 134,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/llama/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 190,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/llama/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1329,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 136,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/mistral/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 134,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/mistral/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1400,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 137,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/qwen/meta.json"
+      },
+      {
+        "commits": 2,
+        "lines": 161,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/qwen/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1273,
+        "path": "dogfood/playtest/runs/b1g-2026-09-02/qwen/transcript.txt"
+      },
+      {
+        "commits": 3,
+        "lines": 258,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 40,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 269,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 132,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/deepseek/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 155,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/deepseek/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1340,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 136,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/gemini/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 164,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/gemini/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1442,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 133,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/llama/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 179,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/llama/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1359,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 141,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/mistral/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 147,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/mistral/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1283,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 138,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/qwen/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 176,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/qwen/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1321,
+        "path": "dogfood/playtest/runs/b1h-2026-09-02/qwen/transcript.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 293,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02.console.log"
+      },
+      {
+        "commits": 1,
+        "lines": 52,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 253,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 133,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/deepseek/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 183,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/deepseek/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1531,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 134,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/gemini/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 171,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/gemini/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1443,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 133,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/llama/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 188,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/llama/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1567,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 137,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/mistral/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 150,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/mistral/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1353,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 134,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/qwen/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 183,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/qwen/stderr.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 1367,
+        "path": "dogfood/playtest/runs/b1i-2026-09-02/qwen/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 140,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/COORDINATOR.md"
+      },
+      {
+        "commits": 1,
+        "lines": 219,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/REPORT.md"
+      },
+      {
+        "commits": 1,
+        "lines": 80,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/deepseek/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/deepseek/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/deepseek/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1284,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/deepseek/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 81,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/gemini/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/gemini/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/gemini/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1234,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/gemini/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 77,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/llama/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/llama/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/llama/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1265,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/llama/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 85,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/mistral/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/mistral/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/mistral/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1053,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/mistral/transcript.txt"
+      },
+      {
+        "commits": 1,
+        "lines": 87,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/qwen/critique.json"
+      },
+      {
+        "commits": 1,
+        "lines": 16,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/qwen/meta.json"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/qwen/stderr.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 1100,
+        "path": "dogfood/playtest/runs/phase9-2026-09-01/qwen/transcript.txt"
+      },
+      {
+        "commits": 2,
+        "lines": 82,
+        "path": "dogfood/portraits/contracts/characters/ash-ghoul.character.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 62,
+        "path": "dogfood/portraits/contracts/characters/brother-aldric.character.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 57,
+        "path": "dogfood/portraits/contracts/characters/crypt-stalker.character.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 69,
+        "path": "dogfood/portraits/contracts/characters/crypt-warden.character.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 74,
+        "path": "dogfood/portraits/contracts/characters/pilgrim.character.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 61,
+        "path": "dogfood/portraits/contracts/characters/sister-maren.character.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 45,
+        "path": "dogfood/portraits/contracts/factions/chapel-folk.faction.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 45,
+        "path": "dogfood/portraits/contracts/factions/crypt-undead.faction.contract.json"
+      },
+      {
+        "commits": 1,
+        "lines": 150,
+        "path": "dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02-contracts.index.json"
+      },
+      {
+        "commits": 2,
+        "lines": 0,
+        "path": "dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02-contracts.jpg"
+      },
+      {
+        "commits": 1,
+        "lines": 150,
+        "path": "dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02.index.json"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "dogfood/portraits/starter-fantasy-cast-cloud-2026-09-02.jpg"
+      },
+      {
+        "commits": 4,
+        "lines": 19,
+        "path": "dogfood/roadmap/latest.json"
+      },
+      {
+        "commits": 1,
+        "lines": 375,
+        "path": "dogfood/roadmap/swarm-1787722919-4d9e.1.json"
+      },
+      {
+        "commits": 1,
+        "lines": 373,
+        "path": "dogfood/roadmap/swarm-1787722919-4d9e.json"
+      },
+      {
+        "commits": 1,
+        "lines": 375,
+        "path": "dogfood/roadmap/swarm-1788171999-5dc0.1.json"
+      },
+      {
+        "commits": 1,
+        "lines": 222,
+        "path": "dogfood/roadmap/swarm-1788171999-5dc0.2.json"
+      },
+      {
+        "commits": 2,
+        "lines": 536,
+        "path": "dogfood/roadmap/swarm-1788171999-5dc0.json"
+      },
+      {
+        "commits": 1,
+        "lines": 222,
+        "path": "dogfood/roadmap/swarm-1788211425-6420.1.json"
+      },
+      {
+        "commits": 1,
+        "lines": 220,
+        "path": "dogfood/roadmap/swarm-1788211425-6420.json"
+      },
+      {
+        "commits": 2,
+        "lines": 113,
+        "path": "dogfood/tuning/WAVE_0_OUTCOMES.md"
+      },
+      {
+        "commits": 1,
+        "lines": 75,
+        "path": "dogfood/tuning/WAVE_1_OUTCOMES.md"
+      },
+      {
+        "commits": 1,
+        "lines": 95,
+        "path": "dogfood/tuning/WAVE_2_OUTCOMES.md"
+      },
+      {
+        "commits": 1,
+        "lines": 55,
+        "path": "dogfood/tuning/WAVE_3_OUTCOMES.md"
+      },
+      {
+        "commits": 2,
+        "lines": 65,
+        "path": "dogfood/tuning/WAVE_4_OUTCOMES.md"
+      },
+      {
+        "commits": 1,
+        "lines": 343,
+        "path": "dogfood/tuning/matrix-baseline.json"
+      },
+      {
+        "commits": 1,
+        "lines": 343,
+        "path": "dogfood/tuning/matrix-t1.json"
+      },
+      {
+        "commits": 1,
+        "lines": 343,
+        "path": "dogfood/tuning/matrix-t2.json"
+      },
+      {
+        "commits": 1,
+        "lines": 369,
+        "path": "dogfood/tuning/matrix-t3-base.json"
+      },
+      {
+        "commits": 1,
+        "lines": 369,
+        "path": "dogfood/tuning/matrix-t3-half.json"
+      },
+      {
+        "commits": 1,
+        "lines": 369,
+        "path": "dogfood/tuning/matrix-t3-quarter.json"
+      },
+      {
+        "commits": 1,
+        "lines": 369,
+        "path": "dogfood/tuning/matrix-t4-cap1.json"
+      },
+      {
+        "commits": 2,
+        "lines": 50,
+        "path": "engine-composition.test.ts}"
+      },
+      {
+        "commits": 1,
+        "lines": 352,
+        "path": "multitask.md"
+      },
+      {
+        "commits": 14,
+        "lines": 1646,
+        "path": "package-lock.json"
+      },
+      {
+        "commits": 16,
+        "lines": 207,
+        "path": "package.json"
+      },
+      {
+        "commits": 14,
+        "lines": 314,
+        "path": "scripts/check-coverage-utils.mjs"
+      },
+      {
+        "commits": 3,
+        "lines": 477,
+        "path": "scripts/check-coverage-utils.ts"
+      },
+      {
+        "commits": 18,
+        "lines": 506,
+        "path": "scripts/check-critical-coverage.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 5,
+        "path": "site/astro.config.mjs"
+      },
+      {
+        "commits": 1,
+        "lines": 6029,
+        "path": "site/package-lock.json"
+      },
+      {
+        "commits": 1,
+        "lines": 6,
+        "path": "site/package.json"
+      },
+      {
+        "commits": 1,
+        "lines": 0,
+        "path": "site/public/banner.jpg"
+      },
+      {
+        "commits": 1,
+        "lines": 2,
+        "path": "site/src/content/docs/handbook/architecture.md"
+      },
+      {
+        "commits": 2,
+        "lines": 122,
+        "path": "site/src/content/docs/handbook/beginners.md"
+      },
+      {
+        "commits": 4,
+        "lines": 71,
+        "path": "site/src/content/docs/handbook/getting-started.md"
+      },
+      {
+        "commits": 2,
+        "lines": 5,
+        "path": "site/src/content/docs/handbook/index.md"
+      },
+      {
+        "commits": 2,
+        "lines": 85,
+        "path": "site/src/content/docs/handbook/living-world.md"
+      },
+      {
+        "commits": 2,
+        "lines": 15,
+        "path": "site/src/content/docs/handbook/play-guide.md"
+      },
+      {
+        "commits": 4,
+        "lines": 34,
+        "path": "site/src/content/docs/handbook/runtime-guarantees.md"
+      },
+      {
+        "commits": 2,
+        "lines": 18,
+        "path": "site/src/site-config.ts"
+      },
+      {
+        "commits": 19,
+        "lines": 2064,
+        "path": "src/action-interpreter.test.ts"
+      },
+      {
+        "commits": 19,
+        "lines": 852,
+        "path": "src/action-interpreter.ts"
+      },
+      {
+        "commits": 17,
+        "lines": 669,
+        "path": "src/bin-defenses.test.ts"
+      },
+      {
+        "commits": 54,
+        "lines": 3109,
+        "path": "src/bin.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 724,
+        "path": "src/character/builder.test.ts"
+      },
+      {
+        "commits": 10,
+        "lines": 347,
+        "path": "src/character/builder.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 62,
+        "path": "src/character/catalog-names.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 606,
+        "path": "src/character/chronicle-renderer.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 232,
+        "path": "src/character/chronicle-renderer.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 505,
+        "path": "src/character/packs.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 168,
+        "path": "src/character/packs.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 351,
+        "path": "src/character/presence.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 113,
+        "path": "src/character/presence.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 768,
+        "path": "src/character/prompts.test.ts"
+      },
+      {
+        "commits": 10,
+        "lines": 424,
+        "path": "src/character/prompts.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 328,
+        "path": "src/character/recap-delta.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 134,
+        "path": "src/character/recap-delta.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 496,
+        "path": "src/character/recap.test.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 202,
+        "path": "src/character/recap.ts"
+      },
+      {
+        "commits": 15,
+        "lines": 1110,
+        "path": "src/character/session-recap.test.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 600,
+        "path": "src/character/session-recap.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 322,
+        "path": "src/character/sheet.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 140,
+        "path": "src/character/sheet.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 418,
+        "path": "src/character/world-delta.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 56,
+        "path": "src/character/world-delta.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 243,
+        "path": "src/claude-client.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 197,
+        "path": "src/claude-client.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 98,
+        "path": "src/cli/boot-zone-entry.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 80,
+        "path": "src/cli/boot-zone-entry.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 23,
+        "path": "src/cli/claude-client-deprecated.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 266,
+        "path": "src/cli/colors.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 73,
+        "path": "src/cli/colors.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 128,
+        "path": "src/cli/engine-state-validator.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 716,
+        "path": "src/cli/error-presenter.test.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 258,
+        "path": "src/cli/error-presenter.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 166,
+        "path": "src/cli/exit-autosave.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 164,
+        "path": "src/cli/exit-autosave.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 60,
+        "path": "src/cli/path-guard.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 40,
+        "path": "src/cli/path-guard.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 1202,
+        "path": "src/cli/presentation-renderer.test.ts"
+      },
+      {
+        "commits": 14,
+        "lines": 784,
+        "path": "src/cli/presentation-renderer.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 60,
+        "path": "src/cli/resume-path.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 94,
+        "path": "src/cli/resume-path.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 162,
+        "path": "src/cli/save-input-builder.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 167,
+        "path": "src/cli/save-input-builder.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 358,
+        "path": "src/cli/save-listing.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 194,
+        "path": "src/cli/save-listing.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 98,
+        "path": "src/cli/save-selection.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 74,
+        "path": "src/cli/save-selection.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 314,
+        "path": "src/cli/slash-completer.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 147,
+        "path": "src/cli/slash-completer.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 315,
+        "path": "src/cli/spinner.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 189,
+        "path": "src/cli/spinner.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 393,
+        "path": "src/cli/stream-presenter.test.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 183,
+        "path": "src/cli/stream-presenter.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 25,
+        "path": "src/cli/terminal-ui-audit.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 105,
+        "path": "src/cli/unhandled-rejection.test.ts"
+      },
+      {
+        "commits": 10,
+        "lines": 698,
+        "path": "src/cli/usage.test.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 428,
+        "path": "src/cli/usage.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 344,
+        "path": "src/cli/world-flag.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 134,
+        "path": "src/cli/world-flag.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 130,
+        "path": "src/cli/world-truth-seed-runner.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 102,
+        "path": "src/cli/world-truth-seed-runner.ts"
+      },
+      {
+        "commits": 18,
+        "lines": 2152,
+        "path": "src/companion/companion-bridge.test.ts"
+      },
+      {
+        "commits": 17,
+        "lines": 522,
+        "path": "src/companion/companion-bridge.ts"
+      },
+      {
+        "commits": 19,
+        "lines": 1014,
+        "path": "src/dialogue/dialogue-mind.test.ts"
+      },
+      {
+        "commits": 23,
+        "lines": 527,
+        "path": "src/dialogue/dialogue-mind.ts"
+      },
+      {
+        "commits": 14,
+        "lines": 1575,
+        "path": "src/dialogue/npc-context.test.ts"
+      },
+      {
+        "commits": 17,
+        "lines": 762,
+        "path": "src/dialogue/npc-context.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 164,
+        "path": "src/display/announcement-channel.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 304,
+        "path": "src/display/archive-browser.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 198,
+        "path": "src/display/archive-browser.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 578,
+        "path": "src/display/contextual-suggestions.test.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 350,
+        "path": "src/display/contextual-suggestions.ts"
+      },
+      {
+        "commits": 27,
+        "lines": 2351,
+        "path": "src/display/director-renderer.test.ts"
+      },
+      {
+        "commits": 29,
+        "lines": 1890,
+        "path": "src/display/director-renderer.ts"
+      },
+      {
+        "commits": 18,
+        "lines": 1298,
+        "path": "src/display/help-system.test.ts"
+      },
+      {
+        "commits": 24,
+        "lines": 1121,
+        "path": "src/display/help-system.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 60,
+        "path": "src/display/play-renderer-divider.test.ts"
+      },
+      {
+        "commits": 23,
+        "lines": 1462,
+        "path": "src/display/play-renderer.test.ts"
+      },
+      {
+        "commits": 26,
+        "lines": 778,
+        "path": "src/display/play-renderer.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 666,
+        "path": "src/display/status-compact.test.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 139,
+        "path": "src/display/status-compact.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 307,
+        "path": "src/display/turn-divider.test.ts"
+      },
+      {
+        "commits": 23,
+        "lines": 2891,
+        "path": "src/foundry/world-gen.test.ts"
+      },
+      {
+        "commits": 33,
+        "lines": 2720,
+        "path": "src/foundry/world-gen.ts"
+      },
+      {
+        "commits": 63,
+        "lines": 7670,
+        "path": "src/game.test.ts"
+      },
+      {
+        "commits": 66,
+        "lines": 8917,
+        "path": "src/game.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 19,
+        "path": "src/game/ambush-headline.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 370,
+        "path": "src/game/asks.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 804,
+        "path": "src/game/asks.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 166,
+        "path": "src/game/condition.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 144,
+        "path": "src/game/condition.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 206,
+        "path": "src/game/debug-logger.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 217,
+        "path": "src/game/debug-logger.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 124,
+        "path": "src/game/faction-cognition-guards.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 189,
+        "path": "src/game/game-narration.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 50,
+        "path": "src/game/game-narration.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 344,
+        "path": "src/game/game-presenter.test.ts"
+      },
+      {
+        "commits": 14,
+        "lines": 341,
+        "path": "src/game/game-presenter.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 1026,
+        "path": "src/game/game-state.test.ts"
+      },
+      {
+        "commits": 15,
+        "lines": 682,
+        "path": "src/game/game-state.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 96,
+        "path": "src/game/hint-ledger.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 178,
+        "path": "src/game/hint-ledger.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 327,
+        "path": "src/game/hostile-turn.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 532,
+        "path": "src/game/hostile-turn.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 230,
+        "path": "src/game/leverage-view.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 156,
+        "path": "src/game/leverage-view.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 364,
+        "path": "src/game/recognition.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 272,
+        "path": "src/game/reputation-view.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 226,
+        "path": "src/game/reputation-view.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 160,
+        "path": "src/game/round-metrics.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 278,
+        "path": "src/game/rumor-mirror.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 144,
+        "path": "src/game/rumor-mirror.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 451,
+        "path": "src/game/token-tracker.test.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 325,
+        "path": "src/game/token-tracker.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 369,
+        "path": "src/game/tuning.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 76,
+        "path": "src/game/unknown-command.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 471,
+        "path": "src/game/unknown-command.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 164,
+        "path": "src/game/world-moved.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 326,
+        "path": "src/game/world-truth-seed.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 23,
+        "path": "src/index.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 827,
+        "path": "src/llm/claude-adapter.test.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 408,
+        "path": "src/llm/claude-adapter.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 90,
+        "path": "src/llm/claude-errors.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 608,
+        "path": "src/narrator/finale-narrator.test.ts"
+      },
+      {
+        "commits": 10,
+        "lines": 362,
+        "path": "src/narrator/finale-narrator.ts"
+      },
+      {
+        "commits": 26,
+        "lines": 1880,
+        "path": "src/narrator/narrator.test.ts"
+      },
+      {
+        "commits": 29,
+        "lines": 1138,
+        "path": "src/narrator/narrator.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 239,
+        "path": "src/narrator/scene-context-perf.test.ts"
+      },
+      {
+        "commits": 17,
+        "lines": 1756,
+        "path": "src/narrator/scene-context.test.ts"
+      },
+      {
+        "commits": 19,
+        "lines": 768,
+        "path": "src/narrator/scene-context.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 2129,
+        "path": "src/npc/agency.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 813,
+        "path": "src/npc/agency.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 471,
+        "path": "src/npc/ambient-dialogue.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 436,
+        "path": "src/npc/ambient-dialogue.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 235,
+        "path": "src/npc/presence.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 28,
+        "path": "src/npc/presence.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 945,
+        "path": "src/prompts/dialogue-npc.test.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 546,
+        "path": "src/prompts/dialogue-npc.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 500,
+        "path": "src/prompts/finale-prompt.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 364,
+        "path": "src/prompts/finale-prompt.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 134,
+        "path": "src/prompts/interpret-action.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 35,
+        "path": "src/prompts/interpret-action.ts"
+      },
+      {
+        "commits": 20,
+        "lines": 826,
+        "path": "src/prompts/narrate-scene.test.ts"
+      },
+      {
+        "commits": 20,
+        "lines": 750,
+        "path": "src/prompts/narrate-scene.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 376,
+        "path": "src/prompts/world-gen.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 66,
+        "path": "src/prompts/world-gen.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 154,
+        "path": "src/runtime/audio-bridge.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 104,
+        "path": "src/runtime/audio-bridge.ts"
+      },
+      {
+        "commits": 19,
+        "lines": 1291,
+        "path": "src/runtime/hooks.test.ts"
+      },
+      {
+        "commits": 16,
+        "lines": 586,
+        "path": "src/runtime/hooks.ts"
+      },
+      {
+        "commits": 29,
+        "lines": 5138,
+        "path": "src/runtime/immersion-runtime.test.ts"
+      },
+      {
+        "commits": 28,
+        "lines": 1512,
+        "path": "src/runtime/immersion-runtime.ts"
+      },
+      {
+        "commits": 11,
+        "lines": 428,
+        "path": "src/runtime/presentation-state.test.ts"
+      },
+      {
+        "commits": 14,
+        "lines": 328,
+        "path": "src/runtime/presentation-state.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 109,
+        "path": "src/runtime/voice-caster.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 55,
+        "path": "src/runtime/voice-caster.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 234,
+        "path": "src/session/chronicle-export.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 160,
+        "path": "src/session/chronicle-export.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 441,
+        "path": "src/session/chronicle.test.ts"
+      },
+      {
+        "commits": 6,
+        "lines": 81,
+        "path": "src/session/chronicle.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 538,
+        "path": "src/session/history.test.ts"
+      },
+      {
+        "commits": 12,
+        "lines": 386,
+        "path": "src/session/history.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 488,
+        "path": "src/session/migrate.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 430,
+        "path": "src/session/migrate.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 565,
+        "path": "src/session/save-atomic.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 204,
+        "path": "src/session/session-backup-integrity.test.ts"
+      },
+      {
+        "commits": 21,
+        "lines": 2665,
+        "path": "src/session/session.test.ts"
+      },
+      {
+        "commits": 33,
+        "lines": 2502,
+        "path": "src/session/session.ts"
+      },
+      {
+        "commits": 28,
+        "lines": 2887,
+        "path": "src/turn-loop.test.ts"
+      },
+      {
+        "commits": 37,
+        "lines": 2167,
+        "path": "src/turn-loop.ts"
+      },
+      {
+        "commits": 15,
+        "lines": 811,
+        "path": "test/check-critical-coverage.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 226,
+        "path": "test/fixtures/saves/v1-migration-fixtures.md"
+      },
+      {
+        "commits": 2,
+        "lines": 76,
+        "path": "test/fixtures/saves/v1-migration-generated-rich.json"
+      },
+      {
+        "commits": 2,
+        "lines": 90,
+        "path": "test/fixtures/saves/v1-migration-pack-rich.json"
+      },
+      {
+        "commits": 2,
+        "lines": 50,
+        "path": "test/fixtures/saves/v1-migration-veteran.json"
+      },
+      {
+        "commits": 3,
+        "lines": 20,
+        "path": "test/fixtures/saves/v1-rich.json"
+      },
+      {
+        "commits": 2,
+        "lines": 4,
+        "path": "test/fixtures/saves/v2-current.json"
+      },
+      {
+        "commits": 2,
+        "lines": 122,
+        "path": "test/helpers/bin-cli-harness.test.ts"
+      },
+      {
+        "commits": 13,
+        "lines": 1272,
+        "path": "test/helpers/bin-cli-harness.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 96,
+        "path": "test/helpers/catalog-assertions.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 126,
+        "path": "test/helpers/chronicle-fixtures.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 86,
+        "path": "test/helpers/fake-claude-client.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 196,
+        "path": "test/helpers/fake-claude-client.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 154,
+        "path": "test/helpers/fake-readline.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 486,
+        "path": "test/helpers/game-harness.test.ts"
+      },
+      {
+        "commits": 22,
+        "lines": 1394,
+        "path": "test/helpers/game-harness.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 1536,
+        "path": "test/helpers/living-world-matrix.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 362,
+        "path": "test/helpers/world-gen-fixtures.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 226,
+        "path": "test/integration/ambient-zone-dialogue.test.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 177,
+        "path": "test/integration/archive-export.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 580,
+        "path": "test/integration/b1-followups.test.ts"
+      },
+      {
+        "commits": 15,
+        "lines": 922,
+        "path": "test/integration/bin-cli-turn-loop.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 329,
+        "path": "test/integration/catalog-display-names.test.ts"
+      },
+      {
+        "commits": 8,
+        "lines": 634,
+        "path": "test/integration/character-builder-menu.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 36,
+        "path": "test/integration/chronicle.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 218,
+        "path": "test/integration/consecutive-fallbacks.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 446,
+        "path": "test/integration/conversation-memory.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 106,
+        "path": "test/integration/engine-39-composition.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 112,
+        "path": "test/integration/engine-composition.test.ts"
+      },
+      {
+        "commits": 24,
+        "lines": 1262,
+        "path": "test/integration/game-turn-loop.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 358,
+        "path": "test/integration/generated-world-resume.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 117,
+        "path": "test/integration/interpreted-reasoning-debug.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 348,
+        "path": "test/integration/living-world-driver.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 434,
+        "path": "test/integration/living-world-readback.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 1438,
+        "path": "test/integration/living-world-surfaces.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 411,
+        "path": "test/integration/load-archive-edge-cli.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 93,
+        "path": "test/integration/migration.test.ts"
+      },
+      {
+        "commits": 1,
+        "lines": 51,
+        "path": "test/integration/phase9-composed-proof.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 564,
+        "path": "test/integration/phase9-living-world.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 348,
+        "path": "test/integration/post-death-setback.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 1254,
+        "path": "test/integration/reactive-street.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 166,
+        "path": "test/integration/recap-delta.test.ts"
+      },
+      {
+        "commits": 9,
+        "lines": 723,
+        "path": "test/integration/retry-spinner-cli.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 943,
+        "path": "test/integration/save-schema-v3.test.ts"
+      },
+      {
+        "commits": 7,
+        "lines": 291,
+        "path": "test/integration/session-persistence.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 351,
+        "path": "test/integration/sfx-humanization-cli.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 29,
+        "path": "test/integration/streaming.test.ts"
+      },
+      {
+        "commits": 5,
+        "lines": 425,
+        "path": "test/integration/world-flag-cli.test.ts"
+      },
+      {
+        "commits": 2,
+        "lines": 590,
+        "path": "test/integration/world-source-parity.test.ts"
+      },
+      {
+        "commits": 3,
+        "lines": 556,
+        "path": "test/integration/world-truth-seed.test.ts"
+      },
+      {
+        "commits": 4,
+        "lines": 41,
+        "path": "tsconfig.test.json"
+      },
+      {
+        "commits": 6,
+        "lines": 124,
+        "path": "vitest.config.ts"
+      }
+    ]
+  },
+  "confidence": {
+    "level": "full",
+    "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
+  },
+  "generatedAt": "2026-09-24T02:25:38.136Z",
+  "generatedFrom": {
+    "commit": "d22db1236c2745c249ce959157c0f891fae3b3c2"
+  },
+  "pairs": [
+    {
+      "a": "package-lock.json",
+      "b": "package.json",
+      "either": 16,
+      "shared": 10,
+      "strength": 0.625
+    },
+    {
+      "a": "src/action-interpreter.test.ts",
+      "b": "src/action-interpreter.ts",
+      "either": 14,
+      "shared": 10,
+      "strength": 0.714286
+    },
+    {
+      "a": "src/display/director-renderer.test.ts",
+      "b": "src/display/director-renderer.ts",
+      "either": 19,
+      "shared": 15,
+      "strength": 0.789474
+    },
+    {
+      "a": "src/display/play-renderer.test.ts",
+      "b": "src/display/play-renderer.ts",
+      "either": 17,
+      "shared": 12,
+      "strength": 0.705882
+    },
+    {
+      "a": "src/foundry/world-gen.test.ts",
+      "b": "src/foundry/world-gen.ts",
+      "either": 21,
+      "shared": 13,
+      "strength": 0.619048
+    },
+    {
+      "a": "src/game.test.ts",
+      "b": "src/game.ts",
+      "either": 52,
+      "shared": 32,
+      "strength": 0.615385
+    },
+    {
+      "a": "src/narrator/narrator.test.ts",
+      "b": "src/narrator/narrator.ts",
+      "either": 20,
+      "shared": 13,
+      "strength": 0.65
+    },
+    {
+      "a": "src/runtime/immersion-runtime.test.ts",
+      "b": "src/runtime/immersion-runtime.ts",
+      "either": 16,
+      "shared": 14,
+      "strength": 0.875
+    },
+    {
+      "a": "src/turn-loop.test.ts",
+      "b": "src/turn-loop.ts",
+      "either": 23,
+      "shared": 16,
+      "strength": 0.695652
+    }
+  ],
+  "parameters": {
+    "appliedChangesetLimit": 50,
+    "changeset": 50,
+    "changesetFraction": 0.25,
+    "cohesionDrop": 0.2,
+    "couplingPopulation": "source",
+    "fallenShared": 3,
+    "floor": "strong",
+    "floorHeld": false,
+    "floorTrigger": null,
+    "headDate": "2026-09-17T18:41:05-07:00",
+    "inScopeFiles": 496,
+    "pinnedStart": null,
+    "priorFloor": null,
+    "qualifyingCommits": 240,
+    "qualifyingMinimum": 30,
+    "revisions": 5,
+    "shared": 10,
+    "sharedFloorUsed": 10,
+    "since": "2026-03-22T01:41:05.000Z",
+    "sourceExtensions": [
+      ".js",
+      ".mjs",
+      ".cjs",
+      ".jsx",
+      ".ts",
+      ".tsx",
+      ".mts",
+      ".cts",
+      ".py"
+    ],
+    "sourceFileReach": 20,
+    "sourceFileRise": 25,
+    "sourceFilesReachingStrongFloor": 34,
+    "strength": 0.5,
+    "windowDays": 180
+  },
+  "strengthDefinition": "strength is the shared qualifying commits divided by either. either is the number of qualifying commits that touch either file."
+}

@@ -1,0 +1,455 @@
+{
+  "authored": [
+    ".github/",
+    "docs/",
+    "dogfood/",
+    "root",
+    "site/"
+  ],
+  "breaks": [
+    {
+      "doors": 4,
+      "importedBy": [],
+      "importedByTests": [
+        "test"
+      ],
+      "kind": "part",
+      "name": "src",
+      "partLabel": "src"
+    },
+    {
+      "doors": 2,
+      "importedBy": [],
+      "importedByTests": [
+        "test"
+      ],
+      "kind": "part",
+      "name": "scripts",
+      "partLabel": "scripts"
+    },
+    {
+      "doors": 2,
+      "importedBy": [],
+      "importedByTests": [
+        "src"
+      ],
+      "kind": "part",
+      "name": "test",
+      "partLabel": "test"
+    }
+  ],
+  "changes": {
+    "first": true
+  },
+  "changesTogether": [],
+  "changesTogetherNote": [
+    "8 files changed together with their own tests, as expected.",
+    "Window: 180 days; a pair counts from 10 shared commits, since 34 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
+  ],
+  "changesTogetherWithTests": 8,
+  "commit": "d22db1236c2745c249ce959157c0f891fae3b3c2",
+  "defaultBranch": "main",
+  "derived": "8 parts, mostly TypeScript (218 files). Work enters through 5 doors; the busiest is CI, which reaches 3 parts. It publishes to npm. People run claude-rpg. People import @mcptoolshop/claude-rpg.",
+  "doors": [
+    {
+      "checks": [
+        "src/",
+        "test/"
+      ],
+      "checksCount": 2,
+      "file": ".github/workflows/ci.yml",
+      "id": ".github/workflows/ci.yml",
+      "landings": [],
+      "name": "CI",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "scripts",
+          "depth": 0,
+          "files": 2
+        },
+        {
+          "boundary": "src",
+          "depth": 0,
+          "files": 172
+        },
+        {
+          "boundary": "test",
+          "depth": 0,
+          "files": 43
+        }
+      ],
+      "runs": [
+        "scripts/check-critical-coverage.mjs",
+        "src/action-interpreter.test.ts",
+        "src/bin-defenses.test.ts",
+        "src/character/builder.test.ts",
+        "src/character/chronicle-renderer.test.ts",
+        "src/character/packs.test.ts",
+        "src/character/presence.test.ts",
+        "src/character/prompts.test.ts",
+        "src/character/recap-delta.test.ts",
+        "src/character/recap.test.ts",
+        "src/character/session-recap.test.ts",
+        "src/character/sheet.test.ts",
+        "src/character/world-delta.test.ts",
+        "src/claude-client.test.ts",
+        "src/cli/boot-zone-entry.test.ts",
+        "src/cli/claude-client-deprecated.test.ts",
+        "src/cli/colors.test.ts",
+        "src/cli/error-presenter.test.ts",
+        "src/cli/exit-autosave.test.ts",
+        "src/cli/path-guard.test.ts",
+        "src/cli/presentation-renderer.test.ts",
+        "src/cli/resume-path.test.ts",
+        "src/cli/save-input-builder.test.ts",
+        "src/cli/save-listing.test.ts",
+        "src/cli/save-selection.test.ts",
+        "src/cli/slash-completer.test.ts",
+        "src/cli/spinner.test.ts",
+        "src/cli/stream-presenter.test.ts",
+        "src/cli/terminal-ui-audit.test.ts",
+        "src/cli/unhandled-rejection.test.ts",
+        "src/cli/usage.test.ts",
+        "src/cli/world-flag.test.ts",
+        "src/cli/world-truth-seed-runner.test.ts",
+        "src/companion/companion-bridge.test.ts",
+        "src/dialogue/dialogue-mind.test.ts",
+        "src/dialogue/npc-context.test.ts",
+        "src/display/announcement-channel.test.ts",
+        "src/display/archive-browser.test.ts",
+        "src/display/contextual-suggestions.test.ts",
+        "src/display/director-renderer.test.ts",
+        "src/display/help-system.test.ts",
+        "src/display/play-renderer-divider.test.ts",
+        "src/display/play-renderer.test.ts",
+        "src/display/status-compact.test.ts",
+        "src/display/turn-divider.test.ts",
+        "src/foundry/world-gen.test.ts",
+        "src/game.test.ts",
+        "src/game/asks.test.ts",
+        "src/game/condition.test.ts",
+        "src/game/debug-logger.test.ts",
+        "src/game/faction-cognition-guards.test.ts",
+        "src/game/game-narration.test.ts",
+        "src/game/game-presenter.test.ts",
+        "src/game/game-state.test.ts",
+        "src/game/hint-ledger.test.ts",
+        "src/game/hostile-turn.test.ts",
+        "src/game/leverage-view.test.ts",
+        "src/game/reputation-view.test.ts",
+        "src/game/rumor-mirror.test.ts",
+        "src/game/token-tracker.test.ts",
+        "src/game/unknown-command.test.ts",
+        "src/llm/claude-adapter.test.ts",
+        "src/narrator/finale-narrator.test.ts",
+        "src/narrator/narrator.test.ts",
+        "src/narrator/scene-context-perf.test.ts",
+        "src/narrator/scene-context.test.ts",
+        "src/npc/agency.test.ts",
+        "src/npc/ambient-dialogue.test.ts",
+        "src/npc/presence.test.ts",
+        "src/prompts/dialogue-npc.test.ts",
+        "src/prompts/finale-prompt.test.ts",
+        "src/prompts/interpret-action.test.ts",
+        "src/prompts/narrate-scene.test.ts",
+        "src/prompts/world-gen.test.ts",
+        "src/runtime/audio-bridge.test.ts",
+        "src/runtime/hooks.test.ts",
+        "src/runtime/immersion-runtime.test.ts",
+        "src/runtime/presentation-state.test.ts",
+        "src/runtime/voice-caster.test.ts",
+        "src/session/chronicle-export.test.ts",
+        "src/session/chronicle.test.ts",
+        "src/session/history.test.ts",
+        "src/session/migrate.test.ts",
+        "src/session/save-atomic.test.ts",
+        "src/session/session-backup-integrity.test.ts",
+        "src/session/session.test.ts",
+        "src/turn-loop.test.ts",
+        "test/check-critical-coverage.test.ts",
+        "test/helpers/bin-cli-harness.test.ts",
+        "test/helpers/fake-claude-client.test.ts",
+        "test/helpers/game-harness.test.ts",
+        "test/integration/"
+      ],
+      "runsCount": 92,
+      "sends": [],
+      "stages": [],
+      "triggers": [
+        "on a pull request touching 12 paths",
+        "on a push touching 12 paths",
+        "or by hand"
+      ]
+    },
+    {
+      "checks": [
+        "src/"
+      ],
+      "checksCount": 1,
+      "file": ".github/workflows/release.yml",
+      "id": ".github/workflows/release.yml",
+      "landings": [],
+      "name": "Release",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "src",
+          "depth": 0,
+          "files": 172
+        },
+        {
+          "boundary": "test",
+          "depth": 0,
+          "files": 43
+        },
+        {
+          "boundary": "scripts",
+          "depth": 1,
+          "files": 1
+        }
+      ],
+      "runs": [
+        "src/action-interpreter.test.ts",
+        "src/bin-defenses.test.ts",
+        "src/character/builder.test.ts",
+        "src/character/chronicle-renderer.test.ts",
+        "src/character/packs.test.ts",
+        "src/character/presence.test.ts",
+        "src/character/prompts.test.ts",
+        "src/character/recap-delta.test.ts",
+        "src/character/recap.test.ts",
+        "src/character/session-recap.test.ts",
+        "src/character/sheet.test.ts",
+        "src/character/world-delta.test.ts",
+        "src/claude-client.test.ts",
+        "src/cli/boot-zone-entry.test.ts",
+        "src/cli/claude-client-deprecated.test.ts",
+        "src/cli/colors.test.ts",
+        "src/cli/error-presenter.test.ts",
+        "src/cli/exit-autosave.test.ts",
+        "src/cli/path-guard.test.ts",
+        "src/cli/presentation-renderer.test.ts",
+        "src/cli/resume-path.test.ts",
+        "src/cli/save-input-builder.test.ts",
+        "src/cli/save-listing.test.ts",
+        "src/cli/save-selection.test.ts",
+        "src/cli/slash-completer.test.ts",
+        "src/cli/spinner.test.ts",
+        "src/cli/stream-presenter.test.ts",
+        "src/cli/terminal-ui-audit.test.ts",
+        "src/cli/unhandled-rejection.test.ts",
+        "src/cli/usage.test.ts",
+        "src/cli/world-flag.test.ts",
+        "src/cli/world-truth-seed-runner.test.ts",
+        "src/companion/companion-bridge.test.ts",
+        "src/dialogue/dialogue-mind.test.ts",
+        "src/dialogue/npc-context.test.ts",
+        "src/display/announcement-channel.test.ts",
+        "src/display/archive-browser.test.ts",
+        "src/display/contextual-suggestions.test.ts",
+        "src/display/director-renderer.test.ts",
+        "src/display/help-system.test.ts",
+        "src/display/play-renderer-divider.test.ts",
+        "src/display/play-renderer.test.ts",
+        "src/display/status-compact.test.ts",
+        "src/display/turn-divider.test.ts",
+        "src/foundry/world-gen.test.ts",
+        "src/game.test.ts",
+        "src/game/asks.test.ts",
+        "src/game/condition.test.ts",
+        "src/game/debug-logger.test.ts",
+        "src/game/faction-cognition-guards.test.ts",
+        "src/game/game-narration.test.ts",
+        "src/game/game-presenter.test.ts",
+        "src/game/game-state.test.ts",
+        "src/game/hint-ledger.test.ts",
+        "src/game/hostile-turn.test.ts",
+        "src/game/leverage-view.test.ts",
+        "src/game/reputation-view.test.ts",
+        "src/game/rumor-mirror.test.ts",
+        "src/game/token-tracker.test.ts",
+        "src/game/unknown-command.test.ts",
+        "src/llm/claude-adapter.test.ts",
+        "src/narrator/finale-narrator.test.ts",
+        "src/narrator/narrator.test.ts",
+        "src/narrator/scene-context-perf.test.ts",
+        "src/narrator/scene-context.test.ts",
+        "src/npc/agency.test.ts",
+        "src/npc/ambient-dialogue.test.ts",
+        "src/npc/presence.test.ts",
+        "src/prompts/dialogue-npc.test.ts",
+        "src/prompts/finale-prompt.test.ts",
+        "src/prompts/interpret-action.test.ts",
+        "src/prompts/narrate-scene.test.ts",
+        "src/prompts/world-gen.test.ts",
+        "src/runtime/audio-bridge.test.ts",
+        "src/runtime/hooks.test.ts",
+        "src/runtime/immersion-runtime.test.ts",
+        "src/runtime/presentation-state.test.ts",
+        "src/runtime/voice-caster.test.ts",
+        "src/session/chronicle-export.test.ts",
+        "src/session/chronicle.test.ts",
+        "src/session/history.test.ts",
+        "src/session/migrate.test.ts",
+        "src/session/save-atomic.test.ts",
+        "src/session/session-backup-integrity.test.ts",
+        "src/session/session.test.ts",
+        "src/turn-loop.test.ts",
+        "test/check-critical-coverage.test.ts",
+        "test/helpers/bin-cli-harness.test.ts",
+        "test/helpers/fake-claude-client.test.ts",
+        "test/helpers/game-harness.test.ts",
+        "test/integration/"
+      ],
+      "runsCount": 91,
+      "sends": [
+        "publishes to npm",
+        "creates a GitHub release"
+      ],
+      "stages": [],
+      "triggers": [
+        "when a tag matching `v*` is pushed"
+      ]
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "file": ".github/workflows/pages.yml",
+      "id": ".github/workflows/pages.yml",
+      "landings": [],
+      "name": "Deploy site to GitHub Pages",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "site",
+          "depth": 0,
+          "files": 3
+        }
+      ],
+      "runs": [
+        "site/astro.config.mjs",
+        "site/src/"
+      ],
+      "runsCount": 2,
+      "sends": [
+        "deploys the site"
+      ],
+      "stages": [],
+      "triggers": [
+        "on a push to main touching 2 paths",
+        "or by hand"
+      ]
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "file": "package.json",
+      "id": "package.json#@mcptoolshop/claude-rpg",
+      "kind": "package",
+      "landings": [],
+      "name": "@mcptoolshop/claude-rpg",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "src",
+          "depth": 0,
+          "files": 71
+        }
+      ],
+      "runs": [
+        "src/index.ts"
+      ],
+      "runsCount": 1,
+      "sends": [],
+      "stages": [],
+      "triggers": []
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "file": "package.json",
+      "id": "package.json#claude-rpg",
+      "kind": "command",
+      "landings": [],
+      "name": "claude-rpg",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "src",
+          "depth": 0,
+          "files": 84
+        }
+      ],
+      "runs": [
+        "src/bin.ts"
+      ],
+      "runsCount": 1,
+      "sends": [],
+      "stages": [],
+      "triggers": []
+    }
+  ],
+  "duplicates": [],
+  "duplicatesLead": null,
+  "duplicatesNote": [],
+  "edges": [
+    {
+      "from": "src",
+      "fromTests": true,
+      "to": "test"
+    },
+    {
+      "from": "test",
+      "fromTests": true,
+      "to": "scripts"
+    },
+    {
+      "from": "test",
+      "fromTests": true,
+      "to": "src"
+    }
+  ],
+  "generated": [],
+  "generatedAt": "2026-09-24T02:25:38.136Z",
+  "limits": [
+    "2 import sites could not be resolved.",
+    "10 files use syntax the parser cannot read (src/character/session-recap.ts, src/dialogue/npc-context.test.ts, src/game.test.ts and 7 more), so what they import is not known: 8 in src (`typeof import(…)` as a type argument in 7 and an import type followed by `[]` in 1), 2 in test (`typeof import(…)` as a type argument).",
+    "5 writes and 3 reads use paths built at run time and are not named here.",
+    "2 writes and 2 reads go to the directory the command is run in, the home directory or a path its caller passes, not to this repository.",
+    "1 command is built at run time and not followed, it in tests."
+  ],
+  "mainDoor": ".github/workflows/ci.yml",
+  "partLabels": {
+    ".github": ".github",
+    "docs": "docs",
+    "dogfood": "dogfood",
+    "root": "the repository root",
+    "scripts": "scripts",
+    "site": "the site",
+    "src": "src",
+    "test": "test"
+  },
+  "parts": 8,
+  "readers": [],
+  "repo": "mcp-tool-shop-org/claude-rpg",
+  "sequences": [],
+  "startDoor": ".github/workflows/ci.yml",
+  "startHere": [
+    ".github/workflows/ci.yml",
+    "scripts/check-critical-coverage.mjs"
+  ],
+  "summary": null,
+  "summaryFrom": null,
+  "testFiles": 140,
+  "testedBy": {
+    "scripts": 1,
+    "src": 120
+  },
+  "unnamedWrites": 5,
+  "unread": [],
+  "unreadNote": [],
+  "untested": [],
+  "untestedNote": [],
+  "written": 0
+}

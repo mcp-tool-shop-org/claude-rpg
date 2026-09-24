@@ -11,6 +11,7 @@ on:
       - "tsconfig.test.json"
       - "vitest.config.ts"
       - ".github/workflows/**"
+      - "atlas/**"
       - "site/package.json"
       - "site/package-lock.json"
       - "site/astro.config.mjs"
@@ -24,6 +25,7 @@ on:
       - "tsconfig.test.json"
       - "vitest.config.ts"
       - ".github/workflows/**"
+      - "atlas/**"
       - "site/package.json"
       - "site/package-lock.json"
       - "site/astro.config.mjs"
@@ -62,6 +64,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+      # Atlas requires Node 22 or later, so the check runs on the Node 22 cell only.
+      - name: Atlas check
+        if: matrix.node-version == 22
+        run: npx --yes @dogfood-lab/atlas@1.16.0 check
       - run: npm ci
       - run: npm run verify
       - name: Critical-path coverage check

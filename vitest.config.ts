@@ -3,6 +3,10 @@ import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+    // ci.yml sets COVERAGE_LEG to 'true' on the one leg whose reports go to
+    // Codecov, and that leg writes JUnit test results too. CI runs Vitest
+    // through npm run verify, where no flag on the step reaches it.
+    ...(process.env.COVERAGE_LEG === 'true' ? { reporters: ['default', 'junit'], outputFile: { junit: 'junit.xml' } } : {}),
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

@@ -1,34 +1,43 @@
 # claude-rpg: how it works
 
-Mapped at 2026-09-24 from commit d22db12.
+Mapped at 2026-09-30 from commit e3798b1 by Atlas 1.24.0.
 
 ## What this is
 
-8 parts, mostly TypeScript (218 files). Work enters through 5 doors; the busiest is CI, which reaches 3 parts. It publishes to npm. People run claude-rpg. People import @mcptoolshop/claude-rpg.
+8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.
 
-## What changed since the last map
+## What changed since 2026-09-24 (d22db12)
 
-This is the first map.
+- CI's pull request trigger now also names `codecov.yml`.
+- CI's push trigger now also names `codecov.yml`.
+- dogfood/tuning/ is now written by test/helpers/living-world-matrix.ts.
+- src/game.ts is now also read by src/game.test.ts.
+- dogfood was authored and is now mixed.
+- 1 file added and 493 changed content, across 8 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request touching 12 paths; on a push touching 12 paths; or by hand. Runs scripts/check-critical-coverage.mjs, src/action-interpreter.test.ts, src/bin-defenses.test.ts and 89 more; checks src/ and test/.
-2. **Release.** When a tag matching `v*` is pushed. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 88 more; checks src/.
+1. **CI.** On a pull request touching 13 paths; on a push touching 13 paths; or by hand. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; checks src/ and test/. On a pull request, it also runs scripts/check-critical-coverage.mjs.
+2. **Release.** When a tag matching `v*` is pushed. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; builds src/.
 3. **Deploy site to GitHub Pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **@mcptoolshop/claude-rpg** (the package people import). Loads src/index.ts.
 5. **claude-rpg** (a command people run). Runs src/bin.ts.
 
 ## What happens through CI
 
-1. The workflow runs scripts/check-critical-coverage.mjs in scripts, 86 files in src, and 35 files in test; it checks src/ in src and test/ in test.
+1. The workflow runs 86 files in src and 35 files in test; it checks src/ in src and test/ in test.
+2. On a pull request, it also runs scripts/check-critical-coverage.mjs.
+3. It writes to dogfood/tuning/.
+4. It runs git.
+5. It uploads coverage to Codecov.
 
 ## Who reads the results
 
-CI writes nothing this map can see.
+- **dogfood/tuning/** has no reader in this repository.
 
 ## The other doors
 
-**Release** runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 88 more, checks src/, reaches scripts, publishes to npm, and creates a GitHub release.
+**Release** runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more, builds src/, reaches scripts, writes to dogfood/tuning/, publishes to npm, and creates a GitHub release.
 
 **Deploy site to GitHub Pages** runs site/astro.config.mjs and site/src/, and deploys the site.
 
@@ -46,9 +55,9 @@ CI writes nothing this map can see.
 
 No two source files, other than a file and its own test, changed together often enough to name.
 
-8 files changed together with their own tests, as expected.
+7 files changed together with their own tests, as expected.
 
-Window: 180 days; a pair counts from 10 shared commits, since 34 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
+Window: 180 days; a pair counts from 10 shared commits, since 27 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
 
 ## What no test touches
 
@@ -56,7 +65,7 @@ Every code part is imported by at least one test.
 
 ## Written but never read
 
-No place this map can see is written, so none goes unread.
+- **dogfood/tuning/** is written by test/helpers/living-world-matrix.ts (a test) and read by nothing else in this repository.
 
 ## Helpers that look duplicated
 
@@ -64,24 +73,24 @@ No two parts export a helper that looks alike.
 
 ## Generated, never hand-edited
 
-Nothing in this repository writes to a tracked place this map can see.
+- **dogfood/tuning/** is written by test/helpers/living-world-matrix.ts (a test) when run from the repository root, and committed.
 
 ## Hand-authored
 
-People write .github/, docs/, dogfood/, the repository root and site/; 5 writes with paths built at run time may land here.
+People write .github/, docs/, the repository root and site/. Nothing in this repository writes to them.
 
 ## Where to start
 
-.github/workflows/ci.yml → scripts/check-critical-coverage.mjs
+src/bin.ts → src/cli/usage.ts → src/cli/error-presenter.ts → src/cli/world-flag.ts → src/character/builder.ts → src/cli/boot-zone-entry.ts → src/llm/claude-adapter.ts
 
-Read those in order to follow one pull request end to end.
+Read those in order to follow one run of claude-rpg end to end. This path follows claude-rpg (a command people run) from its entry, since CI runs only tests and checks.
 
 ## What this map cannot see
 
-- 2 import sites could not be resolved.
-- 10 files use syntax the parser cannot read (src/character/session-recap.ts, src/dialogue/npc-context.test.ts, src/game.test.ts and 7 more), so what they import is not known: 8 in src (`typeof import(…)` as a type argument in 7 and an import type followed by `[]` in 1), 2 in test (`typeof import(…)` as a type argument).
-- 5 writes and 3 reads use paths built at run time and are not named here.
-- 2 writes and 2 reads go to the directory the command is run in, the home directory or a path its caller passes, not to this repository.
-- 1 command is built at run time and not followed, it in tests.
+- 2 imports could not be resolved: `src/character/packs.test.ts` imports a path built at run time; `src/cli/terminal-ui-audit.test.ts` imports a path built at run time.
+- 5 writes and 15 reads go to a path their caller passes, not to this repository.
+- 3 reads go to the home directory (.claude-rpg/), not to this repository.
+- 2 writes go to the directory the command is run in (.claude-rpg/), not to this repository.
+- 1 command is built at run time and not followed, and it is in tests.
 
 Regenerate with `npx --yes @dogfood-lab/atlas map`.

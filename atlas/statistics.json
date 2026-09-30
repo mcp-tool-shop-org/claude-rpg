@@ -65,7 +65,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "root",
-      "qualifyingSourceCommits": 3,
+      "qualifyingSourceCommits": 4,
       "rebaseline": null
     },
     {
@@ -99,7 +99,7 @@
       "confidence": "low",
       "highWater": null,
       "name": "site",
-      "qualifyingSourceCommits": 3,
+      "qualifyingSourceCommits": 1,
       "rebaseline": null
     },
     {
@@ -117,7 +117,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "src",
-      "qualifyingSourceCommits": 141,
+      "qualifyingSourceCommits": 131,
       "rebaseline": null
     },
     {
@@ -135,7 +135,7 @@
       "confidence": "full",
       "highWater": null,
       "name": "test",
-      "qualifyingSourceCommits": 59,
+      "qualifyingSourceCommits": 57,
       "rebaseline": null
     }
   ],
@@ -143,8 +143,8 @@
     "definition": "commits is how many commits in the window touch the file, including merges and commits dropped from coupling. lines is added plus deleted in those commits.",
     "files": [
       {
-        "commits": 12,
-        "lines": 56,
+        "commits": 16,
+        "lines": 262,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -158,74 +158,94 @@
         "path": ".github/workflows/release.yml"
       },
       {
-        "commits": 2,
-        "lines": 2,
+        "commits": 1,
+        "lines": 1,
         "path": ".gitignore"
       },
       {
-        "commits": 9,
-        "lines": 49,
+        "commits": 8,
+        "lines": 36,
         "path": ".npmignore"
       },
       {
-        "commits": 9,
-        "lines": 241,
+        "commits": 6,
+        "lines": 200,
         "path": "CHANGELOG.md"
       },
       {
-        "commits": 6,
-        "lines": 371,
+        "commits": 5,
+        "lines": 332,
         "path": "README.es.md"
       },
       {
-        "commits": 6,
-        "lines": 341,
+        "commits": 5,
+        "lines": 296,
         "path": "README.fr.md"
       },
       {
-        "commits": 6,
-        "lines": 345,
+        "commits": 5,
+        "lines": 300,
         "path": "README.hi.md"
       },
       {
-        "commits": 6,
-        "lines": 371,
+        "commits": 5,
+        "lines": 332,
         "path": "README.it.md"
       },
       {
-        "commits": 6,
-        "lines": 337,
+        "commits": 5,
+        "lines": 298,
         "path": "README.ja.md"
       },
       {
-        "commits": 7,
-        "lines": 161,
+        "commits": 5,
+        "lines": 120,
         "path": "README.md"
       },
       {
-        "commits": 6,
-        "lines": 319,
+        "commits": 5,
+        "lines": 280,
         "path": "README.pt-BR.md"
       },
       {
-        "commits": 6,
-        "lines": 393,
+        "commits": 5,
+        "lines": 354,
         "path": "README.zh.md"
       },
       {
-        "commits": 2,
-        "lines": 8,
-        "path": "ROADMAP.md"
-      },
-      {
         "commits": 1,
-        "lines": 49,
-        "path": "SCORECARD.md"
+        "lines": 2,
+        "path": "SHIP_GATE.md"
       },
       {
         "commits": 2,
-        "lines": 4,
-        "path": "SHIP_GATE.md"
+        "lines": 174,
+        "path": "atlas/README.md"
+      },
+      {
+        "commits": 2,
+        "lines": 68,
+        "path": "atlas/boundaries.yaml"
+      },
+      {
+        "commits": 2,
+        "lines": 910,
+        "path": "atlas/page.json"
+      },
+      {
+        "commits": 2,
+        "lines": 5306,
+        "path": "atlas/statistics.json"
+      },
+      {
+        "commits": 2,
+        "lines": 19292,
+        "path": "atlas/structure.json"
+      },
+      {
+        "commits": 2,
+        "lines": 36,
+        "path": "codecov.yml"
       },
       {
         "commits": 2,
@@ -1328,18 +1348,13 @@
         "path": "engine-composition.test.ts}"
       },
       {
-        "commits": 1,
-        "lines": 352,
-        "path": "multitask.md"
-      },
-      {
-        "commits": 14,
-        "lines": 1646,
+        "commits": 13,
+        "lines": 1629,
         "path": "package-lock.json"
       },
       {
-        "commits": 16,
-        "lines": 207,
+        "commits": 12,
+        "lines": 200,
         "path": "package.json"
       },
       {
@@ -1380,21 +1395,16 @@
       {
         "commits": 1,
         "lines": 2,
-        "path": "site/src/content/docs/handbook/architecture.md"
-      },
-      {
-        "commits": 2,
-        "lines": 122,
         "path": "site/src/content/docs/handbook/beginners.md"
       },
       {
-        "commits": 4,
-        "lines": 71,
+        "commits": 3,
+        "lines": 39,
         "path": "site/src/content/docs/handbook/getting-started.md"
       },
       {
-        "commits": 2,
-        "lines": 5,
+        "commits": 1,
+        "lines": 1,
         "path": "site/src/content/docs/handbook/index.md"
       },
       {
@@ -1403,38 +1413,33 @@
         "path": "site/src/content/docs/handbook/living-world.md"
       },
       {
-        "commits": 2,
-        "lines": 15,
+        "commits": 1,
+        "lines": 7,
         "path": "site/src/content/docs/handbook/play-guide.md"
       },
       {
-        "commits": 4,
-        "lines": 34,
+        "commits": 1,
+        "lines": 2,
         "path": "site/src/content/docs/handbook/runtime-guarantees.md"
       },
       {
-        "commits": 2,
-        "lines": 18,
-        "path": "site/src/site-config.ts"
-      },
-      {
-        "commits": 19,
-        "lines": 2064,
+        "commits": 15,
+        "lines": 1638,
         "path": "src/action-interpreter.test.ts"
       },
       {
-        "commits": 19,
-        "lines": 852,
+        "commits": 16,
+        "lines": 752,
         "path": "src/action-interpreter.ts"
       },
       {
-        "commits": 17,
-        "lines": 669,
+        "commits": 16,
+        "lines": 564,
         "path": "src/bin-defenses.test.ts"
       },
       {
-        "commits": 54,
-        "lines": 3109,
+        "commits": 46,
+        "lines": 2687,
         "path": "src/bin.ts"
       },
       {
@@ -1443,8 +1448,8 @@
         "path": "src/character/builder.test.ts"
       },
       {
-        "commits": 10,
-        "lines": 347,
+        "commits": 9,
+        "lines": 340,
         "path": "src/character/builder.ts"
       },
       {
@@ -1468,18 +1473,18 @@
         "path": "src/character/packs.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 168,
+        "commits": 4,
+        "lines": 157,
         "path": "src/character/packs.ts"
       },
       {
-        "commits": 5,
-        "lines": 351,
+        "commits": 4,
+        "lines": 302,
         "path": "src/character/presence.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 113,
+        "commits": 4,
+        "lines": 110,
         "path": "src/character/presence.ts"
       },
       {
@@ -1488,8 +1493,8 @@
         "path": "src/character/prompts.test.ts"
       },
       {
-        "commits": 10,
-        "lines": 424,
+        "commits": 9,
+        "lines": 421,
         "path": "src/character/prompts.ts"
       },
       {
@@ -1513,8 +1518,8 @@
         "path": "src/character/recap.ts"
       },
       {
-        "commits": 15,
-        "lines": 1110,
+        "commits": 14,
+        "lines": 930,
         "path": "src/character/session-recap.test.ts"
       },
       {
@@ -1543,13 +1548,13 @@
         "path": "src/character/world-delta.ts"
       },
       {
-        "commits": 3,
-        "lines": 243,
+        "commits": 2,
+        "lines": 212,
         "path": "src/claude-client.test.ts"
       },
       {
-        "commits": 8,
-        "lines": 197,
+        "commits": 4,
+        "lines": 114,
         "path": "src/claude-client.ts"
       },
       {
@@ -1563,18 +1568,13 @@
         "path": "src/cli/boot-zone-entry.ts"
       },
       {
-        "commits": 1,
-        "lines": 23,
-        "path": "src/cli/claude-client-deprecated.test.ts"
-      },
-      {
-        "commits": 5,
-        "lines": 266,
+        "commits": 4,
+        "lines": 148,
         "path": "src/cli/colors.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 73,
+        "commits": 4,
+        "lines": 30,
         "path": "src/cli/colors.ts"
       },
       {
@@ -1588,8 +1588,8 @@
         "path": "src/cli/error-presenter.test.ts"
       },
       {
-        "commits": 13,
-        "lines": 258,
+        "commits": 12,
+        "lines": 250,
         "path": "src/cli/error-presenter.ts"
       },
       {
@@ -1643,8 +1643,8 @@
         "path": "src/cli/save-input-builder.ts"
       },
       {
-        "commits": 9,
-        "lines": 358,
+        "commits": 8,
+        "lines": 266,
         "path": "src/cli/save-listing.test.ts"
       },
       {
@@ -1663,43 +1663,38 @@
         "path": "src/cli/save-selection.ts"
       },
       {
-        "commits": 9,
-        "lines": 314,
+        "commits": 8,
+        "lines": 270,
         "path": "src/cli/slash-completer.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 147,
+        "commits": 4,
+        "lines": 130,
         "path": "src/cli/slash-completer.ts"
       },
       {
-        "commits": 5,
-        "lines": 315,
+        "commits": 4,
+        "lines": 180,
         "path": "src/cli/spinner.test.ts"
       },
       {
-        "commits": 3,
-        "lines": 189,
+        "commits": 2,
+        "lines": 122,
         "path": "src/cli/spinner.ts"
       },
       {
-        "commits": 11,
-        "lines": 393,
+        "commits": 10,
+        "lines": 334,
         "path": "src/cli/stream-presenter.test.ts"
       },
       {
-        "commits": 9,
-        "lines": 183,
+        "commits": 8,
+        "lines": 170,
         "path": "src/cli/stream-presenter.ts"
       },
       {
         "commits": 1,
-        "lines": 25,
-        "path": "src/cli/terminal-ui-audit.test.ts"
-      },
-      {
-        "commits": 2,
-        "lines": 105,
+        "lines": 11,
         "path": "src/cli/unhandled-rejection.test.ts"
       },
       {
@@ -1738,18 +1733,18 @@
         "path": "src/companion/companion-bridge.test.ts"
       },
       {
-        "commits": 17,
-        "lines": 522,
+        "commits": 16,
+        "lines": 516,
         "path": "src/companion/companion-bridge.ts"
       },
       {
-        "commits": 19,
-        "lines": 1014,
+        "commits": 18,
+        "lines": 858,
         "path": "src/dialogue/dialogue-mind.test.ts"
       },
       {
-        "commits": 23,
-        "lines": 527,
+        "commits": 21,
+        "lines": 481,
         "path": "src/dialogue/dialogue-mind.ts"
       },
       {
@@ -1758,8 +1753,8 @@
         "path": "src/dialogue/npc-context.test.ts"
       },
       {
-        "commits": 17,
-        "lines": 762,
+        "commits": 16,
+        "lines": 756,
         "path": "src/dialogue/npc-context.ts"
       },
       {
@@ -1778,23 +1773,23 @@
         "path": "src/display/archive-browser.ts"
       },
       {
-        "commits": 9,
-        "lines": 578,
+        "commits": 8,
+        "lines": 458,
         "path": "src/display/contextual-suggestions.test.ts"
       },
       {
-        "commits": 11,
-        "lines": 350,
+        "commits": 10,
+        "lines": 348,
         "path": "src/display/contextual-suggestions.ts"
       },
       {
-        "commits": 27,
-        "lines": 2351,
+        "commits": 26,
+        "lines": 2172,
         "path": "src/display/director-renderer.test.ts"
       },
       {
-        "commits": 29,
-        "lines": 1890,
+        "commits": 28,
+        "lines": 1883,
         "path": "src/display/director-renderer.ts"
       },
       {
@@ -1808,18 +1803,13 @@
         "path": "src/display/help-system.ts"
       },
       {
-        "commits": 1,
-        "lines": 60,
-        "path": "src/display/play-renderer-divider.test.ts"
-      },
-      {
         "commits": 23,
         "lines": 1462,
         "path": "src/display/play-renderer.test.ts"
       },
       {
-        "commits": 26,
-        "lines": 778,
+        "commits": 23,
+        "lines": 701,
         "path": "src/display/play-renderer.ts"
       },
       {
@@ -1828,33 +1818,33 @@
         "path": "src/display/status-compact.test.ts"
       },
       {
-        "commits": 11,
-        "lines": 139,
+        "commits": 10,
+        "lines": 124,
         "path": "src/display/status-compact.ts"
       },
       {
-        "commits": 5,
-        "lines": 307,
+        "commits": 4,
+        "lines": 234,
         "path": "src/display/turn-divider.test.ts"
       },
       {
-        "commits": 23,
-        "lines": 2891,
+        "commits": 19,
+        "lines": 2521,
         "path": "src/foundry/world-gen.test.ts"
       },
       {
-        "commits": 33,
-        "lines": 2720,
+        "commits": 28,
+        "lines": 2531,
         "path": "src/foundry/world-gen.ts"
       },
       {
-        "commits": 63,
-        "lines": 7670,
+        "commits": 58,
+        "lines": 7377,
         "path": "src/game.test.ts"
       },
       {
-        "commits": 66,
-        "lines": 8917,
+        "commits": 60,
+        "lines": 8473,
         "path": "src/game.ts"
       },
       {
@@ -1883,18 +1873,18 @@
         "path": "src/game/condition.ts"
       },
       {
-        "commits": 5,
-        "lines": 206,
+        "commits": 4,
+        "lines": 146,
         "path": "src/game/debug-logger.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 217,
+        "commits": 4,
+        "lines": 118,
         "path": "src/game/debug-logger.ts"
       },
       {
-        "commits": 3,
-        "lines": 124,
+        "commits": 2,
+        "lines": 58,
         "path": "src/game/faction-cognition-guards.test.ts"
       },
       {
@@ -1918,13 +1908,13 @@
         "path": "src/game/game-presenter.ts"
       },
       {
-        "commits": 13,
-        "lines": 1026,
+        "commits": 11,
+        "lines": 530,
         "path": "src/game/game-state.test.ts"
       },
       {
-        "commits": 15,
-        "lines": 682,
+        "commits": 14,
+        "lines": 660,
         "path": "src/game/game-state.ts"
       },
       {
@@ -1988,13 +1978,13 @@
         "path": "src/game/rumor-mirror.ts"
       },
       {
-        "commits": 9,
-        "lines": 451,
+        "commits": 8,
+        "lines": 368,
         "path": "src/game/token-tracker.test.ts"
       },
       {
-        "commits": 9,
-        "lines": 325,
+        "commits": 8,
+        "lines": 236,
         "path": "src/game/token-tracker.ts"
       },
       {
@@ -2028,13 +2018,13 @@
         "path": "src/index.ts"
       },
       {
-        "commits": 13,
-        "lines": 827,
+        "commits": 12,
+        "lines": 729,
         "path": "src/llm/claude-adapter.test.ts"
       },
       {
-        "commits": 11,
-        "lines": 408,
+        "commits": 9,
+        "lines": 280,
         "path": "src/llm/claude-adapter.ts"
       },
       {
@@ -2053,53 +2043,53 @@
         "path": "src/narrator/finale-narrator.ts"
       },
       {
-        "commits": 26,
-        "lines": 1880,
+        "commits": 23,
+        "lines": 1576,
         "path": "src/narrator/narrator.test.ts"
       },
       {
-        "commits": 29,
-        "lines": 1138,
+        "commits": 25,
+        "lines": 1093,
         "path": "src/narrator/narrator.ts"
       },
       {
-        "commits": 3,
-        "lines": 239,
+        "commits": 2,
+        "lines": 202,
         "path": "src/narrator/scene-context-perf.test.ts"
       },
       {
-        "commits": 17,
-        "lines": 1756,
+        "commits": 15,
+        "lines": 1734,
         "path": "src/narrator/scene-context.test.ts"
       },
       {
-        "commits": 19,
-        "lines": 768,
+        "commits": 17,
+        "lines": 761,
         "path": "src/narrator/scene-context.ts"
       },
       {
-        "commits": 9,
-        "lines": 2129,
+        "commits": 7,
+        "lines": 1897,
         "path": "src/npc/agency.test.ts"
       },
       {
-        "commits": 8,
-        "lines": 813,
+        "commits": 5,
+        "lines": 799,
         "path": "src/npc/agency.ts"
       },
       {
-        "commits": 5,
-        "lines": 471,
+        "commits": 4,
+        "lines": 392,
         "path": "src/npc/ambient-dialogue.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 436,
+        "commits": 4,
+        "lines": 306,
         "path": "src/npc/ambient-dialogue.ts"
       },
       {
-        "commits": 3,
-        "lines": 235,
+        "commits": 2,
+        "lines": 96,
         "path": "src/npc/presence.test.ts"
       },
       {
@@ -2108,13 +2098,13 @@
         "path": "src/npc/presence.ts"
       },
       {
-        "commits": 13,
-        "lines": 945,
+        "commits": 10,
+        "lines": 692,
         "path": "src/prompts/dialogue-npc.test.ts"
       },
       {
-        "commits": 13,
-        "lines": 546,
+        "commits": 10,
+        "lines": 434,
         "path": "src/prompts/dialogue-npc.ts"
       },
       {
@@ -2128,13 +2118,13 @@
         "path": "src/prompts/finale-prompt.ts"
       },
       {
-        "commits": 7,
-        "lines": 134,
+        "commits": 6,
+        "lines": 104,
         "path": "src/prompts/interpret-action.test.ts"
       },
       {
-        "commits": 7,
-        "lines": 35,
+        "commits": 6,
+        "lines": 28,
         "path": "src/prompts/interpret-action.ts"
       },
       {
@@ -2148,13 +2138,13 @@
         "path": "src/prompts/narrate-scene.ts"
       },
       {
-        "commits": 7,
-        "lines": 376,
+        "commits": 6,
+        "lines": 352,
         "path": "src/prompts/world-gen.test.ts"
       },
       {
-        "commits": 7,
-        "lines": 66,
+        "commits": 6,
+        "lines": 62,
         "path": "src/prompts/world-gen.ts"
       },
       {
@@ -2168,8 +2158,8 @@
         "path": "src/runtime/audio-bridge.ts"
       },
       {
-        "commits": 19,
-        "lines": 1291,
+        "commits": 17,
+        "lines": 1212,
         "path": "src/runtime/hooks.test.ts"
       },
       {
@@ -2178,63 +2168,63 @@
         "path": "src/runtime/hooks.ts"
       },
       {
-        "commits": 29,
-        "lines": 5138,
+        "commits": 28,
+        "lines": 5030,
         "path": "src/runtime/immersion-runtime.test.ts"
       },
       {
-        "commits": 28,
-        "lines": 1512,
+        "commits": 27,
+        "lines": 1447,
         "path": "src/runtime/immersion-runtime.ts"
       },
       {
-        "commits": 11,
-        "lines": 428,
+        "commits": 10,
+        "lines": 370,
         "path": "src/runtime/presentation-state.test.ts"
       },
       {
-        "commits": 14,
-        "lines": 328,
+        "commits": 12,
+        "lines": 296,
         "path": "src/runtime/presentation-state.ts"
       },
       {
-        "commits": 3,
-        "lines": 109,
+        "commits": 2,
+        "lines": 94,
         "path": "src/runtime/voice-caster.test.ts"
       },
       {
-        "commits": 3,
-        "lines": 55,
+        "commits": 2,
+        "lines": 54,
         "path": "src/runtime/voice-caster.ts"
       },
       {
-        "commits": 7,
-        "lines": 234,
+        "commits": 6,
+        "lines": 92,
         "path": "src/session/chronicle-export.test.ts"
       },
       {
-        "commits": 5,
-        "lines": 160,
+        "commits": 4,
+        "lines": 158,
         "path": "src/session/chronicle-export.ts"
       },
       {
-        "commits": 4,
-        "lines": 441,
+        "commits": 2,
+        "lines": 44,
         "path": "src/session/chronicle.test.ts"
       },
       {
-        "commits": 6,
-        "lines": 81,
+        "commits": 5,
+        "lines": 78,
         "path": "src/session/chronicle.ts"
       },
       {
-        "commits": 12,
-        "lines": 538,
+        "commits": 8,
+        "lines": 366,
         "path": "src/session/history.test.ts"
       },
       {
-        "commits": 12,
-        "lines": 386,
+        "commits": 10,
+        "lines": 246,
         "path": "src/session/history.ts"
       },
       {
@@ -2248,8 +2238,8 @@
         "path": "src/session/migrate.ts"
       },
       {
-        "commits": 9,
-        "lines": 565,
+        "commits": 8,
+        "lines": 436,
         "path": "src/session/save-atomic.test.ts"
       },
       {
@@ -2263,8 +2253,8 @@
         "path": "src/session/session.test.ts"
       },
       {
-        "commits": 33,
-        "lines": 2502,
+        "commits": 29,
+        "lines": 2341,
         "path": "src/session/session.ts"
       },
       {
@@ -2273,8 +2263,8 @@
         "path": "src/turn-loop.test.ts"
       },
       {
-        "commits": 37,
-        "lines": 2167,
+        "commits": 36,
+        "lines": 2154,
         "path": "src/turn-loop.ts"
       },
       {
@@ -2498,8 +2488,8 @@
         "path": "test/integration/save-schema-v3.test.ts"
       },
       {
-        "commits": 7,
-        "lines": 291,
+        "commits": 5,
+        "lines": 272,
         "path": "test/integration/session-persistence.test.ts"
       },
       {
@@ -2508,8 +2498,8 @@
         "path": "test/integration/sfx-humanization-cli.test.ts"
       },
       {
-        "commits": 2,
-        "lines": 29,
+        "commits": 1,
+        "lines": 25,
         "path": "test/integration/streaming.test.ts"
       },
       {
@@ -2533,8 +2523,8 @@
         "path": "tsconfig.test.json"
       },
       {
-        "commits": 6,
-        "lines": 124,
+        "commits": 8,
+        "lines": 132,
         "path": "vitest.config.ts"
       }
     ]
@@ -2543,73 +2533,59 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-09-24T02:25:38.136Z",
+  "generatedAt": "2026-09-30T20:09:01.855Z",
   "generatedFrom": {
-    "commit": "d22db1236c2745c249ce959157c0f891fae3b3c2"
+    "commit": "e3798b17871cbd88a80f57fbfcfabfc9568a4ad9"
   },
   "pairs": [
     {
-      "a": "package-lock.json",
-      "b": "package.json",
-      "either": 16,
-      "shared": 10,
-      "strength": 0.625
-    },
-    {
-      "a": "src/action-interpreter.test.ts",
-      "b": "src/action-interpreter.ts",
-      "either": 14,
-      "shared": 10,
-      "strength": 0.714286
-    },
-    {
       "a": "src/display/director-renderer.test.ts",
       "b": "src/display/director-renderer.ts",
-      "either": 19,
+      "either": 17,
       "shared": 15,
-      "strength": 0.789474
+      "strength": 0.882353
     },
     {
       "a": "src/display/play-renderer.test.ts",
       "b": "src/display/play-renderer.ts",
-      "either": 17,
+      "either": 14,
       "shared": 12,
-      "strength": 0.705882
-    },
-    {
-      "a": "src/foundry/world-gen.test.ts",
-      "b": "src/foundry/world-gen.ts",
-      "either": 21,
-      "shared": 13,
-      "strength": 0.619048
+      "strength": 0.857143
     },
     {
       "a": "src/game.test.ts",
       "b": "src/game.ts",
-      "either": 52,
-      "shared": 32,
-      "strength": 0.615385
+      "either": 45,
+      "shared": 28,
+      "strength": 0.622222
     },
     {
       "a": "src/narrator/narrator.test.ts",
       "b": "src/narrator/narrator.ts",
-      "either": 20,
-      "shared": 13,
-      "strength": 0.65
+      "either": 15,
+      "shared": 11,
+      "strength": 0.733333
     },
     {
       "a": "src/runtime/immersion-runtime.test.ts",
       "b": "src/runtime/immersion-runtime.ts",
-      "either": 16,
-      "shared": 14,
-      "strength": 0.875
+      "either": 15,
+      "shared": 13,
+      "strength": 0.866667
+    },
+    {
+      "a": "src/session/session.test.ts",
+      "b": "src/session/session.ts",
+      "either": 17,
+      "shared": 10,
+      "strength": 0.588235
     },
     {
       "a": "src/turn-loop.test.ts",
       "b": "src/turn-loop.ts",
-      "either": 23,
+      "either": 22,
       "shared": 16,
-      "strength": 0.695652
+      "strength": 0.727273
     }
   ],
   "parameters": {
@@ -2622,16 +2598,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-09-17T18:41:05-07:00",
-    "inScopeFiles": 496,
+    "headDate": "2026-09-29T15:24:53-07:00",
+    "inScopeFiles": 502,
     "pinnedStart": null,
-    "priorFloor": null,
-    "qualifyingCommits": 240,
+    "priorFloor": "strong",
+    "qualifyingCommits": 229,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-03-22T01:41:05.000Z",
+    "since": "2026-04-02T22:24:53.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
@@ -2641,11 +2617,13 @@
       ".tsx",
       ".mts",
       ".cts",
-      ".py"
+      ".py",
+      ".rs",
+      ".gd"
     ],
     "sourceFileReach": 20,
     "sourceFileRise": 25,
-    "sourceFilesReachingStrongFloor": 34,
+    "sourceFilesReachingStrongFloor": 27,
     "strength": 0.5,
     "windowDays": 180
   },

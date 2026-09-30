@@ -9,7 +9,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "ba9f194aa69cff95ce2d22b6be2e5802c05b11a634e68c017f78228df391337c",
+          "hash": "8fe1165ad7d13635dd1b7f5a5ddbe121b840d3d0cb9fbd1abdc24ab95e61de5a",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -1038,7 +1038,7 @@
           "path": "codecov.yml"
         },
         {
-          "hash": "0b237c1c69f46daf0f852a4c845de1530e0993eea60da4cabd18ebe2a301511d",
+          "hash": "313f08594dad105df9a85c569e0f54c4a53c3c00a11b401627312f5e8a0a2ace",
           "path": "package-lock.json"
         },
         {
@@ -8888,6 +8888,7 @@
             ".github/workflows/**",
             "atlas/**",
             "codecov.yml",
+            "package-lock.json",
             "package.json",
             "scripts/**",
             "site/astro.config.mjs",
@@ -8906,6 +8907,7 @@
             ".github/workflows/**",
             "atlas/**",
             "codecov.yml",
+            "package-lock.json",
             "package.json",
             "scripts/**",
             "site/astro.config.mjs",
@@ -10036,7 +10038,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "e3798b17871cbd88a80f57fbfcfabfc9568a4ad9",
+    "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89",
     "tracked": 497
   },
   "landings": [

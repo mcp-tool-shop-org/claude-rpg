@@ -143,8 +143,8 @@
     "definition": "commits is how many commits in the window touch the file, including merges and commits dropped from coupling. lines is added plus deleted in those commits.",
     "files": [
       {
-        "commits": 16,
-        "lines": 262,
+        "commits": 20,
+        "lines": 270,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -218,8 +218,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 2,
-        "lines": 174,
+        "commits": 4,
+        "lines": 276,
         "path": "atlas/README.md"
       },
       {
@@ -228,18 +228,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 2,
-        "lines": 910,
+        "commits": 4,
+        "lines": 1264,
         "path": "atlas/page.json"
       },
       {
-        "commits": 2,
-        "lines": 5306,
+        "commits": 4,
+        "lines": 6402,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 2,
-        "lines": 19292,
+        "commits": 4,
+        "lines": 26394,
         "path": "atlas/structure.json"
       },
       {
@@ -1348,8 +1348,8 @@
         "path": "engine-composition.test.ts}"
       },
       {
-        "commits": 13,
-        "lines": 1629,
+        "commits": 15,
+        "lines": 1653,
         "path": "package-lock.json"
       },
       {
@@ -2533,9 +2533,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-09-30T20:09:01.855Z",
+  "generatedAt": "2026-09-30T21:38:06.980Z",
   "generatedFrom": {
-    "commit": "e3798b17871cbd88a80f57fbfcfabfc9568a4ad9"
+    "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89"
   },
   "pairs": [
     {
@@ -2598,16 +2598,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-09-29T15:24:53-07:00",
+    "headDate": "2026-09-30T14:36:23-07:00",
     "inScopeFiles": 502,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 229,
+    "qualifyingCommits": 232,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-04-02T22:24:53.000Z",
+    "since": "2026-04-03T21:36:23.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

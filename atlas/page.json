@@ -39,59 +39,36 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 1,
-      "changed": 493,
+      "added": 0,
+      "changed": 2,
       "moved": 0,
-      "parts": 8,
+      "parts": 2,
       "removed": 0
     },
     "items": [
       {
         "kind": "door",
-        "sentence": "CI's pull request trigger now also names `codecov.yml`.",
+        "sentence": "CI's pull request trigger now also names `package-lock.json`.",
         "subjects": [
           ".github/workflows/ci.yml"
         ]
       },
       {
         "kind": "door",
-        "sentence": "CI's push trigger now also names `codecov.yml`.",
+        "sentence": "CI's push trigger now also names `package-lock.json`.",
         "subjects": [
           ".github/workflows/ci.yml"
         ]
       },
       {
-        "kind": "landing",
-        "sentence": "dogfood/tuning/ is now written by test/helpers/living-world-matrix.ts.",
-        "subjects": [
-          "dogfood/tuning/",
-          "test/helpers/living-world-matrix.ts"
-        ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "src/game.ts is now also read by src/game.test.ts.",
-        "subjects": [
-          "src/game.ts",
-          "src/game.test.ts"
-        ]
-      },
-      {
-        "kind": "origin",
-        "sentence": "dogfood was authored and is now mixed.",
-        "subjects": [
-          "dogfood"
-        ]
-      },
-      {
         "kind": "counts",
-        "sentence": "1 file added and 493 changed content, across 8 parts.",
+        "sentence": "2 files changed content, across 2 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "d22db1236c2745c249ce959157c0f891fae3b3c2",
-      "generatedAt": "2026-09-24T02:25:38.136Z"
+      "commit": "e3798b17871cbd88a80f57fbfcfabfc9568a4ad9",
+      "generatedAt": "2026-09-30T20:09:01.855Z"
     },
     "unchanged": false
   },
@@ -101,7 +78,7 @@
     "Window: 180 days; a pair counts from 10 shared commits, since 27 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 7,
-  "commit": "e3798b17871cbd88a80f57fbfcfabfc9568a4ad9",
+  "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89",
   "defaultBranch": "main",
   "derived": "8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.",
   "doors": [
@@ -251,8 +228,8 @@
       ],
       "stages": [],
       "triggers": [
-        "on a pull request touching 13 paths",
-        "on a push touching 13 paths",
+        "on a pull request touching 14 paths",
+        "on a push touching 14 paths",
         "or by hand"
       ]
     },
@@ -505,7 +482,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-09-30T20:09:01.855Z",
+  "generatedAt": "2026-09-30T21:38:06.980Z",
   "limits": [
     "2 imports could not be resolved: `src/character/packs.test.ts` imports a path built at run time; `src/cli/terminal-ui-audit.test.ts` imports a path built at run time.",
     "5 writes and 15 reads go to a path their caller passes, not to this repository.",

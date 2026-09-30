@@ -1,23 +1,20 @@
 # claude-rpg: how it works
 
-Mapped at 2026-09-30 from commit e3798b1 by Atlas 1.24.0.
+Mapped at 2026-09-30 from commit 475262f by Atlas 1.24.0.
 
 ## What this is
 
 8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.
 
-## What changed since 2026-09-24 (d22db12)
+## What changed since 2026-09-30 (e3798b1)
 
-- CI's pull request trigger now also names `codecov.yml`.
-- CI's push trigger now also names `codecov.yml`.
-- dogfood/tuning/ is now written by test/helpers/living-world-matrix.ts.
-- src/game.ts is now also read by src/game.test.ts.
-- dogfood was authored and is now mixed.
-- 1 file added and 493 changed content, across 8 parts.
+- CI's pull request trigger now also names `package-lock.json`.
+- CI's push trigger now also names `package-lock.json`.
+- 2 files changed content, across 2 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request touching 13 paths; on a push touching 13 paths; or by hand. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; checks src/ and test/. On a pull request, it also runs scripts/check-critical-coverage.mjs.
+1. **CI.** On a pull request touching 14 paths; on a push touching 14 paths; or by hand. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; checks src/ and test/. On a pull request, it also runs scripts/check-critical-coverage.mjs.
 2. **Release.** When a tag matching `v*` is pushed. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; builds src/.
 3. **Deploy site to GitHub Pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **@mcptoolshop/claude-rpg** (the package people import). Loads src/index.ts.

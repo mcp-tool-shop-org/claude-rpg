@@ -125,14 +125,21 @@ export type MockAnthropicServer = {
  * classifies as AuthenticationError and claude-adapter.ts's
  * classifyError() maps to a fatal NarrationError(kind: 'auth').
  */
-export function startMockAnthropicServer(succeedCount = 1): Promise<MockAnthropicServer> {
+export function startMockAnthropicServer(
+  succeedCount = 1,
+  // Holds the FIRST response back this long, so a test can act while bin.ts
+  // is still waiting on the opening narration (the very first LLM call).
+  { firstResponseDelayMs = 0 }: { firstResponseDelayMs?: number } = {},
+): Promise<MockAnthropicServer> {
   let calls = 0;
   const server: Server = createServer((req, res) => {
     calls++;
+    const call = calls;
     // Drain the request body so the socket doesn't hang the client.
     req.resume();
-    req.on('end', () => {
-      if (calls <= succeedCount) {
+    req.on('end', () => setTimeout(() => {
+      if (res.destroyed) return;
+      if (call <= succeedCount) {
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({
           id: `msg_stub_${calls}`,
@@ -151,7 +158,7 @@ export function startMockAnthropicServer(succeedCount = 1): Promise<MockAnthropi
         type: 'error',
         error: { type: 'authentication_error', message: 'invalid x-api-key (forced by test)' },
       }));
-    });
+    }, call === 1 ? firstResponseDelayMs : 0));
   });
 
   return new Promise((resolve, reject) => {
@@ -440,6 +447,22 @@ export type CliHandle = {
    * earlier occurrence already satisfied a plain contains-check.
    */
   waitForStdoutCount: (needle: string, minCount: number, timeoutMs?: number) => Promise<void>;
+  /**
+   * Waits until bin.ts is actually waiting for input: stdout, past
+   * `afterLength` characters, ENDS with the game loop's prompt (a newline,
+   * then exactly "  > "). Use this, not waitForStdout('  > ') or a prompt
+   * count, before sending a line or a signal. The opening screen and every
+   * turn print onboarding hints ("    > talk to the pilgrim") that contain
+   * "  > " as a substring, so a substring or count wait can resolve while
+   * bin.ts is still printing -- before its game-loop SIGINT handler exists,
+   * or before readline is asking. A line sent then is dropped (readline
+   * emits it with no question pending) and a SIGINT gets Node's default
+   * disposition: both hung CI for 45 s on 2026-09-30. The prompt is the last
+   * thing written before bin.ts waits, and a hint line never ends the
+   * buffer with "\n  > ", so this resolves only when the game is idle.
+   * Pass stdout().length from before the action whose next prompt you want.
+   */
+  waitForPrompt: (afterLength?: number, timeoutMs?: number) => Promise<void>;
   waitForExit: (timeoutMs?: number) => Promise<number | null>;
   /** Set if the child process or its stdin pipe ever emitted an 'error' event (e.g. EPIPE from a sendLine() after the process died). Undefined if none occurred yet. */
   spawnError: () => Error | undefined;
@@ -464,6 +487,9 @@ export function scaledWaitMs(localMs: number): number {
 }
 
 const DEFAULT_WAIT_MS = scaledWaitMs(15000); // 15s local / 45s CI
+
+/** bin.ts's game-loop prompt, as the very end of stdout: see CliHandle.waitForPrompt. */
+const PROMPT_AT_END = /\n {2}> $/;
 
 /** Spawns the bundled bin.cjs as a real child process with piped stdio. */
 export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessEnv): CliHandle {
@@ -526,6 +552,11 @@ export function spawnCli(entryPath: string, args: string[], env: NodeJS.ProcessE
     },
     waitForStdout: (pattern, timeoutMs = DEFAULT_WAIT_MS) => waitFor(() => stdoutBuf, pattern, timeoutMs, 'stdout'),
     waitForStderr: (pattern, timeoutMs = DEFAULT_WAIT_MS) => waitFor(() => stderrBuf, pattern, timeoutMs, 'stderr'),
+    // Only output written after `afterLength` can satisfy it: until then the
+    // getter answers '' so an earlier prompt still at the end of the buffer
+    // cannot resolve the wait for the next one.
+    waitForPrompt: (afterLength = 0, timeoutMs = DEFAULT_WAIT_MS) =>
+      waitFor(() => (stdoutBuf.length > afterLength ? stdoutBuf : ''), PROMPT_AT_END, timeoutMs, 'stdout to end with the game prompt'),
     waitForStdoutCount: (needle, minCount, timeoutMs = DEFAULT_WAIT_MS) =>
       new Promise((resolve, reject) => {
         const satisfied = () => countOccurrences(stdoutBuf, needle) >= minCount;

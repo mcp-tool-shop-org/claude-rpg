@@ -167,7 +167,7 @@ describe('bin.ts --world flag — interaction with the load path (F-8d865d50)', 
 
     await cli.waitForStdout('Choose a save');
     cli.sendLine('1');
-    await cli.waitForStdout('  > ');
+    await cli.waitForPrompt();
 
     // The loaded session must reflect the SAVE's own pack (fantasy), never
     // the flag's pack (gladiator) -- checked as "gladiator's identity never

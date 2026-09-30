@@ -96,20 +96,16 @@ describe('sfx cue humanization reaches real player-visible stdout (F-9998efb0)',
 
       await cli.waitForStdout('Choose a save');
       cli.sendLine('1');
-      await cli.waitForStdout('  > ');
-      // Baseline AFTER the opening narration's own "  > " prompt -- the
-      // opening screen's TRY-hint lines (bin-cli-harness.ts's own doc
-      // comment: "TRY: > talk to the pilgrim") are indented with 4 spaces
-      // before '>', which contains the 2-space "  > " needle as a
-      // substring, inflating a naive absolute count well past 1 before any
-      // real turn even runs. Comparing against this baseline (mirrors
-      // bin-cli-turn-loop.test.ts's own countStdoutPrompts()
-      // promptsBeforeTurn/promptsAfterTurn convention) cancels that
-      // pollution out since it's already fully present in the baseline too.
-      const promptCountBeforeTurn = countOccurrences(cli.stdout(), '  > ');
+      await cli.waitForPrompt();
+      // Baseline AFTER the opening narration's own prompt. The TRY-hint lines
+      // ("    > talk to the pilgrim") contain "  > " as a substring, so a
+      // substring count could resolve on the turn's hints while bin.ts is
+      // still printing; waitForPrompt waits for the prompt itself, written
+      // past this point.
+      const stdoutBeforeTurn = cli.stdout().length;
 
       cli.sendLine('attack pilgrim');
-      await cli.waitForStdoutCount('  > ', promptCountBeforeTurn + 1);
+      await cli.waitForPrompt(stdoutBeforeTurn);
 
       // "warning sounds" was the pre-fix raw-template-plus-registry-label
       // output (renderSfxLine's `  · ${effect} sounds`, effect resolved to

@@ -95,8 +95,9 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
     // succeeds) renders and the game loop's first "  > " prompt appears.
     await cli.waitForStdout('Choose a save');
     cli.sendLine('1');
-    await cli.waitForStdout('  > ');
+    await cli.waitForPrompt();
     const promptsBeforeTurn = countStdoutPrompts(cli.stdout());
+    const stdoutBeforeTurn = cli.stdout().length;
 
     // "look" fast-paths past interpretation straight to narrateScene()
     // (see test/integration/game-turn-loop.test.ts's "fast-path commands
@@ -111,16 +112,15 @@ describe('bin.ts turn loop — fatal narration error survives to next prompt', (
     await cli.waitForStderr('API key error');
     expect(cli.stderr()).toContain('Your API key is invalid, expired, or missing.');
 
-    // The loop survived: a *second* "  > " prompt was printed rather than
-    // the process exiting. This waits for a new occurrence rather than
-    // reusing waitForStdout('  > ') — that pattern is already present in
-    // the buffer from the first prompt, so a plain contains-check would
-    // resolve instantly and prove nothing. (If the turn-loop try/catch
+    // The loop survived: a *second* prompt was printed rather than the
+    // process exiting. waitForPrompt(stdoutBeforeTurn) only accepts a prompt
+    // written after the turn began, so the first prompt, still in the
+    // buffer, cannot satisfy it. (If the turn-loop try/catch
     // regressed, the fatal error would instead propagate to bin.ts's
     // top-level `main().catch()`, which unconditionally calls
     // process.exit(1) — no second prompt would ever print, and this
     // would time out.)
-    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(5000));
+    await cli.waitForPrompt(stdoutBeforeTurn, scaledWaitMs(5000));
     const promptsAfterTurn = countStdoutPrompts(cli.stdout());
     expect(promptsAfterTurn).toBeGreaterThan(promptsBeforeTurn);
 
@@ -180,7 +180,7 @@ describe('bin.ts exit-autosave — rejected path reaches real SIGINT/EOF exits',
     });
     await handle.waitForStdout('Choose a save');
     handle.sendLine('1');
-    await handle.waitForStdout('  > ');
+    await handle.waitForPrompt();
     return handle;
   }
 
@@ -273,7 +273,7 @@ describe('bin.ts exit-autosave — saved path reaches real SIGINT/EOF exits', ()
     });
     await handle.waitForStdout('Choose a save');
     handle.sendLine('1');
-    await handle.waitForStdout('  > ');
+    await handle.waitForPrompt();
     return handle;
   }
 
@@ -369,17 +369,16 @@ describe('bin.ts NO_COLOR / non-TTY output — full run is provably colorless (F
 
     await cli.waitForStdout('Choose a save');
     cli.sendLine('1');
-    await cli.waitForStdout('  > ');
-    // F-276d4e75: the opening screen's first-turn onboarding hints
-    // (renderOpeningOutput's "TRY: > talk to the pilgrim" lines) contain
-    // their own "  > "-shaped bullets, which inflate a plain occurrence
-    // count -- counting the delta from here (the same pattern the "fatal
-    // auth error" describe block above already uses) rather than a bare
-    // absolute count avoids that collision.
-    const promptsBeforeTurn = countStdoutPrompts(cli.stdout());
+    await cli.waitForPrompt();
+    // F-276d4e75: the onboarding hints ("    > talk to the pilgrim") contain
+    // "  > " as a substring. A count of it could resolve on the turn's hints
+    // before readline asked again, and 'quit' sent then was dropped: the
+    // run hung until waitForExit's 45 s ceiling on CI (2026-09-30). Waiting
+    // for the prompt itself, past this point, cannot.
+    const stdoutBeforeTurn = cli.stdout().length;
 
     cli.sendLine('look');
-    await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(20000));
+    await cli.waitForPrompt(stdoutBeforeTurn, scaledWaitMs(20000));
 
     cli.sendLine('quit');
     const exitCode = await cli.waitForExit();
@@ -389,6 +388,61 @@ describe('bin.ts NO_COLOR / non-TTY output — full run is provably colorless (F
     expect(cli.stdout()).not.toContain('\x1b[');
     expect(cli.stderr()).not.toContain('\x1b[');
   }, scaledWaitMs(20000));
+});
+
+// The opening narration is the first LLM call of every session, and it can
+// take seconds. bin.ts removes its early SIGINT guard just before
+// runGameLoop(), whose own PFE-002 handler used to be registered only AFTER
+// that call returned -- so a Ctrl+C while the opening was still loading met
+// no handler at all and Node killed the process (no "Farewell.", no
+// autosave), the exact disposition F-4997779f exists to prevent. The mock
+// holds its first response back so the signal lands inside that window.
+describe('bin.ts SIGINT while the opening narration is loading', () => {
+  let homeDir: string;
+  let server: MockAnthropicServer;
+  let cli: CliHandle | undefined;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(join(tmpdir(), 'claude-rpg-bin-cli-home-'));
+    await writeFantasySave(join(homeDir, '.claude-rpg', 'saves'));
+    server = await startMockAnthropicServer(1, { firstResponseDelayMs: scaledWaitMs(10000) });
+  });
+
+  afterEach(async () => {
+    await cleanupCliTestResources({ cli, server, homeDir });
+    cli = undefined;
+  });
+
+  // POSIX only, for the reason given on the SIGINT test above: Windows
+  // hard-terminates a piped child instead of delivering the signal.
+  it.skipIf(process.platform === 'win32')(
+    'a Ctrl+C during the opening narration still exits gracefully instead of being killed',
+    async () => {
+      cli = spawnCli(bundle.entryPath, ['load'], {
+        ...process.env,
+        ANTHROPIC_API_KEY: 'sk-ant-test-not-real',
+        ANTHROPIC_BASE_URL: server.url,
+        HOME: homeDir,
+        USERPROFILE: homeDir,
+      });
+      await cli.waitForStdout('Choose a save');
+      cli.sendLine('1');
+      // The opening's spinner line, then the request itself reaching the
+      // mock: from here until the delayed response, bin.ts is awaiting it.
+      await cli.waitForStdout('thinking');
+      for (const t0 = Date.now(); server.callCount() < 1;) {
+        if (Date.now() - t0 > scaledWaitMs(5000)) throw new Error('the opening narration request never reached the mock');
+        await new Promise((r) => setTimeout(r, 25));
+      }
+
+      cli.child.kill('SIGINT');
+
+      const exitCode = await cli.waitForExit();
+      expect(exitCode).toBe(0);
+      expect(cli.stdout()).toContain('Farewell.');
+    },
+    scaledWaitMs(20000),
+  );
 });
 
 // F-b6e89ebb: locks in the file-level beforeAll/afterAll hoist above.

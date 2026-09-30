@@ -44,19 +44,6 @@ import {
 } from '../helpers/bin-cli-harness.js';
 import type { WorldGenProposal } from '../../src/foundry/world-gen.js';
 
-/** Counts non-overlapping occurrences of a literal substring (mirrors sfx-humanization-cli.test.ts's identical local helper). */
-function countOccurrences(haystack: string, needle: string): number {
-  if (needle.length === 0) return 0;
-  let count = 0;
-  let idx = 0;
-  for (;;) {
-    const found = haystack.indexOf(needle, idx);
-    if (found === -1) break;
-    count++;
-    idx = found + needle.length;
-  }
-  return count;
-}
 
 let bundle: BinCliBundle;
 
@@ -92,7 +79,7 @@ describe('real-process retry path (F-99dc64ac infrastructure gap this domain clo
       // genuinely awaited here -- no injectable delayFn on this path
       // (createAdaptedClient never overrides it) -- so this needs real
       // wall-clock patience, not just the default waitFor timeout.
-      await cli.waitForStdout('  > ');
+      await cli.waitForPrompt();
 
       // The real HTTP-level proof this test exists for: two requests hit
       // the mock server (the failed attempt, then the retried success),
@@ -141,17 +128,15 @@ describe('real-process retry path — dialogue turn (F-e44285c0)', () => {
 
       await cli.waitForStdout('Choose a save');
       cli.sendLine('1');
-      await cli.waitForStdout('  > ');
+      await cli.waitForPrompt();
 
-      // Baseline AFTER the opening narration's own "  > " prompt -- the
-      // opening screen's TRY-hint lines contain their own "  > "-shaped
-      // bullets (bin-cli-turn-loop.test.ts's own established convention for
-      // this exact pollution).
-      const promptsBeforeTurn = countOccurrences(cli.stdout(), '  > ');
+      // Baseline AFTER the opening narration's own prompt: the turn's prompt
+      // is the next one written past this point (see waitForPrompt).
+      const stdoutBeforeTurn = cli.stdout().length;
       const callsBeforeTurn = server.callCount();
 
       cli.sendLine('talk to pilgrim');
-      await cli.waitForStdoutCount('  > ', promptsBeforeTurn + 1, scaledWaitMs(20000));
+      await cli.waitForPrompt(stdoutBeforeTurn, scaledWaitMs(20000));
       // Coordinator stitch (run swarm-1788288802-f5a0, wave 2): the prompt
       // marker reappearing is NOT a settled point for the request ledger --
       // CI run 33550215403 (Node 20 job) read 1 of the 3 requests here while
@@ -283,7 +268,7 @@ describe('real-process retry path — world-gen (F-d102b95a)', () => {
       // prompt instead — every request has landed by then — and assert the
       // deterministic TOTAL: the forced 429 + the retried world-gen 200 +
       // the single unforced opening-narration call.
-      await cli.waitForStdout('  > ');
+      await cli.waitForPrompt();
       expect(server.callCount()).toBe(3);
       cli.sendLine('quit');
       const exitCode = await cli.waitForExit();
@@ -325,7 +310,7 @@ describe('real-process retry path — finale (F-d102b95a)', () => {
 
       await cli.waitForStdout('Choose a save');
       cli.sendLine('1');
-      await cli.waitForStdout('  > ');
+      await cli.waitForPrompt();
 
       // Baseline AFTER the opening narration's own request (call 1).
       const callsBeforeTurn = server.callCount();

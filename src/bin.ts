@@ -1063,6 +1063,56 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
     initialPartyState, initialItemChronicle, initialEconomies,
     initialCustom, initialOpportunities,
   } = opts;
+
+  // PFE-002: Graceful SIGINT handling — first Ctrl+C attempts save, second force-exits.
+  // Registered before the opening narration, not after it: runLoad, runPlay
+  // and runNew dispose their early SIGINT guard right before calling this,
+  // and the opening narration is an LLM call that can take seconds. With the
+  // handler after it, a Ctrl+C in that window met no handler and Node killed
+  // the process -- no "Farewell.", no autosave, the disposition F-4997779f
+  // exists to prevent. Everything up to here runs synchronously, so the
+  // handoff from the early guard has no gap.
+  let sigintCount = 0;
+  process.on('SIGINT', async () => {
+    sigintCount++;
+    if (sigintCount >= 2) {
+      console.log('\n  Force-exiting. Farewell.\n');
+      process.exit(1);
+    }
+    spinnerBox.current?.stop();
+    console.log('\n  Interrupted. Saving your progress...');
+    const saveName = session.profile
+      ? `${session.profile.build.name}-autosave-${Date.now()}`
+      : `autosave-${Date.now()}`;
+    const savePath = getSavePath(saveName);
+    const outcome = await attemptExitAutosave(savePath, getDefaultSaveDir(), (p) =>
+      saveSession(buildSaveInput(session, p, packId)),
+    );
+    if (outcome.status === 'failed') {
+      // F-b832167c: routes through the same presentError()/
+      // classifyForPresentation() pipeline every other error path in this
+      // file uses, instead of a flat, detail-free string -- under --debug
+      // this now surfaces the real error type/message/cause for the exact
+      // moment (Ctrl+C mid-session) a player most needs to trust the save
+      // worked or understand why not.
+      presentError(outcome.error, 'save', debugMode);
+    } else if (outcome.status === 'rejected') {
+      // F-bfed3361: 'rejected' means the guard skipped the save entirely --
+      // the closest thing to a data-loss signal this exit flow produces --
+      // but used to fall through to the exact same plain console.log the
+      // routine 'saved' case gets. Now renders with the same severity
+      // signal genuine errors get, so it doesn't visually blend into a
+      // success message at the exact moment (process about to exit) a
+      // player has the least chance to notice and react.
+      console.log(yellow(outcome.message));
+    } else {
+      console.log(outcome.message);
+    }
+    console.log('  Farewell.\n');
+    rl.close();
+    process.exit(0);
+  });
+
   // Welcome
   console.log(session.getWelcome());
 
@@ -1129,47 +1179,6 @@ async function runGameLoop(opts: GameLoopOptions): Promise<void> {
   // question() (PFE-001: rejects on readline 'close' so this doesn't hang
   // forever on Ctrl+D/pipe EOF) is now a module-level helper shared with
   // runLoad's save-selection prompt -- see its doc comment above.
-
-  // PFE-002: Graceful SIGINT handling — first Ctrl+C attempts save, second force-exits.
-  let sigintCount = 0;
-  process.on('SIGINT', async () => {
-    sigintCount++;
-    if (sigintCount >= 2) {
-      console.log('\n  Force-exiting. Farewell.\n');
-      process.exit(1);
-    }
-    console.log('\n  Interrupted. Saving your progress...');
-    const saveName = session.profile
-      ? `${session.profile.build.name}-autosave-${Date.now()}`
-      : `autosave-${Date.now()}`;
-    const savePath = getSavePath(saveName);
-    const outcome = await attemptExitAutosave(savePath, getDefaultSaveDir(), (p) =>
-      saveSession(buildSaveInput(session, p, packId)),
-    );
-    if (outcome.status === 'failed') {
-      // F-b832167c: routes through the same presentError()/
-      // classifyForPresentation() pipeline every other error path in this
-      // file uses, instead of a flat, detail-free string -- under --debug
-      // this now surfaces the real error type/message/cause for the exact
-      // moment (Ctrl+C mid-session) a player most needs to trust the save
-      // worked or understand why not.
-      presentError(outcome.error, 'save', debugMode);
-    } else if (outcome.status === 'rejected') {
-      // F-bfed3361: 'rejected' means the guard skipped the save entirely --
-      // the closest thing to a data-loss signal this exit flow produces --
-      // but used to fall through to the exact same plain console.log the
-      // routine 'saved' case gets. Now renders with the same severity
-      // signal genuine errors get, so it doesn't visually blend into a
-      // success message at the exact moment (process about to exit) a
-      // player has the least chance to notice and react.
-      console.log(yellow(outcome.message));
-    } else {
-      console.log(outcome.message);
-    }
-    console.log('  Farewell.\n');
-    rl.close();
-    process.exit(0);
-  });
 
   // Game loop — iterative to avoid unbounded stack growth
   while (true) {

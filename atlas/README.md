@@ -1,20 +1,19 @@
 # claude-rpg: how it works
 
-Mapped at 2026-09-30 from commit 475262f by Atlas 1.24.0.
+Mapped at 2026-10-01 from commit f762fbe by Atlas 1.24.0.
 
 ## What this is
 
 8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.
 
-## What changed since 2026-09-30 (e3798b1)
+## What changed since 2026-09-30 (475262f)
 
-- CI's pull request trigger now also names `package-lock.json`.
-- CI's push trigger now also names `package-lock.json`.
-- 2 files changed content, across 2 parts.
+- CI's pull request trigger no longer names `.github/workflows/**`, `atlas/**`, `codecov.yml`, `package-lock.json`, `package.json`, `scripts/**`, `site/astro.config.mjs`, `site/package-lock.json`, `site/package.json`, `src/**`, `test/**`, `tsconfig.json`, `tsconfig.test.json` and `vitest.config.ts`.
+- 7 files changed content, across 3 parts.
 
 ## What comes in
 
-1. **CI.** On a pull request touching 14 paths; on a push touching 14 paths; or by hand. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; checks src/ and test/. On a pull request, it also runs scripts/check-critical-coverage.mjs.
+1. **CI.** On a pull request; on a push touching 14 paths; or by hand. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; checks src/ and test/. On a pull request, it also runs scripts/check-critical-coverage.mjs.
 2. **Release.** When a tag matching `v*` is pushed. Runs src/action-interpreter.test.ts, src/bin-defenses.test.ts, src/character/builder.test.ts and 118 more; builds src/.
 3. **Deploy site to GitHub Pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **@mcptoolshop/claude-rpg** (the package people import). Loads src/index.ts.
@@ -54,7 +53,7 @@ No two source files, other than a file and its own test, changed together often 
 
 7 files changed together with their own tests, as expected.
 
-Window: 180 days; a pair counts from 10 shared commits, since 27 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
+Window: 180 days; a pair counts from 10 shared commits, since 28 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
 
 ## What no test touches
 

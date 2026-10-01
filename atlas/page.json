@@ -40,45 +40,38 @@
   "changes": {
     "fileCounts": {
       "added": 0,
-      "changed": 2,
+      "changed": 7,
       "moved": 0,
-      "parts": 2,
+      "parts": 3,
       "removed": 0
     },
     "items": [
       {
         "kind": "door",
-        "sentence": "CI's pull request trigger now also names `package-lock.json`.",
-        "subjects": [
-          ".github/workflows/ci.yml"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "CI's push trigger now also names `package-lock.json`.",
+        "sentence": "CI's pull request trigger no longer names `.github/workflows/**`, `atlas/**`, `codecov.yml`, `package-lock.json`, `package.json`, `scripts/**`, `site/astro.config.mjs`, `site/package-lock.json`, `site/package.json`, `src/**`, `test/**`, `tsconfig.json`, `tsconfig.test.json` and `vitest.config.ts`.",
         "subjects": [
           ".github/workflows/ci.yml"
         ]
       },
       {
         "kind": "counts",
-        "sentence": "2 files changed content, across 2 parts.",
+        "sentence": "7 files changed content, across 3 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "e3798b17871cbd88a80f57fbfcfabfc9568a4ad9",
-      "generatedAt": "2026-09-30T20:09:01.855Z"
+      "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89",
+      "generatedAt": "2026-09-30T21:38:06.980Z"
     },
     "unchanged": false
   },
   "changesTogether": [],
   "changesTogetherNote": [
     "7 files changed together with their own tests, as expected.",
-    "Window: 180 days; a pair counts from 10 shared commits, since 27 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
+    "Window: 180 days; a pair counts from 10 shared commits, since 28 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 7,
-  "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89",
+  "commit": "f762fbee8f55ebdc8acc81a906ffb16f0a115170",
   "defaultBranch": "main",
   "derived": "8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.",
   "doors": [
@@ -228,7 +221,7 @@
       ],
       "stages": [],
       "triggers": [
-        "on a pull request touching 14 paths",
+        "on a pull request",
         "on a push touching 14 paths",
         "or by hand"
       ]
@@ -482,7 +475,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-09-30T21:38:06.980Z",
+  "generatedAt": "2026-10-01T02:14:44.626Z",
   "limits": [
     "2 imports could not be resolved: `src/character/packs.test.ts` imports a path built at run time; `src/cli/terminal-ui-audit.test.ts` imports a path built at run time.",
     "5 writes and 15 reads go to a path their caller passes, not to this repository.",

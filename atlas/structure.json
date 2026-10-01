@@ -9,7 +9,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "8fe1165ad7d13635dd1b7f5a5ddbe121b840d3d0cb9fbd1abdc24ab95e61de5a",
+          "hash": "d2fa889efd2409f8aad5a59c4a5d3bb2d2a9ce13df2ce7ff3f0ca0f4e417072c",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -1344,30 +1344,30 @@
             {
               "in": "runGameLoop",
               "kind": "catch",
-              "line": 1122
+              "line": 1172
             },
             {
               "in": "runGameLoop",
               "kind": "catch",
-              "line": 1179
+              "line": 1188
             },
             {
               "in": "runGameLoop",
               "kind": "throw",
-              "line": 1208
+              "line": 1217
             },
             {
               "in": "runGameLoop",
               "kind": "catch",
-              "line": 1245
+              "line": 1254
             },
             {
               "in": "runGameLoop",
               "kind": "catch",
-              "line": 1359
+              "line": 1368
             }
           ],
-          "hash": "e6f4d796216b73bfaf4007ddac86b2ce338cb6b8ee201205f655d4553930e9fc",
+          "hash": "92d7aaec89470f38c02aa86e1d4a1302c9e4e74ddb21898a3e10571da02364f8",
           "importsFiles": [
             "src/character/builder.ts",
             "src/character/packs.ts",
@@ -1820,13 +1820,13 @@
                   "via": "runPlay"
                 },
                 {
-                  "line": 1067,
+                  "line": 1117,
                   "name": "getWelcome",
                   "target": null,
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1096,
+                  "line": 1146,
                   "name": "createStreamPresenter",
                   "target": {
                     "file": "src/cli/stream-presenter.ts"
@@ -1834,7 +1834,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1098,
+                  "line": 1148,
                   "name": "createSpinner",
                   "target": {
                     "file": "src/cli/spinner.ts"
@@ -1842,7 +1842,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1113,
+                  "line": 1163,
                   "name": "getOpeningNarration",
                   "target": null,
                   "via": "runGameLoop"
@@ -1932,7 +1932,7 @@
                       "via": "renderError"
                     }
                   ],
-                  "line": 1124,
+                  "line": 1174,
                   "name": "presentError",
                   "target": {
                     "file": "src/cli/error-presenter.ts"
@@ -1958,7 +1958,7 @@
                   "via": "question"
                 },
                 {
-                  "line": 1186,
+                  "line": 1195,
                   "name": "getSavePath",
                   "target": {
                     "file": "src/session/session.ts"
@@ -1966,7 +1966,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1187,
+                  "line": 1196,
                   "name": "getDefaultSaveDir",
                   "target": {
                     "file": "src/session/session.ts"
@@ -1983,7 +1983,7 @@
                       }
                     }
                   ],
-                  "line": 1187,
+                  "line": 1196,
                   "name": "attemptExitAutosave",
                   "target": {
                     "file": "src/cli/exit-autosave.ts"
@@ -2056,13 +2056,13 @@
                   }
                 },
                 {
-                  "line": 1067,
+                  "line": 1117,
                   "name": "getWelcome",
                   "target": null,
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1096,
+                  "line": 1146,
                   "name": "createStreamPresenter",
                   "target": {
                     "file": "src/cli/stream-presenter.ts"
@@ -2070,7 +2070,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1098,
+                  "line": 1148,
                   "name": "createSpinner",
                   "target": {
                     "file": "src/cli/spinner.ts"
@@ -2078,7 +2078,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1113,
+                  "line": 1163,
                   "name": "getOpeningNarration",
                   "target": null,
                   "via": "runGameLoop"
@@ -2092,7 +2092,7 @@
                   "via": "flushPresentationCues"
                 },
                 {
-                  "line": 1124,
+                  "line": 1174,
                   "name": "presentError",
                   "target": {
                     "file": "src/cli/error-presenter.ts"
@@ -2118,7 +2118,7 @@
                   "via": "question"
                 },
                 {
-                  "line": 1186,
+                  "line": 1195,
                   "name": "getSavePath",
                   "target": {
                     "file": "src/session/session.ts"
@@ -2126,7 +2126,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1187,
+                  "line": 1196,
                   "name": "getDefaultSaveDir",
                   "target": {
                     "file": "src/session/session.ts"
@@ -2134,7 +2134,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1187,
+                  "line": 1196,
                   "name": "attemptExitAutosave",
                   "target": {
                     "file": "src/cli/exit-autosave.ts"
@@ -2142,7 +2142,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1188,
+                  "line": 1197,
                   "name": "buildSaveInput",
                   "target": {
                     "file": "src/cli/save-input-builder.ts"
@@ -2150,7 +2150,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1188,
+                  "line": 1197,
                   "name": "saveSession",
                   "target": {
                     "file": "src/session/session.ts"
@@ -2158,7 +2158,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1196,
+                  "line": 1205,
                   "name": "presentError",
                   "target": {
                     "file": "src/cli/error-presenter.ts"
@@ -2166,7 +2166,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1200,
+                  "line": 1209,
                   "name": "yellow",
                   "target": {
                     "file": "src/cli/colors.ts"
@@ -2462,13 +2462,13 @@
                   }
                 },
                 {
-                  "line": 1067,
+                  "line": 1117,
                   "name": "getWelcome",
                   "target": null,
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1096,
+                  "line": 1146,
                   "name": "createStreamPresenter",
                   "target": {
                     "file": "src/cli/stream-presenter.ts"
@@ -2476,7 +2476,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1098,
+                  "line": 1148,
                   "name": "createSpinner",
                   "target": {
                     "file": "src/cli/spinner.ts"
@@ -2484,7 +2484,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1113,
+                  "line": 1163,
                   "name": "getOpeningNarration",
                   "target": null,
                   "via": "runGameLoop"
@@ -2498,7 +2498,7 @@
                   "via": "flushPresentationCues"
                 },
                 {
-                  "line": 1124,
+                  "line": 1174,
                   "name": "presentError",
                   "target": {
                     "file": "src/cli/error-presenter.ts"
@@ -2524,40 +2524,8 @@
                   "via": "question"
                 },
                 {
-                  "line": 1186,
+                  "line": 1195,
                   "name": "getSavePath",
-                  "target": {
-                    "file": "src/session/session.ts"
-                  },
-                  "via": "runGameLoop"
-                },
-                {
-                  "line": 1187,
-                  "name": "getDefaultSaveDir",
-                  "target": {
-                    "file": "src/session/session.ts"
-                  },
-                  "via": "runGameLoop"
-                },
-                {
-                  "line": 1187,
-                  "name": "attemptExitAutosave",
-                  "target": {
-                    "file": "src/cli/exit-autosave.ts"
-                  },
-                  "via": "runGameLoop"
-                },
-                {
-                  "line": 1188,
-                  "name": "buildSaveInput",
-                  "target": {
-                    "file": "src/cli/save-input-builder.ts"
-                  },
-                  "via": "runGameLoop"
-                },
-                {
-                  "line": 1188,
-                  "name": "saveSession",
                   "target": {
                     "file": "src/session/session.ts"
                   },
@@ -2565,6 +2533,38 @@
                 },
                 {
                   "line": 1196,
+                  "name": "getDefaultSaveDir",
+                  "target": {
+                    "file": "src/session/session.ts"
+                  },
+                  "via": "runGameLoop"
+                },
+                {
+                  "line": 1196,
+                  "name": "attemptExitAutosave",
+                  "target": {
+                    "file": "src/cli/exit-autosave.ts"
+                  },
+                  "via": "runGameLoop"
+                },
+                {
+                  "line": 1197,
+                  "name": "buildSaveInput",
+                  "target": {
+                    "file": "src/cli/save-input-builder.ts"
+                  },
+                  "via": "runGameLoop"
+                },
+                {
+                  "line": 1197,
+                  "name": "saveSession",
+                  "target": {
+                    "file": "src/session/session.ts"
+                  },
+                  "via": "runGameLoop"
+                },
+                {
+                  "line": 1205,
                   "name": "presentError",
                   "target": {
                     "file": "src/cli/error-presenter.ts"
@@ -2572,7 +2572,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1200,
+                  "line": 1209,
                   "name": "yellow",
                   "target": {
                     "file": "src/cli/colors.ts"
@@ -2580,7 +2580,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1221,
+                  "line": 1230,
                   "name": "getSavePath",
                   "target": {
                     "file": "src/session/session.ts"
@@ -2588,7 +2588,7 @@
                   "via": "runGameLoop"
                 },
                 {
-                  "line": 1223,
+                  "line": 1232,
                   "name": "getDefaultSaveDir",
                   "target": {
                     "file": "src/session/session.ts"
@@ -2620,26 +2620,26 @@
             {
               "calls": [
                 {
-                  "line": 1067,
+                  "line": 1117,
                   "name": "getWelcome",
                   "target": null
                 },
                 {
-                  "line": 1096,
+                  "line": 1146,
                   "name": "createStreamPresenter",
                   "target": {
                     "file": "src/cli/stream-presenter.ts"
                   }
                 },
                 {
-                  "line": 1098,
+                  "line": 1148,
                   "name": "createSpinner",
                   "target": {
                     "file": "src/cli/spinner.ts"
                   }
                 },
                 {
-                  "line": 1113,
+                  "line": 1163,
                   "name": "getOpeningNarration",
                   "target": null
                 },
@@ -2652,7 +2652,7 @@
                   "via": "flushPresentationCues"
                 },
                 {
-                  "line": 1124,
+                  "line": 1174,
                   "name": "presentError",
                   "target": {
                     "file": "src/cli/error-presenter.ts"
@@ -2677,105 +2677,105 @@
                   "via": "question"
                 },
                 {
-                  "line": 1186,
+                  "line": 1195,
                   "name": "getSavePath",
-                  "target": {
-                    "file": "src/session/session.ts"
-                  }
-                },
-                {
-                  "line": 1187,
-                  "name": "getDefaultSaveDir",
-                  "target": {
-                    "file": "src/session/session.ts"
-                  }
-                },
-                {
-                  "line": 1187,
-                  "name": "attemptExitAutosave",
-                  "target": {
-                    "file": "src/cli/exit-autosave.ts"
-                  }
-                },
-                {
-                  "line": 1188,
-                  "name": "buildSaveInput",
-                  "target": {
-                    "file": "src/cli/save-input-builder.ts"
-                  }
-                },
-                {
-                  "line": 1188,
-                  "name": "saveSession",
                   "target": {
                     "file": "src/session/session.ts"
                   }
                 },
                 {
                   "line": 1196,
-                  "name": "presentError",
-                  "target": {
-                    "file": "src/cli/error-presenter.ts"
-                  }
-                },
-                {
-                  "line": 1200,
-                  "name": "yellow",
-                  "target": {
-                    "file": "src/cli/colors.ts"
-                  }
-                },
-                {
-                  "line": 1221,
-                  "name": "getSavePath",
-                  "target": {
-                    "file": "src/session/session.ts"
-                  }
-                },
-                {
-                  "line": 1223,
                   "name": "getDefaultSaveDir",
                   "target": {
                     "file": "src/session/session.ts"
                   }
                 },
                 {
-                  "line": 1224,
-                  "name": "isPathInside",
+                  "line": 1196,
+                  "name": "attemptExitAutosave",
                   "target": {
-                    "file": "src/cli/path-guard.ts"
+                    "file": "src/cli/exit-autosave.ts"
                   }
                 },
                 {
-                  "line": 1233,
-                  "name": "yellow",
-                  "target": {
-                    "file": "src/cli/colors.ts"
-                  }
-                },
-                {
-                  "line": 1236,
+                  "line": 1197,
                   "name": "buildSaveInput",
                   "target": {
                     "file": "src/cli/save-input-builder.ts"
                   }
                 },
                 {
-                  "line": 1236,
+                  "line": 1197,
                   "name": "saveSession",
                   "target": {
                     "file": "src/session/session.ts"
                   }
                 },
                 {
-                  "line": 1237,
+                  "line": 1205,
+                  "name": "presentError",
+                  "target": {
+                    "file": "src/cli/error-presenter.ts"
+                  }
+                },
+                {
+                  "line": 1209,
+                  "name": "yellow",
+                  "target": {
+                    "file": "src/cli/colors.ts"
+                  }
+                },
+                {
+                  "line": 1230,
+                  "name": "getSavePath",
+                  "target": {
+                    "file": "src/session/session.ts"
+                  }
+                },
+                {
+                  "line": 1232,
+                  "name": "getDefaultSaveDir",
+                  "target": {
+                    "file": "src/session/session.ts"
+                  }
+                },
+                {
+                  "line": 1233,
+                  "name": "isPathInside",
+                  "target": {
+                    "file": "src/cli/path-guard.ts"
+                  }
+                },
+                {
+                  "line": 1242,
+                  "name": "yellow",
+                  "target": {
+                    "file": "src/cli/colors.ts"
+                  }
+                },
+                {
+                  "line": 1245,
+                  "name": "buildSaveInput",
+                  "target": {
+                    "file": "src/cli/save-input-builder.ts"
+                  }
+                },
+                {
+                  "line": 1245,
+                  "name": "saveSession",
+                  "target": {
+                    "file": "src/session/session.ts"
+                  }
+                },
+                {
+                  "line": 1246,
                   "name": "displayPath",
                   "target": {
                     "file": "src/cli/exit-autosave.ts"
                   }
                 },
                 {
-                  "line": 1386,
+                  "line": 1395,
                   "name": "captureSnapshot",
                   "target": {
                     "file": "src/character/recap-delta.ts"
@@ -2792,105 +2792,105 @@
             {
               "calls": [
                 {
-                  "line": 1386,
+                  "line": 1395,
                   "name": "captureSnapshot",
                   "target": {
                     "file": "src/character/recap-delta.ts"
                   }
                 },
                 {
-                  "line": 1387,
+                  "line": 1396,
                   "name": "computeSessionDelta",
                   "target": {
                     "file": "src/character/recap-delta.ts"
                   }
                 },
                 {
-                  "line": 1389,
+                  "line": 1398,
                   "name": "captureWorldSnapshot",
                   "target": {
                     "file": "src/character/world-delta.ts"
                   }
                 },
                 {
-                  "line": 1393,
+                  "line": 1402,
                   "name": "computeWorldDelta",
                   "target": {
                     "file": "src/character/world-delta.ts"
                   }
                 },
                 {
-                  "line": 1396,
+                  "line": 1405,
                   "name": "computeFactionDeltas",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1404,
+                  "line": 1413,
                   "name": "computeRumorDelta",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1418,
+                  "line": 1427,
                   "name": "deriveWhatPeopleAreSaying",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1435,
+                  "line": 1444,
                   "name": "computeDistrictDeltas",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1448,
+                  "line": 1457,
                   "name": "computeCompanionRecapEntries",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1460,
+                  "line": 1469,
                   "name": "computeItemRecapEntries",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1469,
+                  "line": 1478,
                   "name": "computeEconomyRecapEntries",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1477,
+                  "line": 1486,
                   "name": "computeCraftingRecapEntries",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1479,
+                  "line": 1488,
                   "name": "computeCraftingRecapFromJournal",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1490,
+                  "line": 1499,
                   "name": "computeOpportunityRecapEntries",
                   "target": {
                     "file": "src/character/session-recap.ts"
                   }
                 },
                 {
-                  "line": 1512,
+                  "line": 1521,
                   "name": "renderFullRecap",
                   "target": {
                     "file": "src/character/session-recap.ts"
@@ -7421,7 +7421,7 @@
             "writeFantasySaveWithCharacterName",
             "writeFutureVersionSave"
           ],
-          "hash": "47ea6f97635263ab559594e2536a1430cca58ed4d72e23843cc7fbb91da24ca3",
+          "hash": "ab42e63dea5feff3da3614b12cb141cd2169f5d63fed00122ae47da80e4d2489",
           "importsFiles": [
             "src/session/history.ts",
             "src/session/session.ts"
@@ -7622,7 +7622,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "7c1439991fad4aa2b3fd0ac6de24a87a53460768c563983c28e3432d9357bcc3",
+          "hash": "7880c395ff7bb1f96e7f04fc279fd79f5954c5af05d21323d0d958bb1e11e0a0",
           "importOrder": [
             "test/helpers/bin-cli-harness.ts",
             "src/session/session.ts"
@@ -7917,7 +7917,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "eecb7799aec5de2b4455542110cd7599d55420d8474ec38e25f6467004b478ff",
+          "hash": "85163904a940409433729e07972e3f50025bfb5ca542aa86f85339753c12974a",
           "importOrder": [
             "test/helpers/bin-cli-harness.ts",
             "src/foundry/world-gen.ts"
@@ -7967,7 +7967,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "e408818d757e5c96b057fcbfe8319ff6ef5a045266ce1e58feb11e0a917d98fc",
+          "hash": "20cd3f2708fcde9826f3917c1c4683f947091c1365d6f7c735803b6d5c5b1455",
           "importsFiles": [
             "test/helpers/bin-cli-harness.ts"
           ],
@@ -7992,7 +7992,7 @@
           "testFramework": "vitest"
         },
         {
-          "hash": "3d58b78b5fb6f7eda17723c15f63722e5c20472a174c1c28e7bfecda70fa0b2a",
+          "hash": "e731a8743beaca1c2a7c1d4e6a1664d580d365c3e613da91f32bea2c96a994f5",
           "importOrder": [
             "test/helpers/bin-cli-harness.ts",
             "src/character/packs.ts"
@@ -8883,23 +8883,7 @@
       ],
       "triggers": [
         {
-          "event": "pull_request",
-          "paths": [
-            ".github/workflows/**",
-            "atlas/**",
-            "codecov.yml",
-            "package-lock.json",
-            "package.json",
-            "scripts/**",
-            "site/astro.config.mjs",
-            "site/package-lock.json",
-            "site/package.json",
-            "src/**",
-            "test/**",
-            "tsconfig.json",
-            "tsconfig.test.json",
-            "vitest.config.ts"
-          ]
+          "event": "pull_request"
         },
         {
           "event": "push",
@@ -10038,7 +10022,7 @@
   ],
   "engine": "1.24.0",
   "generatedFrom": {
-    "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89",
+    "commit": "f762fbee8f55ebdc8acc81a906ffb16f0a115170",
     "tracked": 497
   },
   "landings": [

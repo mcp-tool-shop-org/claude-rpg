@@ -9,7 +9,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "d2fa889efd2409f8aad5a59c4a5d3bb2d2a9ce13df2ce7ff3f0ca0f4e417072c",
+          "hash": "709631f352f7d9e28ad441b9ead3298761fee3d29f62684d02f696340c76007b",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -1136,7 +1136,7 @@
           "path": "site/astro.config.mjs"
         },
         {
-          "hash": "af5d4f54dca60686724d306eb58759fb25b6f5ba4d66559ab84a968112a184e5",
+          "hash": "0607a19c4f60b635244a906c7ad2424359b50e20c4a83bc140f202abce4a941e",
           "path": "site/package-lock.json"
         },
         {
@@ -8155,7 +8155,7 @@
         }
       ],
       "landings": [
-        "dogfood/tuning"
+        "dogfood/tuning/matrix-*.json"
       ],
       "mentions": [
         {
@@ -9175,7 +9175,7 @@
         }
       ],
       "landings": [
-        "dogfood/tuning"
+        "dogfood/tuning/matrix-*.json"
       ],
       "mentions": [
         {
@@ -10020,9 +10020,9 @@
       "to": "src"
     }
   ],
-  "engine": "1.24.0",
+  "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "f762fbee8f55ebdc8acc81a906ffb16f0a115170",
+    "commit": "e39fc828357b8fe0461e06f92902a244c0a0e654",
     "tracked": 497
   },
   "landings": [
@@ -10315,7 +10315,7 @@
     },
     {
       "readers": [],
-      "target": "dogfood/tuning",
+      "target": "dogfood/tuning/matrix-*.json",
       "writers": [
         {
           "by": "test/helpers/living-world-matrix.ts",

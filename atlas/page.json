@@ -40,28 +40,29 @@
   "changes": {
     "fileCounts": {
       "added": 0,
-      "changed": 7,
+      "changed": 2,
       "moved": 0,
-      "parts": 3,
+      "parts": 2,
       "removed": 0
     },
     "items": [
       {
-        "kind": "door",
-        "sentence": "CI's pull request trigger no longer names `.github/workflows/**`, `atlas/**`, `codecov.yml`, `package-lock.json`, `package.json`, `scripts/**`, `site/astro.config.mjs`, `site/package-lock.json`, `site/package.json`, `src/**`, `test/**`, `tsconfig.json`, `tsconfig.test.json` and `vitest.config.ts`.",
+        "kind": "landing",
+        "sentence": "dogfood/tuning/matrix-*.json is now written by test/helpers/living-world-matrix.ts.",
         "subjects": [
-          ".github/workflows/ci.yml"
+          "dogfood/tuning/matrix-*.json",
+          "test/helpers/living-world-matrix.ts"
         ]
       },
       {
         "kind": "counts",
-        "sentence": "7 files changed content, across 3 parts.",
+        "sentence": "2 files changed content, across 2 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "475262f18ad5f67e9ecf5f8ee0514267eaffde89",
-      "generatedAt": "2026-09-30T21:38:06.980Z"
+      "commit": "f762fbee8f55ebdc8acc81a906ffb16f0a115170",
+      "generatedAt": "2026-10-01T02:14:44.626Z"
     },
     "unchanged": false
   },
@@ -71,7 +72,7 @@
     "Window: 180 days; a pair counts from 10 shared commits, since 28 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 7,
-  "commit": "f762fbee8f55ebdc8acc81a906ffb16f0a115170",
+  "commit": "e39fc828357b8fe0461e06f92902a244c0a0e654",
   "defaultBranch": "main",
   "derived": "8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.",
   "doors": [
@@ -97,7 +98,7 @@
       ],
       "id": ".github/workflows/ci.yml",
       "landings": [
-        "dogfood/tuning/"
+        "dogfood/tuning/matrix-*.json"
       ],
       "name": "CI",
       "programs": [
@@ -236,7 +237,7 @@
       "file": ".github/workflows/release.yml",
       "id": ".github/workflows/release.yml",
       "landings": [
-        "dogfood/tuning/"
+        "dogfood/tuning/matrix-*.json"
       ],
       "name": "Release",
       "pushes": false,
@@ -465,17 +466,17 @@
       "to": "src"
     }
   ],
-  "engine": "1.24.0",
+  "engine": "1.26.0",
   "generated": [
     {
       "fromRoot": true,
-      "place": "dogfood/tuning/",
+      "place": "dogfood/tuning/matrix-*.json",
       "writers": [
         "test/helpers/living-world-matrix.ts (a test)"
       ]
     }
   ],
-  "generatedAt": "2026-10-01T02:14:44.626Z",
+  "generatedAt": "2026-11-11T22:11:57.962Z",
   "limits": [
     "2 imports could not be resolved: `src/character/packs.test.ts` imports a path built at run time; `src/cli/terminal-ui-audit.test.ts` imports a path built at run time.",
     "5 writes and 15 reads go to a path their caller passes, not to this repository.",
@@ -498,20 +499,44 @@
   "readers": [
     {
       "readers": [],
-      "target": "dogfood/tuning/"
+      "target": "dogfood/tuning/matrix-*.json"
     }
   ],
   "repo": "mcp-tool-shop-org/claude-rpg",
   "sequences": [],
+  "startBeside": [
+    {
+      "files": [
+        "src/cli/error-presenter.ts",
+        "src/cli/world-flag.ts",
+        "src/character/builder.ts",
+        "src/cli/boot-zone-entry.ts",
+        "src/llm/claude-adapter.ts",
+        "src/character/recap-delta.ts",
+        "src/character/world-delta.ts",
+        "src/cli/stream-presenter.ts",
+        "src/cli/spinner.ts",
+        "src/cli/presentation-renderer.ts",
+        "src/session/session.ts",
+        "src/cli/exit-autosave.ts",
+        "src/display/archive-browser.ts"
+      ],
+      "from": "src/bin.ts"
+    },
+    {
+      "files": [
+        "src/display/help-system.ts",
+        "src/character/packs.ts"
+      ],
+      "from": "src/cli/usage.ts"
+    }
+  ],
   "startDoor": "package.json#claude-rpg",
   "startHere": [
     "src/bin.ts",
     "src/cli/usage.ts",
-    "src/cli/error-presenter.ts",
-    "src/cli/world-flag.ts",
-    "src/character/builder.ts",
-    "src/cli/boot-zone-entry.ts",
-    "src/llm/claude-adapter.ts"
+    "src/display/play-renderer.ts",
+    "src/cli/colors.ts"
   ],
   "startReason": "This path follows claude-rpg (a command people run) from its entry, since CI runs only tests and checks.",
   "summary": null,
@@ -521,10 +546,11 @@
     "scripts": 1,
     "src": 124
   },
+  "testedCodeParts": 2,
   "unnamedWrites": 0,
   "unread": [
     {
-      "place": "dogfood/tuning/",
+      "place": "dogfood/tuning/matrix-*.json",
       "writers": [
         "test/helpers/living-world-matrix.ts (a test)"
       ]

@@ -99,6 +99,8 @@ La versione 2.0 è la versione che introduce il mondo dinamico: il mondo si svil
 | **Testato da cinque famiglie di modelli** | Quattro test con famiglie di intelligenza artificiale (Mistral, Qwen, Llama, DeepSeek, Gemini, quaranta turni ciascuno) hanno sostituito il giudizio umano e hanno plasmato le ultime due fasi. |
 | **2.495 test** | Partendo da 1.870 test su 121 file, ogni fase è stata completata con una giuria diversificata e un criterio deterministico. |
 
+**2.0.1** chiude una falla all’avvio: un Ctrl+C durante la narrazione iniziale viene ora gestito come qualsiasi altro, quindi il gioco saluta ed esce in modo pulito invece di essere terminato di colpo.
+
 ## Perché è diverso?
 
 | Cosa | Come |

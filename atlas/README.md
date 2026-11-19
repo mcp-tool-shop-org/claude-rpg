@@ -1,15 +1,14 @@
 # claude-rpg: how it works
 
-Mapped at 2026-11-11 from commit e39fc82 by Atlas 1.26.0.
+Mapped at 2026-11-19 from commit 8e8531c by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.
 
-## What changed since 2026-10-01 (f762fbe)
+## What changed since 2026-11-11 (e39fc82)
 
-- dogfood/tuning/matrix-*.json is now written by test/helpers/living-world-matrix.ts.
-- 2 files changed content, across 2 parts.
+Nothing structural changed since 2026-11-11; 11 files changed content.
 
 ## What comes in
 

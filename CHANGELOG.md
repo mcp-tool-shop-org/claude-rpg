@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-11-19
+
+### Fixed
+
+- **Ctrl+C during the opening narration is handled (`src/bin.ts`).** `runLoad`, `runPlay` and `runNew` dispose their early SIGINT guard right before `runGameLoop`, whose own handler was registered only after the opening narration, an LLM call that can take seconds. A Ctrl+C in that window met no handler and Node killed the process: exit by signal, no farewell. The handler now registers first thing in `runGameLoop`, and stops any live spinner before it prints.
+- **CLI tests wait for the real prompt.** `CliHandle.waitForPrompt` resolves only when stdout ends with the prompt itself, which ends two intermittent CI failures in the bin-CLI tests. A new test sends Ctrl+C during the opening narration; it fails on 2.0.0's `bin.ts` and passes here.
+
+### Changed
+
+- **Site moved to Astro 7**, with dependency updates for the site's audit (devalue, brace-expansion). No change to the game.
+
 ## [2.0.0] - 2026-09-02
 
 The living-world release: the world runs on the engine's own tick, the

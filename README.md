@@ -99,6 +99,8 @@ v2.0 is the living-world release: the world runs on the engine's own tick, the s
 | **Played by five model families** | Four AI family playtests (Mistral, Qwen, Llama, DeepSeek, Gemini seats, forty turns each) replaced the human gate and shaped the last two waves. |
 | **2,495 tests** | Grown from 1,870 across 121 files, every wave landed through a family-diverse jury and a deterministic floor. |
 
+**2.0.1** closes a gap at startup: a Ctrl+C during the opening narration is now handled like any other, so the game says farewell and exits cleanly instead of being killed.
+
 ## Why It's Different
 
 | What | How |

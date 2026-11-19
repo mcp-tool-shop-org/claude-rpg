@@ -40,31 +40,23 @@
   "changes": {
     "fileCounts": {
       "added": 0,
-      "changed": 2,
+      "changed": 11,
       "moved": 0,
-      "parts": 2,
+      "parts": 1,
       "removed": 0
     },
     "items": [
       {
-        "kind": "landing",
-        "sentence": "dogfood/tuning/matrix-*.json is now written by test/helpers/living-world-matrix.ts.",
-        "subjects": [
-          "dogfood/tuning/matrix-*.json",
-          "test/helpers/living-world-matrix.ts"
-        ]
-      },
-      {
         "kind": "counts",
-        "sentence": "2 files changed content, across 2 parts.",
+        "sentence": "Nothing structural changed since 2026-11-11; 11 files changed content.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "f762fbee8f55ebdc8acc81a906ffb16f0a115170",
-      "generatedAt": "2026-10-01T02:14:44.626Z"
+      "commit": "e39fc828357b8fe0461e06f92902a244c0a0e654",
+      "generatedAt": "2026-11-11T22:11:57.962Z"
     },
-    "unchanged": false
+    "unchanged": true
   },
   "changesTogether": [],
   "changesTogetherNote": [
@@ -72,7 +64,7 @@
     "Window: 180 days; a pair counts from 10 shared commits, since 28 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 7,
-  "commit": "e39fc828357b8fe0461e06f92902a244c0a0e654",
+  "commit": "8e8531c044cadcd9ab057539a0c76f6f8c66539f",
   "defaultBranch": "main",
   "derived": "8 parts, mostly TypeScript (218 files), JavaScript (3), CSS (2) and Astro (1). Work enters through 5 doors; CI and Release each reach 3 parts, and CI is followed because a pull request goes through it. It publishes to npm. It deploys a site to GitHub Pages. People run claude-rpg. People import @mcptoolshop/claude-rpg.",
   "doors": [
@@ -476,7 +468,7 @@
       ]
     }
   ],
-  "generatedAt": "2026-11-11T22:11:57.962Z",
+  "generatedAt": "2026-11-19T14:17:48.175Z",
   "limits": [
     "2 imports could not be resolved: `src/character/packs.test.ts` imports a path built at run time; `src/cli/terminal-ui-audit.test.ts` imports a path built at run time.",
     "5 writes and 15 reads go to a path their caller passes, not to this repository.",

@@ -99,6 +99,8 @@ La version 2.0 est la version « monde vivant » : le monde fonctionne selon 
 | **Testé par cinq familles de modèles** | Quatre séries de tests avec différentes familles d’IA (Mistral, Qwen, Llama, DeepSeek, Gemini, quarante tours chacune) ont remplacé le test humain et ont façonné les deux dernières vagues. |
 | **2 495 tests** | Développé à partir de 1 870 fichiers, chaque vague a été testée par un jury diversifié et selon des critères déterministes. |
 
+**2.0.1** corrige un défaut au démarrage : un Ctrl+C pendant la narration d’ouverture est désormais traité comme n’importe quel autre, de sorte que le jeu dit au revoir et se ferme proprement au lieu d’être tué.
+
 ## Pourquoi c’est différent
 
 | Quoi | Comment |

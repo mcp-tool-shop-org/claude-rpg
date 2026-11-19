@@ -143,8 +143,8 @@
     "definition": "commits is how many commits in the window touch the file, including merges and commits dropped from coupling. lines is added plus deleted in those commits.",
     "files": [
       {
-        "commits": 22,
-        "lines": 310,
+        "commits": 23,
+        "lines": 312,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -218,8 +218,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 8,
-        "lines": 332,
+        "commits": 9,
+        "lines": 354,
         "path": "atlas/README.md"
       },
       {
@@ -228,18 +228,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 8,
-        "lines": 1412,
+        "commits": 9,
+        "lines": 1480,
         "path": "atlas/page.json"
       },
       {
-        "commits": 8,
-        "lines": 6582,
+        "commits": 9,
+        "lines": 6616,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 8,
-        "lines": 26774,
+        "commits": 9,
+        "lines": 26788,
         "path": "atlas/structure.json"
       },
       {
@@ -2533,9 +2533,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-11-11T22:11:57.962Z",
+  "generatedAt": "2026-11-19T14:17:48.175Z",
   "generatedFrom": {
-    "commit": "e39fc828357b8fe0461e06f92902a244c0a0e654"
+    "commit": "8e8531c044cadcd9ab057539a0c76f6f8c66539f"
   },
   "pairs": [
     {
@@ -2598,16 +2598,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-10-01T13:33:03-07:00",
+    "headDate": "2026-11-11T18:33:48-05:00",
     "inScopeFiles": 502,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 236,
+    "qualifyingCommits": 237,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-04-04T20:33:03.000Z",
+    "since": "2026-05-15T23:33:48.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

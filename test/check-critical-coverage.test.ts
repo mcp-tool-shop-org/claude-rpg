@@ -125,7 +125,7 @@ describe('getPerPathThresholds', () => {
 
 describe('normalizePath', () => {
   it('normalizes absolute paths to forward slashes', () => {
-    const windowsPath = 'C:\\Users\\test\\project\\src\\file.ts';
+    const windowsPath = 'C:\\Users\\Default\\project\\src\\file.ts';
     const result = normalizePath(windowsPath);
     expect(result).toMatch(/^[A-Z]:[/\\]/); // starts with drive letter
     expect(result.includes('\\')).toBe(false); // no backslashes

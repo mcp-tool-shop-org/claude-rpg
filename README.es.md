@@ -99,7 +99,7 @@ La versión 2.0 es la versión del mundo dinámico: el mundo funciona con el pro
 | **Jugado por cinco familias de modelos** | Cuatro pruebas de juego de familias de IA (Mistral, Qwen, Llama, DeepSeek, Gemini, cuarenta turnos cada una) reemplazaron la evaluación humana y dieron forma a las dos últimas oleadas. |
 | **2.495 pruebas** | A partir de 1.870 pruebas en 121 archivos, cada oleada se realizó a través de un jurado diverso y un umbral determinista. |
 
-**2.0.1** soluciona un problema al inicio: ahora, si se presiona Ctrl+C durante la introducción, se gestiona como cualquier otra interrupción, por lo que el juego se despide y se cierra correctamente en lugar de detenerse abruptamente.
+**2.0.1** soluciona un problema al inicio: ahora, si se presiona Ctrl+C durante la narración inicial, se gestiona como cualquier otra interrupción, por lo que el juego se despide y se cierra correctamente en lugar de detenerse abruptamente.
 
 ## Por qué es diferente
 
